@@ -26,8 +26,9 @@ ACCEPTANCE      diff · artifact · the team lead re-runs the check · numbers f
                 grader? only then the law); green → tick · one decision line · STATUS with a finish date
 STOP            ruling ≤12 lines (decides, never legislates) → pattern note (class · root · preventable?) → the same
                 day: phase file revision / PROCESS.md (a mechanic) / skill card (a pattern) / executor harness
-PAID RUN        $0 prep item (registration with pins, population, decision table, platform price, cap quoted from
-                the dry run, hard stop) → fresh verifier → team lead reads the record → paid session → reading
+PAID RUN        $0 prep item (dry run with pins, population, decision table, platform price, cap quoted from
+                it, hard stop) → fresh verifier → team lead reads the dry run + HEAD → paid session: the
+                registration opens the money line minutes before the create → run → close → reading
 PHASE CLOSE     product-truth gate (operator sees N rows under a seed) → report ≤30 lines → retro metrics → one line
 ```
 

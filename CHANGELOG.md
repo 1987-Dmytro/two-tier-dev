@@ -7,12 +7,26 @@ rule → where it lives. Dates are the days the rule entered the live project.
 ## Unreleased — named debts
 - brain-init M6 v2 deltas (`skills/brain-init/M6-v2-deltas.md`) are written but not yet applied in a live
   repository: session start still injects the vault cache, the Stop hook still stamps daily logs.
-- The phase-file template's **money section** with six defaults is here (`templates/PHASE.md` §6); the
+- The phase-file template's **money section** with seven defaults is here (`templates/PHASE.md` §6); the
   brain-init generator does not emit it yet.
 - Retro metrics (stops per day, preventable stops, verification/product line ratio) are read by hand;
   they should be collected from the `class:` line of PROGRESS.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
+
+## v3.11 — 2026-09-06 — registration ≠ opening; the standing law beats a ruling on a mechanic
+- The money line is OPENED (its anchor taken) inside the paid session, minutes before the resource is created —
+  never a session earlier: an aged anchor drinks the always-on drip into the close's reference and the band shuts
+  within hours (fork catalogue (f), (g)). The record is written and read at $0; the team lead's pre-purchase
+  reading is the dry run and the code at HEAD; where the emitter registers and opens in one command, that command
+  runs in the paid session and the registration is read at acceptance against the dry run.
+- A ruling sets choices and never re-sequences a mechanic PROCESS.md already sequences; where the two disagree,
+  the executor follows PROCESS.md, names the contradiction in PROGRESS and does not stop. Two pre-issue checks
+  join §5: «what ELSE does this command do» and «does PROCESS.md already sequence it».
+- Taught by: the origin project's stop s29 — a ruling put the registration (which also anchors the line) in the
+  $0 prep session while PROCESS opened the line «before the pod» in the paid one; measured on the previous run,
+  the whole 2.73 % drift of the close was the volume's drip over the anchor's age. Templates PHASE §6 (seventh
+  default), PROCESS «Money» and the paid-run runbook (§1) carried the same contradiction and are fixed.
 
 ## v3.10 — 2026-09-06 — diet: patterns only
 - The card carries patterns only: a tool name, a flag, a price, a path or a platform word in it is a defect

@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.10 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.9 внутри; диета: только паттерны — ни флагов, ни цен, ни платформ; механика проекта — в его PROCESS.md): деньги — один платный ран = одна линия, кап — цитата пробного расчёта, ставка — среднее целого рана, закрытие — по пост-рановому чтению, железо и цена — поля записи, бэкстоп — из капа; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг, не инструмент; новая форма строки — всем читателям; эталон — из популяции продукта, сожжённый набор — чтение; один файл фазы с каталогом развилок; файл ПРОГРЕССА; стандартный промт; рулинг ≤12 строк; триаж красного бара; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
+description: "v3.11 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.10 внутри; диета: только паттерны — ни флагов, ни цен, ни платформ; механика проекта — в его PROCESS.md): деньги — один платный ран = одна линия, регистрация ≠ открытие линии (якорь — в платной сессии, минуты до рана; чтение до покупки — dry-run + HEAD), кап — цитата пробного расчёта, ставка — среднее целого рана, закрытие — по пост-рановому чтению, железо и цена — поля записи, бэкстоп — из капа; стоящий закон проекта бьёт рулинг по механике — без остановки; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг, не инструмент; новая форма строки — всем читателям; эталон — из популяции продукта, сожжённый набор — чтение; один файл фазы с каталогом развилок; файл ПРОГРЕССА; стандартный промт; рулинг ≤12 строк; триаж красного бара; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
 ---
 
-# team-lead v3.10 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.11 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -80,17 +80,26 @@ reality, hard prohibitions; one question at a time; blindspot pass):
    only literals of that record diverge, it is rewritten to read the record, both directions, in the same
    commit, no stop; weakening an invariant stays a stop; a fixture never invents a unit the record lacks;
    (f) *the money line of a paid run* — one paid run = ONE money line (own name, own anchor taken by an
-   opening reading before the run starts, the run's cap as its cap, closed by its run record in the same
-   session); an open multi-run line carries no new run, and a cap named for a run is registered under the
-   line that will enforce it; the close settles against the line's POST-RUN reading — taken after the
-   run's resource is released and before ANY next run (the gate's reference is the line's last open
-   reading; a pre-run one refuses the close for ever); a line whose readings all predate its run closes
-   on the billing walk alone, bounded to its own window, and never takes a late reading — it would carry
-   the next run's money; a ruling that orders a close names that reading with it.
+   opening reading INSIDE the paid session, minutes before the resource is created — never a session
+   earlier: an aged anchor drinks the always-on drip into the close's reference and the band shuts within
+   hours; the run's cap as its cap, closed by its run record in the same session); an open multi-run
+   line carries no new run, and a cap named for a run is registered under the line that will enforce it;
+   the close settles against the line's POST-RUN reading — taken after the run's resource is released
+   and before ANY next run (the gate's reference is the line's last open reading; a pre-run one refuses
+   the close for ever); a line whose readings all predate its run closes on the billing walk alone,
+   bounded to its own window, and never takes a late reading — it would carry the next run's money; a
+   ruling that orders a close names that reading with it; (g) *registration ≠ opening* — the RECORD
+   (pins, bound, FITS, tier, price, backstop, runbook) is written and read at $0; the line's ANCHOR is the
+   opening reading of (f), taken in the paid session; where the emitter does both in one command, that
+   command runs in the paid session, the team lead's pre-purchase reading is the dry run and the code at
+   HEAD, and the registration is read at acceptance against the dry run — only the anchor and its time new.
 5. **Decisions log** — appended by the team lead, dated, **≤12 lines each**: a decision names a
    choice, a number the instrument produced, or a file to read — it never adds a test, pin, guard
    or ledger. Rulings live here, not in a separate file. A ruling that must carry commands is a sign
-   the project's PROCESS.md lacks a default — write the default there the same day.
+   the project's PROCESS.md lacks a default — write the default there the same day. **A ruling sets
+   choices; it never re-sequences a mechanic the project's PROCESS.md already sequences — where a ruling
+   and PROCESS.md disagree on a mechanic, the executor follows PROCESS.md, names the contradiction in the
+   progress file and does not stop; the ruling is corrected the same day.**
 Information found missing at a stop joins this file by revision THE SAME DAY (§10). A plan file is
 written only when the diff cannot be described in a sentence, and then ≤80 lines. Re-spec trigger
 unchanged: when the goal, the customer or the metric moves, stop the line, re-interview, close the
@@ -124,7 +133,9 @@ phase file — nothing else first — and takes ONE item.
   it, «who reads this file» was asked (code graph / preflight) for every file the item moves — and
   «who reads this ROW» for every new shape a fix writes into a file others read — and for every
   producer the item re-uses: does it take its inputs and outputs as parameters, and does every
-  decision field of the record it writes branch on the leg it is now asked to serve?
+  decision field of the record it writes branch on the leg it is now asked to serve? And for every
+  command a ruling orders: «what ELSE does this command do» (a registration that also opens a money
+  line) and «does PROCESS.md already sequence it» — a ruling that re-sequences it is the defect.
 - **Prompt ↔ transport contract:** whatever the prompt permits the model to answer (object or array,
   fenced or bare), the runner's stop rule and the parser accept — drilled at $0 on every permitted
   shape before the first purchase; a shape the model produces later joins the drill once. A law that
@@ -140,7 +151,8 @@ phase file — nothing else first — and takes ONE item.
   reads the money paths end to end with the commands the paid session will run: the emitter's defaults
   (money line, hardware tier, price, backstop), every reader of the reply file, the guard calls and the
   runbook at HEAD; its findings enter the $0 prep item, and the purchase is the session AFTER the team
-  lead has read the committed registration.**
+  lead has read the committed RECORD — the dry run's file and the code at HEAD (§3.4 g); the registration
+  that opens the line belongs to the paid session and is read at acceptance against the dry run.**
 - Red → **triage in this order:** (1) was the run complete — every unit answered and parsed? if not,
   it is a transport defect (a serving failure included), not a reading; (2) the reference and the grader;
   (3) only then the law. Diagnose the root cause and decide with the error signal attached; never
@@ -170,9 +182,10 @@ phase file — nothing else first — and takes ONE item.
   smoke is not run at all: the hard stop is the gate. **The mean is the WHOLE-RUN mean of the slowest host seen**
   (n = the run's units, written from the run record per host) — a smoke of three built to hold the longest unit is
   a maximum, never a mean, and prices nothing. **One paid run = one money line** (§3.4 f): a line that spans days
-  drinks the always-on drip and can neither carry a new cap nor close. **The platform's backstop is derived from
-  the cap at the registered price** — a borrowed minute-constant that would bite first bounds the READING, not the
-  money, and turns a complete run into an incomplete one; the record says which bound is live.
+  drinks the always-on drip and can neither carry a new cap nor close — and a line opened a session before its run
+  is such a line. **The platform's backstop is derived from the cap at the registered price** — a borrowed
+  minute-constant that would bite first bounds the READING, not the money, and turns a complete run into an
+  incomplete one; the record says which bound is live.
 - **A fence written for a LATER paid step is an estimate, never a cap:** it is re-priced at that step's registration
   on the instrument's own measured pace of the SLOWEST host seen (hosts of one hardware tier have run 1.5–2.3×
   apart on identical outputs), the cap becoming the hard stop — a fence carried from an estimate table into a cap
@@ -191,7 +204,8 @@ phase file — nothing else first — and takes ONE item.
   the diet may be the phase file's defaults growing while the executor's law does not. Three money stops in
   one day mean the phase-file TEMPLATE lacks a money section: write its defaults once (§3.4 f, the whole-run
   rate, the cap from the dry run, the guard named with the line, the post-run reading as the close's reference,
-  the hardware tier and price as record fields, the backstop from the cap), not one rule per stop.
+  the hardware tier and price as record fields, the backstop from the cap, the line opened inside the paid
+  session — §3.4 g), not one rule per stop.
 
 ## 8. Operator visibility — caps, not scrollback
 - `docs/STATUS.md` ≤60 lines, operator's language: mission in a paragraph, the phase map with «you
@@ -233,14 +247,17 @@ in a phase is deleted at the retro. The operator is told in three lines: what th
 changed, what it prevents. A planned read (an error table the team lead must judge) is not a failure and
 is not counted as preventable; a fork or a defect that the catalogue could have answered is — and so is
 a question INSIDE a planned stop that the phase file could have answered before the stop was reached.
-A verifier's finding BEFORE a purchase is a stop that did not happen: it gets the same pass.
+A verifier's finding BEFORE a purchase is a stop that did not happen: it gets the same pass. **Two
+team-lead documents that disagree are a stop of the team lead's own class (process): the standing one
+wins, the instance is corrected, and the check «what else does this command do» enters §5.**
 
 ## Cadence
 Session start: STATUS → PROCESS → the phase file. Per item: brief (≤5 lines) → the operator pastes
 the standing prompt → the executor's turn ends at «done» or at a stop → acceptance (§6) → tick,
 decision line, STATUS. Per paid run: the $0 prep item → the fresh verifier → the team lead reads the
-registration → the paid session. Per stop: ruling (≤12 lines) → the pattern pass (§10) → the
-phase-file revision. Per phase: the product-truth gate, the retro metrics (§7), one retro line. Kickoff
-in a new repo: `/brain-init` with the two-tier module (phase file template with the fork catalogue AND a
-money section with its six defaults, PROGRESS template with the stop class, standing prompt, deny
-rules, the sweep-refusing hook) — then the interview fills the product spec and the first phase file.
+dry run and HEAD → the paid session opens its own line and runs. Per stop: ruling (≤12 lines) → the
+pattern pass (§10) → the phase-file revision. Per phase: the product-truth gate, the retro metrics (§7),
+one retro line. Kickoff in a new repo: `/brain-init` with the two-tier module (phase file template with
+the fork catalogue AND a money section with its seven defaults, PROGRESS template with the stop class,
+standing prompt, deny rules, the sweep-refusing hook) — then the interview fills the product spec and
+the first phase file.

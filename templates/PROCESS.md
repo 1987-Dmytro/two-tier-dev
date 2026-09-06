@@ -32,13 +32,18 @@ Pinned modules: <list> — a moved pin is claimed through `<mechanism>`, never b
 measurement with `source`, `n`, `max`, `sample`; a rate is a property of the host it was measured on.
 
 ## Money (<platform>; console empty between sessions)
-<!-- The six defaults of the phase-file template, with THIS project's commands. Keep every command real. -->
-- **A paid run is a whole session**: create → settlement in one session; its runbook is written the session before
-  and re-pointed to that run. Rulings name the command whose output is the number; a cap is quoted from
-  `<dry-run command>`.
-- **One paid run = one money line**: opened before the run by `<guard command --line <name> --cap <cap> --note …>`
-  (own ledger `<path>`, anchor = the balance then); the registration reads the guard WITH its line
-  (`<register command --line <name> --cap <cap>>`); the emitter's default line is <name> — never used for a run.
+<!-- The seven defaults of the phase-file template, with THIS project's commands. Keep every command real. -->
+- **A paid run is a whole session**: create → settlement in one session; in front of the create only the line's
+  opening (registration → commit → pack → commit → the checks, minutes, no development); its runbook is written the
+  session before and re-pointed to that run. Rulings name the command whose output is the number; a cap is quoted
+  from `<dry-run command>`.
+- **One paid run = one money line**, opened INSIDE the paid session, minutes before the create — never a session
+  earlier (an aged anchor drinks the always-on drip into the close's reference; the band shuts within hours): by the
+  registration when it reads the guard WITH its line (`<register command --line <name> --cap <cap>>` creates the
+  ledger `<path>`, anchor = the balance then), else by `<guard command --line <name> --cap <cap> --note …>`; the
+  emitter's default line is <name> — never used for a run. The team lead reads `<dry-run file>` + the code at HEAD
+  before the purchase and the registration at acceptance (only the anchor and its time are new). **Where a ruling
+  and this section disagree on a mechanic, this section wins: follow it, name the contradiction in PROGRESS, no stop.**
 - **Pricing**: the rate is the whole-run mean of the slowest host (`<measurements file>`, `sample: whole run`); the
   dear corner is priced and shown; a leg that does not fit issues on the mean corner with the cap as the hard
   stop, no band gate. The hardware tier and its price are fields of the record read from `<platform listing

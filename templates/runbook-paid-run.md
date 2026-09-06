@@ -1,9 +1,10 @@
 # Runbook — a paid run (executor file; written the session BEFORE the run and re-pointed to THAT run)
 
 <!-- The paid session pastes; it transposes nothing. Every path, name, line and cap below is this run's.
-     The $0 half (registration) is its own item the session before; a fresh verifier reads this file at HEAD
-     and the money paths before the purchase; the team lead reads the committed registration; only then the
-     paid session. -->
+     The $0 half (the dry run, the code, this file) is its own item the session before; a fresh verifier reads
+     this file at HEAD and the money paths before the purchase; the team lead reads the dry run + HEAD; only
+     then the paid session — and the registration that OPENS the money line runs HERE (§1), minutes before the
+     create, never a session earlier (an aged anchor drinks the always-on drip into the close's reference). -->
 
 **Run:** `<run-name>` · **money line:** `<line>` · **cap:** <cap> (quoted from `<dry-run command>` — FITS on the
 <mean|dear> corner at <figure>) · **hardware:** `<tier, both platform names>` at <price>/h (the day's dearer offer)
@@ -13,11 +14,14 @@
 ## 0 — before anything (in the paid session, $0)
 - Start ritual done; team-lead files committed by path; `git status` clean; **no live resource**: `<listing
   command>` → `[]`.
-- The registration is the committed one: `<show the record's line, cap, price, pins>`.
+- The dry run is the committed one: `<show the dry run's bound, FITS corner, tier, price, pins>`.
 
-## 1 — open the money line (before the resource exists)
-`<guard command --line <line> --cap <cap> --note "<line> — about to create">` → the line's ledger exists with its
-anchor; the guard prints REMAINING for the line and for the cycle.
+## 1 — register and open the money line (in THIS session, before the resource exists)
+`<register command --line <line> --cap <cap>>` (FITS shown; a refusal ENDS the turn before any create) → commit the
+record + the ledger → `<pack command>` → commit → the checks at that HEAD → `<guard command --line <line> --cap <cap>
+--note "<line> — about to create">` → the line's ledger exists with its anchor; the guard prints REMAINING for the
+line and for the cycle. The registration is read at acceptance against the dry run: same pins, bound, tier, price,
+backstop — only the anchor and its time are new.
 
 ## 2 — create
 `<create command … --hardware "<create-name>" --terminate-after <minutes> …>` — the operator's own line if the

@@ -65,10 +65,12 @@ emitter refuses to write.
 
 ## 6. Money — defaults for every paid run (the project's commands are in `docs/PROCESS.md` «Money»)
 
-<!-- Six defaults. Fill the numbers; do not add rules one per stop — extend the defaults. -->
-1. **One paid run = ONE money line** (own name, own anchor taken by an opening reading before the run, the run's
-   cap as its cap, closed by its run record in the same session). An open multi-run line carries no new run.
-   The registration reads the guard named with ITS line; a default line name in the emitter is a refusal.
+<!-- Seven defaults. Fill the numbers; do not add rules one per stop — extend the defaults. -->
+1. **One paid run = ONE money line** (own name, own anchor taken by an opening reading INSIDE the paid session,
+   minutes before the resource is created — never a session earlier: an aged anchor drinks the always-on drip into
+   the close's reference and the band shuts within hours; the run's cap as its cap, closed by its run record in the
+   same session). An open multi-run line carries no new run. The registration reads the guard named with ITS line;
+   a default line name in the emitter is a refusal.
 2. **The rate is the WHOLE-RUN mean of the slowest host seen** (n = the run's units, from the run record) —
    never a smoke of three, never a borrowed sibling. The dear corner (the max on every unit) is priced and
    shown; when it does not fit, the leg issues FITS on the MEAN corner with the cap as the hard stop, no band gate.
@@ -84,6 +86,11 @@ emitter refuses to write.
 6. **The smoke holds the longest unit first**; a card too small fails on three units, not on eighty. The cycle
    ceiling is the operator's word (a table: options · what fits · when asked again); the anchor is never
    regenerated; always-on resources drip into every open window; teardown is proven by a listing.
+7. **Registration ≠ opening.** The record (pins, bound, FITS, tier, price, backstop, runbook) is written and read at
+   $0 — the team lead reads the dry run and the code at HEAD before the purchase; the line's anchor is taken in the
+   paid session (default 1). Where the emitter does both in one command, that command runs in the paid session,
+   minutes before the create, and the registration is read at acceptance against the dry run. Where a ruling and
+   `docs/PROCESS.md` disagree on a mechanic, PROCESS.md wins: follow it, name the contradiction in PROGRESS, no stop.
 Ceiling: <amount> (operator, <date>). Per-leg caps: <leg> ≤ <cap> (quoted from `<dry-run command>`) …
 
 ## 7. Dependencies the team lead owes
