@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.13 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.12 внутри; только паттерны — механика проекта в его PROCESS.md): деньги — один платный ран = одна линия; регистрация — ОДНА на линию (повтор после якоря = новая линия); регистрация ≠ открытие (якорь — в платной сессии; чтение до покупки — dry-run + HEAD); кап — цитата dry-run; ставка — среднее целого рана; закрытие — по пост-рановому чтению; железо и цена — поля записи; бэкстоп — из капа; гейт ранбука — команда с exit ≠ 0 ДО шага; разрешение харнеса на платную команду доказано за $0 до покупки; стоящий закон бьёт рулинг по механике; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг; эталон — из популяции продукта, ничьи эталона считаются до вердикта, сожжённый набор — чтение; второй красный холдаут → другой класс инструмента, замер за $0 до покупки; один файл фазы с каталогом развилок; стандартный промт; рулинг ≤12 строк; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
+description: "v3.14 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.13 внутри; только паттерны — механика проекта в его PROCESS.md): деньги — один платный ран = одна линия; регистрация — ОДНА на линию (повтор после якоря = новая линия); регистрация ≠ открытие (якорь — в платной сессии; чтение до покупки — dry-run + HEAD); кап — цитата dry-run; ставка — среднее целого рана; закрытие — по пост-рановому чтению; железо и цена — поля записи; бэкстоп — из капа; гейт ранбука — команда с exit ≠ 0 ДО шага; разрешение харнеса на платную команду доказано за $0 до покупки; стоящий закон бьёт рулинг по механике; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг; эталон — из популяции продукта, ничьи эталона считаются до вердикта, сожжённый набор — чтение; второй красный холдаут → другой класс инструмента, замер за $0; таблица решений — на языке оператора, рекомендация первой; один файл фазы с каталогом развилок; стандартный промт; рулинг ≤12 строк; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
 ---
 
-# team-lead v3.13 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.14 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -239,6 +239,11 @@ phase file — nothing else first — and takes ONE item.
 - Every step is briefed in ≤5 plain lines before it runs (what, why now, what changes on disk,
   the risk); the operator's action is always one of two: paste the standing prompt (given VERBATIM
   in a code block every time), or answer a decision table.
+- **A decision table is written in the operator's words, never the team lead's:** first what the number
+  measures and why it is what it is, then per branch what it buys, what it costs (money, days) and what
+  it changes on the map, the recommendation first and the reason in one sentence; no metric names,
+  set names or guard words the operator did not coin. A table the operator has to ask about is rewritten
+  in plain words BEFORE it is answered — the confusion is the table's, not the operator's.
 - Disorientation («explain where we are», «we never discussed this», repeated stops) is a red gate
   on the PROCESS: stop, fix the map, not the operator.
 

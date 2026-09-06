@@ -14,6 +14,13 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.14 — 2026-09-06 (late) — a decision table is written in the operator's words
+- **§8:** a decision table says first what the number measures and why it is what it is, then per branch what it
+  buys, costs and changes on the map, the recommendation first; no metric, set or guard names the operator did not
+  coin; a table the operator has to ask about is rewritten in plain words before it is answered. Taught by: the
+  origin project's operator answering the second fork of the evening with «explain it to me, I am lost» — the
+  branches were priced and dated but written in the team lead's jargon; the plain explanation settled it in one turn.
+
 ## v3.13 — 2026-09-06 (night) — the harness's permission is proven at $0; the reference's ties are counted before the verdict; a second red frozen set changes the instrument's class
 - **§5:** the paid session's irreversible command is pre-authorised in the executor's harness and PROVEN at $0 in the
   prep session by a call of the same shape that cannot spend; a permission prompt inside a paid session with an open
