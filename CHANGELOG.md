@@ -14,6 +14,19 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.13 — 2026-09-06 (night) — the harness's permission is proven at $0; the reference's ties are counted before the verdict; a second red frozen set changes the instrument's class
+- **§5:** the paid session's irreversible command is pre-authorised in the executor's harness and PROVEN at $0 in the
+  prep session by a call of the same shape that cannot spend; a permission prompt inside a paid session with an open
+  money line is a stop, and the team lead's. Taught by: the origin project's s33 — the harness classifier denied the
+  create twice with the line anchored (≈ 16 min of anchor age, $0).
+- **§6 triage (2):** the reference's own declared ties are counted before the verdict; a verdict the ties alone could
+  flip is reported with both numbers; the codebook is the first suspect. Taught by: holdout-2 read red on subject
+  (0.7054) with 15 of 33 misses on the gold's own declared ties.
+- **§6:** a frozen set red for the second time under one law family is not answered by another tuning round — a dev
+  bar fit on one set is a fit, not a forecast; the next attempt is a different instrument class measured at $0 on
+  every spent set, and the next frozen set's purchase is gated on that $0 reading. Taught by: two holdouts at ≈ 0.71
+  after a dev bar of 0.8857 taken on the fifth tuning round.
+
 ## v3.12 — 2026-09-06 (evening) — one registration per line; a runbook gate is a command that can fail the session
 - **A registration is ONE per line** (fork catalogue (g)): once a line has swallowed any cent — the always-on drip across
   a billing boundary, a resource the liveness gate killed — its own remaining, not the cap, is its measure and a second

@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.12 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.11 внутри; только паттерны — механика проекта в его PROCESS.md): деньги — один платный ран = одна линия; регистрация — ОДНА на линию (повтор после якоря = новая линия или остаток линии словом оператора); регистрация ≠ открытие (якорь — в платной сессии; чтение до покупки — dry-run + HEAD); кап — цитата dry-run; ставка — среднее целого рана; закрытие — по пост-рановому чтению (сработавший жёсткий стоп — та же ветка, прописана до покупки); железо и цена — поля записи; бэкстоп — из капа; гейт ранбука — команда с exit ≠ 0, сцепленная, ДО шага (печать «STOP» — не гейт); стоящий закон бьёт рулинг по механике; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг; новая форма строки — всем читателям; эталон — из популяции продукта, сожжённый набор — чтение; один файл фазы с каталогом развилок; файл ПРОГРЕССА; стандартный промт; рулинг ≤12 строк; триаж красного бара; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
+description: "v3.13 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.12 внутри; только паттерны — механика проекта в его PROCESS.md): деньги — один платный ран = одна линия; регистрация — ОДНА на линию (повтор после якоря = новая линия); регистрация ≠ открытие (якорь — в платной сессии; чтение до покупки — dry-run + HEAD); кап — цитата dry-run; ставка — среднее целого рана; закрытие — по пост-рановому чтению; железо и цена — поля записи; бэкстоп — из капа; гейт ранбука — команда с exit ≠ 0 ДО шага; разрешение харнеса на платную команду доказано за $0 до покупки; стоящий закон бьёт рулинг по механике; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг; эталон — из популяции продукта, ничьи эталона считаются до вердикта, сожжённый набор — чтение; второй красный холдаут → другой класс инструмента, замер за $0 до покупки; один файл фазы с каталогом развилок; стандартный промт; рулинг ≤12 строк; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
 ---
 
-# team-lead v3.12 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.13 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -137,6 +137,10 @@ phase file — nothing else first — and takes ONE item.
   stop derived from the cap; a tiny fix and the paid run it unblocks may share a session. Prompts are
   rewritten when the model changes, never inherited. After two failed corrections in one session,
   stop feeding it: one decision line, fresh session.
+- **The paid session's irreversible command is pre-authorised in the executor's harness and PROVEN at $0 in
+  the prep session** — a call of the same shape that cannot spend passes the harness's permission layer and
+  the proof is shown; a permission prompt inside a paid session with an open money line is a stop, and the
+  team lead's.
 - Before issuing anything: every path exists (grep), every claim about a file was checked by opening
   it, «who reads this file» was asked (code graph / preflight) for every file the item moves — and
   «who reads this ROW» for every new shape a fix writes into a file others read — and for every
@@ -162,9 +166,17 @@ phase file — nothing else first — and takes ONE item.
   lead has read the committed RECORD — the dry run's file and the code at HEAD (§3.4 g); the registration
   that opens the line belongs to the paid session and is read at acceptance against the dry run.**
 - Red → **triage in this order:** (1) was the run complete — every unit answered and parsed? if not,
-  it is a transport defect (a serving failure included), not a reading; (2) the reference and the grader;
-  (3) only then the law. Diagnose the root cause and decide with the error signal attached; never
-  «try again». A measured number is never rewritten; a repaired instrument buys the next number.
+  it is a transport defect (a serving failure included), not a reading; (2) the reference and the grader —
+  **the reference's own declared ties are COUNTED before the verdict**: a verdict the ties alone could flip is
+  reported with both numbers (the bar as registered, and the post-hoc reading with every tie resolved the
+  instrument's way), and the codebook, not the instrument, is the first suspect; (3) only then the law.
+  Diagnose the root cause and decide with the error signal attached; never «try again». A measured number
+  is never rewritten; a repaired instrument buys the next number. **A frozen set red for the SECOND time
+  under one law family is not answered by another tuning round on that family** — a dev bar taken after
+  rounds of tuning on one set is a fit, not a forecast, and two independent frozen sets that agree are the
+  product's number; the next attempt is a different instrument class (a deterministic layer over the output,
+  another reader), measured at $0 on every spent set before any purchase, and the purchase of the next
+  frozen set is gated on that $0 reading in the phase file's decision table.
 - Green → tick the item in the phase file, one acceptance line in the decisions log, refresh the map.
 - A re-registration is accepted only after its BOUND is re-read at the source: the instrument's own measured rate
   from the measurements file — a borrowed rate that outlived the first smoke is a refusal, not a detail — and its
