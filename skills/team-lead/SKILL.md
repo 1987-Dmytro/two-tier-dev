@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.11 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.10 внутри; диета: только паттерны — ни флагов, ни цен, ни платформ; механика проекта — в его PROCESS.md): деньги — один платный ран = одна линия, регистрация ≠ открытие линии (якорь — в платной сессии, минуты до рана; чтение до покупки — dry-run + HEAD), кап — цитата пробного расчёта, ставка — среднее целого рана, закрытие — по пост-рановому чтению, железо и цена — поля записи, бэкстоп — из капа; стоящий закон проекта бьёт рулинг по механике — без остановки; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг, не инструмент; новая форма строки — всем читателям; эталон — из популяции продукта, сожжённый набор — чтение; один файл фазы с каталогом развилок; файл ПРОГРЕССА; стандартный промт; рулинг ≤12 строк; триаж красного бара; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
+description: "v3.12 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.11 внутри; только паттерны — механика проекта в его PROCESS.md): деньги — один платный ран = одна линия; регистрация — ОДНА на линию (повтор после якоря = новая линия или остаток линии словом оператора); регистрация ≠ открытие (якорь — в платной сессии; чтение до покупки — dry-run + HEAD); кап — цитата dry-run; ставка — среднее целого рана; закрытие — по пост-рановому чтению (сработавший жёсткий стоп — та же ветка, прописана до покупки); железо и цена — поля записи; бэкстоп — из капа; гейт ранбука — команда с exit ≠ 0, сцепленная, ДО шага (печать «STOP» — не гейт); стоящий закон бьёт рулинг по механике; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг; новая форма строки — всем читателям; эталон — из популяции продукта, сожжённый набор — чтение; один файл фазы с каталогом развилок; файл ПРОГРЕССА; стандартный промт; рулинг ≤12 строк; триаж красного бара; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
 ---
 
-# team-lead v3.11 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.12 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -88,11 +88,19 @@ reality, hard prohibitions; one question at a time; blindspot pass):
    and before ANY next run (the gate's reference is the line's last open reading; a pre-run one refuses
    the close for ever); a line whose readings all predate its run closes on the billing walk alone,
    bounded to its own window, and never takes a late reading — it would carry the next run's money; a
-   ruling that orders a close names that reading with it; (g) *registration ≠ opening* — the RECORD
-   (pins, bound, FITS, tier, price, backstop, runbook) is written and read at $0; the line's ANCHOR is the
-   opening reading of (f), taken in the paid session; where the emitter does both in one command, that
+   ruling that orders a close names that reading with it; **the hard stop firing is the same case written
+   in advance** — the post-run reading may refuse at the cap, the close then settles on the walk alone, and
+   the runbook says so before the purchase so nobody retries the reading; (g) *registration ≠ opening* — the
+   RECORD (pins, bound, FITS, tier, price, backstop, runbook) is written and read at $0; the line's ANCHOR is
+   the opening reading of (f), taken in the paid session; where the emitter does both in one command, that
    command runs in the paid session, the team lead's pre-purchase reading is the dry run and the code at
    HEAD, and the registration is read at acceptance against the dry run — only the anchor and its time new.
+   **A registration is ONE per line:** once a line has swallowed any cent (the always-on drip across a
+   billing boundary, a resource the liveness gate killed) its own remaining, not the cap, is its measure and
+   a second registration at the full cap refuses — so a registration repeated after the anchor (a price
+   move, a retry an hour later) is a NEW line of (b) with its own anchor, or is issued against the anchored
+   line's printed remaining on the operator's word; the runbook's recovery paths say which BEFORE the first
+   purchase, never inside it.
 5. **Decisions log** — appended by the team lead, dated, **≤12 lines each**: a decision names a
    choice, a number the instrument produced, or a file to read — it never adds a test, pin, guard
    or ledger. Rulings live here, not in a separate file. A ruling that must carry commands is a sign
@@ -172,6 +180,10 @@ phase file — nothing else first — and takes ONE item.
 
 ## 7. Law diet — verification must stay cheaper than building
 - A caught bug becomes a guard ONCE; a guard nobody has seen refuse is checked in both directions.
+- **A runbook gate is a command that can fail the session** — a non-zero exit with the next command chained on
+  it — placed BEFORE the step it guards; a printed «STOP» that exits 0 is a note to a human who is not in the
+  room, and a gate placed after the command it guards (a pin check after the registration that anchors the
+  line) guards nothing; a check the paid session runs is drilled once at $0 to refuse.
 - A test is written for a product defect or a data invariant — never for the process, never by
   reading prose out of a document, never pinning the hash of a file that grows.
 - Money: the cap becomes the platform's hard stop; one ledger line per session; a smoke before a run;
@@ -205,7 +217,7 @@ phase file — nothing else first — and takes ONE item.
   one day mean the phase-file TEMPLATE lacks a money section: write its defaults once (§3.4 f, the whole-run
   rate, the cap from the dry run, the guard named with the line, the post-run reading as the close's reference,
   the hardware tier and price as record fields, the backstop from the cap, the line opened inside the paid
-  session — §3.4 g), not one rule per stop.
+  session — §3.4 g, one registration per line), not one rule per stop.
 
 ## 8. Operator visibility — caps, not scrollback
 - `docs/STATUS.md` ≤60 lines, operator's language: mission in a paragraph, the phase map with «you

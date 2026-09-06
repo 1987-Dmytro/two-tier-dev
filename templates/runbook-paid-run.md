@@ -15,8 +15,15 @@
 - Start ritual done; team-lead files committed by path; `git status` clean; **no live resource**: `<listing
   command>` → `[]`.
 - The dry run is the committed one: `<show the dry run's bound, FITS corner, tier, price, pins>`.
+- **The pin check is a gate, not a note — and it runs HERE, before the registration anchors anything:**
+  `<pin-check command over the disk files against the dev-bar registration> && echo "PINS HOLD"` — it exits ≠ 0 on
+  a moved pin and every following command is chained on it with `&&`; a moved pin ENDS the turn ($0).
 
 ## 1 — register and open the money line (in THIS session, before the resource exists)
+**One registration per line.** If this registration must be redone after its anchor (a price move, a STOP retried an
+hour later), it is a NEW line (`<line>-r2`, its own ledger) or `--cap` = the guard's printed remaining of the line on the
+operator's word — never a second `<register command>` at the full cap on the anchored line (it refuses once any cent
+has landed).
 `<register command --line <line> --cap <cap>>` (FITS shown; a refusal ENDS the turn before any create) → commit the
 record + the ledger → `<pack command>` → commit → the checks at that HEAD → `<guard command --line <line> --cap <cap>
 --note "<line> — about to create">` → the line's ledger exists with its anchor; the guard prints REMAINING for the
@@ -44,7 +51,8 @@ are read for the record, never for a band gate on a leg issued on the mean corne
 `<close-segment command --replies <out-file>>` (the segment's billed span comes from here) → the POST-RUN reading
 on the line: `<guard command --line <line> --note "post-run reading">` → `<close command --expect <billed span>
 --until <after the delete> --tolerance <t>>`. A partial billing walk is refused: carried to the next session's
-start, read-only walk first. **Never** take a late reading on a line whose readings predate its run.
+start, read-only walk first. **Never** take a late reading on a line whose readings predate its run. **If the hard
+stop fired** (spent == cap) the post-run reading REFUSES — do not retry it; the close settles on the walk alone.
 
 ## 7 — the reading
 `<score command --arm <bar arm>>` (BAR <x>/<y>) · `<score command --arm <reading arm>>` (READING) → the error

@@ -14,6 +14,21 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.12 — 2026-09-06 (evening) — one registration per line; a runbook gate is a command that can fail the session
+- **A registration is ONE per line** (fork catalogue (g)): once a line has swallowed any cent — the always-on drip across
+  a billing boundary, a resource the liveness gate killed — its own remaining, not the cap, is its measure and a second
+  registration at the full cap refuses; a registration repeated after the anchor (a price move, a retry an hour later)
+  is a NEW line of (b) with its own anchor, or is issued against the anchored line's printed remaining on the operator's
+  word — and the runbook's recovery paths say which BEFORE the first purchase.
+- **A runbook gate is a command that can fail the session** (§7): a non-zero exit with the next command chained on it,
+  placed BEFORE the step it guards; a printed «STOP» that exits 0 is a note to a human who is not in the room; a gate
+  placed after the command it guards (a pin check after the anchoring registration) guards nothing.
+- **The hard stop firing is a branch written in advance** ((f)): the post-run reading may refuse at the cap, the close then
+  settles on the walk alone, and the runbook says so before the purchase so nobody retries the reading.
+- Taught by: the fresh pre-purchase verifier of the origin project's holdout-2 shot (no stop happened — the findings
+  entered PROCESS «Money» v2.2 and PHASE v17 the same hour, the paid session opens with a three-line runbook fix).
+  Templates: `templates/PROCESS.md` «Money» and the paid-run runbook template gain the three defaults.
+
 ## v3.11 — 2026-09-06 — registration ≠ opening; the standing law beats a ruling on a mechanic
 - The money line is OPENED (its anchor taken) inside the paid session, minutes before the resource is created —
   never a session earlier: an aged anchor drinks the always-on drip into the close's reference and the band shuts

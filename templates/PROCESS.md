@@ -42,7 +42,14 @@ measurement with `source`, `n`, `max`, `sample`; a rate is a property of the hos
   registration when it reads the guard WITH its line (`<register command --line <name> --cap <cap>>` creates the
   ledger `<path>`, anchor = the balance then), else by `<guard command --line <name> --cap <cap> --note …>`; the
   emitter's default line is <name> — never used for a run. The team lead reads `<dry-run file>` + the code at HEAD
-  before the purchase and the registration at acceptance (only the anchor and its time are new). **Where a ruling
+  before the purchase and the registration at acceptance (only the anchor and its time are new). **A registration is
+  never repeated on an anchored line** — once the line has swallowed any cent (the drip across a billing boundary, a
+  killed resource) a second `<register command>` at the full cap refuses; a re-registration (a price move, a retry an
+  hour later) goes under a NEW line (`<name>-r2`, its own ledger) or with `--cap` = the guard's printed remaining of the
+  line, the operator's word. **A runbook gate is a command that can fail the session** (exit ≠ 0, the next command
+  chained with `&&`), placed BEFORE the step it guards — the instrument-pin check runs on the disk files before the
+  registration; a printed «STOP» with exit 0 is a note. When the hard stop fires (spent == cap) the post-run note
+  refuses — it is not retried; the close settles on the walk alone. **Where a ruling
   and this section disagree on a mechanic, this section wins: follow it, name the contradiction in PROGRESS, no stop.**
 - **Pricing**: the rate is the whole-run mean of the slowest host (`<measurements file>`, `sample: whole run`); the
   dear corner is priced and shown; a leg that does not fit issues on the mean corner with the cap as the hard
