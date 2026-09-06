@@ -1,0 +1,64 @@
+# CLAUDE.md
+
+Guidance for Claude Code (the EXECUTOR) in this repository. The team lead is a separate Claude session
+(skill `team-lead`); the operator relays between the two and owns every decision. This file stays ≤80 lines.
+
+# <project-name>
+
+<one paragraph: what the product is, for whom, the stage, the budget shape (e.g. rented compute, $0 data)>
+
+## Where the truth lives (read in this order, only the sections your task names)
+
+1. `docs/PRODUCT.md` — the customer's questions (north star). 2. `docs/SPEC*.md` — the current product spec.
+3. `docs/PHASE-*.md` — the executable phase file you were handed (question · checks · files · out of scope ·
+stop-points · fork catalogue · money defaults). 4. `docs/STATUS.md` — the map. 5. `docs/PROCESS.md` — mechanics:
+ownership, money, pins, report and plan formats. Sealed records and frozen sets: consult only when a record cites
+them; never edit.
+
+## File ownership — one writer per file (enforced by `permissions.deny`)
+
+- Team-lead files — read and commit BY PATH, never edit: `docs/STATUS.md`, `docs/SPEC*.md`, `docs/PRODUCT.md`,
+  `docs/PROCESS.md`, `docs/PHASE-*.md`, `docs/reviews/**`, `docs/labels-*.jsonl`, `docs/CODEBOOK-*.md`.
+  A fact for the map goes into PROGRESS; the team lead moves it into STATUS at acceptance.
+- Executor files: `src/`, `tests/`, `scripts/`, `results/`, `config/`, `knowledge/**`, `docs/plans/**`,
+  `docs/reports/**`, runbooks, `.claude/**`, the rest.
+
+## Workflow per phase (the loop the team lead accepts)
+
+1. Every session starts with the operator's standing prompt: read `git log`, `docs/plans/<phase>.PROGRESS.md`,
+   the newest dated ruling, the phase file's DONE list — nothing else first. Commit modified team-lead files by
+   path. Take ONE item: the «next» line of PROGRESS.
+2. Verify the item with its own check and SHOW the output. Commit by path. Update PROGRESS (done / next / open
+   stop, ≤60 lines). A stop-point (an operator decision, a paid or irreversible step, a fork the phase file does
+   not settle, a test that would have to be weakened, a sealed file that would move) is written into PROGRESS as
+   the open stop with its class, and the turn ENDS.
+3. A plan (`/plan-phase`) only when the diff cannot be described in a sentence; ≤80 lines; STOP for review.
+4. The phase report (`docs/reports/<phase>.md`, ≤30 lines): the question and its answer in the first ten lines;
+   evidence; deviations with cause tags; debts; the check's tail with the HEAD it was taken over.
+5. Two failed corrections in one session → say so; the team lead reissues in a fresh session.
+
+## Rules
+- Chat: <operator's language>. All artifacts (code, comments, commits, docs, plans, reports): English.
+- Numbers only from result files through the scorer/build; never typed; fail loudly when a source is missing.
+  `<scorer module>` is the single judge of all numbers; never fork it.
+- **Never add a test, pin, guard or ledger the phase file did not ask for — the phase file asks for ONE test per
+  caught product defect; name every other need in PROGRESS instead.**
+- Smoke before any paid run; money lines, caps and the guard's commands: `docs/PROCESS.md` «Money».
+- Frozen sets, sealed registrations and the frozen spec are immutable; a moved pinned module is claimed through
+  `<mechanism>`, never by re-pinning.
+- Never `git add -A`; never format repo-wide (hooks refuse both). `make check` green after every commit — a red
+  you did not cause is named in PROGRESS, not fixed silently.
+- Execute what the phase file and the newest ruling say: never expand or silently shrink scope; a threshold that
+  is not in the phase file is a scope change — write it as a stop.
+
+## Second brain
+- `knowledge/hot.md` is injected at SessionStart: keep the curated block ≤40 lines — a cache, not a log. Durable
+  lessons → native memory; volatile state → hot.md; decisions → `knowledge/decisions/`.
+- `knowledge/` is an Obsidian vault; `[[wikilinks]]` are reader pointers. Path-scoped invariants live in
+  `.claude/rules/*.md` with `paths:` frontmatter, not here.
+
+## Stack & commands
+<language, versions, `make check` → `<lint> && <tests>`, `make preflight` → pins and digests, one test command>
+
+## Tooling
+<code graph query before grepping; docs lookups; `gh` for GitHub; the full inventory in `knowledge/runbooks/tooling.md`>
