@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.14 (06.09.2026, сохранять ЭТУ карточку; v3.5–3.13 внутри; только паттерны — механика проекта в его PROCESS.md): деньги — один платный ран = одна линия; регистрация — ОДНА на линию (повтор после якоря = новая линия); регистрация ≠ открытие (якорь — в платной сессии; чтение до покупки — dry-run + HEAD); кап — цитата dry-run; ставка — среднее целого рана; закрытие — по пост-рановому чтению; железо и цена — поля записи; бэкстоп — из капа; гейт ранбука — команда с exit ≠ 0 ДО шага; разрешение харнеса на платную команду доказано за $0 до покупки; стоящий закон бьёт рулинг по механике; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг; эталон — из популяции продукта, ничьи эталона считаются до вердикта, сожжённый набор — чтение; второй красный холдаут → другой класс инструмента, замер за $0; таблица решений — на языке оператора, рекомендация первой; один файл фазы с каталогом развилок; стандартный промт; рулинг ≤12 строк; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
+description: "v3.15 (08.09.2026, сохранять ЭТУ карточку; v3.5–3.14 внутри; только паттерны — механика проекта в его PROCESS.md): измеряемый инструмент = пайплайн продукта ЦЕЛИКОМ (каждый фильтр продукта между моделью и экраном — внутри замера, граница названа до первой покупки; число продукта его же функциями за $0, замер не переписывается, запись не расширяется); деньги — один платный ран = одна линия; регистрация — ОДНА на линию (повтор после якоря = новая линия); регистрация ≠ открытие (якорь — в платной сессии; чтение до покупки — dry-run + HEAD); кап — цитата dry-run; ставка — среднее целого рана; закрытие — по пост-рановому чтению; железо и цена — поля записи; бэкстоп — из капа; гейт ранбука — команда с exit ≠ 0 ДО шага; разрешение харнеса на платную команду доказано за $0 до покупки; стоящий закон бьёт рулинг по механике; свежий верификатор ДО покупки; сервинг-отказ двигает сервинг; эталон — из популяции продукта, ничьи эталона считаются до вердикта, сожжённый набор — чтение; второй красный холдаут → другой класс инструмента, замер за $0; таблица решений — на языке оператора, рекомендация первой; один файл фазы с каталогом развилок; стандартный промт; рулинг ≤12 строк; при КАЖДОЙ остановке — разбор паттерна; диета закона; ≥2 сессии/день, ≤1 остановка/день."
 ---
 
-# team-lead v3.14 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.15 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -41,6 +41,13 @@ nines is counted on the product). The source beats habit — and v3's own stop r
   sources, a predicate that also fires off-domain): a frozen set with out-of-scope items measures the
   codebook's gaps, not the instrument, and its bar is spent for nothing. The population rule is written
   in the phase file BEFORE the draw, and a draw is checked against it before it is frozen.
+- **The graded instrument is the product's pipeline END TO END** — every filter the product applies between
+  the model's answer and the screen (an evidence hook, a dedup, a post-processing layer) sits INSIDE what the
+  grader scores, or the phase file names the one that does not and why, BEFORE the first purchase: a number
+  measured upstream of a product filter is the MODEL's number, disclosed as such, never the product's. A gap
+  found after the fact is closed at $0 by the product's own functions over the same answers (§3.4 h): the
+  product's number is shipped beside the reading; the reading is never rewritten, and a record is never
+  widened so that the product reproduces the instrument.
 - **Phase-close gate:** the operator SEES the system's output beside the reference (rows under a
   recorded seed, from result files) and says what is right and wrong. Green tests close nothing.
 - Reliability is counted on the product, never on the number of green process gates.
@@ -100,7 +107,10 @@ reality, hard prohibitions; one question at a time; blindspot pass):
    a second registration at the full cap refuses — so a registration repeated after the anchor (a price
    move, a retry an hour later) is a NEW line of (b) with its own anchor, or is issued against the anchored
    line's printed remaining on the operator's word; the runbook's recovery paths say which BEFORE the first
-   purchase, never inside it.
+   purchase, never inside it; (h) *the instrument ≠ the product* — a filter the product applies that the grader
+   did not see: the product's own number at $0 by the product's OWN functions (called, never re-spelled) over
+   the same answers, on EVERY axis the grader scores, shipped beside the reading; the executor names the gap
+   with its numbers in the progress file — no stop; widening a record's contract stays a stop.
 5. **Decisions log** — appended by the team lead, dated, **≤12 lines each**: a decision names a
    choice, a number the instrument produced, or a file to read — it never adds a test, pin, guard
    or ledger. Rulings live here, not in a separate file. A ruling that must carry commands is a sign
@@ -147,7 +157,9 @@ phase file — nothing else first — and takes ONE item.
   producer the item re-uses: does it take its inputs and outputs as parameters, and does every
   decision field of the record it writes branch on the leg it is now asked to serve? And for every
   command a ruling orders: «what ELSE does this command do» (a registration that also opens a money
-  line) and «does PROCESS.md already sequence it» — a ruling that re-sequences it is the defect.
+  line) and «does PROCESS.md already sequence it» — a ruling that re-sequences it is the defect. And for every
+  grader an item relies on: does it score the rows the product SHIPS (after every product filter) or the model's
+  raw answer? — asked before the first purchase, not after the second frozen set.
 - **Prompt ↔ transport contract:** whatever the prompt permits the model to answer (object or array,
   fenced or bare), the runner's stop rule and the parser accept — drilled at $0 on every permitted
   shape before the first purchase; a shape the model produces later joins the drill once. A law that
@@ -158,6 +170,9 @@ phase file — nothing else first — and takes ONE item.
 ## 6. Acceptance — diff, artifact, check; ≤10 lines
 - Read the DIFF, open the artifact, re-run the check. Numbers from result files, never from prose.
 - Hunt for scope silently added AND silently dropped; a guard is accepted only with both directions.
+- A gap the executor measured on ONE axis is re-measured by the team lead on EVERY axis the grader scores
+  before it is ruled — with the team lead's own run of the product's functions, never from the executor's
+  prose: a one-row story is usually a two-number story.
 - A fresh-context reviewer only for money, secrets or user input — correctness and stated
   requirements; other findings optional. **Before EVERY purchase — not after a stop — a fresh verifier
   reads the money paths end to end with the commands the paid session will run: the emitter's defaults

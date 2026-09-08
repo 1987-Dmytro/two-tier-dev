@@ -14,6 +14,18 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.15 — 2026-09-08 — the graded instrument is the product's pipeline end to end
+- **§2:** every filter the product applies between the model's answer and the screen (an evidence hook, a dedup, a
+  post-processing layer) sits inside what the grader scores, or the phase file names the exception BEFORE the first
+  purchase; a number measured upstream of a product filter is the model's number, disclosed as such. A gap found
+  after the fact is closed at $0 by the product's own functions over the same answers; the reading is never
+  rewritten, the record is never widened so the product reproduces the instrument. **§3.4 (h)** the fork-catalogue
+  default; **§5** «does the grader score the rows the product ships?» joins the pre-issue questions; **§6** a gap the
+  executor measured on one axis is re-measured by the team lead on every axis the grader scores. Taught by: the
+  origin project's s35 — five dev iterations and two frozen sets had graded the model's raw answer while the product
+  screened it through its evidence hooks before the post-processing layer; the loop reproduced 0.7411 / 0.7937 where
+  the screen published 0.7500 / 0.8021 (the executor named the subject row, not the signal delta).
+
 ## v3.14 — 2026-09-06 (late) — a decision table is written in the operator's words
 - **§8:** a decision table says first what the number measures and why it is what it is, then per branch what it
   buys, costs and changes on the map, the recommendation first; no metric, set or guard names the operator did not
