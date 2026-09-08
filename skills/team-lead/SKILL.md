@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.15 (08.09.2026; сохранять ЭТУ карточку, v3.5–3.14 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид-сессия двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): один файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при КАЖДОЙ остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, ничьи считаются до вердикта, второй красный холдаут → другой класс инструмента; таблица решений — на языке оператора. Новое в v3.15: измеряемый инструмент = пайплайн продукта ЦЕЛИКОМ — каждый фильтр продукта между моделью и экраном внутри замера, граница названа до первой покупки; найденный разрыв закрывается числом продукта его же функциями за $0, замер не переписывается, запись не расширяется. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
+description: "v3.16 (08.09.2026; сохранять ЭТУ карточку, v3.5–3.15 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, ничьи считаются до вердикта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора. Новое в v3.16: правило харнеса — из доков платформы, не из симптома; доказательство детерминированное (поле в файле, правило совпало); режим сессии, усилие, оркестрация, таймауты гардов — поля харнеса и записи рана, не ритуал; дефект шаблона правится в шаблоне сразу. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
 ---
 
-# team-lead v3.15 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.16 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -147,10 +147,14 @@ phase file — nothing else first — and takes ONE item.
   stop derived from the cap; a tiny fix and the paid run it unblocks may share a session. Prompts are
   rewritten when the model changes, never inherited. After two failed corrections in one session,
   stop feeding it: one decision line, fresh session.
-- **The paid session's irreversible command is pre-authorised in the executor's harness and PROVEN at $0 in
-  the prep session** — a call of the same shape that cannot spend passes the harness's permission layer and
-  the proof is shown; a permission prompt inside a paid session with an open money line is a stop, and the
-  team lead's.
+- **The paid session's irreversible command never meets a permission gate it can lose** — every setting that
+  changes what the harness does to the money path (the session's permission mode, its effort, its orchestration,
+  the timeouts of its guards) is a FIELD of the harness and of the paid run's record, set once and read at $0,
+  never a per-session ritual of the operator's hands. **A harness rule is written from the platform's
+  documentation read that day, never from a transcript's symptom** — the mechanism quoted beside the rule in the
+  project's PROCESS — and its proof is deterministic (a field shown in the file, a rule shown to match the
+  command's exact prefix), never a harmless call that passed: a harmless call passes without any rule. A
+  permission prompt or denial inside a paid session with an open money line is a stop, and the team lead's.
 - Before issuing anything: every path exists (grep), every claim about a file was checked by opening
   it, «who reads this file» was asked (code graph / preflight) for every file the item moves — and
   «who reads this ROW» for every new shape a fix writes into a file others read — and for every
@@ -159,7 +163,8 @@ phase file — nothing else first — and takes ONE item.
   command a ruling orders: «what ELSE does this command do» (a registration that also opens a money
   line) and «does PROCESS.md already sequence it» — a ruling that re-sequences it is the defect. And for every
   grader an item relies on: does it score the rows the product SHIPS (after every product filter) or the model's
-  raw answer? — asked before the first purchase, not after the second frozen set.
+  raw answer? — asked before the first purchase, not after the second frozen set. And for every harness setting
+  a ruling touches: «what does the PLATFORM say this setting does» — read in its documentation, not inferred.
 - **Prompt ↔ transport contract:** whatever the prompt permits the model to answer (object or array,
   fenced or bare), the runner's stop rule and the parser accept — drilled at $0 on every permitted
   shape before the first purchase; a shape the model produces later joins the drill once. A law that
@@ -236,6 +241,12 @@ phase file — nothing else first — and takes ONE item.
   number — the guard is never widened to green it; a close refused by billing lag is retried at the next session's
   start, read-only walk first, never sat out on the clock.
 - The guard set is frozen for a stage; a new invariant enters only by replacing one.
+- **A kit's template is a law multiplier:** a value copied from a template into every project is checked against
+  the platform's own unit and semantics once, at the template; a template defect found in one project is fixed in
+  the template and in every live copy the same day, or every next kickoff inherits it.
+- **Automatic multi-agent orchestration inside an executor session is a cost line the retro reads** (agents
+  spawned, agents dead on limits, findings left unverified): off by a harness field, on only by the team lead's
+  word for a named fan-out; one fresh verifier with a brief beats a swarm whose skeptics died.
 - **Metrics the retro reads every phase, with thresholds that DECLARE a diet:** verification lines
   (tests + guards + scripts) ÷ product lines > 3 · process commits > 25 % · stops > 1 per day ·
   executor sessions < 2 per day · any artifact over its cap · **preventable stops > 0** (a stop the
@@ -293,7 +304,9 @@ is not counted as preventable; a fork or a defect that the catalogue could have 
 a question INSIDE a planned stop that the phase file could have answered before the stop was reached.
 A verifier's finding BEFORE a purchase is a stop that did not happen: it gets the same pass. **Two
 team-lead documents that disagree are a stop of the team lead's own class (process): the standing one
-wins, the instance is corrected, and the check «what else does this command do» enters §5.**
+wins, the instance is corrected, and the check «what else does this command do» enters §5.** A planned review
+of the tooling (both tiers, against the platform's documentation) is not a stop but gets the same pass; a rule it
+retires is named with what it failed to prove.
 
 ## Cadence
 Session start: STATUS → PROCESS → the phase file. Per item: brief (≤5 lines) → the operator pastes

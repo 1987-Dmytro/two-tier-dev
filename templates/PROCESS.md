@@ -16,9 +16,29 @@ item per session, the check shown, commit by path, PROGRESS updated, a stop ends
 Two failed corrections in one session → one decision line, fresh session. `/goal` only for a single session with
 one measurable end and no human decision inside.
 
-## Models and effort (named per task, never a session default)
-Executor = <model>; the operator sets `<effort command>` before pasting the standing prompt. Team lead = <model>.
-Verifier = a fresh-context subagent for money, secrets, user input, and before every purchase.
+## Models and effort (named per task; effort is a FIELD of the harness, never a per-session ritual)
+Executor = <model> (a model change re-issues the standing prompt — at a phase boundary, never inside a paid step).
+Team lead = <model>. Verifier = a fresh-context subagent for money, secrets, user input, and before every purchase.
+
+## Harness fields (every setting that changes what the harness does to the money path is a field, read at $0)
+<!-- Written from the platform's documentation read that day — quote the mechanism beside each rule; never from a
+     symptom in a transcript. The proof of a field is deterministic: the field shown in the file, a rule shown to
+     match the command's exact prefix — never «a harmless call passed» (a harmless call passes without any rule). -->
+- **Launch line** of every executor session: `<the exact command, with its permission mode>` — a field here and of every
+  paid runbook's §0, never an accident of the day; what protects the repo in that mode: `<deny rules · guard hooks · the
+  money guard in the repo's own scripts>`, with the platform's sentence that says they hold in that mode.
+- **Effort and orchestration:** `.claude/settings.json` → `env.<effort variable> = <level>` and `<orchestration key>: false`;
+  an automatic fan-out is switched on only by `<session command>` in a session the team lead names (an audit, a sweep) —
+  never for an item or a paid run; the retro reads agents spawned / dead on limits / findings unverified per session.
+- **Narrow allow rules** for the paid CLI's create and release commands only (`<rule for create>`, `<rule for release>`) —
+  broad rules are suspended by the classifier mode, narrow ones resolve before it; no other allow rule: one that never
+  fires is deleted at the retro.
+- **Hook timeouts** in the platform's unit (<seconds>): guard hooks generous (a timed-out guard does not block — a short
+  timeout is a hole), context hooks short; hooks of one event run in parallel — a data dependency lives inside ONE command.
+- **The check** of the fields, run by the executor when the file changes and by the team lead at acceptance:
+  `<one-line validator over .claude/settings.json → "HARNESS FIELDS OK", exit 0>`. A harness change is issued as a
+  whole file under `docs/reviews/<date>-harness-*/settings.json`, copied by path by the executor and verified by the
+  NEXT session's start — the team lead never edits the executor's harness.
 
 ## Hooks and guards (deterministic — "must happen every time")
 `SessionStart`: <what is injected>. `Stop`: <what is stamped>. `PreToolUse(Bash)`: refuse sweeping commands

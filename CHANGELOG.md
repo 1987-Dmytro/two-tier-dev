@@ -14,6 +14,28 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.16 — 2026-09-08 (evening) — a harness rule is written from the platform's docs; harness fields, not rituals
+- **§5:** every setting that changes what the harness does to the money path (the session's permission mode, its
+  effort, its orchestration, the timeouts of its guards) is a FIELD of the harness and of the paid run's record, set
+  once and read at $0 — never a per-session ritual of the operator's hands; a harness rule is written from the
+  platform's documentation read that day, never from a transcript's symptom, and its proof is deterministic (a field
+  shown in the file, a rule shown to match the command's exact prefix), never «a harmless call passed»; the pre-issue
+  questions gain «what does the PLATFORM say this setting does». **§7:** a kit's template is a law multiplier — a
+  template defect is fixed in the template and in every live copy the same day; automatic multi-agent orchestration
+  inside an executor session is a cost line the retro reads (agents spawned, dead on limits, findings unverified).
+  **§10:** a planned tooling review gets the same pass; a rule it retires is named with what it failed to prove.
+- **Kit and templates:** `executor-kit/claude-config/settings.json` — hook `timeout` values in SECONDS (they were
+  written as milliseconds: 5000 = 83 minutes; the platform's default is 600 and a timed-out `PreToolUse` command hook
+  does NOT block, so a guard's timeout is generous by design), ONE sequential `SessionStart` hook (hooks of one event
+  run in parallel — the refresh and the cache injection raced), the effort field and `ultracode: false`;
+  `templates/PROCESS.md` gains «Harness fields»; `templates/standing-prompt.md` — nothing is typed before the paste;
+  `templates/runbook-paid-run.md` — the launch line as a field and a harness-fields gate in §0.
+- Taught by: the origin project's tooling audit of both tiers against the platform's documentation (08.09) — the
+  classifier's two denials of the paid create (s33) were the broad shell allow rule being suspended in the classifier
+  mode while narrow rules resolve before it; the v2.3 rule written from that symptom («a harmless call of the same
+  shape passed») proved nothing; sessions had been launched in two different permission modes without a record; the
+  millisecond timeouts sat in the live repo, in the kit and in the brain-init template.
+
 ## v3.15 — 2026-09-08 — the graded instrument is the product's pipeline end to end
 - **§2:** every filter the product applies between the model's answer and the screen (an evidence hook, a dedup, a
   post-processing layer) sits inside what the grader scores, or the phase file names the exception BEFORE the first
