@@ -14,6 +14,16 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.17 — 2026-09-09 — a field is a field only where the platform reads it without a hand
+- **§5:** a value the operator must retype at every launch is a ritual wearing a field's name and fails in the
+  first session that forgets it; the paid record's gate reads the value the platform actually applied, never the
+  one the operator meant to type. Taught by: the origin project's s37 — the session after the launch line had been
+  declared a field ran in the classifier mode anyway (the flag was not in effect; the classifier refused a copy and a
+  read-only command); the mode moved to the operator's user-level default, the harness stamps the applied mode into a
+  file and the paid runbook's first gate reads it.
+- Templates: `templates/PROCESS.md` «Harness fields» — the mode lives where the platform reads it without a hand,
+  the harness stamps the applied value, the paid runbook's first gate reads the stamp.
+
 ## v3.16 — 2026-09-08 (evening) — a harness rule is written from the platform's docs; harness fields, not rituals
 - **§5:** every setting that changes what the harness does to the money path (the session's permission mode, its
   effort, its orchestration, the timeouts of its guards) is a FIELD of the harness and of the paid run's record, set

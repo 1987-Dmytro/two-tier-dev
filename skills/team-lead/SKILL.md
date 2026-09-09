@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.16 (08.09.2026; сохранять ЭТУ карточку, v3.5–3.15 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, ничьи считаются до вердикта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора. Новое в v3.16: правило харнеса — из доков платформы, не из симптома; доказательство детерминированное (поле в файле, правило совпало); режим сессии, усилие, оркестрация, таймауты гардов — поля харнеса и записи рана, не ритуал; дефект шаблона правится в шаблоне сразу. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
+description: "v3.17 (09.09.2026; сохранять ЭТУ карточку, v3.5–3.16 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, ничьи считаются до вердикта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора; правило харнеса — из доков платформы, доказательство детерминированное. Новое в v3.17: поле — только там, где платформа читает его без рук; значение, которое оператор повторяет при каждом запуске, — ритуал с именем поля; гейт записи читает применённое платформой значение. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
 ---
 
-# team-lead v3.16 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.17 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -150,7 +150,10 @@ phase file — nothing else first — and takes ONE item.
 - **The paid session's irreversible command never meets a permission gate it can lose** — every setting that
   changes what the harness does to the money path (the session's permission mode, its effort, its orchestration,
   the timeouts of its guards) is a FIELD of the harness and of the paid run's record, set once and read at $0,
-  never a per-session ritual of the operator's hands. **A harness rule is written from the platform's
+  never a per-session ritual of the operator's hands — and a field is a field only where the platform reads it
+  without a hand: a value the operator must retype at every launch is a ritual wearing a field's name, and it fails
+  in the first session that forgets it; the record's gate reads the value the platform actually applied, not the
+  one the operator meant to type. **A harness rule is written from the platform's
   documentation read that day, never from a transcript's symptom** — the mechanism quoted beside the rule in the
   project's PROCESS — and its proof is deterministic (a field shown in the file, a rule shown to match the
   command's exact prefix), never a harmless call that passed: a harmless call passes without any rule. A

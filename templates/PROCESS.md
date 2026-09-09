@@ -24,9 +24,12 @@ Team lead = <model>. Verifier = a fresh-context subagent for money, secrets, use
 <!-- Written from the platform's documentation read that day — quote the mechanism beside each rule; never from a
      symptom in a transcript. The proof of a field is deterministic: the field shown in the file, a rule shown to
      match the command's exact prefix — never «a harmless call passed» (a harmless call passes without any rule). -->
-- **Launch line** of every executor session: `<the exact command, with its permission mode>` — a field here and of every
-  paid runbook's §0, never an accident of the day; what protects the repo in that mode: `<deny rules · guard hooks · the
-  money guard in the repo's own scripts>`, with the platform's sentence that says they hold in that mode.
+- **Permission mode** of every executor session: `<the mode>`, set where the platform reads it WITHOUT a hand (`<the
+  settings scope the platform's docs name for a starting mode>` — a value the operator retypes at every launch is a ritual
+  wearing a field's name); the harness stamps the APPLIED mode into `<a gitignored file>` on every shell call and every
+  paid runbook's first gate reads it (`<grep of the stamp> && …`, exit ≠ 0 before any anchor); what protects the repo in
+  that mode: `<deny rules · guard hooks · the money guard in the repo's own scripts>`, with the platform's sentence that
+  says they hold in that mode.
 - **Effort and orchestration:** `.claude/settings.json` → `env.<effort variable> = <level>` and `<orchestration key>: false`;
   an automatic fan-out is switched on only by `<session command>` in a session the team lead names (an audit, a sweep) —
   never for an item or a paid run; the retro reads agents spawned / dead on limits / findings unverified per session.
