@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.19 (09.09.2026; сохранять ЭТУ карточку, v3.5–3.18 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора; правило харнеса — из доков, поле — где платформа читает его без рук, инертное поле снимается; предпосылка и контроль рулинга прогоняются до записи. Новое в v3.19: денежный гейт перечитывается на популяции новой ноги до покупки; ранбук несёт то, что работало в прошлом ране. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
+description: "v3.20 (09.09.2026; сохранять ЭТУ карточку, v3.5–3.19 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки, денежный гейт перечитывается на новой популяции; эталон — из популяции продукта; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора; правило харнеса — из доков, поле — где платформа читает его без рук; предпосылка и контроль рулинга прогоняются до записи. Новое в v3.20: каждая строка платного ранбука репетируется за $0 в границах вызовов платной сессии; закрытие пишется по реальному закрытию прошлой ноги. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
 ---
 
-# team-lead v3.19 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.20 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -237,7 +237,12 @@ phase file — nothing else first — and takes ONE item.
 - **A runbook gate is a command that can fail the session** — a non-zero exit with the next command chained on
   it — placed BEFORE the step it guards; a printed «STOP» that exits 0 is a note to a human who is not in the
   room, and a gate placed after the command it guards (a pin check after the registration that anchors the
-  line) guards nothing; a check the paid session runs is drilled once at $0 to refuse.
+  line) guards nothing; a check the paid session runs is drilled once at $0 to refuse. **Every line of a paid
+  runbook that is not the purchase itself is REHEARSED at $0 in the prep session, in the paid session's own call
+  boundaries** — a variable exported in one call and used in another, a value computed in one block and read in
+  the next, a close whose arithmetic the platform's billing does not share: each is executed the way the paid
+  session will execute it, and the close is written from the previous leg's REAL close record, never from the
+  run record's shape — a line first executed in the paid session is a stop waiting there.
 - A test is written for a product defect or a data invariant — never for the process, never by
   reading prose out of a document, never pinning the hash of a file that grows.
 - Money: the cap becomes the platform's hard stop; one ledger line per session; a smoke before a run;

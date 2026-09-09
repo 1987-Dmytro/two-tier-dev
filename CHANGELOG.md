@@ -14,6 +14,15 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.20 — 2026-09-09 (evening) — every non-purchase line of a paid runbook is rehearsed in the paid session's own call boundaries; the close is written from the previous leg's real close
+- **§7:** a runbook gate drilled is not a runbook rehearsed: every line that is not the purchase itself is executed at $0
+  in the prep session the way the paid session will execute it — a variable exported in one call and used in another,
+  a value computed in one block and read in the next, a close whose arithmetic the platform's billing does not share —
+  and the close is written from the previous leg's REAL close record. Taught by: the origin project's third verifier
+  pass over one leg — an API key exported in one shell call and consumed in the next (shell state does not survive a
+  call), and a close expecting the run record's wall time against a serverless walk that bills worker uptime (the
+  previous leg had closed without that expectation); both would have stopped the paid session at $0.
+
 ## v3.19 — 2026-09-09 (late afternoon) — a money gate is re-read on the next leg's population; the runbook carries what ran; a control a ruling orders is run first
 - **§6:** a money gate written for one population (a reserve, a pack size, a floor) is re-read on the next leg's
   population before its purchase — the dry run exercises the in-run gates at the registered cap, or the verifier
