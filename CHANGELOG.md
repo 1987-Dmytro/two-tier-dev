@@ -14,6 +14,20 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.19 — 2026-09-09 (late afternoon) — a money gate is re-read on the next leg's population; the runbook carries what ran; a control a ruling orders is run first
+- **§6:** a money gate written for one population (a reserve, a pack size, a floor) is re-read on the next leg's
+  population before its purchase — the dry run exercises the in-run gates at the registered cap, or the verifier
+  computes them with the emitter's own functions. Taught by: the origin project's verifier before the c3 leg —
+  an in-run room gate sized for a 3 000-page leg (one wedged job in reserve + a pack sized by time) would have
+  ended a 30-page leg before its first page at the cap the whole-leg price cleared by 63 %; the cap moved by the
+  operator's word, the code untouched before the purchase.
+- **§6:** a runbook line the last paid run had to replace mid-session (a launch form the harness killed, a
+  close that refused) is replaced at that run's acceptance — the record carries what RAN. Taught by: the C2
+  runbook still carried the foreground launch its own log shows killed twice; the c3 runbook inherited it.
+- **§3.5:** a control a ruling orders is run once by the team lead before the ruling is issued, or worded as the
+  delta to show. Taught by: a «byte-identical» control over a record that embeds a live reading — unreachable, a
+  deviation for the executor to name.
+
 ## v3.18 — 2026-09-09 (afternoon) — a ruling's premise is measured; an inert field is retired; a refusal is attributed only to a documented mechanism
 - **§3.5:** what a ruling calls existing, shared or unmoved was shown that day by a run of the function that decides it
   on the real inputs — never read off a comment, a table or memory. Taught by: the origin project's (l)3 «both channels

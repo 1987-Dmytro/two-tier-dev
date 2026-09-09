@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.18 (09.09.2026; сохранять ЭТУ карточку, v3.5–3.17 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, ничьи считаются до вердикта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора; правило харнеса — из доков платформы, поле — там, где платформа читает его без рук. Новое в v3.18: предпосылка рулинга измеряется прогоном до записи; инертное поле снимается, не поддерживается; отказ приписывается только механизму из доков, иначе — «недокументирован». Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
+description: "v3.19 (09.09.2026; сохранять ЭТУ карточку, v3.5–3.18 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора; правило харнеса — из доков, поле — где платформа читает его без рук, инертное поле снимается; предпосылка и контроль рулинга прогоняются до записи. Новое в v3.19: денежный гейт перечитывается на популяции новой ноги до покупки; ранбук несёт то, что работало в прошлом ране. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
 ---
 
-# team-lead v3.18 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.19 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -121,6 +121,9 @@ reality, hard prohibitions; one question at a time; blindspot pass):
    fact:** what it calls existing, shared or unmoved was shown that day by a run of the function that decides it on
    the real inputs (or a diff), never read off a comment, a table or memory — an unmeasured premise turns the
    executor's first command into a fork and the «$0 extension» into a change of a measured layer, one session later.
+   **And so is a control a ruling orders:** its expected output is run once by the team lead before the ruling is
+   issued, or the control is worded as the delta to show («differs only in …»), never as a byte-identity to claim —
+   an unreachable control costs the executor a session and the record a deviation.
 Information found missing at a stop joins this file by revision THE SAME DAY (§10). A plan file is
 written only when the diff cannot be described in a sentence, and then ≤80 lines. Re-spec trigger
 unchanged: when the goal, the customer or the metric moves, stop the line, re-interview, close the
@@ -186,7 +189,10 @@ phase file — nothing else first — and takes ONE item.
 
 ## 6. Acceptance — diff, artifact, check; ≤10 lines
 - Read the DIFF, open the artifact, re-run the check. Numbers from result files, never from prose.
-- Hunt for scope silently added AND silently dropped; a guard is accepted only with both directions.
+- Hunt for scope silently added AND silently dropped; a guard is accepted only with both directions. **And hunt
+  for a runbook line the last paid run had to REPLACE mid-session** (a launch form the harness killed, a close that
+  refused): the record carries what RAN, replaced at that run's acceptance — the next leg inherits the survivor,
+  never the first attempt.
 - A gap the executor measured on ONE axis is re-measured by the team lead on EVERY axis the grader scores
   before it is ruled — with the team lead's own run of the product's functions, never from the executor's
   prose: a one-row story is usually a two-number story.
@@ -217,7 +223,11 @@ phase file — nothing else first — and takes ONE item.
   WHICH bound is live — the cap's hard stop or a borrowed minute-constant that would bite first.
 - **A rule that retires or replaces a bound is checked on EVERY leg that reads the bound**, by each leg's own dry
   run — a leg marked «done» still has a next iteration; a verifier's line that says «the dev leg still reads the
-  borrow» is a finding to act on, not a note to file.
+  borrow» is a finding to act on, not a note to file. **A money gate written for one population is re-read on the
+  next leg's population before its purchase** — a reserve, a pack size or a floor sized for a thousand units can
+  strangle a leg of thirty while the whole-leg price still FITS: the dry run exercises the in-run gates at the
+  registered cap, or the verifier computes them with the emitter's own functions; a cap that clears the leg's price
+  but not its first gate is not a cap.
 - **A ruling that orders a command is checked against the command's own gate before it is issued** — «close the
   line» is read in the guard's code (what is the reference, what is the window): an order the line cannot pass
   is the team lead's stop, found one session later at the executor's expense.
