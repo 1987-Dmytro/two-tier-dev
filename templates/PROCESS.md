@@ -33,15 +33,21 @@ Team lead = <model>. Verifier = a fresh-context subagent for money, secrets, use
 - **Effort and orchestration:** `.claude/settings.json` → `env.<effort variable> = <level>` and `<orchestration key>: false`;
   an automatic fan-out is switched on only by `<session command>` in a session the team lead names (an audit, a sweep) —
   never for an item or a paid run; the retro reads agents spawned / dead on limits / findings unverified per session.
-- **Narrow allow rules** for the paid CLI's create and release commands only (`<rule for create>`, `<rule for release>`) —
-  broad rules are suspended by the classifier mode, narrow ones resolve before it; no other allow rule: one that never
-  fires is deleted at the retro.
+- **Allow rules: none while the mode is the one that ignores them** — `<the platform's sentence that allow rules have no effect
+  in that mode>`; a rule that can only matter in a mode the paid runbook's first gate refuses is inert, and an inert field
+  maintained per run is a ritual with a gate. If the project ever runs its paid sessions in a classifier mode instead, narrow
+  rules for the paid CLI's create and release commands are written then, from the runbook's own lines, never from a symptom.
+- **Deny rules reach into the shell** — `<the platform's sentence on which shell file commands and redirections the file rules
+  cover>`, in every mode: a team-lead path is never an operand of such a command in the executor's shell; team-lead files are
+  read with the editor's read tool, the harness file is written with its write tool from the issued copy, and a read-only
+  comparison proves byte identity. One refusal of a documented kind meets the documented path, never a series of probes.
 - **Hook timeouts** in the platform's unit (<seconds>): guard hooks generous (a timed-out guard does not block — a short
   timeout is a hole), context hooks short; hooks of one event run in parallel — a data dependency lives inside ONE command.
 - **The check** of the fields, run by the executor when the file changes and by the team lead at acceptance:
   `<one-line validator over .claude/settings.json → "HARNESS FIELDS OK", exit 0>`. A harness change is issued as a
-  whole file under `docs/reviews/<date>-harness-*/settings.json`, copied by path by the executor and verified by the
-  NEXT session's start — the team lead never edits the executor's harness.
+  whole file under `docs/reviews/<date>-harness-*/settings.json`, written by the executor with its write tool from the
+  issued copy (a shell copy from a deny-listed path is refused — the rule above), proven by a read-only comparison, and
+  verified by the NEXT session's start — the team lead never edits the executor's harness.
 
 ## Hooks and guards (deterministic — "must happen every time")
 `SessionStart`: <what is injected>. `Stop`: <what is stamped>. `PreToolUse(Bash)`: refuse sweeping commands

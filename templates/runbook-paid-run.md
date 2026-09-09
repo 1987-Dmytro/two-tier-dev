@@ -15,9 +15,10 @@ session:** `<the exact executor launch command, with its permission mode — PRO
 ## 0 — before anything (in the paid session, $0)
 - Start ritual done; team-lead files committed by path; `git status` clean; **no live resource**: `<listing
   command>` → `[]`.
-- **The harness-fields gate** (deterministic, before any money): `<grep of the paid CLI's allow rules in the harness
-  file> && <grep of the create command's exact prefix in THIS file> && echo "HARNESS FIELDS HOLD"` — exit ≠ 0 ends the
-  turn; a permission prompt or denial later in this session is a stop, and the team lead's.
+- **The mode gate, FIRST, then the harness-fields check** (deterministic, before any money): `<grep of the applied-mode
+  stamp the harness writes> && <the one-line validator of PROCESS «Harness fields» → "HARNESS FIELDS OK">` — exit ≠ 0 ends
+  the turn before any anchor; no allow-rule grep (allow rules are inert in the mode the first gate demands); a permission
+  prompt or denial later in this session is a stop, and the team lead's.
 - The dry run is the committed one: `<show the dry run's bound, FITS corner, tier, price, pins>`.
 - **The pin check is a gate, not a note — and it runs HERE, before the registration anchors anything:**
   `<pin-check command over the disk files against the dev-bar registration> && echo "PINS HOLD"` — it exits ≠ 0 on

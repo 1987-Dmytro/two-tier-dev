@@ -14,6 +14,23 @@ rule → where it lives. Dates are the days the rule entered the live project.
 - The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
   waits until the money defaults stop producing stops.
 
+## v3.18 — 2026-09-09 (afternoon) — a ruling's premise is measured; an inert field is retired; a refusal is attributed only to a documented mechanism
+- **§3.5:** what a ruling calls existing, shared or unmoved was shown that day by a run of the function that decides it
+  on the real inputs — never read off a comment, a table or memory. Taught by: the origin project's (l)3 «both channels
+  carry ONE existing chain id — nothing sealed moves» — the fold function folded neither channel; the «$0 extension»
+  was a change of a measured layer, found by the executor one session later (a right stop, the team lead's fork).
+- **§5:** a harness field the platform can no longer act on (a rule that only matters in a mode the record's first gate
+  refuses) is inert — retired that day, not maintained per run. Taught by: two allow rules written for a symptom's
+  command (`pod create`) while the leg created a template and an endpoint, in a mode where allow rules have no effect;
+  the runbook gate refused by construction.
+- **§5:** the attribution of a refusal follows the same rule as a harness rule — the documented mechanism, quoted, or
+  «undocumented» beside the proven workaround; one refusal of a documented kind meets the documented path, never probes.
+  Taught by: a ruling that blamed the classifier for a copy refused in the classifier mode — the same refusal returned in
+  bypass mode, because deny rules reach into the shell's file commands in every mode (the docs said so).
+- Templates: `templates/PROCESS.md` «Harness fields» — no allow rules while the mode ignores them; deny rules reach into
+  the shell (read tool / write tool / read-only comparison); `templates/runbook-paid-run.md` §0 — the mode gate FIRST,
+  then the fields check; no allow-rule grep.
+
 ## v3.17 — 2026-09-09 — a field is a field only where the platform reads it without a hand
 - **§5:** a value the operator must retype at every launch is a ritual wearing a field's name and fails in the
   first session that forgets it; the paid record's gate reads the value the platform actually applied, never the

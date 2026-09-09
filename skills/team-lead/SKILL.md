@@ -1,9 +1,9 @@
 ---
 name: team-lead
-description: "v3.17 (09.09.2026; сохранять ЭТУ карточку, v3.5–3.16 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, ничьи считаются до вердикта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора; правило харнеса — из доков платформы, доказательство детерминированное. Новое в v3.17: поле — только там, где платформа читает его без рук; значение, которое оператор повторяет при каждом запуске, — ритуал с именем поля; гейт записи читает применённое платформой значение. Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
+description: "v3.18 (09.09.2026; сохранять ЭТУ карточку, v3.5–3.17 внутри; только паттерны — механика проекта в его PROCESS.md). Тимлид двухъярусной разработки (оператор · тимлид в Cowork · исполнитель Claude Code): файл фазы с каталогом развилок, файл прогресса, стандартный промт, приёмка по диффу/артефакту/своему прогону, рулинг ≤12 строк, разбор паттерна при каждой остановке, диета закона; деньги — одна линия на платный ран, регистрация в платной сессии, кап — цитата dry-run, свежий верификатор до покупки; эталон — из популяции продукта, ничьи считаются до вердикта, второй красный холдаут → другой класс инструмента; инструмент = пайплайн продукта целиком; таблица решений — на языке оператора; правило харнеса — из доков платформы, поле — там, где платформа читает его без рук. Новое в v3.18: предпосылка рулинга измеряется прогоном до записи; инертное поле снимается, не поддерживается; отказ приписывается только механизму из доков, иначе — «недокументирован». Вызывать при /team-lead, «отчёт готов», приёмке, рулинге."
 ---
 
-# team-lead v3.17 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
+# team-lead v3.18 — product truth first, one phase file, one progress file, a law that shrinks, a stop that teaches
 
 Universal skill: principles and the minimum procedure that serves them. **This card carries PATTERNS
 only.** Every project mechanic — a tool name, a flag, a price, a path, a platform word — lives in the
@@ -117,7 +117,10 @@ reality, hard prohibitions; one question at a time; blindspot pass):
    the project's PROCESS.md lacks a default — write the default there the same day. **A ruling sets
    choices; it never re-sequences a mechanic the project's PROCESS.md already sequences — where a ruling
    and PROCESS.md disagree on a mechanic, the executor follows PROCESS.md, names the contradiction in the
-   progress file and does not stop; the ruling is corrected the same day.**
+   progress file and does not stop; the ruling is corrected the same day.** **A ruling's premise is a measured
+   fact:** what it calls existing, shared or unmoved was shown that day by a run of the function that decides it on
+   the real inputs (or a diff), never read off a comment, a table or memory — an unmeasured premise turns the
+   executor's first command into a fork and the «$0 extension» into a change of a measured layer, one session later.
 Information found missing at a stop joins this file by revision THE SAME DAY (§10). A plan file is
 written only when the diff cannot be described in a sentence, and then ≤80 lines. Re-spec trigger
 unchanged: when the goal, the customer or the metric moves, stop the line, re-interview, close the
@@ -153,10 +156,16 @@ phase file — nothing else first — and takes ONE item.
   never a per-session ritual of the operator's hands — and a field is a field only where the platform reads it
   without a hand: a value the operator must retype at every launch is a ritual wearing a field's name, and it fails
   in the first session that forgets it; the record's gate reads the value the platform actually applied, not the
-  one the operator meant to type. **A harness rule is written from the platform's
+  one the operator meant to type; and a field the platform can no longer act on (a rule that only matters in a
+  mode the record's first gate refuses) is INERT — retired that day, not maintained per run: an inert field kept
+  true by hand is a ritual with a gate. **A harness rule is written from the platform's
   documentation read that day, never from a transcript's symptom** — the mechanism quoted beside the rule in the
   project's PROCESS — and its proof is deterministic (a field shown in the file, a rule shown to match the
-  command's exact prefix), never a harmless call that passed: a harmless call passes without any rule. A
+  command's exact prefix), never a harmless call that passed: a harmless call passes without any rule. **So is the
+  ATTRIBUTION of a refusal:** a denial is named by the documented mechanism that produced it, quoted, or written as
+  «undocumented» beside the workaround that was proven once — a refusal attributed by guess (to a classifier, to a
+  mode) is the symptom rule in the other direction, and the same denial returns under the next fix; one refusal of
+  a documented kind meets the documented path, never a series of probes. A
   permission prompt or denial inside a paid session with an open money line is a stop, and the team lead's.
 - Before issuing anything: every path exists (grep), every claim about a file was checked by opening
   it, «who reads this file» was asked (code graph / preflight) for every file the item moves — and
