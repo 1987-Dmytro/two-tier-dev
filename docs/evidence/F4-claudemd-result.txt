@@ -1,0 +1,2 @@
+CLAUDE.md:       21 строк; REVIEW.md: 4 раздела
+CLAUDEMD_OK
