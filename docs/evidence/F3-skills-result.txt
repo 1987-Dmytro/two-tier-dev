@@ -1,0 +1,6 @@
+      39 kit/.claude/skills/accept/SKILL.md
+      30 kit/.claude/skills/grilling/SKILL.md
+      40 kit/.claude/skills/plan-phase/SKILL.md
+      52 kit/.claude/skills/team-lead/SKILL.md
+     161 total
+SKILLS_OK
