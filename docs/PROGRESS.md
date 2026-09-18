@@ -1,0 +1,35 @@
+# PROGRESS — фаза «сборка кита v2» (файл исполнителя: сделано / следующее / открытый стоп)
+
+## Done — 18.09.2026, одна сессия
+- **PLAN-v2 (`c789f1e`)** — план сборки: файлы, порядок, риски, доказательство; реестр из 15 отклонений от замороженных SPEC и архитектуры.
+- **Шаг 0 (`a99a1fa`)** — карточка тимлида v3.23 зафиксирована отдельным коммитом, чтобы F5 не втянул постороннюю правку.
+- **F1 (`f873334`)** — `bin/two-tier-init` и 22 файла кита; шесть шаблонов заполнены. Чек: дерево `/tmp/t2` совпало с `docs/evidence/F1-tree-expected.txt` построчно → `TREE_OK`, rc=0.
+- **F2 (`51fc544`)** — пять хуков cwc verbatim + `refuse_sweeping_commands.py` + `test-output-filter.sh`, `settings.json` по §5 (7 ключей, 7 записей deny, без `CLAUDE_CODE_MAX_*`), `evaluator.md` с `model: haiku`, `rules/graphify.md`. Чек: `HARNESS_OK`, rc=0; фильтр оставил «3 passed», срезав шум.
+- **F3 (`5f6f0fb`)** — четыре скилла: team-lead 52 строки (потолок 80), grilling verbatim + строка MIT в теле, plan-phase и accept с `disable-model-invocation: true`. Чек: `SKILLS_OK`, rc=0.
+- **F4 (`424967c`)** — `kit/CLAUDE.md` 21 строка (потолок 40, десять блоков §4, запрещённых фраз нет), `kit/REVIEW.md` из четырёх разделов. Чек: `CLAUDEMD_OK`, rc=0.
+- **F5 (`af9c489`)** — весь v1 в `docs/archive/` одним `git mv`; переезд отрепетирован на выброшенном клоне: 0 удалений, 31 переименование. README, dev-system.ru.md, docs/README.md, CHANGELOG переписаны под v2. Чек: `ARCHIVE_OK`, rc=0, набор удалений за фазу пуст.
+- **F6** — `docs/STATUS.md` с датой гейта и строкой запуска; три маркера перезапущены из `/tmp/t2`: `TREE_OK` (22 файла), `HARNESS_OK`, `SKILLS_OK`, `CLAUDEMD_OK`. Чек: `GATE_OK`, rc=0.
+
+## Next — ONE item
+1. **Приёмка фазы**: `/accept fa3e602` — evaluator (Haiku, `REVIEW.md`) сверяет дифф `fa3e602..HEAD` со SPEC-v2 и PLAN-v2; чек: первым словом ответа `PASS` или `NEEDS_WORK`. Дальше — гейт: оператор сам разворачивает кит в реальный проект.
+
+## Open stop — NONE
+STOP-1 не сработал: оба внешних источника доступны и совпали со SPEC §0 (пять хуков cwc, все `.sh`, размеры сошлись байт в байт; grilling — 28 строк, MIT). Расхождения между нашими собственными документами разрешены в PLAN-v2 и по §4 стопом не являются.
+
+## Tree
+Чисто на HEAD, кроме `?? goal-v2.txt` — файл задания, фазой не трогался и ни в один коммит не входил. $0: платных ресурсов фаза не касалась. Кит в сам `two-tier-dev` не устанавливался: `.claude/` в корне нет, `commit-on-stop` не вмешивался, каждый коммит собран по путям.
+
+## Notes — неясности, решённые исполнителем в PLAN (SPEC §4)
+- Хуков семь, не шесть: `verify-gate.**sh**` (upstream `.py` — 404), `test-output-filter.**sh**`, добавлен `track-read.sh` — без него `verify-gate` мёртв, а маска `*-result.txt` и есть контракт evidence.
+- `graphify-hint` — не файл, а inline-команда, выписанная дословно из `executor-kit/claude-config/settings.json` до архивации.
+- Кит ложится в **корень** цели; вложенного `kit/` в проекте нет.
+- Флаг `disable-model-invocation: true` — только на `plan-phase` и `accept`.
+- Имя evidence — `<fid>-<check>-result.txt`; форма `<fid>-<check>.txt` из §5 отброшена (glob F6 и маска `track-read.sh`).
+- Чек F5 реконструирован из прозы: `HEAD~N` → `fa3e602..HEAD`, `grep -c .` → `wc -l`, добавлены `-M -C --pretty=format:`.
+- `docs/archive/team-lead-v3.20.md` выписан из `fa3e602`, а на диске лежала v3.23 — в архиве обе.
+
+## Named, not built
+- `docs/interview.md` — дерево дизайна для grilling; пишет тимлид в Cowork, вне этой фазы.
+- Карточка Cowork v3.22 — из содержимого репо не производится; ждёт выгрузки оператором или снятия строки §3.
+- Sweep effort (`low/medium/high/ultracode` × ±Ponytail) — отдельный $0-айтем после гейта.
+- Правила `permissions.deny`: связывают ли они только `Edit`, оставляя `Write` — измеряется первым `/accept` (риск 5 PLAN-v2).
