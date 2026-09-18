@@ -1,3 +1,12 @@
 HARNESS_OK
 collected 3 items
 3 passed in 0.12s
+--- поключевые утверждения по settings.json (обещаны PLAN §Файлы, дописаны на приёмке) ---
+  OK  ключи ровно §5: ['model', 'ultracode', 'workflowSizeGuideline', 'subagentPromptCacheTtl', 'autoMemoryEnabled', 'permissions', 'hooks']
+  OK  deny = 7 записей: ['Edit(/docs/STATUS.md)', 'Edit(/docs/SPEC-*.md)', 'Edit(/docs/PLAN-*.md)', 'Edit(/docs/PROCESS.md)', 'Edit(/docs/reviews/**)', 'Edit(/docs/archive/**)', 'Edit(/intent/**)']
+  OK  нет CLAUDE_CODE_MAX_*: не найдено
+  OK  нет maxEffortLevel / env.CLAUDE_CODE_EFFORT_LEVEL: не найдено
+  OK  ultracode = true: True
+  OK  PreToolUse групп 4, Stop 1: (4, 1)
+  OK  все command-пути существуют в ките: 7 путей, отсутствуют: нет
+SETTINGS_KEYS_OK
