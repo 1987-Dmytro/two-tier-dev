@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# two-tier-init — развернуть кит two-tier-dev v2 в целевом репозитории.
+#
+#   bin/two-tier-init <target-dir>
+#
+# Содержимое kit/ ложится в КОРЕНЬ цели: kit/CLAUDE.md → <target>/CLAUDE.md,
+# kit/.claude/ → <target>/.claude/; вложенного kit/ в цели нет.
+# Существующий файл не перезаписывается — печатается «skip (exists)».
+# Режимы сохраняются (cp -p): хуки должны остаться исполняемыми.
+# Цель должна существовать; git init скрипт не делает и не требует.
+set -euo pipefail
+
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+[ $# -eq 1 ] || usage
+case "$1" in -h|--help) usage;; esac
+
+[ -d "$1" ] || { echo "two-tier-init: нет каталога $1" >&2; exit 1; }
+TARGET="$(cd "$1" && pwd)"
+
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+KIT="$HERE/kit"
+[ -d "$KIT" ] || { echo "two-tier-init: нет $KIT" >&2; exit 1; }
+
+echo "two-tier-dev kit → $TARGET"
+cd "$KIT"
+find . -type f -print | LC_ALL=C sort | while IFS= read -r src; do
+  rel="${src#./}"
+  dst="$TARGET/$rel"
+  if [ -e "$dst" ]; then
+    echo "  skip (exists): $rel"
+    continue
+  fi
+  mkdir -p "$(dirname "$dst")"
+  cp -p "$src" "$dst"
+  echo "  wrote: $rel"
+done
+
+cat <<'EOF'
+
+Дальше:
+  1. Заполнить CLAUDE.md (факты проекта: стек, команды запуска и чека) и docs/PROCESS.md
+     (Environment под названные чеки, деньги, каталог развилок) — из шаблонов docs/*.template.md.
+  2. Оператор пишет intent/<slug>.md; тимлид прожаривает его в Cowork по grilling → docs/SPEC-1.md.
+  3. Исполнитель: plan mode → docs/PLAN-1.md коммитом → один /goal на фазу → /accept.
+  Остановить исполнителя в любой момент: touch AGENT_STOP (снять — rm AGENT_STOP).
+EOF
