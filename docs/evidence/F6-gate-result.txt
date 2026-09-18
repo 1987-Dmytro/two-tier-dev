@@ -3,5 +3,4 @@ docs/evidence/F2-harness-result.txt
 docs/evidence/F3-skills-result.txt
 docs/evidence/F4-claudemd-result.txt
 docs/evidence/F5-archive-result.txt
-9:**Запуск:** `cd <проект> && bin/two-tier-init . && claude`
 GATE_OK

@@ -137,6 +137,7 @@
 Плюс не-`mv`: `git show fa3e602:skills/team-lead/SKILL.md > docs/archive/team-lead-v3.20.md` (346 строк) — это то, что проверяет `test -f docs/archive/team-lead-v3.20.md`.
 `skills/team-lead/README.md` не назван ни одним документом; без этой строки папка `skills/` исчезает вместе с ним жёстким удалением и инвариант «`--diff-filter=D` пуст» ломается.
 `executor-kit/CLAUDE.md.template` едет как есть: чек F5 ищет имя ровно `CLAUDE.md`, `.template` под него не попадает.
+**После всех `git mv`** каталоги `executor-kit/`, `templates/`, `skills/` остаются на диске пустыми (git каталогов не хранит), а `test ! -e executor-kit` на пустом каталоге ложен — значит F5 без этого шага красный. Убирать только пустые и только после проверки, что файлов не осталось: `find executor-kit templates skills -type f` (должен напечатать ничего), затем `find executor-kit templates skills -depth -type d -empty -delete`.
 
 ### Чего кит НЕ поставляет
 
@@ -298,7 +299,7 @@ git log -M -C --diff-filter=D --name-only --pretty=format: $BASE..HEAD | grep -v
 
 ### F6 — гейт → `docs/evidence/F6-gate-result.txt`
 
-Сначала три перезапуска из целевого репо (команды F2/F3/F4 без префикса `kit/`, cwd `/tmp/t2`, `tee` по абсолютному пути) в `docs/evidence/F6-harness-result.txt`, `F6-skills-result.txt`, `F6-claudemd-result.txt`. Затем:
+Сначала четыре прогона из целевого репо (`tee` по абсолютному пути): сверка дерева `/tmp/t2` с `F1-tree-expected.txt` → `docs/evidence/F6-tree-result.txt`, и команды F2/F3/F4 без префикса `kit/` при cwd `/tmp/t2` → `F6-harness-result.txt`, `F6-skills-result.txt`, `F6-claudemd-result.txt`. Затем:
 
 ```bash
 ls docs/evidence/F1-*-result.txt docs/evidence/F2-*-result.txt docs/evidence/F3-*-result.txt \
@@ -333,3 +334,5 @@ ls docs/evidence/F1-*-result.txt docs/evidence/F2-*-result.txt docs/evidence/F3-
 | 13 | Фактическая зависимость F5 — `after: F1, F2, F3, F4` | SPEC F5 | исправление |
 | 14 | `skills/team-lead/README.md` → `docs/archive/team-lead-v1-README.md`; в архив уходят обе карточки (v3.23 и v3.20) | реестр F5 | дополнение |
 | 15 | `docs/archive/team-lead-v3.22.md` не производится; `docs/interview.md` вне объёма фазы | §3 | невыполнимо / вне объёма |
+| 16 | Опустевшие после `git mv` каталоги снимаются с диска: `test ! -e` на пустом каталоге ложен | F5 | найдено на прогоне |
+| 17 | Добавлен четвёртый файл evidence гейта — `F6-tree-result.txt` (сверка дерева из целевого репо) | F6 | найдено на прогоне |

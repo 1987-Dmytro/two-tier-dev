@@ -4,7 +4,7 @@ description: "Приёмка фазы: собрать дифф, evidence и STAT
 disable-model-invocation: true
 ---
 
-# /accept &lt;базовый коммит фазы&gt; — приёмка
+# /accept <базовый коммит фазы> — приёмка
 
 Отдельный финальный проход. Исполнитель не проверяет себя: вердикт выносит evaluator, у которого нет Write и Edit.
 
