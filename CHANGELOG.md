@@ -1,18 +1,57 @@
 # Changelog — what each version learned, and the stop that taught it
 
-The skill card `skills/team-lead/SKILL.md` is the unit of versioning; the templates and the executor kit
-follow it. A version enters only through the self-improvement pass (skill §10): a stop → its class → the
-rule → where it lives. Dates are the days the rule entered the live project.
+The unit of versioning is the KIT: `kit/` (CLAUDE.md, REVIEW.md, the templates, `.claude/` — hooks, evaluator,
+skills), `bin/two-tier-init` that copies it into a project, and the documents that describe the cycle; a
+version is what the next `bin/two-tier-init` ships. A rule enters only on the REPEAT of the same error without
+it, and it enters first as a hook (D10). Dates are the days the rule entered the live kit.
 
 ## Unreleased — named debts
-- brain-init M6 v2 deltas (`skills/brain-init/M6-v2-deltas.md`) are written but not yet applied in a live
-  repository: session start still injects the vault cache, the Stop hook still stamps daily logs.
-- The phase-file template's **money section** with seven defaults is here (`templates/PHASE.md` §6); the
-  brain-init generator does not emit it yet.
-- Retro metrics (stops per day, preventable stops, verification/product line ratio) are read by hand;
-  they should be collected from the `class:` line of PROGRESS.
-- The operator is the only channel between the tiers; an automatic prompt/report relay is speculative and
-  waits until the money defaults stop producing stops.
+- Sweep effort (`low/medium/high/ultracode` × ±Ponytail, three tasks, `/cost`) is a separate $0 item after the
+  gate (SPEC-v2 §6.1): until it is measured, ultracode runs always and `/usage` after every phase is its only
+  registered bound.
+- The Cowork card v3.22 that the architecture §3 sends to the archive is not producible from repo content — it
+  exists only in Cowork (PLAN-v2, risk 6). The archive holds `team-lead-v3.20.md` and `team-lead-v3.23.md`;
+  either the operator exports v3.22 or §3's line is retired.
+- **Closed by the archive:** the brain-init M6 v2 deltas (`docs/archive/brain-init-v1/M6-v2-deltas.md`) — the
+  module is replaced by the cwc hooks, there is nothing left to apply; the phase file's money section
+  (`docs/archive/templates-v1/PHASE.md` §6) — PHASE became SPEC and the eight defaults live in
+  `kit/docs/PROCESS.template.md`; retro metrics read by hand — the phase's metric set is D13, read at the
+  retro; the operator as the only channel between the tiers — in v2 the channel is the repo folder itself
+  (Cowork reads STATUS and `docs/evidence/`), and the operator carries three decisions, not reports.
+
+## v2.0 — 2026-09-18 — a harness is assembled from the platform's own primitives, never written a second time; what a check proved lives in a file, because the transcript no longer holds the work
+- **Tiers:** two tiers and no bus between them — the operator decides three times (spec yes/no · a letter at a
+  stop point · the gate he opens himself) and never retells a report; the channel between the tiers is the repo
+  folder, which Cowork reads (SPEC, STATUS, `docs/evidence/`). Taught by: four days of v1 — 44 sessions of
+  «report is ready → make session», the operator's own hands carrying every hand-off between two applications.
+- **Kit:** everything a project receives is one folder, `kit/`, and one command puts it there —
+  `cd <project> && bin/two-tier-init . && claude`; a rule that is not in the kit is not shipped. Taught by:
+  decisions D1–D17 of the 10.09 retro never reached the repository — it stood on v3.20 of 09.09 while the live
+  rules lived in a Cowork card and a generator script.
+- **Harness:** the harness is the official primitives of `anthropics/cwc-long-running-agents` (Apache-2.0)
+  copied verbatim — five hooks and `evaluator.md`; where an official file exists we write no analogue of our
+  own, and only the two Bash guards are ours (`refuse_sweeping_commands.py` from v1, the test-output filter).
+  Taught by: the self-written brain-init M6 — its v2 deltas (`docs/archive/brain-init-v1/M6-v2-deltas.md`) were
+  written, carried in this file as a debt, and never applied in a single live repository.
+- **Evaluator:** acceptance is a separate pass launched by `/accept` — Haiku, no Write/Edit, the diff against
+  SPEC and PLAN by `REVIEW.md`; the executor never verifies itself with subagents, and «verify with a subagent
+  / double-check / re-verify» is banned from every prompt of the kit. Taught by: the 10.09 retro (D17) — under
+  ultracode the executor plans its own workflow, so a self-check grades the assumptions of the session that
+  made them.
+- **Evidence:** every check writes its output to `docs/evidence/<fid>-<check>-result.txt` as well as showing
+  it, `verify-gate` refuses a result the session has not read, and the evaluator reads the files. Taught by:
+  the move to ultracode (18.09) — a workflow's intermediate results live in the script's variables and never
+  reach the transcript, so «show the command and its output in the transcript» (D8) proves nothing about
+  a workflow's subagent.
+- **Diet:** `kit/CLAUDE.md` ≤40 lines, the team lead's card ≤80 and patterns only, a feature is a vertical
+  slice that fits one fresh context window, `/goal` ≤4000 characters. Taught by: the card at
+  `docs/archive/team-lead-v3.23.md` — 404 lines, one rule added per stop, against Anthropic's own «bloated
+  files cause Claude to ignore your instructions».
+- **Archive:** nothing of v1 is deleted — every file has an address in `docs/archive/` (`team-lead-v3.20.md`,
+  `team-lead-v3.23.md`, `team-lead-v1-README.md`, `executor-kit-v1/`, `templates-v1/`, `brain-init-v1/`,
+  `new-project.sh`) and the phase's `git log --diff-filter=D` is empty. Taught by: the move's own registry —
+  the v1 card's README was named by no v2 document, and without a line for it the folder would have gone by
+  hard delete with the card's history inside; it is now `docs/archive/team-lead-v1-README.md`.
 
 ## v3.20 — 2026-09-09 (evening) — every non-purchase line of a paid runbook is rehearsed in the paid session's own call boundaries; the close is written from the previous leg's real close
 - **§7:** a runbook gate drilled is not a runbook rehearsed: every line that is not the purchase itself is executed at $0
