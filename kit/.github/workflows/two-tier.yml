@@ -11,4 +11,5 @@ jobs:
         with:
           fetch-depth: 0  # lint владения читает коммиты после merge-base с main
       - run: bin/check-budget
-      - run: if grep -q '^ci:' Makefile 2>/dev/null; then make ci; else echo "make ci: цели нет"; fi
+      - run: |
+          if grep -q '^ci:' Makefile 2>/dev/null; then make ci; else echo "make ci — цели нет"; fi
