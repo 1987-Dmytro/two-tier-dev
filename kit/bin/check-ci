@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# check-ci <ветка> — ждёт прогон workflow two-tier для коммита HEAD и печатает CI_OK (SPEC-v3 §1).
+# Прогона ещё нет — это ожидание, а не красное; прогон прошлого коммита не засчитывается.
+set -euo pipefail
+branch=${1:?usage: bin/check-ci <ветка>}
+sha=$(git rev-parse HEAD)
+remote=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+[ "$remote" = "$sha" ] || { echo "check-ci: origin/$branch = ${remote:-нет} ≠ HEAD ${sha:0:7} — сначала push"; exit 1; }
+echo "check-ci: ветка $branch, HEAD ${sha:0:7}"
+id=""
+for _ in $(seq 60); do  # ponytail: 60 × 10 с — ждём появления прогона до 10 минут, потом это уже не ожидание
+  id=$(gh run list --workflow two-tier.yml --branch "$branch" --commit "$sha" --event push --json databaseId -q '.[0].databaseId')
+  [ -n "$id" ] && break
+  sleep 10
+done
+[ -n "$id" ] || { echo "check-ci: за 10 минут прогона для ${sha:0:7} нет"; exit 1; }
+echo "check-ci: прогон $id для ${sha:0:7}"
+if gh run watch "$id" --exit-status >/dev/null 2>&1; then
+  echo "check-ci: conclusion $(gh run view "$id" --json conclusion -q .conclusion)"
+  echo CI_OK
+else
+  echo "check-ci: conclusion $(gh run view "$id" --json conclusion -q .conclusion)"
+  gh run view "$id" --log-failed 2>/dev/null | tail -25
+  exit 1
+fi

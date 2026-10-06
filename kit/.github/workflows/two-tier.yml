@@ -1,0 +1,14 @@
+# two-tier-dev v3 — бюджеты и чеки на push и PR (SPEC-v3 §1): check-budget плюс `make ci`, если такая цель есть.
+name: two-tier
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # lint владения читает коммиты после merge-base с main
+      - run: bin/check-budget
+      - run: if grep -q '^ci:' Makefile 2>/dev/null; then make ci; else echo "make ci: цели нет"; fi
