@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3 «кит v3» (файл исполнителя; потолок 60 строк)
 
 ## Голова — 06.10.2026
-**Сделано:** сид тимлида, PLAN-v3, архив v2, F1, F2. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
+**Сделано:** сид тимлида, PLAN-v3, архив v2, F1, F2, F3; ветка `v3` на origin. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
 
 ## Done
 - Сид `49e873c` «Тимлид: seed v3»; `goal-v2.txt` → `docs/archive/goal-v2.txt` (`c39237f`); PLAN-v3 (`c4114c4`).
@@ -11,8 +11,10 @@
 
 - **F2 Intent, пин, владение**: `bin/check-budget --self-test intent owner` → `INTENT_OK`, `OWNER_OK` (15 фикстур); на репо пин `e5e66199712a` = hash-object, коммит «Тимлид:» один — `49e873c` — `docs/evidence/F2-intent-result.txt`.
 
+- **F3 CI**: `bin/check-ci v3` → `CI_OK` для HEAD `4edfb15` (прогон 37495741399: check-budget и `make ci` — success) — `docs/evidence/F3-ci-result.txt`. Первый прогон упал на YAML (`: ` в plain-скаляре), починка — `4edfb15`.
+
 ## Next — один айтем
-1. **F3 CI**: `bin/check-ci v3` → `CI_OK`.
+1. **F4 Харнес**: `bin/check-harness` → `HARNESS_OK`.
 
 ## Open stop — NONE
 

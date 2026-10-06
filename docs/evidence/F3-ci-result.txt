@@ -1,0 +1,6 @@
+check-ci: ветка v3, HEAD 4edfb15
+check-ci: прогон 37495741399 для 4edfb15
+check-ci: conclusion success
+CI_OK
+--- дополнение PLAN: шаги прогона 37495741399
+check: success — Set up job=success, Run actions/checkout@v5=success, Run bin/check-budget=success, Run if grep -q '^ci:' Makefile 2>/dev/null; then make ci; else echo "make ci — цели нет"; fi=success, Post Run actions/checkout@v5=success, Complete job=success
