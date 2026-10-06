@@ -6,8 +6,9 @@ OK   CHANGELOG.md: ссылок 0, путей репо 13; мёртвых — н
 OK   CHANGELOG v3: полей харнеса v2 и v3 — 18, строк таблицы со ссылкой на док и столбцами до/после — 19; без строки — нет
 OK   dev-system.ru.md: разделы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение
 DOCS_OK
+
+--- дополнение PLAN: красная проба на копии дерева /tmp/two-tier-v3/docs-red — мёртвый путь в README и нет строки disableClaudeAiConnectors в CHANGELOG; ждём DOCS_FAIL
 FAIL README.md: ссылок 8, путей репо 22; мёртвых — kit/docs/NOPE.md
-OK   docs/README.md: ссылок 0, путей репо 1; мёртвых — нет
 FAIL CHANGELOG v3: полей харнеса v2 и v3 — 18, строк таблицы со ссылкой на док и столбцами до/после — 18; без строки — disableClaudeAiConnectors
 DOCS_FAIL
-rc=1
+rc=1 (ожидаемо 1)
