@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# gate-v3 — гейт кита v3 (SPEC-v3 F9): кит на пустом репо /tmp/two-tier-v3/t3, там check-budget → BUDGET_OK;
+# оттуда повторены маркеры F1, F2, F4, F5, F6, F7; F3 и F8 — из корня ветки. Печатает «F<n> <МАРКЕР>» и GATE_OK.
+# В репо ничего не пишет: полные логи — /tmp/two-tier-v3/gate/<F>.log, в вывод — команда, итог и строки FAIL/WARN.
+set -uo pipefail
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+T3=/tmp/two-tier-v3/t3
+LOGS=/tmp/two-tier-v3/gate
+fails=0
+
+mark() {  # mark <F> <маркер> <каталог> <команда…>: rc 0 и строка, равная маркеру, в выводе
+  local f=$1 m=$2 dir=$3 rc; shift 3
+  ( cd "$dir" && "$@" ) > "$LOGS/$f.log" 2>&1; rc=$?
+  echo "$f: ($([ "$dir" = "$T3" ] && echo t3 || echo корень ветки)) $* — rc $rc, строк OK $(grep -c '^OK' "$LOGS/$f.log")"
+  grep -E '^(FAIL|WARN|BAD)' "$LOGS/$f.log" | sed 's/^/    /'
+  if [ "$rc" -eq 0 ] && grep -qx "$m" "$LOGS/$f.log"; then echo "$f $m"; else echo "$f FAIL: нет $m"; fails=$((fails + 1)); fi
+}
+
+rm -rf "$T3" "$LOGS" && mkdir -p "$T3" "$LOGS" && git init -q "$T3"
+echo "F9: bin/two-tier-init $T3 — файлов кита $("$REPO/bin/two-tier-init" "$T3" | grep -c 'wrote:')"
+mark F9-init BUDGET_OK "$T3" bin/check-budget
+mark F1 BUDGET_OK "$T3" bash -c 'bin/check-budget --self-test && bin/check-budget'
+mark F2 INTENT_OK "$T3" bin/check-budget --self-test intent owner
+mark F3 CI_OK "$REPO" bin/check-ci v3
+mark F4 HARNESS_OK "$T3" bin/check-harness
+mark F5 BUDGET_OK "$T3" bin/check-budget --templates
+mark F6 KIT_OK "$T3" bin/check-kit
+mark F7 UPGRADE_OK "$T3" bin/two-tier-upgrade --self-test
+mark F8 DOCS_OK "$REPO" bin/check-docs
+[ "$fails" -eq 0 ] && echo "F9 GATE_OK" && echo GATE_OK || { echo "GATE_FAIL: $fails"; exit 1; }
