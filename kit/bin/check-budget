@@ -169,7 +169,63 @@ def rule_review(b):
     return out or [("OK", "review", "нет docs/reviews/*.md")]
 
 
-RULES = [rule_sizes, rule_dollar, rule_goal, rule_spec, rule_plan, rule_review]
+def rule_intent(b):
+    out, intent = [], "intent/INTENT.md"
+    if os.path.isfile(intent):
+        n = len(MARKER.findall(CODE.sub("", read(intent))))
+        out.append(("WARN" if n else "OK", "intent", f"{intent}: маркеров неясности {n}"))
+    ph = phase()
+    spec = ph[2] if ph else None
+    if not spec or not os.path.isfile(spec):
+        return out
+    s = read(spec)
+    n = len(MARKER.findall(CODE.sub("", s)))
+    out.append(("FAIL" if n else "OK", "intent", f"{spec}: маркеров неясности {n}"))
+    if not os.path.isfile(intent):
+        return out + [("FAIL", "intent", f"{spec} есть, а {intent} нет")]
+    real = git("hash-object", intent).stdout.strip()[:12]
+    m = re.search(r"intent/INTENT\.md @ ([0-9a-f]+)", s)
+    out.append(("OK" if m and m.group(1) == real else "FAIL", "pin",
+                f"пин SPEC {m.group(1) if m else 'нет'} · git hash-object {intent} {real}"))
+    known = sorted(set(re.findall(r"\*\*(S\d+)\*\*", read(intent))), key=lambda x: int(x[1:]))
+    bad = []
+    for line in s.splitlines():
+        f = FEATURE.match(line)
+        if f:
+            m = re.search(r"служит:\s*([^·\n]*)", line)
+            refs = re.findall(r"S\d+", m.group(1)) if m else []
+            if not refs or not set(refs) <= set(known):
+                bad.append(f"{f.group(1)}→{','.join(refs) or 'нет поля служит'}")
+    return out + [("FAIL" if bad else "OK", "signal",
+                   f"сигналы intent {','.join(known) or 'нет'}; фич без существующего S — {'; '.join(bad) or 'нет'}")]
+
+
+def rule_owner(b):
+    out, owner, ph = [], b["owner"], phase()
+    if ph:
+        es = re.search(r"END STATE(.*?)(?:\nCONSTRAINTS|\Z)", ph[0], re.S)
+        paths = set(re.findall(r"[\w.<>*-]+(?:/[\w.<>*-]+)+", es.group(1))) if es else set()
+        named = sorted(p for p in paths if is_tl(p, owner))
+        out.append(("FAIL" if named else "OK", "owner",
+                    f"END STATE docs/GOAL.txt: путей {len(paths)}, файлов тимлида — {', '.join(named) or 'нет'}"))
+    base = next((r.stdout.strip() for ref in ("main", "origin/main")
+                 for r in [git("merge-base", ref, "HEAD")] if r.returncode == 0), None)
+    if not base:
+        return out + [("OK", "owner", "нет main/origin/main или коммитов — lint коммитов пропущен")]
+    log = git("log", "--no-merges", "--no-renames", "--name-only", "--format=%x00%h %s", f"{base}..HEAD").stdout
+    tl = []
+    for chunk in log.split("\0")[1:]:
+        head, *rest = chunk.split("\n")
+        sha, _, subj = head.partition(" ")
+        hit = [p for p in rest if p and is_tl(p, owner)]
+        if subj.startswith("Тимлид:"):
+            tl.append(f"{sha} {subj}")
+        elif hit:
+            out.append(("FAIL", "owner", f"{sha} «{subj}» меняет файлы тимлида без «Тимлид:»: {', '.join(hit)}"))
+    return out + [("OK", "owner", f"коммитов «Тимлид:» после merge-base {base[:7]} — {len(tl)}: {'; '.join(tl) or '—'}")]
+
+
+RULES = [rule_sizes, rule_dollar, rule_goal, rule_spec, rule_plan, rule_review, rule_intent, rule_owner]
 
 
 def run(b):
@@ -278,6 +334,28 @@ def fixtures(b, defaults):
     add("budgets", "project добавляет owner_add", "OK", bj({"owner_add": ["docs/X.md"]}), lb)
     add("budgets", "project подменяет owner", "FAIL", bj({"owner": []}), lb)
     add("budgets", "project с чужим ключом", "FAIL", bj({"bogus": 1}), lb)
+
+    def phase_fs(intent="**S1** — x\n", serves="S1", pin=None, spec_extra=""):
+        p = pin_of(intent) if pin is None else pin
+        return {"intent/INTENT.md": intent, "docs/GOAL.txt": "Read first: docs/SPEC-1.md\n",
+                "docs/SPEC-1.md": f"**intent:** `intent/INTENT.md @ {p}`\n{feat(80, serves=serves)}\n{spec_extra}"}
+    marker = "[NEEDS CLARIFICATION: объём?]"
+    add("intent", "пин = hash-object", "OK", phase_fs(), rule_intent)
+    add("intent", "пин ≠ hash-object", "FAIL", phase_fs(pin="0123456789ab"), rule_intent)
+    add("intent", "пина нет", "FAIL", phase_fs(pin="<hash>"), rule_intent)
+    add("intent", "маркер в SPEC", "FAIL", phase_fs(spec_extra=marker + "\n"), rule_intent)
+    add("intent", "маркер в SPEC в `кавычках`", "OK", phase_fs(spec_extra=f"`{marker}`\n"), rule_intent)
+    add("intent", "маркер в INTENT", "WARN", phase_fs(intent="**S1** — x\n" + marker + "\n"), rule_intent)
+    add("intent", "фича служит S1", "OK", phase_fs(serves="S1, S2", intent="**S1** — x\n**S2** — y\n"), rule_intent)
+    add("intent", "фича служит несуществующему S9", "FAIL", phase_fs(serves="S9"), rule_intent)
+    add("intent", "у фичи нет поля служит", "FAIL", phase_fs(serves="—"), rule_intent)
+    add("owner", "файл тимлида коммитом без «Тимлид:»", "FAIL", {}, rule_owner, [("F1: x", {"docs/STATUS.md": "x\n"}, [])])
+    add("owner", "файл тимлида коммитом «Тимлид:»", "OK", {}, rule_owner, [("Тимлид: x", {"docs/STATUS.md": "x\n"}, [])])
+    add("owner", "коммит без файлов тимлида", "OK", {}, rule_owner, [("F1: x", {"src/x.py": "x\n"}, [])])
+    add("owner", "git mv файла тимлида без «Тимлид:»", "FAIL", {}, rule_owner, [("F1: mv", {"docs/old.md": "s\n"}, ["docs/STATUS.md"])])
+    es = lambda path: {"docs/GOAL.txt": f"END STATE:\n(A) {path} is written.\n\nCONSTRAINTS:\n- docs/SPEC-1.md is read-only.\n"}
+    add("owner", "END STATE называет docs/STATUS.md", "FAIL", es("docs/STATUS.md"), rule_owner)
+    add("owner", "END STATE называет docs/PROGRESS.md", "OK", es("docs/PROGRESS.md"), rule_owner)
     return C
 
 

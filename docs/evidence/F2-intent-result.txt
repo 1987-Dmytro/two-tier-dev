@@ -1,0 +1,27 @@
+ok  intent · пин = hash-object: ждали OK, получили OK
+ok  intent · пин ≠ hash-object: ждали FAIL, получили FAIL
+ok  intent · пина нет: ждали FAIL, получили FAIL
+ok  intent · маркер в SPEC: ждали FAIL, получили FAIL
+ok  intent · маркер в SPEC в `кавычках`: ждали OK, получили OK
+ok  intent · маркер в INTENT: ждали WARN, получили WARN
+ok  intent · фича служит S1: ждали OK, получили OK
+ok  intent · фича служит несуществующему S9: ждали FAIL, получили FAIL
+ok  intent · у фичи нет поля служит: ждали FAIL, получили FAIL
+INTENT_OK
+ok  owner · файл тимлида коммитом без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · файл тимлида коммитом «Тимлид:»: ждали OK, получили OK
+ok  owner · коммит без файлов тимлида: ждали OK, получили OK
+ok  owner · git mv файла тимлида без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · END STATE называет docs/STATUS.md: ждали FAIL, получили FAIL
+ok  owner · END STATE называет docs/PROGRESS.md: ждали OK, получили OK
+OWNER_OK
+SELFTEST_OK
+--- дополнение PLAN: живой bin/check-budget на репо — строки intent, pin, signal, owner (список коммитов «Тимлид:»)
+OK   intent_chars: intent/INTENT.md 4925/6000
+OK   intent: intent/INTENT.md: маркеров неясности 0
+OK   intent: docs/SPEC-v3.md: маркеров неясности 0
+OK   pin: пин SPEC e5e66199712a · git hash-object intent/INTENT.md e5e66199712a
+OK   signal: сигналы intent S1,S2,S3,S4,S5,S6; фич без существующего S — нет
+OK   owner: END STATE docs/GOAL.txt: путей 3, файлов тимлида — нет
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 1: 49e873c Тимлид: seed v3
+BUDGET_OK
