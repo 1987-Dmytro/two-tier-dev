@@ -1,0 +1,21 @@
+Read first: docs/SPEC-v3.md, docs/OFFICIAL-SOURCES.md, docs/PROGRESS.md
+
+Build kit v3 of two-tier-dev as specified in docs/SPEC-v3.md. Why it exists is in SPEC §0 and intent/INTENT.md; read the intent when a fork needs the why. You own the path. First run `git switch -c v3` from main (e0b5f6e) and commit the team-lead seed exactly as delivered (paths in SPEC §0) as "Тимлид: seed v3" — the only commit of yours with that prefix; move the untracked goal-v2.txt to docs/archive/goal-v2.txt. Step 0 is docs/PLAN-v3.md in its own commit (files, order, risks, proof); then features in the order the plan sets. Facts about Claude Code come from the official docs at code.claude.com/docs (index llms.txt), starting from the pages in docs/OFFICIAL-SOURCES.md; where a doc and the spec differ in detail, follow the doc and record the deviation in PLAN-v3.md.
+
+Authorized in this goal: create branch v3, commit to it and push it to origin; edit kit/**, including kit/.claude/**; create, run and remove scratch repos under /tmp/two-tier-v3, including `claude -p` control runs and `claude doctor` there; watch this repo's GitHub Actions runs with gh.
+
+END STATE (met when one holds):
+(A) Every feature F1-F9 of SPEC-v3 §2 is closed: its check ran in this session and its output is in docs/evidence/<F>-<check>-result.txt; branch v3 is pushed; in the final turn, after the last push, `bin/gate-v3` prints every marker F1-F9 including CI_OK; the head of docs/PROGRESS.md says what is done, the exact next step for the operator and when the transition can finish.
+(B) docs/PROGRESS.md has a NEW line written in this session `STOP: <id>` for a stop of SPEC-v3 §4, with the question and a resume line. STOP lines already in the file do not count.
+(C) 150 turns are reached and a checkpoint is in PROGRESS (done, not done, exact next command), committed and pushed.
+
+CONSTRAINTS:
+- Branch v3 only; never push to main. At least one commit per feature, `git add` with exact paths; fix-ups are new commits; never amend a pushed commit or force-push.
+- Move, never delete: retired v2 files go to docs/archive/kit-v2/ with git mv; the v2 PROGRESS and PLAN go to docs/archive/PROGRESS-v2.md and docs/archive/PLAN-v2.md, fresh ones start from the v3 templates.
+- Team-lead files are read-only after the seed commit: intent/, docs/SPEC-*.md, docs/GOAL.txt, docs/STATUS.md, docs/PROCESS.md, docs/reviews/, docs/drafts/, claude/, .claude/launch.settings.json, docs/OFFICIAL-SOURCES.md, docs/archive/team-lead-*.md.
+- Work only inside this repo and /tmp/two-tier-v3; never touch another project. F7 uses a synthetic fixture and never pushes.
+- Nothing paid: control runs use the subscription (`env -u ANTHROPIC_API_KEY`), each at most 3 turns. Never print secrets or tokens.
+- The repo is public: evidence and commit messages carry counts, exit codes, markers and paths relative to the repo or /tmp/two-tier-v3, never emails, account or org ids, client names or home-directory paths.
+- After an auto-mode block, do not repeat the action: take another path or stop with STOP-INPUT and the exact command for the operator. Write any STOP line only after every feature that does not need the missing input is closed and pushed.
+- A fork the spec leaves open: take the simplest reading and add a line to `## Notes` in PROGRESS; that is not a stop.
+- For every check show the command and its output in the transcript; a check without output is not passed.
