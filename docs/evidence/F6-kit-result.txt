@@ -1,0 +1,13 @@
+OK   skills: kit/.claude/skills: accept, plan-phase (ждём accept, plan-phase)
+OK   accept: frontmatter: name accept, description есть, disable-model-invocation true
+OK   accept: знаков 1737/4000, `$` с цифрой — 0
+OK   accept: контракт (5 слов): нет — ничего
+OK   plan-phase: frontmatter: name plan-phase, description есть, disable-model-invocation true
+OK   plan-phase: знаков 1356/4000, `$` с цифрой — 0
+OK   plan-phase: контракт (6 слов): нет — ничего
+OK   accept: STATUS не пишет: пути docs/STATUS.md в скилле нет
+OK   evaluator: tools Read, Glob, Grep, Bash; формат REVIEW.md есть
+OK   archive: скиллы v2 в docs/archive/kit-v2/claude-config/skills/: team-lead, grilling
+OK   workflow: .github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml
+OK   budgets: defaults budgets.json = kit/budgets.json
+KIT_OK

@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3 «кит v3» (файл исполнителя; потолок 60 строк)
 
 ## Голова — 06.10.2026
-**Сделано:** сид тимлида, PLAN-v3, архив v2, F1–F5; ветка `v3` на origin. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
+**Сделано:** сид тимлида, PLAN-v3, архив v2, F1–F6; ветка `v3` на origin. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
 
 ## Done
 - Сид `49e873c` «Тимлид: seed v3»; `goal-v2.txt` → `docs/archive/goal-v2.txt` (`c39237f`); PLAN-v3 (`c4114c4`).
@@ -17,8 +17,10 @@
 
 - **F5 Шаблоны**: `bin/check-budget --templates` → `BUDGET_OK` — `docs/evidence/F5-templates-result.txt`: 9 шаблонов (INTENT, SPEC, GOAL дословно из `docs/drafts/`), пример каждого проходит правила; WARN — маркер неясности шаблона INTENT, так задумано.
 
+- **F6 Скиллы кита**: `bin/check-kit` → `KIT_OK` — `docs/evidence/F6-kit-result.txt`: в ките только `plan-phase` v3 (фазы с платными и необратимыми шагами) и `accept` v3 (свежий evaluator, вердикт в `docs/evidence/accept-<sha>.txt`, STATUS не пишет); v2 `team-lead`, `grilling` — в архиве.
+
 ## Next — один айтем
-1. **F6 Скиллы кита**: `bin/check-kit` → `KIT_OK`.
+1. **F7 Upgrade**: `bin/two-tier-upgrade --self-test` → `UPGRADE_OK`.
 
 ## Open stop — NONE
 
