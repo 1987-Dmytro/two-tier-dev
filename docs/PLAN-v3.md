@@ -109,3 +109,4 @@
 12. Шаблон REVIEW — `kit/REVIEW.md` на прежнем пути: на него ссылаются CLAUDE.md, evaluator и accept. Блокирующие — пункты списка верхнего уровня под заголовком `## Блокирующие`.
 13. «До» для CHANGELOG — та же пара прогонов на ките v2 из `e0b5f6e` со строкой запуска v3.
 14. `kit/CLAUDE.md` переписан в F4 (см. Порядок).
+15. Риск 1 закрыт измерением. В `-p` (`stream-json`) отдельного события `stopReason` нет: строка kill-switch (она же `permissionDecisionReason`) приходит в `tool_result` единственного вызова, а остановку хуком доказывает `result.terminal_reason = hook_stopped`. Поэтому `check-harness` требует и строку, и `hook_stopped`.
