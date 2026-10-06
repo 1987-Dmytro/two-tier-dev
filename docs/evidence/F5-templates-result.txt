@@ -1,0 +1,27 @@
+пример: kit/docs/INTENT.template.md → intent/INTENT.md
+пример: kit/docs/SPEC.template.md → docs/SPEC-1.md
+пример: kit/docs/GOAL.template.txt → docs/GOAL.txt
+пример: kit/docs/PLAN.template.md → docs/PLAN-1.md
+пример: kit/docs/PROGRESS.template.md → docs/PROGRESS.md
+пример: kit/docs/STATUS.template.md → docs/STATUS.md
+пример: kit/docs/PROCESS.template.md → docs/PROCESS.md
+пример: kit/REVIEW.md → docs/reviews/1-1.md
+пример: kit/CLAUDE.md → CLAUDE.md
+OK   budgets: defaults кита — 18 ключей, ключей проекта — 0
+OK   claude_md_lines: CLAUDE.md 15/40
+OK   intent_chars: intent/INTENT.md 2001/6000
+OK   progress_lines: docs/PROGRESS.md 19/60
+OK   dollar_digit: `$` с цифрой — 0 в 0 файлах
+OK   goal_chars: docs/GOAL.txt, знаков 2517/4000
+OK   read_first_files: Read first, файлов 3/3
+OK   read_first_chars: Read first + CLAUDE.md, знаков 6015/50000
+OK   spec_feature_chars: docs/SPEC-1.md: фич 1, длиннее 600 знаков — нет
+OK   plan_lines: docs/PLAN-1.md, строк 25/150
+OK   review_blocking: docs/reviews/1-1.md: блокирующих 1/5
+WARN intent: intent/INTENT.md: маркеров неясности 1
+OK   intent: docs/SPEC-1.md: маркеров неясности 0
+OK   pin: пин SPEC 377d61ea7dd4 · git hash-object intent/INTENT.md 377d61ea7dd4
+OK   signal: сигналы intent S1,S2; фич без существующего S — нет
+OK   owner: END STATE docs/GOAL.txt: путей 2, файлов тимлида — нет
+OK   owner: нет main/origin/main или коммитов — lint коммитов пропущен
+BUDGET_OK

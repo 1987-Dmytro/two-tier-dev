@@ -383,9 +383,41 @@ def self_test(groups):
     return 0 if all_ok else 1
 
 
+TEMPLATES = {  # шаблон кита → куда его кладёт пример в проекте
+    "docs/INTENT.template.md": "intent/INTENT.md", "docs/SPEC.template.md": "docs/SPEC-1.md",
+    "docs/GOAL.template.txt": "docs/GOAL.txt", "docs/PLAN.template.md": "docs/PLAN-1.md",
+    "docs/PROGRESS.template.md": "docs/PROGRESS.md", "docs/STATUS.template.md": "docs/STATUS.md",
+    "docs/PROCESS.template.md": "docs/PROCESS.md", "REVIEW.md": "docs/reviews/1-1.md", "CLAUDE.md": "CLAUDE.md",
+}
+
+
+def templates():
+    """Пример — шаблон как есть, только номер фазы, пин и Read first подставлены; плейсхолдеры <…> остаются."""
+    root = "kit" if os.path.isdir("kit/docs") else "."
+    missing = [t for t in TEMPLATES if not os.path.isfile(f"{root}/{t}")]
+    if missing:
+        return report([("FAIL", "templates", f"нет шаблонов {missing}")])
+    b, out = load_budgets(f"{root}/budgets.json")
+    if not b:
+        return report(out)
+    pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
+    subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),
+            ("<первые 12 знаков git hash-object>", pin)]
+    fs = {}
+    for t, dst in TEMPLATES.items():
+        text = read(f"{root}/{t}")
+        for a, z in subs:
+            text = text.replace(a, z)
+        fs[dst] = text
+        print(f"пример: {root}/{t} → {dst}")
+    return report(out + in_fixture(fs, None, lambda: run(b)))
+
+
 def main(argv):
     if argv[:1] == ["--self-test"]:
         return self_test(argv[1:])
+    if argv == ["--templates"]:
+        return templates()
     if argv:
         print(__doc__)
         return 2
