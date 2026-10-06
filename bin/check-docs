@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""check-docs — документы кита v3 живые (SPEC-v3 F8). DOCS_OK или exit 1.
+
+  · ссылки [..](путь) и пути репо в `обратных кавычках` (bin/ kit/ intent/ claude/ docs/archive|drafts|evidence/)
+    в README, docs/README, docs/dev-system.ru.md, docs/LAUNCH.md и записи v3 CHANGELOG существуют — в репо или в kit/;
+  · запись v3 CHANGELOG называет каждое поле харнеса v2 и v3 строкой таблицы со ссылкой на док и столбцами до/после;
+  · dev-system.ru.md описывает цикл v3, intent, бюджеты и самоулучшение.
+"""
+import json, os, re, sys
+
+DOCS = ["README.md", "docs/README.md", "docs/dev-system.ru.md", "docs/LAUNCH.md", "CHANGELOG.md"]
+REPO_PATH = re.compile(r"^(bin|kit|intent|claude|docs/(archive|drafts|evidence))/[\w./-]*$")
+out = []
+
+
+def say(ok, item, msg):
+    out.append(bool(ok))
+    print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}")
+
+
+def read(p):
+    with open(p, encoding="utf-8") as f:
+        return f.read()
+
+
+def exists(p):
+    p = p.rstrip("/")
+    return os.path.exists(p) or os.path.exists(os.path.join("kit", p))
+
+
+for doc in DOCS:
+    text = read(doc)
+    if doc == "CHANGELOG.md":
+        text = text.split("\n## v2.0", 1)[0]  # прежние записи — история со старыми путями
+    base = os.path.dirname(doc)
+    links = [l.split("#")[0] for l in re.findall(r"\]\(([^)\s]+)\)", text) if not re.match(r"(https?:|mailto:|#)", l)]
+    paths = [p for p in re.findall(r"`([^`\s]+)`", text) if REPO_PATH.match(p) and "…" not in p]
+    dead = [l for l in links if not os.path.exists(os.path.normpath(os.path.join(base, l)))] + [p for p in paths if not exists(p)]
+    say(not dead, doc, f"ссылок {len(links)}, путей репо {len(paths)}; мёртвых — {', '.join(sorted(set(dead))) or 'нет'}")
+
+v3 = read("CHANGELOG.md").split("\n## v3.0", 1)[1].split("\n## v2.0", 1)[0]
+rows = [r for r in v3.splitlines() if r.startswith("| ") and r.count("|") >= 6]
+fields = set()
+for p in ("kit/.claude/settings.json", "docs/archive/kit-v2/claude-config/settings.json"):
+    s = json.loads(read(p))
+    fields |= set(s) | set(re.findall(r"[\w-]+\.(?:sh|py)", json.dumps(s.get("hooks", {}))))
+    fields |= {"graphify"} if "graphify" in json.dumps(s.get("hooks", {})) else set()
+fields |= {"launch.settings.json", "rules/graphify.md"}
+miss = sorted(f for f in fields if not any(f in r and "code.claude.com/docs/en/" in r for r in rows))
+say(not miss, "CHANGELOG v3", f"полей харнеса v2 и v3 — {len(fields)}, строк таблицы со ссылкой на док и столбцами до/после — {len(rows)}; без строки — {', '.join(miss) or 'нет'}")
+
+ds = read("docs/dev-system.ru.md")
+need = ["Цикл v3", "intent/INTENT.md", "Бюджеты", "Самоулучшение"]
+say(all(n in ds for n in need), "dev-system.ru.md", f"разделы: {', '.join(n for n in need if n in ds)}")
+print("DOCS_OK" if all(out) else "DOCS_FAIL")
+sys.exit(0 if all(out) else 1)

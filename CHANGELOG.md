@@ -6,18 +6,48 @@ version is what the next `bin/two-tier-init` ships. A rule enters only on the RE
 it, and it enters first as a hook (D10). Dates are the days the rule entered the live kit.
 
 ## Unreleased — named debts
-- Sweep effort (`low/medium/high/ultracode` × ±Ponytail, three tasks, `/cost`) is a separate $0 item after the
-  gate (SPEC-v2 §6.1): until it is measured, ultracode runs always and `/usage` after every phase is its only
-  registered bound.
-- The Cowork card v3.22 that the architecture §3 sends to the archive is not producible from repo content — it
-  exists only in Cowork (PLAN-v2, risk 6). The archive holds `team-lead-v3.20.md` and `team-lead-v3.23.md`;
-  either the operator exports v3.22 or §3's line is retired.
-- **Closed by the archive:** the brain-init M6 v2 deltas (`docs/archive/brain-init-v1/M6-v2-deltas.md`) — the
-  module is replaced by the cwc hooks, there is nothing left to apply; the phase file's money section
-  (`docs/archive/templates-v1/PHASE.md` §6) — PHASE became SPEC and the eight defaults live in
-  `kit/docs/PROCESS.template.md`; retro metrics read by hand — the phase's metric set is D13, read at the
-  retro; the operator as the only channel between the tiers — in v2 the channel is the repo folder itself
-  (Cowork reads STATUS and `docs/evidence/`), and the operator carries three decisions, not reports.
+- The Cowork card v3.22 that the v2 architecture §3 sends to the archive is not producible from repo content (PLAN-v2,
+  risk 6); either the operator exports it or the line is retired.
+- A measured effort sweep stays a separate $0 item: v3 pins effort in the launch line (`medium`, the Opus 5.5 default
+  by model-config) instead of `ultracode` in settings.
+- Living projects move to v3 by `bin/two-tier-upgrade` in the next phase (SPEC-v3 §6); the kit's S6 is measured there.
+
+## v3.0 — 2026-10-06 — budgets enforced by code, the result instead of the path, the harness from the official docs, a living intent pinned in the SPEC
+- **Budgets:** `bin/check-budget` + `budgets.json` (kit defaults; a project may only tighten) — skills, CLAUDE.md, the
+  intent, SPEC feature lines and pin, open-question markers, PROGRESS, PLAN, GOAL, reviews, ownership of team-lead
+  files; every rule has a green and a red fixture (`--self-test`), every template an example (`--templates`); CI on
+  push (`.github/workflows/two-tier.yml`, `bin/check-ci`). Taught by: the 06.10 retro — the `team-lead` skill ×7,
+  ~0.6 M characters of mandatory reading at executor start, acceptance longer than the leg (`intent/INTENT.md`, D1).
+- **Intent:** one living `intent/INTENT.md`, pinned in the SPEC by `git hash-object`; a pivot is a change-log line and
+  a new pin, not a layer of amendments (D3). Taught by: an intent outdated after three pivots that lived in reviews.
+- **Skills:** `team-lead` and `grilling` leave the kit — Cowork holds them, copies live in `docs/drafts/`; `plan-phase`
+  serves only phases with paid or irreversible steps; `accept` runs a fresh evaluator and writes
+  `docs/evidence/accept-<sha>.txt`, never STATUS.
+- **Upgrade:** `bin/two-tier-upgrade <path>` — branch `kit-v3`, nothing pushed, nothing deleted, team-lead files left
+  to the team lead, a second run changes nothing.
+- **Harness fields** — the doc, and the same control pair (`bin/check-harness`, `docs/LAUNCH.md`) before, on the v2 kit
+  (`docs/evidence/F4-harness-v2-baseline.txt`), and after, on v3 (`docs/evidence/F4-harness-result.txt`):
+
+| field | v2 → v3 | doc | before (v2) | after (v3) |
+|---|---|---|---|---|
+| `model` | `opus` → `claude-opus-5-5` | [settings-reference](https://code.claude.com/docs/en/settings-reference#model), [model-config](https://code.claude.com/docs/en/model-config) | static FAIL: the alias moves by itself; init `claude-opus-5-5` only via `--model` | static OK; init `claude-opus-5-5` |
+| `ultracode` | `true` → removed | [settings-reference](https://code.claude.com/docs/en/settings-reference#ultracode), [workflows](https://code.claude.com/docs/en/workflows) | static FAIL: a workflow planned for every task | removed; the keyword stays for parallel items |
+| `effortLevel` | not set → not set | [model-config](https://code.claude.com/docs/en/model-config) | — | effort lives in the launch line, `--effort medium` |
+| `autoMemoryEnabled` | `false` → `false` | [settings-reference](https://code.claude.com/docs/en/settings-reference#automemoryenabled), [memory](https://code.claude.com/docs/en/memory) | `false` | `false`: MEMORY.md is not read at start |
+| `disableClaudeAiConnectors` | — → `true` | [settings-reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors), [mcp](https://code.claude.com/docs/en/mcp) | 5 `claude.ai …` servers in both runs | 0 in both runs |
+| `subagentPromptCacheTtl` | `"1h"` → removed | [settings-reference](https://code.claude.com/docs/en/settings-reference#subagentpromptcachettl) | not visible in the pair: no subagent | removed: one evaluator per acceptance does not need the dearer hour-long cache writes |
+| `workflowSizeGuideline` | `small` → `small` | [settings-reference](https://code.claude.com/docs/en/settings-reference#workflowsizeguideline) | not visible in the pair: no workflow | kept: it bounds the spend of a keyword-started workflow |
+| `permissions` (deny) | 7 rules → 9 `Edit(…)` on the team-lead list | [permissions](https://code.claude.com/docs/en/permissions) | 5 of 9 team-lead files covered; PLAN (the executor's file in v3) and the archive denied | 9 of 9, no `Write(…)` rules (never consulted) |
+| `hooks`: `kill-switch.sh` | `decision: block` → `continue: false` + `stopReason` + deny | [hooks](https://code.claude.com/docs/en/hooks) | run 2: one call denied, `terminal_reason completed` — the model stopped by itself | run 2: `hook_stopped` at the first call, the probe not created |
+| `hooks`: `steer.sh` | a blocking order → a factual note in `additionalContext` | [hooks](https://code.claude.com/docs/en/hooks) | run 1: the marker arrived by blocking the call | run 1: the marker arrived, the call ran, the note came with its result |
+| `hooks`: paths | relative `.claude/hooks/…` → exec form with `${CLAUDE_PROJECT_DIR}` | [hooks](https://code.claude.com/docs/en/hooks) | static FAIL | static OK |
+| `hooks`: `verify-gate.sh`, `track-read.sh` | → `docs/archive/kit-v2/` | [hooks](https://code.claude.com/docs/en/hooks) | inert: the gate guards `test-results.json`, which the kit never writes | removed |
+| `hooks`: `commit-on-stop.sh` | → archive | [hooks](https://code.claude.com/docs/en/hooks) | 0 commits in the copy (no tracked files); in a project it commits `-am`, against exact-path commits and the ownership lint | removed |
+| `hooks`: `test-output-filter.sh`, the graphify hint | → archive | [hooks](https://code.claude.com/docs/en/hooks) | inert in the pair; both inject orders, the doc asks for facts | removed |
+| `rules/graphify.md` | → archive | [memory](https://code.claude.com/docs/en/memory) | loaded at every start | the Environment row of PROCESS carries the tool |
+| `hooks`: `refuse_sweeping_commands.py` | kept, exec form | [hooks](https://code.claude.com/docs/en/hooks) | runs | runs: stage by path, not the whole tree |
+| `launch.settings.json` | new: `autoMode.environment` with `"$defaults"` | [auto-mode-config](https://code.claude.com/docs/en/auto-mode-config) | init `permissionMode auto` | init `permissionMode auto` |
+| `claude doctor` | — | [cli-reference](https://code.claude.com/docs/en/cli-reference) | 0 settings errors | 0 settings errors |
 
 ## v2.0 — 2026-09-18 — a harness is assembled from the platform's own primitives, never written a second time; what a check proved lives in a file, because the transcript no longer holds the work
 - **Tiers:** two tiers and no bus between them — the operator decides three times (spec yes/no · a letter at a

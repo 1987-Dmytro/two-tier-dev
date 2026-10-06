@@ -3,3 +3,4 @@ ci:
 	bin/check-budget --self-test
 	bin/check-budget --templates
 	bin/check-kit
+	bin/check-docs

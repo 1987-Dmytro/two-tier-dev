@@ -1,18 +1,16 @@
 # docs
 
-- `SPEC-v2.md` — the spec of the v2 kit build (six sections, features F1–F6): the first run of the cycle on this
-  repository itself. Frozen; deviations from it live in the plan.
-- `PLAN-v2.md` — the plan for that spec: files, order, risks, proof, the check commands reconstructed with their
-  markers, and the register of deviations.
-- `two-tier-dev-v2-architecture.md` — the architecture signed 18.09.2026: the two tiers and their models, the
-  artifact chain of a phase, the repository tree, `settings.json`, the executor's environment, acceptance.
-- `dev-system.ru.md` — the system described end to end, in the operator's language (v2.0): the four roles and the
-  operator's three decisions, the chain `intent/<slug>.md` → SPEC → PLAN → `/goal` → `/accept`, artifacts with
-  caps, the harness, the boundary rule, how to start a new project. The English condensed version is the root
-  `README.md`.
-- `evidence/` — `<fid>-<check>-result.txt`, the output of every check of this repository's own phase; the file
-  and its marker are what makes a feature closed.
-- `archive/` — all of v1, moved file by file and nothing deleted: the `team-lead` cards v3.20 and v3.23 with
-  their README, `executor-kit-v1/`, `templates-v1/`, `brain-init-v1/`, `new-project.sh`. History, not
-  instructions: nothing here is installed by the kit.
-- `drafts/` — written, not yet signed.
+- `SPEC-v3.md` · `PLAN-v3.md` · `PROGRESS.md` — the phase that built kit v3: the team lead's spec, the executor's
+  plan (files, order, risks, proof, deviations from the spec and the docs), the executor's report.
+- `GOAL.txt` — the `/goal` of the current phase; `Read first:` names its SPEC.
+- `OFFICIAL-SOURCES.md` — the only sources by which the harness, the kit and the skills may change.
+- `LAUNCH.md` — the executor's launch line and the paired control run (a link to `kit/docs/LAUNCH.md`).
+- `dev-system.ru.md` — the whole system in the operator's language (v3).
+- `evidence/` — `<F>-<check>-result.txt`, the output of every check of this phase; `F4-harness-v2-baseline.txt`
+  is the same control pair on the v2 kit, the «before» of the CHANGELOG.
+- `drafts/` — copies of the Cowork skills `team-lead` v6 and `team-lead-brief`, and the INTENT, SPEC and GOAL
+  templates as the team lead wrote them.
+- `STATUS.md` — the operator's map; the team lead writes it at acceptance.
+- `SPEC-v2.md` · `two-tier-dev-v2-architecture.md` — the v2 phase, history.
+- `archive/` — everything retired, moved and never deleted: v1, the v2 kit (`kit-v2/`, `.claude/` there is
+  `claude-config/`), `PROGRESS-v2.md`, `PLAN-v2.md`, `evidence-v2/`, `goal-v2.txt`, the `team-lead` cards.

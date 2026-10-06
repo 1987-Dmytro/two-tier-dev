@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3 «кит v3» (файл исполнителя; потолок 60 строк)
 
 ## Голова — 06.10.2026
-**Сделано:** сид тимлида, PLAN-v3, архив v2, F1–F7; ветка `v3` на origin. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
+**Сделано:** сид тимлида, PLAN-v3, архив v2, F1–F8; ветка `v3` на origin. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
 
 ## Done
 - Сид `49e873c` «Тимлид: seed v3»; `goal-v2.txt` → `docs/archive/goal-v2.txt` (`c39237f`); PLAN-v3 (`c4114c4`).
@@ -21,8 +21,10 @@
 
 - **F7 Upgrade**: `bin/two-tier-upgrade --self-test` → `UPGRADE_OK` — `docs/evidence/F7-upgrade-result.txt`: клон без origin, ветка `kit-v3`, 23 файла v3, 11 в архив, PROGRESS (201) и PLAN-1 (401) — в архив с датой, свежие со ссылкой; файлы тимлида не тронуты; второй прогон — тот же HEAD.
 
+- **F8 Документы**: `bin/check-docs` → `DOCS_OK` — `docs/evidence/F8-docs-result.txt`: README, `docs/dev-system.ru.md` (цикл v3, intent, бюджеты, самоулучшение), `docs/README.md`, `docs/LAUNCH.md`, CHANGELOG v3 — 18 полей харнеса со ссылкой на док и итогом до/после; красная проба на копии → `DOCS_FAIL`.
+
 ## Next — один айтем
-1. **F8 Документы**: `bin/check-docs` → `DOCS_OK`.
+1. **F9 Гейт**: `bin/gate-v3` → `GATE_OK`.
 
 ## Open stop — NONE
 
