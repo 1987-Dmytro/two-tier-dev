@@ -1,0 +1,18 @@
+OK   список апгрейда = файлы кита (25)
+OK   фикстура: тестовый клон без origin (`git remote` пуст)
+  прогон 1: ветка: kit-v3 | коммит 2520ea9: поставлено 23, в архив 11, конфликтов 0, тимлиду 2; отчёт docs/upgrade-v3.md
+OK   ветка kit-v3
+OK   main не тронут
+OK   механика v3: 22 файлов кита на месте
+OK   прежние версии (settings, accept v2) — в docs/archive/kit-v2/
+OK   выведенные из кита v2 (6) — в архиве
+OK   раздутые PROGRESS (201 строка) и PLAN-1 (401) — в docs/archive/ с датой, байт в байт
+OK   свежие PROGRESS и PLAN-1 из шаблонов, со ссылкой на архив
+OK   файлы тимлида и CLAUDE.md проекта не тронуты, launch.settings.json не создан
+OK   отчёт docs/upgrade-v3.md: тимлиду, исполнителю, оператору
+OK   история цела: 2 коммита v2 — предки kit-v3
+OK   в проекте после апгрейда bin/check-budget → BUDGET_OK
+  прогон 2: ветка: kit-v3 | изменений нет
+OK   повторный прогон: тот же HEAD, `git status` пуст
+OK   remotes не тронуты, push некуда и не было
+UPGRADE_OK
