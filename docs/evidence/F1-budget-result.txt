@@ -1,0 +1,77 @@
+ok  size · team_lead_copy_lines: ждали OK, получили OK
+ok  size · team_lead_copy_lines+1: ждали FAIL, получили FAIL
+ok  size · team_lead_copy_chars: ждали OK, получили OK
+ok  size · team_lead_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · brief_copy_lines: ждали OK, получили OK
+ok  size · brief_copy_lines+1: ждали FAIL, получили FAIL
+ok  size · brief_copy_chars: ждали OK, получили OK
+ok  size · brief_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · role_copy_chars: ждали OK, получили OK
+ok  size · role_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · grilling_copy_chars: ждали OK, получили OK
+ok  size · grilling_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · skill_chars: ждали OK, получили OK
+ok  size · skill_chars+1: ждали FAIL, получили FAIL
+ok  size · claude_md_lines: ждали OK, получили OK
+ok  size · claude_md_lines+1: ждали FAIL, получили FAIL
+ok  size · intent_chars: ждали OK, получили OK
+ok  size · intent_chars+1: ждали WARN, получили WARN
+ok  size · progress_lines: ждали OK, получили OK
+ok  size · progress_lines+1: ждали FAIL, получили FAIL
+SIZE_OK
+ok  dollar · скилл без $ с цифрой: ждали OK, получили OK
+ok  dollar · скилл с $0: ждали FAIL, получили FAIL
+ok  dollar · копия тимлида с $5: ждали FAIL, получили FAIL
+DOLLAR_OK
+ok  goal · goal_chars: ждали OK, получили OK
+ok  goal · goal_chars+1: ждали FAIL, получили FAIL
+ok  goal · read_first_files: ждали OK, получили OK
+ok  goal · read_first_files+1: ждали FAIL, получили FAIL
+ok  goal · read_first_chars: ждали OK, получили OK
+ok  goal · read_first_chars+1: ждали FAIL, получили FAIL
+ok  goal · Read first: нет файла: ждали FAIL, получили FAIL
+GOAL_OK
+ok  spec · spec_feature_chars: ждали OK, получили OK
+ok  spec · spec_feature_chars+1: ждали FAIL, получили FAIL
+ok  spec · первый Read first — не SPEC: ждали FAIL, получили FAIL
+SPEC_OK
+ok  plan · plan_lines: ждали OK, получили OK
+ok  plan · plan_lines+1: ждали FAIL, получили FAIL
+PLAN_OK
+ok  review · review_blocking: ждали OK, получили OK
+ok  review · review_blocking+1: ждали FAIL, получили FAIL
+REVIEW_OK
+ok  budgets · project ужесточает progress_lines: ждали OK, получили OK
+ok  budgets · project ослабляет progress_lines: ждали FAIL, получили FAIL
+ok  budgets · project добавляет owner_add: ждали OK, получили OK
+ok  budgets · project подменяет owner: ждали FAIL, получили FAIL
+ok  budgets · project с чужим ключом: ждали FAIL, получили FAIL
+BUDGETS_OK
+SELFTEST_OK
+OK   budgets: defaults кита — 18 ключей, ключей проекта — 1
+OK   team_lead_copy_lines: docs/drafts/team-lead-v6.md 72/80
+OK   team_lead_copy_chars: docs/drafts/team-lead-v6.md 11242/12000
+OK   brief_copy_lines: docs/drafts/team-lead-brief.md 145/150
+OK   brief_copy_chars: docs/drafts/team-lead-brief.md 14938/15000
+OK   skill_chars: kit/.claude/skills/accept/SKILL.md 2020/4000
+OK   skill_chars: kit/.claude/skills/plan-phase/SKILL.md 2471/4000
+OK   claude_md_lines: kit/CLAUDE.md 21/40
+OK   intent_chars: intent/INTENT.md 4925/6000
+OK   progress_lines: docs/PROGRESS.md 18/60
+OK   dollar_digit: `$` с цифрой — 0 в 4 файлах
+OK   goal_chars: docs/GOAL.txt, знаков 3423/4000
+OK   read_first_files: Read first, файлов 3/3
+OK   read_first_chars: Read first + CLAUDE.md, знаков 24211/50000
+OK   spec_feature_chars: docs/SPEC-v3.md: фич 9, длиннее 600 знаков — нет
+OK   plan_lines: docs/PLAN-v3.md, строк 111/150
+OK   review: нет docs/reviews/*.md
+BUDGET_OK
+--- дополнение PLAN: на ките — (cd kit && ../bin/check-budget)
+OK   budgets: defaults кита — 18 ключей, ключей проекта — 0
+OK   skill_chars: .claude/skills/accept/SKILL.md 2020/4000
+OK   skill_chars: .claude/skills/plan-phase/SKILL.md 2471/4000
+OK   claude_md_lines: CLAUDE.md 21/40
+OK   dollar_digit: `$` с цифрой — 0 в 2 файлах
+OK   goal: нет docs/GOAL.txt — фаза не открыта, правила фазы пропущены
+OK   review: нет docs/reviews/*.md
+BUDGET_OK
