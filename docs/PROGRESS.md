@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3 «кит v3» (файл исполнителя; потолок 60 строк)
 
 ## Голова — 06.10.2026
-**Сделано:** сид тимлида, PLAN-v3, архив v2, F1, F2, F3; ветка `v3` на origin. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
+**Сделано:** сид тимлида, PLAN-v3, архив v2, F1–F4; ветка `v3` на origin. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** в этой сессии, F1–F9 по PLAN-v3.
 
 ## Done
 - Сид `49e873c` «Тимлид: seed v3»; `goal-v2.txt` → `docs/archive/goal-v2.txt` (`c39237f`); PLAN-v3 (`c4114c4`).
@@ -13,12 +13,16 @@
 
 - **F3 CI**: `bin/check-ci v3` → `CI_OK` для HEAD `4edfb15` (прогон 37495741399: check-budget и `make ci` — success) — `docs/evidence/F3-ci-result.txt`. Первый прогон упал на YAML (`: ` в plain-скаляре), починка — `4edfb15`.
 
+- **F4 Харнес**: `bin/check-harness` → `HARNESS_OK` — `docs/evidence/F4-harness-result.txt`: settings v3, пара `claude -p` (маркер STEER дошёл; с `AGENT_STOP` — 1 вызов, `hook_stopped`), коннекторов claude.ai 0 в обоих прогонах, `claude doctor` без ошибок. «До» на ките v2: 5 коннекторов, `completed` вместо `hook_stopped` — `F4-harness-v2-baseline.txt`.
+
 ## Next — один айтем
-1. **F4 Харнес**: `bin/check-harness` → `HARNESS_OK`.
+1. **F5 Шаблоны**: `bin/check-budget --templates` → `BUDGET_OK`.
 
 ## Open stop — NONE
 
 ## Notes
 - PLAN-v3 и эта страница написаны в форме шаблонов v3 до F5: шаблоны пишет сам исполнитель, F5 их фиксирует.
+
+- Список `claude.ai …` в `system/init` грузится в фоне: на ките v2 прогон 1 дал 0, прогон 2 — 5. Поэтому `check-harness` смотрит оба прогона пары.
 
 ## Named, not built

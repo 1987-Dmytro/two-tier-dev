@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Copyright 2026 Anthropic PBC
 # SPDX-License-Identifier: Apache-2.0
-# If STEER.md has content, surface it to the agent once and clear the file.
-# Write to STEER.md (or pipe from a UI) to redirect the agent mid-run.
-# Note: this is a convenience channel, not a trust boundary; if the agent has
-# Write access to the project it can write STEER.md itself.
-f="${AGENT_STEER_FILE:-./STEER.md}"
-if [ -s "$f" ]; then
-  note=$(cat "$f")
-  reason=$(python3 -c 'import json,sys; print(json.dumps("OPERATOR STEERING: " + sys.argv[1] + "\n\nPause what you were about to do, incorporate this guidance, then continue toward the feature goal."))' "$note" 2>/dev/null) || exit 0
-  printf '{"decision":"block","reason":%s}\n' "$reason"
-  : > "$f"
-fi
+# Modified for two-tier-dev v3: lines of STEER.md reach Claude once, as facts in `additionalContext` next to the
+# tool result (hooks doc: "factual statements rather than imperative"), then the file is cleared.
+# A convenience channel, not a trust boundary: the agent can write STEER.md itself.
+f="${AGENT_STEER_FILE:-${CLAUDE_PROJECT_DIR:-.}/STEER.md}"
+[ -s "$f" ] || exit 0
+python3 - "$f" <<'PY'
+import json, sys, time
+p = sys.argv[1]
+lines = [l.strip() for l in open(p, encoding="utf-8") if l.strip()]
+open(p, "w").close()
+note = "\n".join(f"Operator note {time.strftime('%H:%M')}: {l}" for l in lines)
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": note}}, ensure_ascii=False))
+PY

@@ -1,0 +1,15 @@
+# Базовая линия «до» (не чек фичи): та же пара на ките v2 из e0b5f6e; строка запуска, launch.settings.json и budgets.json — v3
+источник харнеса: /tmp/two-tier-v3/kit-v2-src/kit → копия /tmp/two-tier-v3/harness
+FAIL settings: model opus; effortLevel нет; ultracode задан
+FAIL settings: autoMemoryEnabled False; disableClaudeAiConnectors None
+FAIL settings: deny Edit на файлы тимлида 5/9; правил Write(…) 0
+FAIL settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, track-read.sh, verify-gate.sh, refuse_sweeping_commands.py, test-output-filter.sh, . For focused questions, run `graphify q; с ошибкой — ['kill-switch.sh', 'steer.sh', 'track-read.sh', 'verify-gate.sh', 'refuse_sweeping_commands.py', 'test-output-filter.sh', '. For focused questions, run `graphify q']
+OK   launch: autoMode.environment: записей 5, "$defaults" есть
+run: env -u ANTHROPIC_API_KEY -u ENABLE_CLAUDEAI_MCP_SERVERS claude -p '<prompt>' --permission-mode auto --model claude-opus-5-5 --effort medium --settings .claude/launch.settings.json --setting-sources project,local --max-turns 3 --output-format stream-json --verbose
+OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
+OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
+FAIL run2: с AGENT_STOP: probe.txt не создан; tool_use 1; причина kill-switch в выводе — да; terminal_reason completed, отказов 1
+FAIL run1: mcp_servers 5: claude.ai Claude Docs, claude.ai Google Drive, claude.ai Gmail, claude.ai Google Calendar, claude.ai Canva; claude.ai — 5
+FAIL run2: mcp_servers 5: claude.ai Claude Docs, claude.ai Google Drive, claude.ai Gmail, claude.ai Google Calendar, claude.ai Canva; claude.ai — 5
+OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
+HARNESS_FAIL

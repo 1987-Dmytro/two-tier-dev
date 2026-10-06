@@ -1,0 +1,11 @@
+{
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "Project: <проект> — <что он делает, одной фразой>. Primary use: software development.",
+      "Source control: <GitHub org/repo проекта> — pushing feature branches there is routine; main changes only after the operator's acceptance.",
+      "Trusted domains: <API вендоров и хосты, которые вызывает проект>.",
+      "Key services: <CI, сервер проекта, деплой — или «нет»>."
+    ]
+  }
+}
