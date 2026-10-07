@@ -1,4 +1,4 @@
-$ bin/check-harness   # корень репо кита (из bin/gate-v3.1, после фикса проб и таймаута)
+$ bin/check-harness   # свежий клон e1cd97f, из bin/gate-v3.1 лаунчера /verify-phase
 фикстура таблицы: строк 10; CLI: 2; флаг: 1; плагин: 1 …
 ok  env · зелёная: init = таблица, встроенный плагин и бандл-скилл не в счёт: расхождений нет
 ok  env · лишний плагин: плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»
@@ -21,7 +21,7 @@ OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (жд
 OK   settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, refuse_sweeping_commands.py; с ошибкой — нет
 OK   launch: .claude/launch.settings.json: autoMode.environment записей 5, "$defaults" есть
 OK   line: docs/PROCESS.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 13; нет — ничего
-копия харнеса: /tmp/two-tier-v3/harness-g6f66awa
+копия харнеса: /tmp/two-tier-v3/harness-ts6jrefm
 run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p '<prompt>' --permission-mode auto --model claude-opus-5-5 --effort ultracode --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3 --max-turns 3 --output-format stream-json --verbose
 OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
 OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
@@ -30,7 +30,7 @@ OK   allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` �
 OK   run1: system/init = таблица docs/PROCESS.md: плагинов 3, MCP 1 (context7 connected), скиллов 29; строк таблицы 19
 OK   run2: system/init = таблица docs/PROCESS.md: плагинов 3, MCP 1 (context7 connected), скиллов 29; строк таблицы 19
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
-OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 7; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «<\tool_use_error>File is in a directory that is denied by your permiss»; `git add -A` — отказ хука; в индексе 0
+OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 6; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
 OK   kill: воркфлоу completed; агент создал AGENT_STOP — да; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
 OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
 ENV_OK
@@ -61,7 +61,7 @@ OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (жд
 OK   settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, refuse_sweeping_commands.py; с ошибкой — нет
 OK   launch: .claude/launch.settings.json: autoMode.environment записей 5, "$defaults" есть
 OK   line: ./docs/PROCESS.template.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 11; нет — ничего
-копия харнеса: /tmp/two-tier-v3/harness-3bygjt29
+копия харнеса: /tmp/two-tier-v3/harness-6s842i0d
 run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p '<prompt>' --permission-mode auto --model claude-opus-5-5 --effort ultracode --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --max-turns 3 --output-format stream-json --verbose
 OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
 OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
@@ -70,7 +70,7 @@ OK   allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` �
 OK   run1: system/init = таблица ./docs/PROCESS.template.md: плагинов 3, MCP 1 (context7 connected), скиллов 29; строк таблицы 20
 OK   run2: system/init = таблица ./docs/PROCESS.template.md: плагинов 3, MCP 1 (context7 connected), скиллов 29; строк таблицы 20
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
-OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 9; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
+OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 5; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «<\tool_use_error>File is in a directory that is denied by your permiss»; `git add -A` — отказ хука; в индексе 0
 OK   kill: воркфлоу completed; агент создал AGENT_STOP — да; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
 OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
 ENV_OK

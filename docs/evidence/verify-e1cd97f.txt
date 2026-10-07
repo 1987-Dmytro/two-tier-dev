@@ -1,0 +1,43 @@
+VERDICT: PASS
+/verify-phase · docs/SPEC-v3.1.md · HEAD e1cd97f · проверяющие claude-sonnet-5-5 (фич 9, опровергателей 0) · судья claude-opus-5-5
+
+Блокирующих замечаний нет: у всех девяти фич есть файл docs/evidence/<F>-*-result.txt с маркером, свежий прогон или gate.log текущего прогона зелёный (F1–F8 с номером фичи, `v3 GATE_OK`, `F9 GATE_OK`), мутации F1–F8 красные, и ни одного кандидата в блокирующие после опровергателя не осталось. Выжившие мутации (F5 лимит×2, F9 rc в mark()) и найденные краевые случаи — пробелы чеков или входы вне «готово»; инварианты §3 не нарушены: в evidence, коде и сообщениях коммитов нет домашних путей, почты и ключей, модели — полными id.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F1: check-harness пропускает строку запуска с повторным флагом `--effort ultracode --effort low` (проверка подстрокой, check-harness стр. 196); шаблон несёт флаг один раз — пробел в чеке, не в поведении
+- F2: нет раздела `## Environment` или строка таблицы короче 4 ячеек — IndexError с трассой вместо FAIL с именем (rc ненулевой, ложного ENV_OK нет)
+- F2: ячейка «вкл» сравнивается точно с «да» («Да», «да.» считаются «нет»); форма `mcp` в нижнем регистре молча не проверяется
+- F2: флаг из таблицы сверяется в compare() подстрокой всей строки запуска, не целыми токенами (`--effort ultracodeXYZ` проходит)
+- F2: `|` внутри ячейки с бэктиками рвёт ячейку; ids без бэктиков берутся всем текстом ячейки
+- F3: refuse_sweeping_commands.py не ловит `(git add -A)`, `bash -c "git add -A"`, `env/sudo/time/command git add -A`, `git add -fA`, `-Av`, `./`, `*`
+- F3: refuse_sweeping_commands.py падает AttributeError на JSON не-объекте (`[]`), rc 1
+- F3: steer.sh на STEER.md из одних пробелов отдаёт пустой additionalContext; пустой/null agent_id считается главной сессией
+- F3: пробы guards/agent проверяют только `Write docs/STATUS.md` и `git add -A`, не `Edit`, другие файлы тимлида и `make fmt`/`ruff format`
+- F4: `bin/verify-phase --limit ²` — ValueError с трассой, rc 1 вместо usage и rc 2 (нужен isascii() или try/except)
+- F4/F9: свежий прогон не повторён судьёй-верификатором — опора на gate.log лаунчера и evidence (маркеры есть, rc 0)
+- F5: bin/check-kit доказывает лимит 30 мин только константой `limit = 1800`; мутация `> limit * 2` выживает (поведение покрыто check-verify F4)
+- F5: контракт скилла accept в check-kit — наличие 9 подстрок, без проверки вызова `bin/verify-phase` и пути вердикта
+- F5: bin/verify-phase пишет вердикт по относительному пути docs/evidence/ — из подкаталога создаст лишний каталог
+- F6: контракт PROCESS ищет `--strict-mcp-config` по всему файлу — строка запуска может его потерять при зелёном чеке
+- F6: контракт GOAL — подстроки; размещение `/verify-phase` именно в END STATE (A) не проверяется
+- F7: знак, прилипший к файлу тимлида, из класса вне accept-8f1d232.txt (`-`, `->`, `<br>`, `>`, `*`) проходит END STATE зелёным (символы в классе захвата [\w.<>*-])
+- F7: commit lint берёт список владельца с родителя — один коммит исполнителя, создающий budgets.json вместе с правкой docs/STATUS.md и intent/INTENT.md, проходит без «Тимлид:»
+- F7: docs/PROGRESS.md стр. 13 (ok 256, BAD 83) расходится с docs/evidence/F7-owner-result.txt (280 ok; проба rc 1, ok 170, BAD 101)
+- F8: bin/check-docs из другого cwd падает FileNotFoundError вместо DOCS_FAIL
+- F8: check-docs слабее «готово»: флаги — подстрокой по всему LAUNCH.md без проверки объяснения, поля CHANGELOG — подстрокой в любой строке, скан ссылок — только по префиксам bin/ kit/ intent/ claude/ docs/archive|drafts|evidence
+- F9: у mark() в bin/gate-v3.1 нет self-test — мутация «снять rc==0» выживает (немутированный гейт ведёт себя верно)
+- F9: каждый прогон gate-v3.1 оставляет t31-* и gate31-* в /tmp/two-tier-v3 без уборки
+
+## По фичам
+- F1: чек `bin/check-harness` rc 0, маркер есть (gate_log); мутация kit/.claude/settings.json: worktree.baseRef "head" -> "fresh" (restored with git checkout) → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0
+- F2: чек `bin/check-harness (gate log /tmp/two-tier-v3/verify-e1cd97f-jvei3e3y/gate.log: 'F2 ENV_OK', harness-repo rc 0, harness-t3 rc 0; evidence docs/evidence/F2-harness-result.txt contains ENV_OK, 2 times); own run: bin/check-harness --self-test -> ENV_SELFTEST_OK` rc 0, маркер есть (gate_log); мутация kit/bin/check-harness (bin/check-harness is a symlink to it): in compare(): MCP status check `s != "connected"` -> `s not in ("connected", "needs-auth")`; restored with git checkout, git status clean → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F3: чек `bin/check-harness` rc 0, маркер есть (own_run); мутация kit/.claude/hooks/steer.sh: agent_id check broken: get("agent_id") -> get("agent_idx"), so a workflow agent consumes the STEER.md note → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F4: чек `bin/check-verify` rc 0, маркер есть (gate_log); мутация kit/.claude/workflows/verify-phase.js: const JUDGE = 'claude-opus-5-5' replaced with 'opus' (short model id instead of full id) → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F5: чек `bin/check-kit` rc 0, маркер есть (own_run); мутация kit/bin/verify-phase: default limit 1800 -> 3000 (red). Second mutation: kill condition `> limit` -> `> limit * 2` (check-kit stayed green) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F6: чек `bin/check-budget --templates` rc 0, маркер есть (own_run); мутация kit/CLAUDE.md: 'Push в `main` запрещён' -> 'Push в `main` разрешён' → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `bin/check-budget --self-test intent owner` rc 0, маркер есть (own_run); мутация kit/bin/check-budget (bin/check-budget is a symlink to it): rule_owner: two-level tier-lead directory threshold e.count("/") > 1 changed to > 2 → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F8: чек `bin/check-docs` rc 0, маркер есть (own_run); мутация kit/docs/LAUNCH.md: deleted the bullet explaining `--effort ultracode` (a launch-line flag explanation); restored with git checkout → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F9: чек `bin/gate-v3.1 (gate log /tmp/two-tier-v3/verify-e1cd97f-jvei3e3y/gate.log, read, not re-run: ~long check with claude -p probes)` rc 0, маркер есть (gate_log); мутация bin/gate-v3.1: in mark(): removed the rc==0 condition, leaving only grep -qx marker (a check that prints its marker but exits non-zero would pass) → green; находок 3, блокирующих-кандидатов 0, опровергнуто 0

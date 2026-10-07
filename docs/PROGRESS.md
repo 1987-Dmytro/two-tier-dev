@@ -1,7 +1,9 @@
 # PROGRESS — two-tier-dev, SPEC-v3.1 «ultracode по полной» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — 07.10.2026
-**Сделано:** шаг 0 — `docs/PLAN-v3.1.md`; шаг 0b — evidence и PROGRESS фазы v3 в `docs/archive/`. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** 07.10, вечер — по темпу плеча 1,5–2 ч; сдвинуть может только стоп по SPEC-v3.1 §4.
+## Голова — 07.10.2026, 13:10 — фаза v3.1 закрыта, ждёт приёмки
+**Сделано:** F1–F9 закрыты, у каждой фичи — свой чек и evidence в `docs/evidence/`. `/verify-phase` из свежего клона `e1cd97f` → `VERDICT: PASS`, блокирующих 0 (`docs/evidence/verify-e1cd97f.txt`; 11 агентов, 8 мин, гейт 120 с). Блокирующая прогона на `f3b4863` починена в этой сессии. CI `v3.1` → `CI_OK`; `bin/gate-v3.1` → `F1`…`F8`, `F9 GATE_OK`. Плечо — 11:37–13:10 по транскрипту.
+**Следующий шаг оператора:** «отчёт готов» в свежую сессию тимлида: `/team-lead — приёмка v3.1 (ветка v3.1, голова docs/PROGRESS.md); /usage до … после …`. Тимлиду ещё: deny `Edit(/budgets.json)` в `.claude/launch.settings.json` — это файл тимлида. После PASS — PR `v3.1` → `main` по «да» оператора.
+**Когда закончим:** приёмка v3.1 — 07.10, вечер: `bin/verify-phase` 8–20 мин и ревью тимлида ~15 мин. Перевод telefon — 08.10, если неделя ≤ 60 % (SPEC-v3.1 §6). Сдвинуть может только окно оператора.
 
 ## Done
 - Шаг 0: `docs/PLAN-v3.1.md` (`19b0380`).
@@ -10,15 +12,16 @@
 
 - **F2 Окружение = таблица**: `bin/check-harness` → `ENV_OK` на репо кита и на t3 — `F2-harness-result.txt`; `--self-test` — в `make ci`.
 - **F3 Хуки на агентах**: `bin/check-harness` → `HOOKS_OK` на репо и t3 — `F3-harness-result.txt`; «до» на хуках v3 → `HOOKS_FAIL` — `F3-harness-v3-baseline.txt`.
-- **F7 Владение: хвосты 3 и 5**: `bin/check-budget --self-test intent owner` → `OWNER_OK` (ok 256, BAD 0); красная проба на `rule_owner` из `8f1d232` → `OWNER_FAIL`, BAD 83 — `F7-owner-result.txt`.
+- **F7 Владение: хвосты 3 и 5**: `bin/check-budget --self-test intent owner` → `OWNER_OK` (ok 280, BAD 0); красная проба на `rule_owner` из `8f1d232` → `OWNER_FAIL`, ok 170, BAD 101 — `F7-owner-result.txt`.
 - **F4 `/verify-phase`**: `bin/check-verify` → `VERIFY_OK` — `F4-verify-result.txt`: красная фикстура → `NEEDS_WORK`, дефект назван; чистая → `PASS`, блокирующих 0; `--limit 20` → `VERIFY_TIMEOUT`.
 - **F5 `/accept` v3.1**: `bin/check-kit` → `KIT_OK` — `F5-kit-result.txt`: вердикт — `bin/verify-phase` (свежий клон, `Workflow(verify-phase)`, 30 мин), скилл 1 999/4 000 знаков.
 - **F6 Шаблоны и CLAUDE.md**: `bin/check-budget --templates` → `BUDGET_OK` с контрактом фраз — `F6-templates-result.txt`; красная проба (шаблон PROCESS без `--effort ultracode`) → `BUDGET_FAIL`.
 - **F8 Документы**: `bin/check-docs` → `DOCS_OK` — `F8-docs-result.txt`: CHANGELOG v3.1 (поле — док, до, после), LAUNCH (каждый флаг строки), README и dev-system — ultracode и `/verify-phase`; красная проба → `DOCS_FAIL`.
-- **F9 Гейт v3.1**: `bin/gate-v3.1` → `F1 HARNESS_OK` … `F8 DOCS_OK`, `v3 GATE_OK`, `F9 GATE_OK` — `F9-gate-result.txt`; `bin/gate-v3` — CI текущей ветки, свои каталоги на запуск.
+- **F9 Гейт v3.1**: `bin/gate-v3.1` → `F1 HARNESS_OK` … `F8 DOCS_OK`, `v3 GATE_OK`, `F9 GATE_OK` — `F9-gate-result.txt` (гейт свежего клона `e1cd97f`); F2, F3 — оттуда же.
+- **`/verify-phase` фазы**: `f3b4863` → `NEEDS_WORK` (1 блокирующая, фикс-ап `e1cd97f`); `e1cd97f` → `VERDICT: PASS` — `verify-e1cd97f.txt`.
 
 ## Next — один айтем
-1. **`/verify-phase` фазы**: `bin/verify-phase` из свежего клона запушенного HEAD → `VERDICT: PASS` в `docs/evidence/verify-<sha>.txt`.
+1. **Приёмка тимлида v3.1**: свежий клон `origin/v3.1`, `bin/verify-phase` → `VERDICT: PASS`, `bin/gate-v3.1` → `GATE_OK`.
 
 ## Open stop — NONE
 
