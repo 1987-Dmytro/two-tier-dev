@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""check-kit [<корень>] — скиллы кита v3 (SPEC-v3 F6): набор, frontmatter, контракт accept и plan-phase, evaluator без правок.
+"""check-kit [<корень>] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
+(вердикт — /verify-phase из свежего клона, лимит 30 мин) и plan-phase, evaluator без правок, воркфлоу verify-phase и его лаунчер.
 
 Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
-копии workflow совпадают, defaults бюджета в kit/budgets.json и budgets.json совпадают. KIT_OK или exit 1.
+копии workflow CI и verify-phase совпадают, defaults бюджета в kit/budgets.json и budgets.json совпадают. KIT_OK или exit 1.
 """
 import json, os, re, sys
 
@@ -24,7 +25,8 @@ sk = f"{root}/.claude/skills"
 names = sorted(d for d in os.listdir(sk) if os.path.isfile(f"{sk}/{d}/SKILL.md"))
 say(names == ["accept", "plan-phase"], "skills", f"{sk}: {', '.join(names)} (ждём accept, plan-phase)")
 limit = json.loads(read(f"{root}/budgets.json"))["defaults"]["skill_chars"]
-CONTRACT = {"accept": ["docs/evidence/accept-", "evaluator", "свеж", "REVIEW.md", "Named, not built"],
+CONTRACT = {"accept": ["bin/verify-phase", "Workflow(verify-phase)", "свеж", "30 мин", "docs/evidence/verify-", "VERDICT: PASS",
+                      "VERIFY_TIMEOUT", "REVIEW.md", "Named, not built"],
             "plan-phase": ["docs/PLAN-", "PLAN.template.md", "Environment", "платн", "необратим", "bin/check-budget"]}
 for n in names:
     t = read(f"{sk}/{n}/SKILL.md")
@@ -39,11 +41,18 @@ if "accept" in names:
 ev = read(f"{root}/.claude/agents/evaluator.md")
 tools = re.search(r"^tools:(.*)$", ev, re.M).group(1).strip()
 say("Write" not in tools and "Edit" not in tools and "REVIEW.md" in ev, "evaluator", f"tools {tools}; формат REVIEW.md {'есть' if 'REVIEW.md' in ev else 'нет'}")
+wf = sorted(os.listdir(f"{root}/.claude/workflows")) if os.path.isdir(f"{root}/.claude/workflows") else []
+say(wf == ["verify-phase.js"], "workflows", f"{root}/.claude/workflows: {', '.join(wf) or 'нет'} (ждём verify-phase.js)")
+vp = f"{root}/bin/verify-phase"
+say(os.access(vp, os.X_OK) and "Workflow(verify-phase)" in read(vp) and "VERIFY_TIMEOUT" in read(vp), "verify-phase",
+    f"{vp}: исполняемый, allow Workflow(verify-phase), VERIFY_TIMEOUT")
 if root == "kit":
     arch = [s for s in ("team-lead", "grilling") if os.path.isfile(f"docs/archive/kit-v2/claude-config/skills/{s}/SKILL.md")]
     say(len(arch) == 2, "archive", f"скиллы v2 в docs/archive/kit-v2/claude-config/skills/: {', '.join(arch)}")
     say(read(".github/workflows/two-tier.yml") == read("kit/.github/workflows/two-tier.yml"), "workflow",
         ".github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml")
+    say(read(".claude/workflows/verify-phase.js") == read("kit/.claude/workflows/verify-phase.js"), "workflows",
+        ".claude/workflows/verify-phase.js = kit/.claude/workflows/verify-phase.js")
     say(json.loads(read("budgets.json"))["defaults"] == json.loads(read("kit/budgets.json"))["defaults"], "budgets",
         "defaults budgets.json = kit/budgets.json")
 print("KIT_OK" if all(out) else "KIT_FAIL")

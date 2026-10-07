@@ -12,9 +12,10 @@
 - **F3 Хуки на агентах**: `bin/check-harness` → `HOOKS_OK` на репо и t3 — `F3-harness-result.txt`; «до» на хуках v3 → `HOOKS_FAIL` — `F3-harness-v3-baseline.txt`.
 - **F7 Владение: хвосты 3 и 5**: `bin/check-budget --self-test intent owner` → `OWNER_OK` (ok 256, BAD 0); красная проба на `rule_owner` из `8f1d232` → `OWNER_FAIL`, BAD 83 — `F7-owner-result.txt`.
 - **F4 `/verify-phase`**: `bin/check-verify` → `VERIFY_OK` — `F4-verify-result.txt`: красная фикстура → `NEEDS_WORK`, дефект назван; чистая → `PASS`, блокирующих 0; `--limit 20` → `VERIFY_TIMEOUT`.
+- **F5 `/accept` v3.1**: `bin/check-kit` → `KIT_OK` — `F5-kit-result.txt`: вердикт — `bin/verify-phase` (свежий клон, `Workflow(verify-phase)`, 30 мин), скилл 1 999/4 000 знаков.
 
 ## Next — один айтем
-1. **F5 `/accept` v3.1**: `bin/check-kit` → `KIT_OK`.
+1. **F6 Шаблоны и CLAUDE.md**: `bin/check-budget --templates` → `BUDGET_OK`.
 
 ## Open stop — NONE
 
