@@ -26,7 +26,7 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
 - **Upgrade:** `bin/two-tier-upgrade <path>` — branch `kit-v3`, nothing pushed, nothing deleted, team-lead files left
   to the team lead, a second run changes nothing.
 - **Harness fields** — the doc, and the same control pair (`bin/check-harness`, `docs/LAUNCH.md`) before, on the v2 kit
-  (`docs/evidence/F4-harness-v2-baseline.txt`), and after, on v3 (`docs/evidence/F4-harness-result.txt`):
+  (`docs/archive/evidence-v3/F4-harness-v2-baseline.txt`), and after, on v3 (`docs/archive/evidence-v3/F4-harness-result.txt`):
 
 | field | v2 → v3 | doc | before (v2) | after (v3) |
 |---|---|---|---|---|
