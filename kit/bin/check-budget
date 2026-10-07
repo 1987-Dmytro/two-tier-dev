@@ -204,9 +204,10 @@ def rule_owner(b):
     out, owner, ph = [], b["owner"], phase()
     if ph:
         es = re.search(r"END STATE(.*?)(?:\nCONSTRAINTS|\Z)", ph[0], re.S)
-        # путь из прозы — без ведущего «./» и точки конца фразы: «see ./docs/STATUS.md», «updates docs/STATUS.md.»
-        found = re.findall(r"[\w.<>*-]+(?:/[\w.<>*-]+)+", es.group(1)) if es else []
-        paths = {re.sub(r"^(?:\./)+", "", p).rstrip(".") for p in found}
+        # путь из прозы — токен между пробелами, кавычками, скобками и «,;:|»; с краёв сняты разметка * _ ~ < >,
+        # ведущие «./» и знаки конца фразы, хвостовой «/» каталога остаётся: «**docs/STATUS.md**», «`intent/`», «see ./claude/.»
+        toks = re.split(r"[\s`'\"«»“”()\[\],;:|]+", es.group(1)) if es else []
+        paths = {p for t in toks for p in [re.sub(r"^(?:[*_~<>]|\./)+", "", re.sub(r"[*_~<>.!?]+$", "", t))] if "/" in p}
         named = sorted(p for p in paths if is_tl(p, owner))
         out.append(("FAIL" if named else "OK", "owner",
                     f"END STATE docs/GOAL.txt: путей {len(paths)}, файлов тимлида — {', '.join(named) or 'нет'}"))
@@ -371,6 +372,14 @@ def fixtures(b, defaults):
     add("owner", "END STATE: «.claude/launch.settings.json.» в конце фразы", "FAIL",
         es("(A) the team lead edits .claude/launch.settings.json."), rule_owner)
     add("owner", "END STATE: свой путь в конце фразы — «docs/PROGRESS.md.»", "OK", es("(A) the head of docs/PROGRESS.md."), rule_owner)
+    # класс находки v3-2: каждая запись defaults.owner как в списке (каталог с «/», glob как есть) в каждом обрамлении прозы
+    frames = ["(A) the team lead updates {} and stops", "(A) the pin matches {}.", "(A) {}, then the rest is done.",
+              "(A) see {}: done", "(A) the verdict is set (see {})", "(A) a new review in `{}` says PASS",
+              "(A) **{}** is updated", "(A) _{}_ is updated", "(A) <{}> is updated", "(A) see ./{} for it"]
+    own = ("docs/PROGRESS.md", "docs/evidence/", "docs/evidence/F2-intent-result.txt")
+    for p, expect in [(e, "FAIL") for e in defaults["owner"]] + [(e, "OK") for e in own]:
+        for f in frames:
+            add("owner", f"END STATE «{f.format(p)}»", expect, es(f.format(p)), rule_owner)
     return C
 
 
