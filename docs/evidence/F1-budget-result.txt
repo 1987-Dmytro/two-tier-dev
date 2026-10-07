@@ -47,31 +47,62 @@ ok  budgets · project добавляет owner_add: ждали OK, получи
 ok  budgets · project подменяет owner: ждали FAIL, получили FAIL
 ok  budgets · project с чужим ключом: ждали FAIL, получили FAIL
 BUDGETS_OK
+ok  intent · пин = hash-object: ждали OK, получили OK
+ok  intent · пин ≠ hash-object: ждали FAIL, получили FAIL
+ok  intent · пина нет: ждали FAIL, получили FAIL
+ok  intent · маркер в SPEC: ждали FAIL, получили FAIL
+ok  intent · маркер в SPEC в `кавычках`: ждали OK, получили OK
+ok  intent · маркер в INTENT: ждали WARN, получили WARN
+ok  intent · фича служит S1: ждали OK, получили OK
+ok  intent · фича служит несуществующему S9: ждали FAIL, получили FAIL
+ok  intent · у фичи нет поля служит: ждали FAIL, получили FAIL
+INTENT_OK
+ok  owner · файл тимлида коммитом без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · файл тимлида коммитом «Тимлид:»: ждали OK, получили OK
+ok  owner · коммит без файлов тимлида: ждали OK, получили OK
+ok  owner · git mv файла тимлида без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · не-ASCII пути тимлида (core.quotePath=true, умолчание git) коммитом без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · END STATE называет docs/STATUS.md: ждали FAIL, получили FAIL
+ok  owner · END STATE называет docs/PROGRESS.md: ждали OK, получили OK
+ok  owner · END STATE: путь тимлида перед точкой — «updates docs/STATUS.md.»: ждали FAIL, получили FAIL
+ok  owner · END STATE: путь тимлида перед запятой — «docs/GOAL.txt,»: ждали FAIL, получили FAIL
+ok  owner · END STATE: путь тимлида перед скобкой — «docs/PROCESS.md)»: ждали FAIL, получили FAIL
+ok  owner · END STATE: путь тимлида с ./ — «see ./docs/STATUS.md»: ждали FAIL, получили FAIL
+ok  owner · END STATE: «.claude/launch.settings.json.» в конце фразы: ждали FAIL, получили FAIL
+ok  owner · END STATE: свой путь в конце фразы — «docs/PROGRESS.md.»: ждали OK, получили OK
+OWNER_OK
 SELFTEST_OK
 OK   budgets: defaults кита — 18 ключей, ключей проекта — 1
 OK   team_lead_copy_lines: docs/drafts/team-lead-v6.md 72/80
 OK   team_lead_copy_chars: docs/drafts/team-lead-v6.md 11242/12000
 OK   brief_copy_lines: docs/drafts/team-lead-brief.md 145/150
 OK   brief_copy_chars: docs/drafts/team-lead-brief.md 14938/15000
-OK   skill_chars: kit/.claude/skills/accept/SKILL.md 2020/4000
-OK   skill_chars: kit/.claude/skills/plan-phase/SKILL.md 2471/4000
-OK   claude_md_lines: kit/CLAUDE.md 21/40
+OK   skill_chars: kit/.claude/skills/accept/SKILL.md 1737/4000
+OK   skill_chars: kit/.claude/skills/plan-phase/SKILL.md 1356/4000
+OK   claude_md_lines: kit/CLAUDE.md 15/40
 OK   intent_chars: intent/INTENT.md 4925/6000
-OK   progress_lines: docs/PROGRESS.md 18/60
+OK   progress_lines: docs/PROGRESS.md 35/60
 OK   dollar_digit: `$` с цифрой — 0 в 4 файлах
-OK   goal_chars: docs/GOAL.txt, знаков 3423/4000
+OK   goal_chars: docs/GOAL.txt, знаков 3582/4000
 OK   read_first_files: Read first, файлов 3/3
-OK   read_first_chars: Read first + CLAUDE.md, знаков 24211/50000
+OK   read_first_chars: Read first + CLAUDE.md, знаков 22543/50000
 OK   spec_feature_chars: docs/SPEC-v3.md: фич 9, длиннее 600 знаков — нет
-OK   plan_lines: docs/PLAN-v3.md, строк 111/150
-OK   review: нет docs/reviews/*.md
+OK   plan_lines: docs/PLAN-v3.md, строк 130/150
+OK   review_blocking: docs/reviews/v3-1.md: блокирующих 3/5
+OK   intent: intent/INTENT.md: маркеров неясности 0
+OK   intent: docs/SPEC-v3.md: маркеров неясности 0
+OK   pin: пин SPEC e5e66199712a · git hash-object intent/INTENT.md e5e66199712a
+OK   signal: сигналы intent S1,S2,S3,S4,S5,S6; фич без существующего S — нет
+OK   owner: END STATE docs/GOAL.txt: путей 7, файлов тимлида — нет
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 3: dfe007b Тимлид: STATUS — S2 фикс-раунда по замеру check-budget; 1b8e977 Тимлид: приёмка v3-1 — NEEDS_WORK, GOAL фикс-раунда, STATUS; 49e873c Тимлид: seed v3
 BUDGET_OK
 --- дополнение PLAN: на ките — (cd kit && ../bin/check-budget)
 OK   budgets: defaults кита — 18 ключей, ключей проекта — 0
-OK   skill_chars: .claude/skills/accept/SKILL.md 2020/4000
-OK   skill_chars: .claude/skills/plan-phase/SKILL.md 2471/4000
-OK   claude_md_lines: CLAUDE.md 21/40
+OK   skill_chars: .claude/skills/accept/SKILL.md 1737/4000
+OK   skill_chars: .claude/skills/plan-phase/SKILL.md 1356/4000
+OK   claude_md_lines: CLAUDE.md 15/40
 OK   dollar_digit: `$` с цифрой — 0 в 2 файлах
 OK   goal: нет docs/GOAL.txt — фаза не открыта, правила фазы пропущены
 OK   review: нет docs/reviews/*.md
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 3: dfe007b Тимлид: STATUS — S2 фикс-раунда по замеру check-budget; 1b8e977 Тимлид: приёмка v3-1 — NEEDS_WORK, GOAL фикс-раунда, STATUS; 49e873c Тимлид: seed v3
 BUDGET_OK
