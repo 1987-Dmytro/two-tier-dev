@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""check-verify — /verify-phase выносит вердикт фазы (SPEC-v3.1 F4). VERIFY_OK или exit 1.
+
+  · статика: kit/.claude/workflows/verify-phase.js — meta литералом, модели полными id (проверяющие claude-sonnet-5-5,
+    судья claude-opus-5-5), без часов и случайности; копия в .claude/workflows/ корня репо — та же; лимит лаунчера 1800 с;
+  · фикстуры во /tmp/two-tier-v3 (кит из bin/two-tier-init, фаза из одной фичи `bin/slug`, параллельно):
+      red   — подложен пограничный дефект (дефисы по краям слага), чек его не видит → VERDICT: NEEDS_WORK, дефект назван;
+      clean — тот же продукт без дефекта, чек покрывает «готово» → VERDICT: PASS, блокирующих 0;
+      limit — чистая фикстура с --limit 20 → VERIFY_TIMEOUT, вердикта нет;
+    у агентов прогонов — только claude-sonnet-5-5 и claude-opus-5-5.
+Фикстуры синтетические и не пушатся: у них нет origin.
+"""
+import json, os, re, subprocess, sys, tempfile
+from concurrent.futures import ThreadPoolExecutor
+
+REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+TMP = "/tmp/two-tier-v3"
+WF = "kit/.claude/workflows/verify-phase.js"
+MODELS = {"claude-sonnet-5-5", "claude-opus-5-5"}
+GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
+               GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
+out = []
+
+
+def say(ok, item, msg):
+    out.append(bool(ok))
+    print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}", flush=True)
+
+
+SLUG = '''#!/usr/bin/env python3
+"""slug <заголовок…> — URL-слаг заголовка."""
+import re, sys
+s = re.sub(r"[^a-z0-9]+", "-", " ".join(sys.argv[1:]).lower()){strip}
+if not s:
+    sys.exit("empty slug")
+print(s)
+'''
+CHECK = {  # clean покрывает всё «готово», red — только простой случай и пустой ввод
+    "clean": '''#!/bin/sh
+fail() { echo "FAIL: $1"; exit 1; }
+[ "$(bin/slug Hello World)" = hello-world ] || fail "Hello World"
+[ "$(bin/slug '  Hello,  World!  ')" = hello-world ] || fail "края и серии"
+[ "$(bin/slug 'Äb C')" = b-c ] || fail "не-ASCII"
+e=$(mktemp); bin/slug '!!!' 2>"$e" && fail "!!! не отказан"; grep -q 'empty slug' "$e" || fail "нет empty slug"
+bin/slug '' 2>/dev/null && fail "пустой ввод не отказан"
+echo SLUG_OK
+''',
+    "red": '''#!/bin/sh
+fail() { echo "FAIL: $1"; exit 1; }
+[ "$(bin/slug Hello World)" = hello-world ] || fail "Hello World"
+bin/slug '' 2>/dev/null && fail "пустой ввод не отказан"
+echo SLUG_OK
+''',
+}
+SPEC = '''# SPEC-1 — slug — фаза 1
+
+**intent:** — · **дата:** 07.10.2026
+
+## 0. Контекст
+Оператору нужен URL-слаг из заголовка статьи одной командой.
+
+## 1. Дизайн высокого уровня
+`bin/slug` — скрипт python3 без зависимостей; `bin/check-slug` — его чек; `bin/gate-1` — гейт фазы.
+
+## 2. Фичи
+- **F1 Слаг** · оператор получает URL-слаг из заголовка · готово: `bin/slug <заголовок…>` печатает заголовок (аргументы через пробел) в нижнем регистре, где каждая серия символов вне `a-z0-9` заменена одним `-`, без `-` в начале и в конце; если слаг пуст — exit 1 и `empty slug` в stderr · чек: `bin/check-slug` → `SLUG_OK` · служит: S1 · after: —
+
+## 3. Инварианты и границы
+- Только stdlib python3; сеть не нужна.
+'''
+GOAL = '''Read first: docs/SPEC-1.md, docs/PROGRESS.md
+
+Phase 1 of slug: F1 of SPEC-1 §2.
+
+END STATE (met when one holds):
+(A) Every feature of SPEC-1 §2 is closed: its check ran and its output is in docs/evidence/F1-slug-result.txt; in the final turn `bin/gate-1` prints every marker of the phase.
+
+CONSTRAINTS:
+- Branch main only.
+'''
+
+
+def fixture(kind):
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix=f"verify-fx-{kind}-", dir=TMP)
+    g = lambda *a: subprocess.run(["git", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True)
+    g("init", "-q", "-b", "main")
+    subprocess.run([f"{REPO}/bin/two-tier-init", d], capture_output=True, check=True)
+    side = "red" if kind == "red" else "clean"
+    files = {"bin/slug": SLUG.format(strip="" if side == "red" else '.strip("-")'), "bin/check-slug": CHECK[side],
+             "bin/gate-1": '#!/bin/sh\nbin/check-slug && echo "F1 SLUG_OK" && echo GATE_OK\n',
+             "docs/SPEC-1.md": SPEC, "docs/GOAL.txt": GOAL,
+             "docs/PROGRESS.md": "# PROGRESS — slug, SPEC-1\n\n## Done\n- **F1 Слаг**: `bin/check-slug` → `SLUG_OK` — `docs/evidence/F1-slug-result.txt`.\n"}
+    for p, text in files.items():
+        os.makedirs(os.path.dirname(f"{d}/{p}"), exist_ok=True)
+        open(f"{d}/{p}", "w", encoding="utf-8").write(text)
+        os.chmod(f"{d}/{p}", 0o755) if p.startswith("bin/") else None
+    ev = subprocess.run(["bin/check-slug"], cwd=d, capture_output=True, text=True)
+    os.makedirs(f"{d}/docs/evidence", exist_ok=True)
+    open(f"{d}/docs/evidence/F1-slug-result.txt", "w").write("$ bin/check-slug\n" + ev.stdout)
+    g("add", "-A")
+    g("commit", "-qm", "slug: фаза 1")
+    return d
+
+
+def launch(kind):
+    d = fixture(kind)
+    args = ["--limit", "20"] if kind == "limit" else []
+    r = subprocess.run([f"{REPO}/bin/verify-phase", *args], cwd=d, capture_output=True, text=True, timeout=2400)
+    files = [f for f in os.listdir(f"{d}/docs/evidence") if f.startswith("verify-")]
+    report = open(f"{d}/docs/evidence/{files[0]}", encoding="utf-8").read() if files else ""
+    return kind, d, r.returncode, r.stdout + r.stderr, report
+
+
+def static():
+    js = open(f"{REPO}/{WF}", encoding="utf-8").read()
+    meta = re.match(r"export const meta = (\{.*?\n\})\n", js, re.S)
+    bare = re.sub(r"'[^'\n]*'", "''", meta.group(1)) if meta else ""  # строки — литералы; вне строк — ни вызова, ни spread
+    lit = bool(meta) and not re.search(r"\(|\.\.\.|`|[A-Za-z_]\w*\s*[,}\n]", re.sub(r"\w+:", "", bare))
+    say(lit and "name: 'verify-phase'" in meta.group(1), "workflow", f"{WF}: meta первым оператором, литералом — {'да' if lit else 'нет'}")
+    ids = set(re.findall(r"'(claude-[a-z0-9-]+)'", js))
+    say(ids == MODELS and "const CHECKER = 'claude-sonnet-5-5'" in js and "const JUDGE = 'claude-opus-5-5'" in js, "workflow",
+        f"модели: {', '.join(sorted(ids))}; проверяющие CHECKER, судья JUDGE — полными id")
+    bad = [w for w in ("Date.now", "Math.random", "new Date(") if w in js]
+    say(not bad, "workflow", f"часы и случайность в скрипте — {', '.join(bad) or 'нет'}")
+    root = f"{REPO}/.claude/workflows/verify-phase.js"
+    say(os.path.isfile(root) and open(root, encoding="utf-8").read() == js, "workflow", ".claude/workflows/verify-phase.js корня = копия кита")
+    lim = re.search(r"limit = (\d+)", open(f"{REPO}/kit/bin/verify-phase", encoding="utf-8").read())
+    say(lim and lim.group(1) == "1800", "launcher", f"kit/bin/verify-phase: лимит по умолчанию {lim.group(1) if lim else 'нет'} с")
+
+
+def judge(kind, d, rc, text, report):
+    used = dict(re.findall(r"(claude-[a-z0-9-]+) ×(\d+)", text))
+    print(f"--- {kind}: {d.replace(TMP, '/tmp/two-tier-v3')} · rc {rc}")
+    print("\n".join("    " + l for l in text.strip().splitlines()))
+    if kind == "limit":
+        say(rc == 3 and "VERIFY_TIMEOUT" in text and not report, kind, f"--limit 20: rc {rc}, VERIFY_TIMEOUT — {'да' if 'VERIFY_TIMEOUT' in text else 'нет'}, файл вердикта — {'есть' if report else 'нет'}")
+        return
+    print("\n".join("    | " + l for l in report.strip().splitlines()))
+    say(used and set(used) <= MODELS and "claude-opus-5-5" in used, kind, f"модели агентов: {used or 'нет'}")
+    block = report.split("## Блокирующие", 1)[-1].split("## Named", 1)[0]
+    if kind == "red":
+        named = re.search(r"(?i)leading|trailing|ведущ|хвост|начал|конц|крайн|краях|края|strip|hyphen|дефис", block)
+        say(report.startswith("VERDICT: NEEDS_WORK") and named, kind, f"первая строка «{report.splitlines()[0] if report else 'нет файла'}»; дефект (дефисы по краям) назван в блокирующих — {'да' if named else 'нет'}")
+    else:
+        n = len(re.findall(r"^- ", block, re.M))
+        say(report.startswith("VERDICT: PASS") and n == 0, kind, f"первая строка «{report.splitlines()[0] if report else 'нет файла'}»; блокирующих {n}")
+
+
+def main():
+    static()
+    with ThreadPoolExecutor(3) as ex:
+        for res in ex.map(launch, ("red", "clean", "limit")):
+            judge(*res)
+    print("VERIFY_OK" if all(out) else "VERIFY_FAIL")
+    return 0 if all(out) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,56 @@
+$ bin/check-verify
+OK   workflow: kit/.claude/workflows/verify-phase.js: meta первым оператором, литералом — да
+OK   workflow: модели: claude-opus-5-5, claude-sonnet-5-5; проверяющие CHECKER, судья JUDGE — полными id
+OK   workflow: часы и случайность в скрипте — нет
+OK   workflow: .claude/workflows/verify-phase.js корня = копия кита
+OK   launcher: kit/bin/verify-phase: лимит по умолчанию 1800 с
+--- red: /tmp/two-tier-v3/verify-fx-red-qr11_xm1 · rc 0
+    verify-phase: HEAD a317efd ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-a317efd-6ymqq4j7/repo; лимит 1800 с
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)
+    verify-phase: claude -p rc 0; воркфлоу completed; агентов 5: claude-sonnet-5-5 ×4, claude-opus-5-5 ×1; токенов 81657; 87 с
+    verify-phase: docs/evidence/verify-a317efd.txt
+    VERDICT: NEEDS_WORK
+    | VERDICT: NEEDS_WORK
+    | /verify-phase · docs/SPEC-1.md · HEAD a317efd · проверяющие claude-sonnet-5-5 (фич 1, опровергателей 2) · судья claude-opus-5-5
+    | 
+    | Свежий прогон `bin/check-slug` зелёный, маркер `SLUG_OK` есть в docs/evidence/F1-slug-result.txt, но я воспроизвёл на HEAD: `bin/slug ' Hello World '` → `-hello-world-` и `bin/slug '---'` → `-` с rc=0. Это прямо нарушает условие «готово» у F1 (нет `-` по краям, пустой слаг → exit 1) и сводится к одной причине — в bin/slug нет `strip('-')` перед проверкой на пустоту; выжившая мутация лишь показывает, что чек слишком слабый, и в блокирующие не входит.
+    | 
+    | ## Блокирующие
+    | - **F1: `bin/slug` не снимает `-` с краёв слага и проверяет пустоту до этой зачистки. Поэтому ввод с ведущими или хвостовыми спецсимволами даёт слаг с `-` по краям, а ввод только из спецсимволов даёт `-` с exit 0 вместо exit 1 и `empty slug`.** · доказательство: На HEAD a317efd: `bin/slug ' Hello World '` печатает `-hello-world-`, rc=0; `bin/slug '---'` печатает `-`, rc=0. В bin/slug, строка 4, есть только `re.sub(r"[^a-z0-9]+", "-", ...)`, `strip('-')` нет; проверка `if not s` стоит сразу после неё. · критерий: (c) поведение на пути заказчика противоречит условию «готово» у F1: «без `-` в начале и в конце; если слаг пуст — exit 1 и `empty slug` в stderr» · чек приёмки: `bin/slug ' Hello World '` → `hello-world`, rc=0; `bin/slug '---'` → exit 1 и `empty slug` в stderr; `bin/slug '!!!'` → то же; `bin/check-slug` → `SLUG_OK`
+    | 
+    | ## Named, not built
+    | - F1: `bin/check-slug` проверяет только `Hello World` и пустую строку. Мутация `[^a-z0-9]+` → `[^a-z0-9]` (серии не схлопываются) выжила с `SLUG_OK`. В чек стоит добавить случаи `'a  b'`, `' Hello World '` и `'---'`.
+    | 
+    | ## По фичам
+    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); мутация bin/slug: regex [^a-z0-9]+ changed to [^a-z0-9] (no collapsing of runs into one '-') → green; находок 3, блокирующих-кандидатов 2, опровергнуто 0
+OK   red: модели агентов: {'claude-sonnet-5-5': '4', 'claude-opus-5-5': '1'}
+OK   red: первая строка «VERDICT: NEEDS_WORK»; дефект (дефисы по краям) назван в блокирующих — да
+--- clean: /tmp/two-tier-v3/verify-fx-clean-r41eydz1 · rc 0
+    verify-phase: HEAD b558f1e ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-b558f1e-odtc8m2z/repo; лимит 1800 с
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)
+    verify-phase: claude -p rc 0; воркфлоу completed; агентов 3: claude-sonnet-5-5 ×2, claude-opus-5-5 ×1; токенов 50454; 75 с
+    verify-phase: docs/evidence/verify-b558f1e.txt
+    VERDICT: PASS
+    | VERDICT: PASS
+    | /verify-phase · docs/SPEC-1.md · HEAD b558f1e · проверяющие claude-sonnet-5-5 (фич 1, опровергателей 0) · судья claude-opus-5-5
+    | 
+    | Свежий прогон bin/check-slug завершился с rc=0 и маркером SLUG_OK, маркер есть и в docs/evidence/F1-slug-result.txt. Мутация (.strip("-") заменён на .strip()) сделала чек красным. bin/slug — python3 только на stdlib и без сети: переводит строку в нижний регистр, заменяет каждую серию символов вне a-z0-9 одним «-», обрезает «-» по краям, а при пустом слаге через sys.exit("empty slug") даёт exit 1 и текст в stderr, то есть «готово» F1 и инвариант §3 выполнены. Единственная находка (Unicode lower() для Kelvin/İ) согласуется с «готово» и не блокирует.
+    | 
+    | ## Блокирующие
+    | Нет.
+    | 
+    | ## Named, not built
+    | - F1 (не блокирует): не-ASCII символы, у которых Unicode lower() даёт ASCII-буквы, остаются в слаге: U+212A KELVIN SIGN превращается в k, 'İstanbul' даёт i-stanbul. Это совпадает с буквальным прочтением «готово» (сначала нижний регистр, потом замена всего вне a-z0-9), а чек этот случай не покрывает.
+    | 
+    | ## По фичам
+    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); мутация bin/slug: replaced .strip("-") with .strip() so leading/trailing dashes are no longer trimmed → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0
+OK   clean: модели агентов: {'claude-sonnet-5-5': '2', 'claude-opus-5-5': '1'}
+OK   clean: первая строка «VERDICT: PASS»; блокирующих 0
+--- limit: /tmp/two-tier-v3/verify-fx-limit-e402n17w · rc 3
+    verify-phase: HEAD b558f1e ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-b558f1e-kdyiixpf/repo; лимит 20 с
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)
+    verify-phase: лимит истёк на шаге «воркфлоу /verify-phase» через 25 с
+    VERIFY_TIMEOUT
+OK   limit: --limit 20: rc 3, VERIFY_TIMEOUT — да, файл вердикта — нет
+VERIFY_OK
+rc 0
