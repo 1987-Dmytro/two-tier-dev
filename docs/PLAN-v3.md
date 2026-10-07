@@ -128,3 +128,15 @@
   - `bin/check-budget --self-test intent owner` → `INTENT_OK`, `OWNER_OK` — `F2-intent-result.txt` (со строками owner живого прогона);
   - `bin/two-tier-upgrade --self-test` → `UPGRADE_OK`, формы (а)–(г) и (д) — `F7-upgrade-result.txt`;
   - `bin/gate-v3` после последнего push → F1–F9 с `F3 CI_OK` — в транскрипте, без коммита.
+
+## Фикс-раунд 2 (v3-2) — 07.10.2026
+Вход — одна блокирующая `docs/reviews/v3-2.md`: класс находки 2 из v3-1. Воспроизведения — `docs/evidence/accept-f7ffa41.txt`, раздел «Блокирующие». «Named, not built» в раунд не входит.
+- **Файлы:** `kit/bin/check-budget` — только захват пути END STATE в `rule_owner` и фикстуры owner; evidence F1, F2; голова `docs/PROGRESS.md`. `is_tl` и lint коммитов не меняются.
+- **Порядок:** этот раздел → фикстуры, прогон на правиле `f7ffa41` (BAD в транскрипте) → фикс тем же коммитом → evidence и голова PROGRESS → push → `bin/check-ci v3` → `bin/gate-v3` последним ходом.
+- **Фикс:** путь из END STATE — токен прозы между пробелами, кавычками, скобками и `,;:|`. С левого края снимаются разметка `* _ ~ < >` и ведущие `./`, с правого — разметка и знаки конца фразы `. ! ?`. Хвостовой `/` каталога остаётся: `intent/` сверяется с записью списка как есть. Путь — токен с `/`; голое слово `intent` в `--self-test intent owner` — не путь.
+- **Фикстуры:** `defaults.owner` × 10 обрамлений — посреди фразы; перед `.`, `,`, `:`, `)`; в обратных кавычках; `**…**`, `_…_`, `<…>`; с `./`. Запись — как в списке: каталог с `/`, glob как есть. Зелёные — `docs/PROGRESS.md`, `docs/evidence/`, `docs/evidence/F2-intent-result.txt` в тех же обрамлениях. Прежние фикстуры owner остаются.
+- **Риски:**
+  1. Ложнокрасное на живом GOAL: путей станет больше, файлов тимлида в END STATE нет — живой прогон в evidence F2.
+  2. Плейсхолдер `docs/SPEC-<n>.md` и glob `docs/SPEC-*.md`: `<`, `>`, `*` снимаются только с краёв токена; `--templates` прогоняется.
+  3. Край `_` или `*` у настоящего имени файла даёт лишний FAIL — сторона безопасности, его видно сразу.
+- **Доказательство:** `bin/check-budget --self-test && bin/check-budget` → `BUDGET_OK` — `F1-budget-result.txt`; `--self-test intent owner` → `INTENT_OK`, `OWNER_OK`, рядом красная проба тех же фикстур на правиле `f7ffa41` (BAD, `OWNER_FAIL`) — `F2-intent-result.txt`; `bin/gate-v3` после последнего push → F1–F9 с `F3 CI_OK` — в транскрипте.
