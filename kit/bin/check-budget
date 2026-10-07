@@ -209,7 +209,7 @@ def owner_at(rev, fallback):
     try:
         raw = json.loads(r.stdout)
         return raw["defaults"]["owner"] + ((raw.get("project") or {}).get("owner_add") or [])
-    except (ValueError, KeyError, TypeError):
+    except (ValueError, KeyError, TypeError, AttributeError):
         return fallback
 
 
@@ -222,7 +222,7 @@ def rule_owner(b):
         toks = re.split(r"[\s`'\"«»“”()\[\],;:|]+", es.group(1)) if es else []
         paths = {p for t in toks for p in [re.sub(r"^(?:[*_~<>]|\./)+", "", re.sub(r"[*_~<>.!?]+$", "", t))] if "/" in p}
         # v3.1, хвост 5: и путь, к которому прилип знак вне разделителей — «docs/STATUS.md—then», «@…», «/…», «#…», «{…}», «’s»
-        paths |= {re.sub(r"^(?:\./)+", "", p).rstrip(".") for p in re.findall(r"[\w.<>*-]+(?:/[\w.<>*-]+)+", es.group(1) if es else "")}
+        paths |= {re.sub(r"^(?:[*_~<>]|\./)+", "", re.sub(r"[*_~<>.]+$", "", p)) for p in re.findall(r"[\w.<>*-]+(?:/[\w.<>*-]+)+", es.group(1) if es else "")}
         # двухуровневый каталог тимлида без хвостового «/» («docs/reviews»); однословный («intent») — нет: это слово прозы
         dirs = {e.rstrip("/") for e in owner if e.endswith("/") and e.count("/") > 1}
         named = {p for p in paths if is_tl(p, owner) or p.rstrip("/") in dirs}
@@ -411,6 +411,7 @@ def fixtures(b, defaults):
              "(A) see ‘{}’ for it", "(A) see „{}“ for it", "(A) cc @{} please", "(A) the file /{} is updated",
              "(A) see {}#top for it", "(A) the map {{{}}} is updated", "(A) make ci && {} is updated", "(A) the {}’s head is updated"]
     files_tl = [e for e in defaults["owner"] if not e.endswith("/")]
+    stuck += ["(A) see **{}**—then stop", "(A) see _{}_… and stop", "(A) see <{}>’s head"]  # разметка и прилипший знак вместе
     for p, expect in [(e, "FAIL") for e in files_tl] + [(e, "OK") for e in own if not e.endswith("/")]:
         for f in stuck:
             add("owner", f"END STATE, знак прилип: «{f.format(p)}»", expect, es(f.format(p)), rule_owner)
@@ -470,7 +471,8 @@ TEMPLATES = {  # шаблон кита → куда его кладёт прим
 CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из шаблонов — фразы, без которых шаблон её не ведёт
     "docs/GOAL.template.txt": ["bin/verify-phase", "VERDICT: PASS", "its blocking findings fixed in this session",
                                "Workflow agents edit only inside their own worktrees", "never push to main"],
-    "docs/PROCESS.template.md": ["| инструмент | форма | id | вкл | фича или чек | установка | удаление |", "--effort ultracode",
+    "docs/PROCESS.template.md": ["| инструмент | форма | id | вкл | фича или чек | установка | удаление |",
+                                 "claude --permission-mode auto --model claude-opus-5-5 --effort ultracode",
                                  "--strict-mcp-config", "% недели"],
     "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase"],
 }

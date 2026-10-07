@@ -9,9 +9,10 @@ OK   plan-phase: контракт (6 слов): нет — ничего
 OK   accept: STATUS не пишет: пути docs/STATUS.md в скилле нет
 OK   evaluator: tools Read, Glob, Grep, Bash; формат REVIEW.md есть
 OK   workflows: kit/.claude/workflows: verify-phase.js (ждём verify-phase.js)
-OK   verify-phase: kit/bin/verify-phase: исполняемый, allow Workflow(verify-phase), VERIFY_TIMEOUT
+OK   verify-phase: kit/bin/verify-phase: исполняемый, ALLOW с Workflow(verify-phase) — да, лимит по умолчанию 1800 с, VERIFY_TIMEOUT
 OK   archive: скиллы v2 в docs/archive/kit-v2/claude-config/skills/: team-lead, grilling
 OK   workflow: .github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml
 OK   workflows: .claude/workflows/verify-phase.js = kit/.claude/workflows/verify-phase.js
 OK   budgets: defaults budgets.json = kit/budgets.json
 KIT_OK
+rc 0

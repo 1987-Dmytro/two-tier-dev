@@ -31,8 +31,8 @@ OK   owner: нет main/origin/main или коммитов — lint комми�
 BUDGET_OK
 rc 0
 
-$ cd /tmp/two-tier-v3/tpl-red && <repo>/kit/bin/check-budget --templates   # красная проба: в копии шаблона PROCESS --effort medium
+$ cd /tmp/two-tier-v3/tpl-red && <repo>/kit/bin/check-budget --templates   # красная проба: в строке запуска копии шаблона PROCESS --effort medium (строка таблицы осталась)
 OK   contract: kit/docs/GOAL.template.txt: фраз 5, нет — ничего
-FAIL contract: kit/docs/PROCESS.template.md: фраз 4, нет — --effort ultracode
+FAIL contract: kit/docs/PROCESS.template.md: фраз 4, нет — claude --permission-mode auto --model claude-opus-5-5 --effort ultracode
 OK   contract: kit/CLAUDE.md: фраз 6, нет — ничего
 BUDGET_FAIL: 1

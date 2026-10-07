@@ -30,4 +30,5 @@
 - `permissions.allow` из `.claude/settings.json` в `-p` не действует (папка не доверена) — пара и `bin/verify-phase` передают те же правила `--allowedTools`; отклонение 3 PLAN.
 
 ## Named, not built
+- Неблокирующие `/verify-phase` @ `f3b4863` (полный список — журнал PLAN): `refuse_sweeping` не ловит `git add -A` после перевода строки, `&`, `-fA`, `sudo`, `bash -c` (поведение v2); у `bin/gate-v3.1` нет негативного self-test; `table()` падает на PROCESS без `## Environment`; `id` таблицы чувствительны к регистру, «Да» ≠ «да»; апгрейд проекта v3.0 не вносит `budgets.json` в его `owner`; пути тимлида не нормализуются (`docs//`, `..`); каталоги прогонов во `/tmp/two-tier-v3` копятся.
 - `fix-until-green.js` — Q4, по замеру на ретро v3.1.

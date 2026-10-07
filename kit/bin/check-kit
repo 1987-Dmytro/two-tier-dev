@@ -44,8 +44,11 @@ say("Write" not in tools and "Edit" not in tools and "REVIEW.md" in ev, "evaluat
 wf = sorted(os.listdir(f"{root}/.claude/workflows")) if os.path.isdir(f"{root}/.claude/workflows") else []
 say(wf == ["verify-phase.js"], "workflows", f"{root}/.claude/workflows: {', '.join(wf) or 'нет'} (ждём verify-phase.js)")
 vp = f"{root}/bin/verify-phase"
-say(os.access(vp, os.X_OK) and "Workflow(verify-phase)" in read(vp) and "VERIFY_TIMEOUT" in read(vp), "verify-phase",
-    f"{vp}: исполняемый, allow Workflow(verify-phase), VERIFY_TIMEOUT")
+allow = re.search(r"^ALLOW = \[(.*)\]$", read(vp), re.M)
+wf_ok = bool(allow) and '"Workflow(verify-phase)"' in allow.group(1)
+limit = re.search(r"^    limit = (\d+)$", read(vp), re.M)
+say(os.access(vp, os.X_OK) and wf_ok and limit and limit.group(1) == "1800" and "VERIFY_TIMEOUT" in read(vp), "verify-phase",
+    f"{vp}: исполняемый, ALLOW с Workflow(verify-phase) — {'да' if wf_ok else 'нет'}, лимит по умолчанию {limit.group(1) if limit else 'нет'} с, VERIFY_TIMEOUT")
 if root == "kit":
     arch = [s for s in ("team-lead", "grilling") if os.path.isfile(f"docs/archive/kit-v2/claude-config/skills/{s}/SKILL.md")]
     say(len(arch) == 2, "archive", f"скиллы v2 в docs/archive/kit-v2/claude-config/skills/: {', '.join(arch)}")

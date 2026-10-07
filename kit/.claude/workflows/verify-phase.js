@@ -32,7 +32,7 @@ const scope = await agent(
 )
 log(`${scope.spec} @ ${scope.sha}: features ${scope.features.length}, gate log ${scope.gate_log ? 'present' : 'absent'}`)
 
-const verifyPrompt = f => `Acceptance of feature ${f.id} of ${scope.spec} at HEAD ${scope.sha}. You work in your own git worktree, a copy of HEAD: edit files only there, never commit, never push. The feature line, verbatim:
+const verifyPrompt = f => `Acceptance of feature ${f.id} of ${scope.spec} at HEAD ${scope.sha}. You work in your own git worktree, a copy of HEAD: edit files only there (scratch files too, or under \`mktemp -d\`), never commit, never push; the gate log and its directory are read-only. The feature line, verbatim:
 ${f.line}
 
 Do three things and record commands with their observed output.

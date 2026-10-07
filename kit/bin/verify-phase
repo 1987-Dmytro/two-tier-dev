@@ -65,6 +65,9 @@ def main(argv):
         if remote != sha:
             print(f"verify-phase: origin/{branch} = {remote[:7] or 'нет'} ≠ HEAD {sha[:7]} — сначала push")
             return 1
+    path = f"docs/evidence/verify-{sha[:7]}.txt"
+    if os.path.exists(path):  # вердикт прошлого прогона того же HEAD не остаётся рядом с VERIFY_TIMEOUT
+        os.remove(path)
     os.makedirs(TMP, exist_ok=True)
     d = tempfile.mkdtemp(prefix=f"verify-{sha[:7]}-", dir=TMP)
     clone = f"{d}/repo"
@@ -95,7 +98,8 @@ def main(argv):
     if rc is None:
         timeout("воркфлоу /verify-phase")
     ev = [json.loads(l) for l in open(f"{d}/run.jsonl", encoding="utf-8") if l.startswith("{")]
-    note = next((e for e in ev if e.get("subtype") == "task_notification"), {})
+    wid = next((e.get("task_id") for e in ev if e.get("subtype") == "task_started" and e.get("workflow_name") == "verify-phase"), None)
+    note = next((e for e in ev if e.get("subtype") == "task_notification" and e.get("task_id") == wid), {})  # у агентов свои фоновые задачи
     f = note.get("output_file", "")
     out = json.load(open(f, encoding="utf-8")) if f and os.path.isfile(f) else {}
     res = out.get("result") if isinstance(out.get("result"), dict) else {}
@@ -106,11 +110,10 @@ def main(argv):
     print(f"verify-phase: claude -p rc {rc}; воркфлоу {note.get('status') or 'не запущен'}; агентов {len(agents)}: "
           f"{', '.join(f'{m} ×{n}' for m, n in models.items()) or 'нет'}; токенов {out.get('totalTokens')}; {time.monotonic() - T0:.0f} с")
     report = res.get("report", "")
-    if not report.startswith("VERDICT: "):
+    if report.split("\n", 1)[0] not in ("VERDICT: PASS", "VERDICT: NEEDS_WORK"):
         print("verify-phase: воркфлоу не вернул отчёт — вердикта нет")
         return 1
     os.makedirs("docs/evidence", exist_ok=True)
-    path = f"docs/evidence/verify-{sha[:7]}.txt"
     open(path, "w", encoding="utf-8").write(report)
     print(f"verify-phase: {path}")
     print(report.splitlines()[0])

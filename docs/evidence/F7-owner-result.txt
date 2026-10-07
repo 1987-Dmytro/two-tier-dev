@@ -163,6 +163,9 @@ ok  owner · END STATE, знак прилип: «(A) see docs/SPEC-*.md#top for 
 ok  owner · END STATE, знак прилип: «(A) the map {docs/SPEC-*.md} is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) make ci && docs/SPEC-*.md is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the docs/SPEC-*.md’s head is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see **docs/SPEC-*.md**—then stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see _docs/SPEC-*.md_… and stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see <docs/SPEC-*.md>’s head»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/GOAL.txt—then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/GOAL.txt–then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) see docs/GOAL.txt… and stop»: ждали FAIL, получили FAIL
@@ -174,6 +177,9 @@ ok  owner · END STATE, знак прилип: «(A) see docs/GOAL.txt#top for i
 ok  owner · END STATE, знак прилип: «(A) the map {docs/GOAL.txt} is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) make ci && docs/GOAL.txt is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the docs/GOAL.txt’s head is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see **docs/GOAL.txt**—then stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see _docs/GOAL.txt_… and stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see <docs/GOAL.txt>’s head»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/STATUS.md—then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/STATUS.md–then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) see docs/STATUS.md… and stop»: ждали FAIL, получили FAIL
@@ -185,6 +191,9 @@ ok  owner · END STATE, знак прилип: «(A) see docs/STATUS.md#top for 
 ok  owner · END STATE, знак прилип: «(A) the map {docs/STATUS.md} is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) make ci && docs/STATUS.md is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the docs/STATUS.md’s head is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see **docs/STATUS.md**—then stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see _docs/STATUS.md_… and stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see <docs/STATUS.md>’s head»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/PROCESS.md—then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/PROCESS.md–then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) see docs/PROCESS.md… and stop»: ждали FAIL, получили FAIL
@@ -196,6 +205,9 @@ ok  owner · END STATE, знак прилип: «(A) see docs/PROCESS.md#top for
 ok  owner · END STATE, знак прилип: «(A) the map {docs/PROCESS.md} is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) make ci && docs/PROCESS.md is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the docs/PROCESS.md’s head is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see **docs/PROCESS.md**—then stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see _docs/PROCESS.md_… and stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see <docs/PROCESS.md>’s head»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates .claude/launch.settings.json—then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates .claude/launch.settings.json–then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) see .claude/launch.settings.json… and stop»: ждали FAIL, получили FAIL
@@ -207,6 +219,9 @@ ok  owner · END STATE, знак прилип: «(A) see .claude/launch.settings
 ok  owner · END STATE, знак прилип: «(A) the map {.claude/launch.settings.json} is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) make ci && .claude/launch.settings.json is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the .claude/launch.settings.json’s head is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see **.claude/launch.settings.json**—then stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see _.claude/launch.settings.json_… and stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see <.claude/launch.settings.json>’s head»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates budgets.json—then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates budgets.json–then stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) see budgets.json… and stop»: ждали FAIL, получили FAIL
@@ -218,6 +233,9 @@ ok  owner · END STATE, знак прилип: «(A) see budgets.json#top for it
 ok  owner · END STATE, знак прилип: «(A) the map {budgets.json} is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) make ci && budgets.json is updated»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the budgets.json’s head is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see **budgets.json**—then stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see _budgets.json_… and stop»: ждали FAIL, получили FAIL
+ok  owner · END STATE, знак прилип: «(A) see <budgets.json>’s head»: ждали FAIL, получили FAIL
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/PROGRESS.md—then stops»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/PROGRESS.md–then stops»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) see docs/PROGRESS.md… and stop»: ждали OK, получили OK
@@ -229,6 +247,9 @@ ok  owner · END STATE, знак прилип: «(A) see docs/PROGRESS.md#top fo
 ok  owner · END STATE, знак прилип: «(A) the map {docs/PROGRESS.md} is updated»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) make ci && docs/PROGRESS.md is updated»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) the docs/PROGRESS.md’s head is updated»: ждали OK, получили OK
+ok  owner · END STATE, знак прилип: «(A) see **docs/PROGRESS.md**—then stop»: ждали OK, получили OK
+ok  owner · END STATE, знак прилип: «(A) see _docs/PROGRESS.md_… and stop»: ждали OK, получили OK
+ok  owner · END STATE, знак прилип: «(A) see <docs/PROGRESS.md>’s head»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/evidence/F2-intent-result.txt—then stops»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) the team lead updates docs/evidence/F2-intent-result.txt–then stops»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) see docs/evidence/F2-intent-result.txt… and stop»: ждали OK, получили OK
@@ -240,6 +261,9 @@ ok  owner · END STATE, знак прилип: «(A) see docs/evidence/F2-intent
 ok  owner · END STATE, знак прилип: «(A) the map {docs/evidence/F2-intent-result.txt} is updated»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) make ci && docs/evidence/F2-intent-result.txt is updated»: ждали OK, получили OK
 ok  owner · END STATE, знак прилип: «(A) the docs/evidence/F2-intent-result.txt’s head is updated»: ждали OK, получили OK
+ok  owner · END STATE, знак прилип: «(A) see **docs/evidence/F2-intent-result.txt**—then stop»: ждали OK, получили OK
+ok  owner · END STATE, знак прилип: «(A) see _docs/evidence/F2-intent-result.txt_… and stop»: ждали OK, получили OK
+ok  owner · END STATE, знак прилип: «(A) see <docs/evidence/F2-intent-result.txt>’s head»: ждали OK, получили OK
 ok  owner · END STATE, каталог тимлида без «/»: «(A) the team lead updates docs/reviews and stops»: ждали FAIL, получили FAIL
 ok  owner · END STATE, каталог тимлида без «/»: «(A) the pin matches docs/reviews.»: ждали FAIL, получили FAIL
 ok  owner · END STATE, каталог тимлида без «/»: «(A) docs/reviews, then the rest is done.»: ждали FAIL, получили FAIL
@@ -266,7 +290,7 @@ OK   owner: коммитов «Тимлид:» после merge-base 7957d68 —
 BUDGET_OK
 
 $ /tmp/two-tier-v3/redprobe-v31/check-budget --self-test owner   # красная проба: rule_owner из 8f1d232, фикстуры HEAD
-rc 1, ok 164, BAD 83
+rc 1, ok 170, BAD 101
 BAD owner · END STATE «(A) _budgets.json_ is updated»
 BAD owner · END STATE «(A) **budgets.json** is updated»
 BAD owner · END STATE «(A) <budgets.json> is updated»
@@ -284,9 +308,27 @@ BAD owner · END STATE, знак прилип: «(A) cc @docs/PROCESS.md please�
 BAD owner · END STATE, знак прилип: «(A) cc @docs/SPEC-*.md please»
 BAD owner · END STATE, знак прилип: «(A) cc @docs/STATUS.md please»
 BAD owner · END STATE, знак прилип: «(A) make ci && budgets.json is updated»
+BAD owner · END STATE, знак прилип: «(A) see _.claude/launch.settings.json_… and stop»
+BAD owner · END STATE, знак прилип: «(A) see _budgets.json_… and stop»
+BAD owner · END STATE, знак прилип: «(A) see _docs/GOAL.txt_… and stop»
+BAD owner · END STATE, знак прилип: «(A) see _docs/PROCESS.md_… and stop»
+BAD owner · END STATE, знак прилип: «(A) see _docs/SPEC-*.md_… and stop»
+BAD owner · END STATE, знак прилип: «(A) see _docs/STATUS.md_… and stop»
 BAD owner · END STATE, знак прилип: «(A) see .claude/launch.settings.json… and stop»
 BAD owner · END STATE, знак прилип: «(A) see ‘.claude/launch.settings.json’ for it»
 BAD owner · END STATE, знак прилип: «(A) see .claude/launch.settings.json#top for it»
+BAD owner · END STATE, знак прилип: «(A) see **.claude/launch.settings.json**—then stop»
+BAD owner · END STATE, знак прилип: «(A) see **budgets.json**—then stop»
+BAD owner · END STATE, знак прилип: «(A) see **docs/GOAL.txt**—then stop»
+BAD owner · END STATE, знак прилип: «(A) see **docs/PROCESS.md**—then stop»
+BAD owner · END STATE, знак прилип: «(A) see **docs/SPEC-*.md**—then stop»
+BAD owner · END STATE, знак прилип: «(A) see **docs/STATUS.md**—then stop»
+BAD owner · END STATE, знак прилип: «(A) see <.claude/launch.settings.json>’s head»
+BAD owner · END STATE, знак прилип: «(A) see <budgets.json>’s head»
+BAD owner · END STATE, знак прилип: «(A) see <docs/GOAL.txt>’s head»
+BAD owner · END STATE, знак прилип: «(A) see <docs/PROCESS.md>’s head»
+BAD owner · END STATE, знак прилип: «(A) see <docs/SPEC-*.md>’s head»
+BAD owner · END STATE, знак прилип: «(A) see <docs/STATUS.md>’s head»
 BAD owner · END STATE, знак прилип: «(A) see budgets.json… and stop»
 BAD owner · END STATE, знак прилип: «(A) see ‘budgets.json’ for it»
 BAD owner · END STATE, знак прилип: «(A) see budgets.json#top for it»
@@ -309,28 +351,10 @@ BAD owner · END STATE, знак прилип: «(A) the docs/PROCESS.md’s hea
 BAD owner · END STATE, знак прилип: «(A) the docs/SPEC-*.md’s head is updated»
 BAD owner · END STATE, знак прилип: «(A) the docs/STATUS.md’s head is updated»
 BAD owner · END STATE, знак прилип: «(A) the file /.claude/launch.settings.json is updated»
-BAD owner · END STATE, знак прилип: «(A) the file /budgets.json is updated»
-BAD owner · END STATE, знак прилип: «(A) the file /docs/GOAL.txt is updated»
-BAD owner · END STATE, знак прилип: «(A) the file /docs/PROCESS.md is updated»
-BAD owner · END STATE, знак прилип: «(A) the file /docs/SPEC-*.md is updated»
-BAD owner · END STATE, знак прилип: «(A) the file /docs/STATUS.md is updated»
-BAD owner · END STATE, знак прилип: «(A) the map {.claude/launch.settings.json} is updated»
-BAD owner · END STATE, знак прилип: «(A) the map {budgets.json} is updated»
-BAD owner · END STATE, знак прилип: «(A) the map {docs/GOAL.txt} is updated»
-BAD owner · END STATE, знак прилип: «(A) the map {docs/PROCESS.md} is updated»
-BAD owner · END STATE, знак прилип: «(A) the map {docs/SPEC-*.md} is updated»
-BAD owner · END STATE, знак прилип: «(A) the map {docs/STATUS.md} is updated»
-BAD owner · END STATE, знак прилип: «(A) the team lead updates .claude/launch.settings.json—then stops»
-BAD owner · END STATE, знак прилип: «(A) the team lead updates budgets.json—then stops»
-BAD owner · END STATE, знак прилип: «(A) the team lead updates docs/GOAL.txt—then stops»
-BAD owner · END STATE, знак прилип: «(A) the team lead updates docs/PROCESS.md—then stops»
-BAD owner · END STATE, знак прилип: «(A) the team lead updates docs/SPEC-*.md—then stops»
-BAD owner · END STATE, знак прилип: «(A) the team lead updates docs/STATUS.md—then stops»
-BAD owner · END STATE, каталог тимлида без «/»: «(A) docs/drafts, then the rest is done.»
 OWNER_FAIL
 SELFTEST_FAIL
 
 $ bin/two-tier-upgrade --self-test
-  сбой (д) сбой после старта — pre-commit отказал: rc 1 | ветка: kit-v3 | two-tier-upgrade: git commit: pre-commit: отказ (фикстура) |   проект как до запуска: ветка main @ 10d17e5, индекс пуст
+  сбой (д) сбой после старта — pre-commit отказал: rc 1 | ветка: kit-v3 | two-tier-upgrade: git commit: pre-commit: отказ (фикстура) |   проект как до запуска: ветка main @ 0f0869c, индекс пуст
 OK   сбой (д): выход ≠0 с причиной, без трассировки, откат после старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (27 путей)
 UPGRADE_OK
