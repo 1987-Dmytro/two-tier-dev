@@ -20,7 +20,7 @@ KIT_FILES = [".claude/settings.json", ".claude/hooks/kill-switch.sh", ".claude/h
              "docs/INTENT.template.md", "docs/SPEC.template.md", "docs/GOAL.template.txt", "docs/PLAN.template.md",
              "docs/PROGRESS.template.md", "docs/STATUS.template.md", "docs/PROCESS.template.md", "docs/LAUNCH.md",
              "REVIEW.md", "bin/check-budget", "bin/check-ci", "bin/check-harness", "bin/check-kit",
-             "bin/two-tier-upgrade", ".github/workflows/two-tier.yml"]
+             "bin/two-tier-upgrade", ".github/workflows/two-tier.yml", ".claude/workflows/verify-phase.js", "bin/verify-phase"]
 IF_ABSENT = ["CLAUDE.md", "budgets.json"]          # файлы с фактами проекта: ставятся, только если их нет
 TL_IN_KIT = [".claude/launch.settings.json"]       # файл тимлида: апгрейд его не пишет
 RETIRED = [".claude/hooks/verify-gate.sh", ".claude/hooks/track-read.sh", ".claude/hooks/commit-on-stop.sh",
