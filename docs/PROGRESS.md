@@ -8,12 +8,15 @@
 - Шаг 0b (`a4b474d`): `git mv` evidence v3 → `docs/archive/evidence-v3/`, PROGRESS v3 → `docs/archive/PROGRESS-v3.md`.
 - **F1 Харнес ultracode**: `bin/check-harness` → `HARNESS_OK` — `F1-harness-result.txt`; `baseRef` `fresh` → `main-base`, `head` → `head-feature` — `F1-baseref-result.txt`.
 
+- **F2 Окружение = таблица**: `bin/check-harness` → `ENV_OK` на репо кита и на t3 — `F2-harness-result.txt`; `--self-test` — в `make ci`.
+
 ## Next — один айтем
-1. **F2 Окружение = таблица**: `bin/check-harness` → `ENV_OK`.
+1. **F3 Хуки на агентах**: `bin/check-harness` → `HOOKS_OK`.
 
 ## Open stop — NONE
 
 ## Notes
+- Встроенные плагины `@builtin` (`cc-plugin-*`) в сверке не считаются: PROCESS называет их прозой, строки таблицы нет.
 - `permissions.allow` из `.claude/settings.json` в `-p` не действует (папка не доверена) — пара и `bin/verify-phase` передают те же правила `--allowedTools`; отклонение 3 PLAN.
 
 ## Named, not built

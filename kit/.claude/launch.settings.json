@@ -1,4 +1,39 @@
 {
+  "enabledPlugins": {
+    "ponytail@ponytail": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "context7@claude-plugins-official": false,
+    "commit-commands@claude-plugins-official": false,
+    "security-guidance@claude-plugins-official": false,
+    "frontend-design@claude-plugins-official": false,
+    "code-review@claude-plugins-official": false,
+    "serena@claude-plugins-official": false
+  },
+  "skillOverrides": {
+    "brain-init": "off",
+    "memory-protocol": "off",
+    "anthropic-skills:built-in-browser": "off",
+    "anthropic-skills:chrome-browser": "off",
+    "anthropic-skills:computer-use": "off",
+    "anthropic-skills:deep-research": "off",
+    "anthropic-skills:docs": "off",
+    "anthropic-skills:docx": "off",
+    "anthropic-skills:google-workspace": "off",
+    "anthropic-skills:grilling": "off",
+    "anthropic-skills:import-memory": "off",
+    "anthropic-skills:morning": "off",
+    "anthropic-skills:pdf": "off",
+    "anthropic-skills:pptx": "off",
+    "anthropic-skills:role-checker": "off",
+    "anthropic-skills:role-hypothesis-generator": "off",
+    "anthropic-skills:role-hypothesis-judge": "off",
+    "anthropic-skills:role-research": "off",
+    "anthropic-skills:skill-creator": "off",
+    "anthropic-skills:team-lead": "off",
+    "anthropic-skills:team-lead-brief": "off",
+    "anthropic-skills:xlsx": "off"
+  },
   "autoMode": {
     "environment": [
       "$defaults",
