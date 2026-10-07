@@ -53,7 +53,7 @@ def files(patterns):
 
 
 def git(*args):
-    return subprocess.run(["git", *args], capture_output=True, text=True)
+    return subprocess.run(["git", *args], capture_output=True, encoding="utf-8", errors="replace")
 
 
 def check(rule, value, limit, what, weight="FAIL"):
@@ -212,12 +212,13 @@ def rule_owner(b):
                  for r in [git("merge-base", ref, "HEAD")] if r.returncode == 0), None)
     if not base:
         return out + [("OK", "owner", "нет main/origin/main или коммитов — lint коммитов пропущен")]
-    log = git("log", "--no-merges", "--no-renames", "--name-only", "--format=%x00%h %s", f"{base}..HEAD").stdout
+    # -z: пути как есть — без кавычек и \-escape не-ASCII (core.quotePath), каждый до NUL; \x01 — начало коммита
+    log = git("log", "-z", "--no-merges", "--no-renames", "--name-only", "--format=%x01%h %s", f"{base}..HEAD").stdout
     tl = []
-    for chunk in log.split("\0")[1:]:
-        head, *rest = chunk.split("\n")
+    for chunk in log.split("\x01")[1:]:
+        head, _, names = chunk.partition("\0")
         sha, _, subj = head.partition(" ")
-        hit = [p for p in rest if p and is_tl(p, owner)]
+        hit = [p for p in (n.lstrip("\n") for n in names.split("\0")) if p and is_tl(p, owner)]
         if subj.startswith("Тимлид:"):
             tl.append(f"{sha} {subj}")
         elif hit:
@@ -264,7 +265,9 @@ def in_fixture(fs, commits, fn):
             g = lambda *a: subprocess.run(["git", *a], env=GIT_ENV, capture_output=True, check=True)
             write("README.md", "base\n")
             write("docs/STATUS.md", "s\n")
-            g("init", "-q", "-b", "main"); g("add", "-A"); g("commit", "-qm", "base"); g("switch", "-qc", "v")
+            g("init", "-q", "-b", "main")
+            g("config", "core.quotePath", "true")  # умолчание git — и при другом глобальном конфиге хоста
+            g("add", "-A"); g("commit", "-qm", "base"); g("switch", "-qc", "v")
             for subj, add, rm in commits:
                 for p, c in add.items():
                     write(p, c)
@@ -353,6 +356,8 @@ def fixtures(b, defaults):
     add("owner", "файл тимлида коммитом «Тимлид:»", "OK", {}, rule_owner, [("Тимлид: x", {"docs/STATUS.md": "x\n"}, [])])
     add("owner", "коммит без файлов тимлида", "OK", {}, rule_owner, [("F1: x", {"src/x.py": "x\n"}, [])])
     add("owner", "git mv файла тимлида без «Тимлид:»", "FAIL", {}, rule_owner, [("F1: mv", {"docs/old.md": "s\n"}, ["docs/STATUS.md"])])
+    add("owner", "не-ASCII пути тимлида (core.quotePath=true, умолчание git) коммитом без «Тимлид:»", "FAIL", {}, rule_owner,
+        [("F1: x", {"intent/Gesprächsleitfaden.md": "x\n", "docs/reviews/ревью-1.md": "x\n"}, [])])
     es = lambda path: {"docs/GOAL.txt": f"END STATE:\n(A) {path} is written.\n\nCONSTRAINTS:\n- docs/SPEC-1.md is read-only.\n"}
     add("owner", "END STATE называет docs/STATUS.md", "FAIL", es("docs/STATUS.md"), rule_owner)
     add("owner", "END STATE называет docs/PROGRESS.md", "OK", es("docs/PROGRESS.md"), rule_owner)
