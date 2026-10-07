@@ -15,7 +15,8 @@
       "Edit(/docs/reviews/**)",
       "Edit(/docs/drafts/**)",
       "Edit(/claude/**)",
-      "Edit(/.claude/launch.settings.json)"
+      "Edit(/.claude/launch.settings.json)",
+      "Edit(/budgets.json)"
     ]
   },
   "hooks": {

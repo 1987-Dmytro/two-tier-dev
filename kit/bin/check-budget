@@ -200,6 +200,19 @@ def rule_intent(b):
                    f"сигналы intent {','.join(known) or 'нет'}; фич без существующего S — {'; '.join(bad) or 'нет'}")]
 
 
+def owner_at(rev, fallback):
+    """Список владения на ревизии: файл тимлида тот, что был им ДО коммита (v3.1, хвост 3). Нет budgets.json — кит ещё
+    не стоял, файлов тимлида нет; не разбирается — список HEAD."""
+    r = git("show", f"{rev}:budgets.json")
+    if r.returncode:
+        return []
+    try:
+        raw = json.loads(r.stdout)
+        return raw["defaults"]["owner"] + ((raw.get("project") or {}).get("owner_add") or [])
+    except (ValueError, KeyError, TypeError):
+        return fallback
+
+
 def rule_owner(b):
     out, owner, ph = [], b["owner"], phase()
     if ph:
@@ -208,7 +221,14 @@ def rule_owner(b):
         # ведущие «./» и знаки конца фразы, хвостовой «/» каталога остаётся: «**docs/STATUS.md**», «`intent/`», «see ./claude/.»
         toks = re.split(r"[\s`'\"«»“”()\[\],;:|]+", es.group(1)) if es else []
         paths = {p for t in toks for p in [re.sub(r"^(?:[*_~<>]|\./)+", "", re.sub(r"[*_~<>.!?]+$", "", t))] if "/" in p}
-        named = sorted(p for p in paths if is_tl(p, owner))
+        # v3.1, хвост 5: и путь, к которому прилип знак вне разделителей — «docs/STATUS.md—then», «@…», «/…», «#…», «{…}», «’s»
+        paths |= {re.sub(r"^(?:\./)+", "", p).rstrip(".") for p in re.findall(r"[\w.<>*-]+(?:/[\w.<>*-]+)+", es.group(1) if es else "")}
+        # двухуровневый каталог тимлида без хвостового «/» («docs/reviews»); однословный («intent») — нет: это слово прозы
+        dirs = {e.rstrip("/") for e in owner if e.endswith("/") and e.count("/") > 1}
+        named = {p for p in paths if is_tl(p, owner) or p.rstrip("/") in dirs}
+        # файл тимлида в корне («budgets.json») — без «/»: целое имя, не хвост чужого пути («kit/budgets.json»)
+        named |= {e for e in owner if "/" not in e and re.search(r"(?<![^\W_]|[.-])(?<!\w/)" + re.escape(e) + r"(?![^\W_]|-)", es.group(1) if es else "")}  # «_» — разметка
+        named = sorted(named)
         out.append(("FAIL" if named else "OK", "owner",
                     f"END STATE docs/GOAL.txt: путей {len(paths)}, файлов тимлида — {', '.join(named) or 'нет'}"))
     base = next((r.stdout.strip() for ref in ("main", "origin/main")
@@ -221,7 +241,8 @@ def rule_owner(b):
     for chunk in log.split("\x01")[1:]:
         head, _, names = chunk.partition("\0")
         sha, _, subj = head.partition(" ")
-        hit = [p for p in (n.lstrip("\n") for n in names.split("\0")) if p and is_tl(p, owner)]
+        own = owner_at(f"{sha}^", owner)
+        hit = [p for p in (n.lstrip("\n") for n in names.split("\0")) if p and is_tl(p, own)]
         if subj.startswith("Тимлид:"):
             tl.append(f"{sha} {subj}")
         elif hit:
@@ -263,9 +284,11 @@ def in_fixture(fs, commits, fn):
     try:
         os.chdir(d)
         for p, c in fs.items():
-            write(p, c)
+            write(p, c) if c is not None else None  # None — файла нет и в базе
         if commits is not None:
             g = lambda *a: subprocess.run(["git", *a], env=GIT_ENV, capture_output=True, check=True)
+            if "budgets.json" not in fs:  # кит стоит с базы: список владения на родителе коммита — его
+                write("budgets.json", json.dumps({"defaults": {"owner": BASE_OWNER}, "project": {}}))
             write("README.md", "base\n")
             write("docs/STATUS.md", "s\n")
             g("init", "-q", "-b", "main")
@@ -281,6 +304,9 @@ def in_fixture(fs, commits, fn):
     finally:
         os.chdir(here)
         shutil.rmtree(d, ignore_errors=True)
+
+
+BASE_OWNER = []  # owner кита для базы lint-фикстур; ставит self_test
 
 
 def pin_of(text):
@@ -380,6 +406,31 @@ def fixtures(b, defaults):
     for p, expect in [(e, "FAIL") for e in defaults["owner"]] + [(e, "OK") for e in own]:
         for f in frames:
             add("owner", f"END STATE «{f.format(p)}»", expect, es(f.format(p)), rule_owner)
+    # v3.1, хвост 5: знак вне разделителей прилип к файлу (классы — docs/evidence/accept-8f1d232.txt, «Неблокирующие»)
+    stuck = ["(A) the team lead updates {}—then stops", "(A) the team lead updates {}–then stops", "(A) see {}… and stop",
+             "(A) see ‘{}’ for it", "(A) see „{}“ for it", "(A) cc @{} please", "(A) the file /{} is updated",
+             "(A) see {}#top for it", "(A) the map {{{}}} is updated", "(A) make ci && {} is updated", "(A) the {}’s head is updated"]
+    files_tl = [e for e in defaults["owner"] if not e.endswith("/")]
+    for p, expect in [(e, "FAIL") for e in files_tl] + [(e, "OK") for e in own if not e.endswith("/")]:
+        for f in stuck:
+            add("owner", f"END STATE, знак прилип: «{f.format(p)}»", expect, es(f.format(p)), rule_owner)
+    for e in [e for e in defaults["owner"] if e.endswith("/") and e.count("/") > 1]:
+        for f in frames[:5]:
+            add("owner", f"END STATE, каталог тимлида без «/»: «{f.format(e.rstrip('/'))}»", "FAIL", es(f.format(e.rstrip("/"))), rule_owner)
+    add("owner", "END STATE: однословное «intent» в команде — не путь", "OK", es("(A) `bin/check-budget --self-test intent owner` prints OWNER_OK."), rule_owner)
+    add("owner", "END STATE: каталог исполнителя без «/» — «docs/evidence»", "OK", es("(A) the files in docs/evidence are written."), rule_owner)
+    # v3.1, хвост 3: budgets.json — файл тимлида; список владения — на родителе коммита
+    bud = lambda owner: json.dumps({"defaults": dict(defaults, owner=owner), "project": {}})
+    old = [e for e in defaults["owner"] if e != "budgets.json"]
+    add("owner", "коммит вносит budgets.json в owner (на родителе его нет)", "OK", {"budgets.json": bud(old)}, rule_owner,
+        [("F7: owner", {"budgets.json": bud(old + ["budgets.json"])}, [])])
+    add("owner", "поздняя правка budgets.json исполнителем", "FAIL", {"budgets.json": bud(old + ["budgets.json"])}, rule_owner,
+        [("F1: x", {"budgets.json": bud(old + ["budgets.json"]).replace("60", "59")}, [])])
+    add("owner", "снять запись docs/STATUS.md из owner и править файл", "FAIL", {"budgets.json": bud(old + ["budgets.json"])}, rule_owner,
+        [("F1: unown", {"budgets.json": bud([e for e in old if e != "docs/STATUS.md"] + ["budgets.json"])}, []),
+         ("F1: edit", {"docs/STATUS.md": "y\n"}, [])])
+    add("owner", "кит ставится коммитом с budgets.json (на родителе его нет)", "OK", {"budgets.json": None}, rule_owner,
+        [("kit install", {"budgets.json": bud(old + ["budgets.json"]), "docs/PROGRESS.md": "x\n"}, [])])
     return C
 
 
@@ -388,6 +439,7 @@ def self_test(groups):
     if not b:
         return report(out)
     defaults = json.loads(read("budgets.json"))["defaults"]
+    BASE_OWNER[:] = b["owner"]
     cases = fixtures(b, defaults)
     known = list(dict.fromkeys(c[0] for c in cases))
     bad_args = [g for g in groups if g not in known]

@@ -12,7 +12,7 @@ END STATE (met when one holds):
 CONSTRAINTS:
 - Branch <b> only; never push to main. At least one commit per feature, `git add` with exact paths; fix-ups are new commits; never amend a pushed commit or force-push.
 - Never print secrets; never bypass the spend guard; irreversible or paid above the PROCESS threshold only after the operator's yes.
-- Team-lead files are read-only: intent/, docs/SPEC-*.md, docs/GOAL.txt, docs/STATUS.md, docs/PROCESS.md, docs/reviews/, docs/drafts/, claude/, .claude/launch.settings.json.
+- Team-lead files are read-only: intent/, docs/SPEC-*.md, docs/GOAL.txt, docs/STATUS.md, docs/PROCESS.md, docs/reviews/, docs/drafts/, claude/, .claude/launch.settings.json, budgets.json.
 - On stochastic checks iterate on your own within the budget of SPEC §4 (time, €): one metric, keep or discard by git, a line per run in the run log; stop only by SPEC §4.
 - <Public repo only: evidence and commit messages carry counts, exit codes, markers and repo-relative paths, never emails, account ids, client names or home-directory paths.>
 - After an auto-mode block, do not repeat the action: take another path or stop with STOP-INPUT and the exact command for the operator. Write any STOP line only after every feature that does not need the missing input is closed and pushed.

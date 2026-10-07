@@ -26,7 +26,8 @@
       "docs/reviews/",
       "docs/drafts/",
       "claude/",
-      ".claude/launch.settings.json"
+      ".claude/launch.settings.json",
+      "budgets.json"
     ]
   },
   "project": {}
