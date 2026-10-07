@@ -1,0 +1,22 @@
+F9: bin/two-tier-init /tmp/two-tier-v3/t3 — файлов кита 25
+F9-init: (t3) bin/check-budget — rc 0, строк OK 8
+F9-init BUDGET_OK
+F1: (t3) bash -c bin/check-budget --self-test && bin/check-budget — rc 0, строк OK 8
+F1 BUDGET_OK
+F2: (t3) bin/check-budget --self-test intent owner — rc 0, строк OK 0
+F2 INTENT_OK
+F3: (корень ветки) bin/check-ci v3 — rc 0, строк OK 0
+F3 CI_OK
+F4: (t3) bin/check-harness — rc 0, строк OK 11
+F4 HARNESS_OK
+F5: (t3) bin/check-budget --templates — rc 0, строк OK 16
+    WARN intent: intent/INTENT.md: маркеров неясности 1
+F5 BUDGET_OK
+F6: (t3) bin/check-kit — rc 0, строк OK 9
+F6 KIT_OK
+F7: (t3) bin/two-tier-upgrade --self-test — rc 0, строк OK 15
+F7 UPGRADE_OK
+F8: (корень ветки) bin/check-docs — rc 0, строк OK 7
+F8 DOCS_OK
+F9 GATE_OK
+GATE_OK

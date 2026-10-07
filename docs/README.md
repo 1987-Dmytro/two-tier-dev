@@ -1,13 +1,15 @@
 # docs
 
-- `SPEC-v3.md` · `PLAN-v3.md` · `PROGRESS.md` — the phase that built kit v3: the team lead's spec, the executor's
-  plan (files, order, risks, proof, deviations from the spec and the docs), the executor's report.
+- `SPEC-v3.1.md` · `PLAN-v3.1.md` · `PROGRESS.md` — the current phase, v3.1 «ultracode in full»: the team lead's
+  spec, the executor's plan (files, order, risks, proof, deviations), the executor's report.
+- `SPEC-v3.md` · `PLAN-v3.md` · `archive/PROGRESS-v3.md` — the phase that built kit v3.
 - `GOAL.txt` — the `/goal` of the current phase; `Read first:` names its SPEC.
 - `OFFICIAL-SOURCES.md` — the only sources by which the harness, the kit and the skills may change.
 - `LAUNCH.md` — the executor's launch line and the paired control run (a link to `kit/docs/LAUNCH.md`).
 - `dev-system.ru.md` — the whole system in the operator's language (v3).
-- `evidence/` — `<F>-<check>-result.txt`, the output of every check of this phase; `F4-harness-v2-baseline.txt`
-  is the same control pair on the v2 kit, the «before» of the CHANGELOG.
+- `evidence/` — `<F>-<check>-result.txt`, the output of every check of the current phase, and `verify-<sha>.txt`,
+  `accept-<sha>.txt` — acceptance verdicts; the v3 phase's evidence is in `archive/evidence-v3/`, its
+  `F4-harness-v2-baseline.txt` is the control pair on the v2 kit, the «before» of the CHANGELOG.
 - `drafts/` — copies of the Cowork skills `team-lead` v6 and `team-lead-brief`, and the INTENT, SPEC and GOAL
   templates as the team lead wrote them.
 - `STATUS.md` — the operator's map; the team lead writes it at acceptance.

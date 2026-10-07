@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# gate-v3.1 — гейт кита v3.1 (SPEC-v3.1 F9): кит на пустом репо (свой t3 во /tmp/two-tier-v3), маркеры F1–F8 фазы с номером
+# фичи, bin/gate-v3 зелёный, затем «F9 GATE_OK». F1–F3, F5–F7 — на t3 (F2 и на корне ветки), F4 — на фикстурах
+# bin/check-verify во /tmp/two-tier-v3, F8 и gate-v3 — из корня ветки. Долгие чеки идут параллельно.
+# В репо ничего не пишет: полные логи — свой каталог /tmp/two-tier-v3/gate31-*, в вывод — команда, итог и строки FAIL/WARN/BAD.
+set -uo pipefail
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+mkdir -p /tmp/two-tier-v3
+T3=$(mktemp -d /tmp/two-tier-v3/t31-XXXXXX)
+LOGS=$(mktemp -d /tmp/two-tier-v3/gate31-XXXXXX)
+git init -q "$T3"
+echo "F9: bin/two-tier-init t3 — файлов кита $("$REPO/bin/two-tier-init" "$T3" | grep -c 'wrote:'); логи — ${LOGS}"
+
+run() {  # run <имя> <каталог> <команда…>: лог и код выхода в $LOGS
+  local name=$1 dir=$2; shift 2
+  ( cd "$dir" && "$@" ) > "$LOGS/$name.log" 2>&1
+  echo $? > "$LOGS/$name.rc"
+  echo "$name: ($([ "$dir" = "$T3" ] && echo t3 || echo корень ветки)) $* — rc $(cat "$LOGS/$name.rc")"
+}
+run harness-t3 "$T3" bin/check-harness &
+run harness-repo "$REPO" bin/check-harness &
+run verify "$REPO" bin/check-verify &
+run gate-v3 "$REPO" bin/gate-v3 &
+run init "$T3" bin/check-budget
+run kit "$T3" bin/check-kit
+run templates "$T3" bin/check-budget --templates
+run owner "$T3" bin/check-budget --self-test intent owner
+run docs "$REPO" bin/check-docs
+wait
+
+fails=0
+mark() {  # mark <F> <маркер> <лог…>: в каждом логе rc 0 и строка, равная маркеру
+  local f=$1 m=$2 ok=1 l; shift 2
+  for l in "$@"; do
+    grep -E '^(FAIL|WARN|BAD)' "$LOGS/$l.log" | sed "s/^/    $l: /"
+    [ "$(cat "$LOGS/$l.rc")" = 0 ] && grep -qx "$m" "$LOGS/$l.log" || ok=0
+  done
+  if [ "$ok" = 1 ]; then echo "$f $m"; else echo "$f FAIL: нет $m ($*)"; fails=$((fails + 1)); fi
+}
+mark F9-init BUDGET_OK init
+mark F1 HARNESS_OK harness-t3 harness-repo
+mark F2 ENV_OK harness-t3 harness-repo
+mark F3 HOOKS_OK harness-t3 harness-repo
+mark F4 VERIFY_OK verify
+mark F5 KIT_OK kit
+mark F6 BUDGET_OK templates
+mark F7 OWNER_OK owner
+mark F8 DOCS_OK docs
+grep -E '^F[0-9]+(-init)? ' "$LOGS/gate-v3.log" | sed 's/^/    gate-v3: /'
+mark v3 GATE_OK gate-v3
+[ "$fails" -eq 0 ] && echo "F9 GATE_OK" && echo GATE_OK || { echo "GATE_FAIL: $fails"; exit 1; }

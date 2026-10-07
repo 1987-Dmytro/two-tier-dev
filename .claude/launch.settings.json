@@ -1,4 +1,5 @@
 {
+  "worktree": { "baseRef": "head" },
   "enabledPlugins": {
     "ponytail@ponytail": true,
     "pr-review-toolkit@claude-plugins-official": true,
@@ -34,13 +35,28 @@
     "anthropic-skills:team-lead-brief": "off",
     "anthropic-skills:xlsx": "off"
   },
+  "permissions": {
+    "deny": [
+      "Edit(/intent/**)",
+      "Edit(/docs/SPEC-*.md)",
+      "Edit(/docs/GOAL.txt)",
+      "Edit(/docs/STATUS.md)",
+      "Edit(/docs/PROCESS.md)",
+      "Edit(/docs/reviews/**)",
+      "Edit(/docs/drafts/**)",
+      "Edit(/claude/**)",
+      "Edit(/.claude/launch.settings.json)",
+      "Edit(/docs/OFFICIAL-SOURCES.md)",
+      "Edit(/docs/archive/team-lead-*.md)"
+    ]
+  },
   "autoMode": {
     "environment": [
       "$defaults",
-      "Project: <проект> — <что он делает, одной фразой>. Primary use: software development.",
-      "Source control: <GitHub org/repo проекта> — pushing feature branches there is routine; main changes only after the operator's acceptance.",
-      "Trusted domains: <API вендоров и хосты, которые вызывает проект>.",
-      "Key services: <CI, сервер проекта, деплой — или «нет»>."
+      "Project: two-tier-dev — the operator's public kit for AI-agent development: scripts, skills, saved workflows, templates and docs. Primary use: software development.",
+      "Source control: github.com/1987-Dmytro/two-tier-dev — pushing feature branches there is routine; main changes only through a pull request after the operator's acceptance.",
+      "Trusted domains: github.com, code.claude.com, registry.npmjs.org, context7.com.",
+      "Key services: GitHub Actions CI of this repo; scratch repos and fixtures under /tmp/two-tier-v3; nested claude -p control runs on the subscription."
     ]
   }
 }

@@ -1,9 +1,9 @@
-# Наша система разработки с ИИ-агентами — «оператор · тимлид · исполнитель», кит v3
+# Наша система разработки с ИИ-агентами — «оператор · тимлид · исполнитель», кит v3.1
 
-**v3.0 · 06.10.2026.** v2 (18.09) — в истории git этого файла, кит v2 — в `docs/archive/kit-v2/`. Зачем v3 — `intent/INTENT.md`, как собран — `docs/SPEC-v3.md` и `docs/PLAN-v3.md`.
+**v3.1 · 07.10.2026 — ultracode по полной.** v3.0 (06.10) — `docs/SPEC-v3.md` и `docs/PLAN-v3.md`; v2 (18.09) — в истории git этого файла, кит v2 — в `docs/archive/kit-v2/`. Зачем — `intent/INTENT.md` (N2, D4), как собран v3.1 — `docs/SPEC-v3.1.md` и `docs/PLAN-v3.1.md`.
 
 ## 0. Одним абзацем
-Оператор ведёт любой проект циклом **intent → прожарка → SPEC → `/goal` → приёмка → гейт**. Тимлид (Cowork) задаёт результат, проверку, границы и стопы; исполнитель (Claude Code, `claude-opus-5-5`, auto mode) строит путь сам. Объём инструкций держит механика (`bin/check-budget` в CI), а не память; intent живой и закреплён в SPEC пином; харнес — только по официальной документации, каждое поле проверено контрольным прогоном.
+Оператор ведёт любой проект циклом **intent → прожарка → SPEC → `/goal` → приёмка → гейт**. Тимлид (Cowork) задаёт результат, проверку, границы и стопы; исполнитель (Claude Code, `claude-opus-5-5`, auto mode, **ultracode** — штатный режим: сам планирует воркфлоу из агентов на каждую существенную задачу) строит путь сам. Объём инструкций держит механика (`bin/check-budget` в CI), а не память; intent живой и закреплён в SPEC пином; харнес — только по официальной документации, каждое поле проверено контрольным прогоном.
 
 ## 1. Роли
 | роль | владеет | не делает |
@@ -11,17 +11,17 @@
 | **Оператор** | цель, деньги, три решения: спека да/нет · буква на стопе · гейт (сам запускает продукт) | не шина между ярусами: задача уходит файлом в репо и текстом `/goal` |
 | **Тимлид** | `intent/INTENT.md`, `docs/SPEC-<n>.md`, `docs/GOAL.txt`, `docs/PROCESS.md`, `docs/STATUS.md`, ревью, `.claude/launch.settings.json` | не пишет шаги реализации |
 | **Исполнитель** | `docs/PLAN-<n>.md`, код, коммиты по путям, evidence, `docs/PROGRESS.md` (голова — отчёт фазы) | не правит файлы тимлида (deny `Edit` + lint владения), не проверяет себя сам |
-| **Evaluator** | вердикт `PASS` / `NEEDS_WORK` по `REVIEW.md` | свежий на каждой приёмке, без Write и Edit |
+| **`/verify-phase`** | вердикт `VERDICT: PASS` / `NEEDS_WORK` по `REVIEW.md` — сохранённый воркфлоу: проверяющие `claude-sonnet-5-5` по фичам, судья `claude-opus-5-5` | свежий клон и свежий `claude -p` на каждой приёмке, 30 мин; evaluator-субагент — запасной путь |
 
-## 2. Цикл v3
+## 2. Цикл v3.1
 1. **Intent.** Один живой `intent/INTENT.md` (шаблон `docs/INTENT.template.md`): проблема · результат · сигналы успеха `S1…` · жёсткие ограничения · не-цели · решено и `[NEEDS CLARIFICATION: …]` · эталонные входы · журнал разворотов. Разворот — строка журнала и новый пин, а не поправка поверх SPEC.
 2. **Прожарка** по `grilling` — полная на kickoff, дальше только фронтир новой фазы.
 3. **SPEC** (шаблон `docs/SPEC.template.md`): шапка `intent/INTENT.md @ <12 знаков hash-object>`; фича — до 600 знаков, `служит: S…`, чек → маркер; стопов четыре.
-4. **`/goal`** (шаблон `docs/GOAL.template.txt`): до 4000 знаков, `Read first:` — до трёх файлов, разрешённые действия строкой `Authorized in this goal:`, три конечных состояния (готово · стоп · лимит ходов).
+4. **`/goal`** (шаблон `docs/GOAL.template.txt`) — в сессии строкой запуска из `docs/PROCESS.md` (`--effort ultracode`): до 4000 знаков, `Read first:` — до трёх файлов, разрешённые действия строкой `Authorized in this goal:`, три конечных состояния (готово · стоп · лимит ходов).
 5. **PLAN** — шаг 0 внутри `/goal`: файлы · порядок · риски · доказательство · отклонения от SPEC по докам. Фаза с платными или необратимыми шагами — сначала `/plan-phase` и приёмка плана.
 6. **Работа**: коммит на фичу, `git add` по путям, вывод каждого чека — в транскрипте и в `docs/evidence/<F>-<check>-result.txt`.
 7. **Стоп** — выполненный goal: `STOP: <id>` новой строкой в PROGRESS, вопрос, resume-строка. Причины: платное или необратимое выше порога · смена объёма · вход оператора · нет прогресса. Развилка, которую SPEC не закрыл, — простейшее прочтение и строка в `## Notes`.
-8. **Приёмка** — три слоя: CI на push · `/accept` (свежий evaluator, вердикт в `docs/evidence/accept-<sha>.txt`) · ревью тимлида, до пяти блокирующих находок. STATUS пишет тимлид.
+8. **Приёмка** — три слоя: CI на push · `/verify-phase` (`bin/verify-phase` из `/accept` и из (A) GOAL: свежий клон, гейт, по фиче — свежий чек, пограничные случаи против «готово», мутация; опровергатели; судья; вердикт в `docs/evidence/verify-<sha>.txt`, лимит 30 мин — иначе `VERIFY_TIMEOUT`) · ревью тимлида, до пяти блокирующих находок. Исполнитель гоняет `/verify-phase` перед (A) и чинит его блокирующие в той же сессии. STATUS пишет тимлид.
 9. **Гейт** — оператор запускает продукт и судит по сигналам intent.
 
 ## 3. Бюджеты — механикой
@@ -36,15 +36,16 @@
 | `docs/PROGRESS.md` · PLAN фазы | 60 · 150 строк |
 | `docs/GOAL.txt` | 4 000 знаков; `Read first:` — до 3 файлов и 50 000 знаков вместе с CLAUDE.md |
 | ревью `docs/reviews/*` | блокирующих — до 5 |
-| владение | коммит после merge-base с `main`, меняющий файл тимлида, — только «Тимлид:»; END STATE GOAL файлов тимлида не называет |
+| владение | коммит после merge-base с `main`, меняющий файл тимлида, — только «Тимлид:»; список — на родителе коммита, `budgets.json` в нём; END STATE GOAL файлов тимлида не называет — ни в разметке, ни с прилипшим знаком, ни каталогом без `/` |
 
 CI (`.github/workflows/two-tier.yml`) гоняет `bin/check-budget` и `make ci` на каждый push и PR; `bin/check-ci <ветка>` засчитывает только прогон текущего HEAD.
 
 ## 4. Харнес
-- `.claude/settings.json`: модель полным id; effort не задан (дефолт Opus 5.5 — medium), effort фазы — в строке запуска; `autoMemoryEnabled: false`; `disableClaudeAiConnectors: true`; deny `Edit` на файлы тимлида (Edit покрывает и Write); хуки exec form с `${CLAUDE_PROJECT_DIR}`.
-- `AGENT_STOP` в корне — kill-switch: `continue: false` со `stopReason`, вызов не выполняется, прогон останавливается. Строка в `STEER.md` — заметка фактом в `additionalContext`.
-- Запуск — `docs/LAUNCH.md`: `--permission-mode auto --model claude-opus-5-5 --effort <…> --settings .claude/launch.settings.json`; доверенная инфраструктура — `autoMode.environment` в этом файле тимлида.
-- `bin/check-harness` — парный контрольный прогон: заметка доходит, стоп-кран останавливает на первом вызове, коннекторов claude.ai нет, `claude doctor` чист. Его итог «до и после» — в CHANGELOG.
+- `.claude/settings.json`: модель полным id; effort не задан — ultracode и effort фазы в строке запуска; `worktree.baseRef: "head"` (агент в worktree видит HEAD ветки, а не `main`); `workflowSizeGuideline: "medium"`; узкие allow на `bin/check-*`, `bin/gate-*`, `make ci`; `autoMemoryEnabled: false`; `disableClaudeAiConnectors: true`; deny `Edit` на файлы тимлида (Edit покрывает и Write); хуки exec form с `${CLAUDE_PROJECT_DIR}`.
+- `AGENT_STOP` в корне — kill-switch: `continue: false` со `stopReason`, вызов не выполняется, прогон останавливается — и у главной сессии, и у агента воркфлоу. Строка в `STEER.md` — заметка фактом в `additionalContext`, только главной сессии (у агента во входе хука `agent_id`).
+- Агенты воркфлоу правят только в своих worktree или только читают; коммит — главная сессия; push в `main` запрещён (`kit/CLAUDE.md`, его читает и классификатор auto mode).
+- **Окружение = таблица.** Таблица Environment в `docs/PROCESS.md` (инструмент · форма · id · вкл · фича · установка · удаление) → `enabledPlugins` и `skillOverrides` в `.claude/launch.settings.json` и строка запуска: `--permission-mode auto --model claude-opus-5-5 --effort ultracode --settings .claude/launch.settings.json --strict-mcp-config --mcp-config …`. Флаги — `docs/LAUNCH.md`.
+- `bin/check-harness` — пара этой строкой: `system/init` = таблица (плагины, MCP `connected`, скиллы, CLI, флаги) — `ENV_OK`; заметка доходит, стоп-кран останавливает, allow-правила работают, `claude doctor` чист — `HARNESS_OK`; deny, отказ широких команд, стоп-кран и заметка — на главной сессии и на агенте воркфлоу — `HOOKS_OK`. Итог «до и после» — в CHANGELOG.
 
 ## 5. Самоулучшение
 - Правило харнеса, кита или скилла меняется только по `docs/OFFICIAL-SOURCES.md` (цитата, URL, дата) или по повтору одной ошибки не меньше двух раз — и без спора с официальным.

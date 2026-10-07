@@ -1,0 +1,4 @@
+$ python3 baseref.py  # разовый замер, скрипт — вне репо
+ветка feature: marker.txt = head-feature (не запушен); origin/main: marker.txt = main-base
+baseRef fresh: агент в worktree прочитал marker.txt = 'main-base'; агентов 1, модели ['claude-sonnet-5-5']; статус completed
+baseRef head: агент в worktree прочитал marker.txt = 'head-feature'; агентов 1, модели ['claude-sonnet-5-5']; статус completed

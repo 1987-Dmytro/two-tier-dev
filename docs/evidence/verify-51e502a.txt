@@ -1,0 +1,37 @@
+VERDICT: PASS
+/verify-phase · docs/SPEC-v3.1.md · HEAD 51e502a · проверяющие claude-sonnet-5-5 (фич 9, опровергателей 0) · судья claude-opus-5-5
+
+Для каждой из фич F1–F9 есть файл `docs/evidence/<F>-*-result.txt` с маркером, свежий прогон зелёный (gate.log свежего клона 51e502a печатает маркеры F1–F8 с номером фичи, а также `v3 GATE_OK` и `F9 GATE_OK`), а применённые мутации (F1, F3–F9) делают чек красным. Мутацию F2 не применили, потому что правку отклонил классификатор auto-mode, но путь «FAIL с именем» подтверждён прогоном с заглушкой claude. Ни одна находка не противоречит «готово» и не нарушает инвариант §3: в evidence нет домашних путей, почты и ключей, кандидатов в блокирующие у опровергателей не было, поэтому блокирующих 0, а остальные находки — пробелы в силе чеков и крайние случаи вне «готово».
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F1: check-harness ищет « --effort ultracode » подстрокой — строка с конфликтующим вторым `--effort medium` проходит, а `--effort=ultracode` даёт ложный FAIL; реальная строка шаблона верна
+- F1: check-harness не читает `docs/LAUNCH.md` и CHANGELOG — эти части «готово» проверены вручную (строка 7 LAUNCH.md, строки 39–40 CHANGELOG), но не чеком
+- F1/F2/F3/F4: evidence снят в свежем клоне e1cd97f, не 51e502a; маркеры за HEAD подтверждает gate.log свежего клона 51e502a, а diff e1cd97f..HEAD в kit/bin/.claude — одна строка в kit/docs/LAUNCH.md
+- F2: нет раздела `## Environment` или в строке таблицы меньше 4 ячеек — IndexError с трейсбеком вместо FAIL с именем (rc 1); таблица разбирается только после контрольной пары
+- F2: разбор таблицы строгий — «Да» с заглавной читается как «нет», id с пробелами внутри или пустой id не совпадают; флаги в compare() сверяются подстрокой
+- F2: `mcp_servers: null` в system/init даёт TypeError; плагин без `source` даёт безымянное «плагин : лишний»
+- F2: мутацию compare() (needs-auth = connected) не применили — её отклонил классификатор auto-mode; FAIL с именем подтверждён прогоном с заглушкой claude
+- F3: refuse_sweeping не ловит `git add ./`, `git add *`, `-Av`, `-fA`, команду после перевода строки, обёртки sudo/env/command, `bash -c`, subshell и `$(...)`
+- F3: steer.sh — STEER.md из одних пробелов даёт пустой additionalContext; не-UTF-8 содержимое роняет хук (rc 1, файл не очищается)
+- F3: строка doctor в check-harness — OK, даже когда «No installation issues found» нет в выводе
+- F4: в заголовке отчёта verify-phase «опровергателей» на деле считает блокирующих кандидатов
+- F5: check-kit ищет в скилле accept только «30 мин» — расхождение «(1800 с)» → «(3600 с)» со значением в лаунчере проходит
+- F5: check-kit не запускает лаунчер — «свежий клон» и «вердикт в docs/evidence/» проверены только по словам скилла и константам; само поведение покрывает F4
+- F7: `--self-test intent owner` не проверяет, что `budgets.json` есть в списке файлов тимлида — удаление записи ловит только check-kit (F5)
+- F7: пути END STATE не нормализуются — `docs//STATUS.md`, `docs/./STATUS.md`, `a/b/../../docs/STATUS.md` не распознаются как файлы тимлида
+- F8: check-docs не видит мёртвые пути в обратных кавычках под docs/ и мёртвые внешние якоря; реальных мёртвых ссылок сейчас нет
+- F8: F8-docs-result.txt отстаёт от HEAD (путей репо 25, а свежий прогон даёт 27); маркер DOCS_OK на месте
+
+## По фичам
+- F1: чек `bin/check-harness (gate-log line for F1 in /tmp/two-tier-v3/verify-51e502a-eqjj8y0n/gate.log; evidence docs/evidence/F1-harness-result.txt)` rc 0, маркер есть (gate_log); мутация kit/.claude/settings.json: worktree.baseRef "head" -> "fresh" → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F2: чек `bin/check-harness (gate log line 'F2 ENV_OK' in /tmp/two-tier-v3/verify-51e502a-eqjj8y0n/gate.log; own runs: bin/check-harness --self-test -> ENV_SELFTEST_OK rc 0; kit run via real claude from a temp project -> ENV_OK HARNESS_OK HOOKS_OK rc 0)` rc 0, маркер есть (gate_log); мутация kit/bin/check-harness (bin/check-harness is a symlink to it): Planned: accept needs-auth as connected in compare() (s != "connected" -> s not in ("connected","needs-auth")). The auto-mode classifier denied the edit as Security Test Removal, so it was not applied and not retried. git status in the worktree is clean. → skipped; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F3: чек `bin/check-harness` rc 0, маркер есть (gate_log); мутация kit/.claude/hooks/steer.sh: get("agent_id") -> get("agent_idx") (the agent no longer skips the note, so it consumes STEER.md) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F4: чек `bin/check-verify` rc 0, маркер есть (gate_log); мутация kit/.claude/workflows/verify-phase.js (and the root copy .claude/workflows/verify-phase.js, edited in step so the copy-equality check does not trigger): const ok = verdict.blocking.length === 0  ->  const ok = verdict.blocking.length >= 0 (the verdict is always PASS) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F5: чек `bin/check-kit (gate.log line 'F5 KIT_OK' plus own run in worktree; evidence docs/evidence/F5-kit-result.txt ends with KIT_OK, rc 0)` rc 0, маркер есть (gate_log); мутация kit/bin/verify-phase: default limit 1800 -> 3600 (line '    limit = 1800') → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F6: чек `bin/check-budget --templates` rc 0, маркер есть (own_run); мутация kit/docs/PROCESS.template.md: launch line: --effort ultracode replaced with --effort medium (table row left intact); second probe: <N> % недели replaced with <N> процентов → red; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `bin/check-budget --self-test intent owner` rc 0, маркер есть (own_run); мутация kit/bin/check-budget (bin/check-budget is a symlink to it): rule_owner: two-level owner-dir threshold e.count("/") > 1 changed to > 2, so docs/reviews and docs/drafts without a trailing slash are no longer named → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F8: чек `bin/check-docs` rc 0, маркер есть (own_run); мутация kit/docs/LAUNCH.md: replaced the explanation `--effort ultracode` with `--eff` (also separately: README.md `bin/verify-phase` -> `bin/verify-phasX`; CHANGELOG v3.1 row workflows/verify-phase.js doc URLs -> example.com) → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F9: чек `read /tmp/two-tier-v3/verify-51e502a-eqjj8y0n/gate.log (F9 lines); bin/check-docs; bin/check-budget --self-test intent owner` rc 0, маркер есть (gate_log); мутация bin/check-docs: print DOCS_OK -> DOCS_OKX (marker no longer emitted) → red; находок 0, блокирующих-кандидатов 0, опровергнуто 0

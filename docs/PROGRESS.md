@@ -1,51 +1,37 @@
-# PROGRESS — two-tier-dev, SPEC-v3 «кит v3» (файл исполнителя; потолок 60 строк)
+# PROGRESS — two-tier-dev, SPEC-v3.1 «ultracode по полной» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — 07.10.2026, фикс-раунд 2 (v3-2)
-**Что изменилось:** блокирующая `docs/reviews/v3-2.md` закрыта по классу (`3c0c2fe`, план — `36237e0`). Правило владения ловит путь тимлида в END STATE, если он записан как в `defaults.owner` (каталог с хвостовым `/`, glob как есть) или обёрнут в разметку: `` ` ``, `**…**`, `_…_`, `<…>`, `~~…~~`, `./`, кавычки, скобки, знаки конца фразы.
-- Фикстуры: 9 записей × 10 обрамлений — FAIL; `docs/PROGRESS.md`, `docs/evidence/`, `docs/evidence/F2-intent-result.txt` в тех же обрамлениях — OK.
-- Красная проба на правиле `f7ffa41` — 51 BAD, `OWNER_FAIL`. Живой GOAL — `путей 5, файлов тимлида — нет`.
-- Evidence F1 и F2 обновлены. Финальный `bin/gate-v3` идёт после последнего push и остаётся в транскрипте.
-**Следующий шаг оператора:** «отчёт готов» в свежую сессию тимлида: `/team-lead — повторная приёмка кита v3 по docs/reviews/v3-2.md: ветка v3, голова docs/PROGRESS.md`. Чек находки — `bin/check-budget --self-test intent owner` → `OWNER_OK`, затем `bin/gate-v3` из свежего клона. После этого — merge `v3` → `main` по «да» оператора.
-**Когда закончим переход:** кит v3 — 07.10, после повторной приёмки (около 30 минут тимлида) и merge. Перевод projekt_1_telefon — 07–08.10, после решения оператора по STOP-5: сессия тимлида около часа плюс один `/goal` с `bin/two-tier-upgrade` на 1–2 часа. Сдвинуть даты могут только окно оператора и это решение.
+## Голова — 07.10.2026, 13:10 — фаза v3.1 закрыта, ждёт приёмки
+**Сделано:** F1–F9 закрыты, у каждой фичи — свой чек и evidence в `docs/evidence/`. `/verify-phase` из свежего клона `e1cd97f` → `VERDICT: PASS`, блокирующих 0 (`docs/evidence/verify-e1cd97f.txt`; 11 агентов, 8 мин, гейт 120 с). Блокирующая прогона на `f3b4863` починена в этой сессии. CI `v3.1` → `CI_OK`; `bin/gate-v3.1` → `F1`…`F8`, `F9 GATE_OK`. Плечо — 11:37–13:10 по транскрипту.
+**Следующий шаг оператора:** «отчёт готов» в свежую сессию тимлида: `/team-lead — приёмка v3.1 (ветка v3.1, голова docs/PROGRESS.md); /usage до … после …`. Тимлиду ещё: deny `Edit(/budgets.json)` в `.claude/launch.settings.json` — это файл тимлида. После PASS — PR `v3.1` → `main` по «да» оператора.
+**Когда закончим:** приёмка v3.1 — 07.10, вечер: `bin/verify-phase` 8–20 мин и ревью тимлида ~15 мин. Перевод telefon — 08.10, если неделя ≤ 60 % (SPEC-v3.1 §6). Сдвинуть может только окно оператора.
 
 ## Done
-- Сид `49e873c` «Тимлид: seed v3»; `goal-v2.txt` → архив (`c39237f`); PLAN-v3 (`c4114c4`); v2 PROGRESS, PLAN и evidence → `docs/archive/`.
-- **F1 Бюджеты** (`b60ff86`): `bin/check-budget --self-test && bin/check-budget` → `SELFTEST_OK`, `BUDGET_OK` на репо и на ките — `F1-budget-result.txt`.
-- **F2 Intent, пин, владение** (`abf7742`): `bin/check-budget --self-test intent owner` → `INTENT_OK`; коммиты «Тимлид:» — список в `F2-intent-result.txt`.
-- **F3 CI** (`ec28688`, fix `4edfb15`): `bin/check-ci v3` → `CI_OK` — `F3-ci-result.txt`.
-- **F4 Харнес** (`435b896`): `bin/check-harness` → `HARNESS_OK` — `F4-harness-result.txt`; «до» на ките v2 — `F4-harness-v2-baseline.txt`.
-- **F5 Шаблоны** (`b9f026b`): `bin/check-budget --templates` → `BUDGET_OK` — `F5-templates-result.txt`.
-- **F6 Скиллы кита** (`2ca1760`): `bin/check-kit` → `KIT_OK` — `F6-kit-result.txt`.
-- **F7 Upgrade** (`c3757e7`): `bin/two-tier-upgrade --self-test` → `UPGRADE_OK` — `F7-upgrade-result.txt`.
-- **F8 Документы** (`b7fa66e`, fix `85e8931`): `bin/check-docs` → `DOCS_OK`, красная проба → `DOCS_FAIL` — `F8-docs-result.txt`.
-- **F9 Гейт**: `bin/gate-v3` → `F1 BUDGET_OK` … `F8 DOCS_OK`, `F9 GATE_OK` — `F9-gate-result.txt`.
-- **Фикс-раунд v3-1** (план `93f14f8`; `139d4cb`, `b7d64ef`, `92fdc86`):
-  - `bin/check-budget --self-test && bin/check-budget` → `BUDGET_OK`;
-  - `--self-test intent owner` → `INTENT_OK`, `OWNER_OK`, с красными фикстурами: не-ASCII путь, точка, запятая, скобка, `./`;
-  - `bin/two-tier-upgrade --self-test` → `UPGRADE_OK`, формы (а)–(г) и (д).
-- **Фикс-раунд v3-2** (план `36237e0`; `3c0c2fe`): `--self-test intent owner` → `OWNER_OK`, 90 красных и 30 зелёных фикстур END STATE; на правиле `f7ffa41` — `OWNER_FAIL`.
+- Шаг 0: `docs/PLAN-v3.1.md` (`19b0380`).
+- Шаг 0b (`a4b474d`): `git mv` evidence v3 → `docs/archive/evidence-v3/`, PROGRESS v3 → `docs/archive/PROGRESS-v3.md`.
+- **F1 Харнес ultracode**: `bin/check-harness` → `HARNESS_OK` — `F1-harness-result.txt`; `baseRef` `fresh` → `main-base`, `head` → `head-feature` — `F1-baseref-result.txt`.
+
+- **F2 Окружение = таблица**: `bin/check-harness` → `ENV_OK` на репо кита и на t3 — `F2-harness-result.txt`; `--self-test` — в `make ci`.
+- **F3 Хуки на агентах**: `bin/check-harness` → `HOOKS_OK` на репо и t3 — `F3-harness-result.txt`; «до» на хуках v3 → `HOOKS_FAIL` — `F3-harness-v3-baseline.txt`.
+- **F7 Владение: хвосты 3 и 5**: `bin/check-budget --self-test intent owner` → `OWNER_OK` (ok 280, BAD 0); красная проба на `rule_owner` из `8f1d232` → `OWNER_FAIL`, ok 170, BAD 101 — `F7-owner-result.txt`.
+- **F4 `/verify-phase`**: `bin/check-verify` → `VERIFY_OK` — `F4-verify-result.txt`: красная фикстура → `NEEDS_WORK`, дефект назван; чистая → `PASS`, блокирующих 0; `--limit 20` → `VERIFY_TIMEOUT`.
+- **F5 `/accept` v3.1**: `bin/check-kit` → `KIT_OK` — `F5-kit-result.txt`: вердикт — `bin/verify-phase` (свежий клон, `Workflow(verify-phase)`, 30 мин), скилл 1 999/4 000 знаков.
+- **F6 Шаблоны и CLAUDE.md**: `bin/check-budget --templates` → `BUDGET_OK` с контрактом фраз — `F6-templates-result.txt`; красная проба (шаблон PROCESS без `--effort ultracode`) → `BUDGET_FAIL`.
+- **F8 Документы**: `bin/check-docs` → `DOCS_OK` — `F8-docs-result.txt`: CHANGELOG v3.1 (поле — док, до, после), LAUNCH (каждый флаг строки), README и dev-system — ultracode и `/verify-phase`; красная проба → `DOCS_FAIL`.
+- **F9 Гейт v3.1**: `bin/gate-v3.1` → `F1 HARNESS_OK` … `F8 DOCS_OK`, `v3 GATE_OK`, `F9 GATE_OK` — `F9-gate-result.txt` (гейт свежего клона `e1cd97f`); F2, F3 — оттуда же.
+- **`/verify-phase` фазы**: `f3b4863` → `NEEDS_WORK` (1 блокирующая, фикс-ап `e1cd97f`); `e1cd97f` → `VERDICT: PASS` — `verify-e1cd97f.txt`.
 
 ## Next — один айтем
-1. **Повторная приёмка тимлида по v3-2** (строка выше). Чек: `bin/gate-v3` → `GATE_OK` из свежего клона ветки `v3`.
+1. **Приёмка тимлида v3.1**: свежий клон `origin/v3.1`, `bin/verify-phase` → `VERDICT: PASS`, `bin/gate-v3.1` → `GATE_OK`.
 
 ## Open stop — NONE
 
 ## Notes
-- PLAN-v3 и эта страница написаны в форме шаблонов v3 до F5: шаблоны пишет сам исполнитель, F5 их зафиксировал.
-- Пример шаблона в `--templates` — шаблон как есть: подставлены номер фазы, пин и Read first, плейсхолдеры `<…>` остаются.
-- «Вместе с CLAUDE.md» в бюджете Read first — корневой `CLAUDE.md`, если он есть (в репо кита его нет).
-- Список `claude.ai …` в `system/init` грузится в фоне: на ките v2 прогон 1 дал 0, прогон 2 — 5. Поэтому `check-harness` смотрит оба прогона пары.
-- Остальные развилки и расхождения с докой — 15 строк «Отклонения» в `docs/PLAN-v3.md`.
-- Фикс-раунд, F7:
-  - «пустой индекс» — `git diff --cached` пуст;
-  - «дерево как до запуска» — все файлы, включая неотслеживаемые и игнорируемые, и все каталоги, без `.git`.
-- Форма (в) — свой `budgets.json` без `defaults.progress_lines` и `plan_lines`: апгрейд отказывает с причиной, defaults кита не подставляет. Иначе `bin/check-budget` проекта после апгрейда всё равно красный.
-- Фикстура (д) — отказ `pre-commit` после старта. Формы (а)–(г) ловят предусловия, поэтому откат проверяет только она.
-- Если прежняя `kit-v3` есть, а проект на другой ветке, план и предусловия считаются на дереве `kit-v3`. При отказе — возврат на исходную ветку.
-- Красные пробы в F2 и F7 — гибрид во `/tmp/two-tier-v3/redprobe`: правило или `upgrade()` из `fe2f33f`, фикстуры из HEAD. Раунд 2 — `rule_owner` из `f7ffa41`.
-- Раунд 2: каталог тимлида без хвостового `/` (`docs/reviews` в прозе) — не красный. Находка называет запись как в списке, а голое слово `intent` в `--self-test intent owner` не должно быть путём.
+- Пробы `guards` и `agent` просят попытку вопреки CLAUDE.md: с правилом «по точным путям» (F6) агент сам не запускал `git add -A` — чек дал FAIL, не ложный PASS. Контрольный `-p` — таймаут 300 с: главная сессия однажды зависла после завершённого воркфлоу `kill-probe`, итог — по снятому потоку и файлам.
+- Хвост 3: lint коммитов берёт список владения на родителе коммита; на родителе нет `budgets.json` — кит ещё не стоял, файлов тимлида нет (коммит установки и апгрейда зелёные). Deny `Edit(/budgets.json)` в `.claude/launch.settings.json` репо — правка тимлида.
+- Риск 1 PLAN снят замером: `continue:false` kill-switch останавливает агента воркфлоу, `kill-switch.sh` не менялся. Проба требует попытки записи: агент, прочитавший CLAUDE.md, иначе останавливался сам.
+- Встроенные плагины `@builtin` (`cc-plugin-*`) в сверке не считаются: PROCESS называет их прозой, строки таблицы нет.
+- `permissions.allow` из `.claude/settings.json` в `-p` не действует (папка не доверена) — пара и `bin/verify-phase` передают те же правила `--allowedTools`; отклонение 3 PLAN.
 
 ## Named, not built
-- `defaults` в `budgets.json` проекта ни с чем не сверяются: «только ужесточать» проверяется для блока `project`. В репо кита две копии defaults сверяет `check-kit`; в проекте правку defaults видно только в диффе.
-- `two-tier-upgrade` на живом проекте (S6) — следующая фаза (SPEC-v3 §6). `intent/intent.template.md` v2 там остаётся тимлиду: путь под `intent/`.
-- Stop-хук `commit-on-stop` в паре прогонов не проявился (в копии нет отслеживаемых файлов); выведен по причине, а не по прогону.
+- Неблокирующие `/verify-phase` @ `f3b4863` (полный список — журнал PLAN): `refuse_sweeping` не ловит `git add -A` после перевода строки, `&`, `-fA`, `sudo`, `bash -c` (поведение v2); у `bin/gate-v3.1` нет негативного self-test; `table()` падает на PROCESS без `## Environment`; `id` таблицы чувствительны к регистру, «Да» ≠ «да»; апгрейд проекта v3.0 не вносит `budgets.json` в его `owner`; пути тимлида не нормализуются (`docs//`, `..`); каталоги прогонов во `/tmp/two-tier-v3` копятся.
+- `fix-until-green.js` — Q4, по замеру на ретро v3.1.

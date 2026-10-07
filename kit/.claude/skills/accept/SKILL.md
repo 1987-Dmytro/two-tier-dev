@@ -1,12 +1,12 @@
 ---
 name: accept
-description: "Приёмка фазы: факты (дифф, evidence, бюджеты, CI), свежий evaluator по REVIEW.md, вердикт в docs/evidence/accept-<sha>.txt. Вызывает тимлид или оператор."
+description: "Приёмка фазы: факты (дифф, evidence, бюджеты, CI), вердикт — сохранённый воркфлоу /verify-phase в свежем claude -p из свежего клона, лимит 30 мин, отчёт в docs/evidence/verify-<sha>.txt. Вызывает тимлид или оператор."
 disable-model-invocation: true
 ---
 
-# /accept [<база>] — приёмка свежим evaluator'ом
+# /accept [<база>] — приёмка воркфлоу /verify-phase
 
-Исполнитель себя не принимает: вердикт выносит субагент `evaluator` (`.claude/agents/evaluator.md`, без Write и Edit), свежий на каждой приёмке — новый вызов, не продолжение прошлого. STATUS ведёт тимлид; этот скилл его не пишет.
+Исполнитель себя не принимает: вердикт выносит сохранённый воркфлоу `/verify-phase` (`.claude/workflows/verify-phase.js`) в свежем `claude -p` из свежего клона запушенного HEAD. По каждой фиче SPEC — свежий прогон её чека, пограничные случаи против «готово» и мутация в продукте; проверяющие — `claude-sonnet-5-5`, судья — `claude-opus-5-5`. STATUS ведёт тимлид; этот скилл его не пишет.
 
 ## 1. Факты — в транскрипт
 База — аргумент (`$ARGUMENTS`), иначе `git merge-base main HEAD`.
@@ -20,14 +20,16 @@ bin/check-budget
 bin/check-ci "$(git branch --show-current)"
 ```
 
-Чек без файла evidence или без маркера в нём — первая находка, ещё до evaluator'а.
+Чек без файла evidence или без маркера в нём — первая находка, ещё до воркфлоу.
 
-## 2. Evaluator
-Субагент типа `evaluator`, задача дословно:
+## 2. Вердикт — `/verify-phase`
+```bash
+bin/verify-phase   # свежий клон, гейт фазы, claude -p с allow Workflow(verify-phase), лимит 30 мин (1800 с)
+```
 
-> Прими фазу: дифф `<BASE>..HEAD` против `docs/SPEC-<n>.md` и `docs/PLAN-<n>.md` по `REVIEW.md`. Открой каждый `docs/evidence/*-result.txt` и смотри, что он напечатал, а не что обещает имя. Первым словом — `PASS` или `NEEDS_WORK` отдельной строкой; дальше находки по формату `REVIEW.md`: блокирующих не больше пяти, остальное — `Named, not built`.
+Лаунчер пишет отчёт в `docs/evidence/verify-<SHA>.txt`. Первая строка — `VERDICT: PASS` или `VERDICT: NEEDS_WORK`; блокирующих не больше пяти по `REVIEW.md`, остальное — `Named, not built`. Лимит истёк — `VERIFY_TIMEOUT`, вердикта нет: это находка «приёмка не уложилась в 30 мин». Воркфлоу недоступен — свежий субагент `evaluator` по `REVIEW.md`, вердикт — в `docs/evidence/accept-<SHA>.txt`.
 
-## 3. Вердикт
-Ответ evaluator'а дословно — в `docs/evidence/accept-<SHA>.txt`, первой строкой `база <BASE> · HEAD <SHA>`. Затем `git add docs/evidence/accept-<SHA>.txt && git commit -m "accept: <вердикт> <SHA>"`. На `NEEDS_WORK` в этой сессии ничего не чинить: блокирующие находки — вход следующего `/goal`.
+## 3. Коммит
+`git add docs/evidence/verify-<SHA>.txt && git commit -m "accept: <вердикт> <SHA>"`, затем push ветки. На `NEEDS_WORK` в этой сессии ничего не чинить: блокирующие находки — вход следующего `/goal`.
 
 Оператору — три строки: вердикт · чем доказано (файлы) · что дальше.

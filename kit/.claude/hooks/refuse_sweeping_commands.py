@@ -53,7 +53,7 @@ def check_segment(segment: str) -> None:
         if rest and rest[0] in ("add", "stage"):
             args = rest[1:]
             if not args or any(a in STAGE_SWEEPS or a.startswith(":/") for a in args):
-                refuse("stage BY PATH (git add <file>...), never the whole tree — CLAUDE.md Rules")
+                refuse("stage BY PATH (git add <file>...), never the whole tree: a commit carries the exact paths it changes")
     elif head == "make":
         if "fmt" in toks[1:]:
             refuse("repo-wide format is forbidden (producer pins) — ruff format <the one file you touched>")
