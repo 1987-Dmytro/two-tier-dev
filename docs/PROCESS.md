@@ -1,7 +1,7 @@
 # PROCESS — two-tier-dev — механика проекта (файл тимлида; исполнитель читает и не правит)
 
 ## Environment
-Базовый набор оператора — всегда; сверх него инструмент входит только под названную фичу или чек. Таблица — источник для `.claude/launch.settings.json` и строки запуска ниже; сверка — `bin/check-harness` по `system/init` (с v3.1, F2). Замер тимлида 07.10 строкой ниже: MCP — только `context7` (connected); плагины — ponytail, pyright-lsp, pr-review-toolkit и встроенные `cc-plugin-*`; скиллов Cowork — 0; режим `auto`.
+Базовый набор оператора — всегда; сверх него инструмент входит только под названную фичу или чек. Таблица — источник для `.claude/launch.settings.json` и строки запуска ниже; сверка — `bin/check-harness` по `system/init` (с v3.1, F2). Замер тимлида 07.10 строкой ниже: MCP — только `context7` (connected); плагины — ponytail, pyright-lsp, pr-review-toolkit и встроенные `cc-plugin-*`; скиллов Cowork — 0; режим `auto`. Встроенные MCP (`claude-in-chrome`, `computer-use`) в `-p` не грузятся и в `system/init` не видны: их держат строки таблицы — флаг `--no-chrome` в строке запуска сверяет `check-harness`, `/mcp` смотрит оператор на гейте.
 
 | инструмент | форма | id | вкл | фича или чек | установка | удаление |
 |---|---|---|---|---|---|---|
@@ -24,12 +24,15 @@
 | скиллы Cowork | скилл | `anthropic-skills:*` — 20, поимённо в `.claude/launch.settings.json` | нет | скиллы тимлида и Cowork исполнителю не нужны | — | — |
 | ref, blockscout | MCP | `ref`, `blockscout` | нет | вне таблицы; blockscout — по задаче (DeFi) | — | — |
 | коннекторы claude.ai | MCP | `claude.ai …` | нет | почта, диск, календарь | — | — |
+| Claude in Chrome | MCP | `claude-in-chrome` | нет | встроенный MCP: настоящий Chrome оператора с его входами; в `-p` не грузится, в сессии — при «Enabled by default» у оператора (гейт v3.1, `/mcp`: 22 инструмента) | — | флаг ниже |
+| без Chrome | флаг | `--no-chrome` | да | выключает встроенный `claude-in-chrome` в сессии исполнителя (cli-reference) | строка запуска | — |
+| computer-use | MCP | `computer-use` | нет | встроенный MCP: экран и приложения Mac оператора; по умолчанию выключен (`○` в `/mcp`) | — | — |
 
 ## Строка запуска исполнителя — фаза v3.1
 Из корня репо, после `mkdir -p /tmp/two-tier-v3`:
 
 ```sh
-ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3
+ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3
 ```
 
 Затем `/goal ` и текст `docs/GOAL.txt` целиком. Зачем каждый флаг — `docs/LAUNCH.md`.
