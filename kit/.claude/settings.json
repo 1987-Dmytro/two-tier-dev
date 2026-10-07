@@ -2,8 +2,10 @@
   "model": "claude-opus-5-5",
   "autoMemoryEnabled": false,
   "disableClaudeAiConnectors": true,
-  "workflowSizeGuideline": "small",
+  "worktree": { "baseRef": "head" },
+  "workflowSizeGuideline": "medium",
   "permissions": {
+    "allow": ["Bash(bin/check-*)", "Bash(bin/gate-*)", "Bash(make ci)"],
     "deny": [
       "Edit(/intent/**)",
       "Edit(/docs/SPEC-*.md)",

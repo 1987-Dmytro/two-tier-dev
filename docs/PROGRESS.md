@@ -5,14 +5,16 @@
 
 ## Done
 - Шаг 0: `docs/PLAN-v3.1.md` (`19b0380`).
-- Шаг 0b: `git mv` evidence v3 → `docs/archive/evidence-v3/`, PROGRESS v3 → `docs/archive/PROGRESS-v3.md`.
+- Шаг 0b (`a4b474d`): `git mv` evidence v3 → `docs/archive/evidence-v3/`, PROGRESS v3 → `docs/archive/PROGRESS-v3.md`.
+- **F1 Харнес ultracode**: `bin/check-harness` → `HARNESS_OK` — `F1-harness-result.txt`; `baseRef` `fresh` → `main-base`, `head` → `head-feature` — `F1-baseref-result.txt`.
 
 ## Next — один айтем
-1. **F1 Харнес ultracode**: `bin/check-harness` → `HARNESS_OK`.
+1. **F2 Окружение = таблица**: `bin/check-harness` → `ENV_OK`.
 
 ## Open stop — NONE
 
 ## Notes
+- `permissions.allow` из `.claude/settings.json` в `-p` не действует (папка не доверена) — пара и `bin/verify-phase` передают те же правила `--allowedTools`; отклонение 3 PLAN.
 
 ## Named, not built
 - `fix-until-green.js` — Q4, по замеру на ретро v3.1.

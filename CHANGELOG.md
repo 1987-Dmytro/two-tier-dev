@@ -12,6 +12,17 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
   by model-config) instead of `ultracode` in settings.
 - Living projects move to v3 by `bin/two-tier-upgrade` in the next phase (SPEC-v3 §6); the kit's S6 is measured there.
 
+## v3.1 — 2026-10-07 — ultracode in full: the executor's standard mode, its environment equal to a table, hooks proven on workflow agents, acceptance by a saved workflow
+- **Harness fields** — the doc, and the same control pair (`bin/check-harness`, `docs/LAUNCH.md`) before, on kit v3
+  (`docs/archive/evidence-v3/F4-harness-result.txt`, `main` @ `7957d68`), and after, on v3.1 (`docs/evidence/F1-harness-result.txt`):
+
+| field | v3 → v3.1 | doc | before (v3) | after (v3.1) |
+|---|---|---|---|---|
+| `worktree.baseRef` | not set (`fresh`) → `"head"` | [settings-reference](https://code.claude.com/docs/en/settings-reference#worktree-baseref), [worktrees](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) | a workflow agent with `isolation: 'worktree'` read `main-base` — the tree of `origin/main`, not the branch (`docs/evidence/F1-baseref-result.txt`) | the same agent read `head-feature` — the branch HEAD with its unpushed commit |
+| `workflowSizeGuideline` | `small` → `medium` | [settings-reference](https://code.claude.com/docs/en/settings-reference#workflowsizeguideline), [workflows](https://code.claude.com/docs/en/workflows#set-a-size-guideline) | advice: fewer than 5 agents | advice: fewer than 10 agents (D4); not visible in the pair — advice to the model, not a cap; `claude doctor` 0 settings errors |
+| `permissions.allow` | none → `Bash(bin/check-*)`, `Bash(bin/gate-*)`, `Bash(make ci)` | [permissions](https://code.claude.com/docs/en/permissions#wildcard-patterns), [workspace trust](https://code.claude.com/docs/en/permissions#project-allow-rules-and-workspace-trust) | run `allow` under `dontAsk`: `bin/check-ci` denied; under `-p` even an exact rule in `.claude/settings.json` is denied — the folder is never trusted | the kit's rules passed with `--allowedTools`: `bin/check-ci` runs, `bin/two-tier-upgrade --help` denied; the executor's interactive session applies them after the trust dialog |
+| launch line `--effort` | `medium` in `docs/LAUNCH.md` → `ultracode` in the PROCESS launch line | [model-config](https://code.claude.com/docs/en/model-config#adjust-effort-level), [workflows](https://code.claude.com/docs/en/workflows#let-claude-decide-with-ultracode) | run1 and run2 green with `--effort medium` | run1, run2, `allow` green with `--effort ultracode`; `system/init` carries no effort or ultracode field — the flag row of the Environment table proves it |
+
 ## v3.0 — 2026-10-06 — budgets enforced by code, the result instead of the path, the harness from the official docs, a living intent pinned in the SPEC
 - **Budgets:** `bin/check-budget` + `budgets.json` (kit defaults; a project may only tighten) — skills, CLAUDE.md, the
   intent, SPEC feature lines and pin, open-question markers, PROGRESS, PLAN, GOAL, reviews, ownership of team-lead

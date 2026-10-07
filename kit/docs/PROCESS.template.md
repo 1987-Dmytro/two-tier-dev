@@ -13,6 +13,15 @@
 
 Коннекторы claude.ai (почта, диск, календарь) исполнителю не оставляются: `disableClaudeAiConnectors` в `.claude/settings.json`, проверка — `bin/check-harness`.
 
+## Строка запуска исполнителя — фаза <n>
+Пишет тимлид по таблице Environment; из корня проекта. Зачем каждый флаг — `docs/LAUNCH.md`; `bin/check-harness` гоняет пару этой строкой.
+
+```sh
+ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}'
+```
+
+Затем `/goal ` и текст `docs/GOAL.txt` целиком.
+
 ## Деньги
 1. **Потолок проекта:** <€> — слово оператора и константа предохранителя.
 2. **Лимит вендора:** <где выставлен, сколько>; проверен на экране до первого платного вызова.

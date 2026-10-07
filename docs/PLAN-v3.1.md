@@ -72,7 +72,7 @@
 ## Отклонения от SPEC и документации
 1. Ultracode в `system/init` не виден: полей effort и ultracode там нет. F1 доказывает его строкой таблицы «флаг» и флагом в строке, а не `system/init`.
 2. Пара идёт без `--setting-sources project,local`: иначе плагины пользователя не грузятся, и `system/init` не равен окружению исполнителя (замер тимлида 07.10 — без него).
-3. Allow-правила доказаны прогоном под `dontAsk`: в `auto` классификатор не различает «правило» и «одобрил сам» (permission-modes, порядок решений).
+3. Allow-правила доказаны прогоном под `dontAsk`: в `auto` классификатор не различает «правило» и «одобрил сам» (permission-modes). В `-p` папка не доверена, и `permissions.allow` из `.claude/settings.json` не применяется (permissions, «What runs before you trust a folder»; замер 07.10: точное `Bash(bin/check-ci)` — отказ). Поэтому прогон `allow` передаёт те же правила через `--allowedTools`. У исполнителя в интерактивной сессии они действуют после диалога доверия.
 4. Встроенные плагины `@builtin` (`cc-plugin-*`) в сверке плагинов не считаются: пользователь ими не управляет, PROCESS называет их прозой.
 5. Вердикт `/verify-phase` лаунчер берёт из `task_notification.output_file`. Поле документировано (agent-sdk/typescript), формат JSON `{result, workflowProgress}` — замер 07.10.
 6. Сам скрипт файлов не трогает и `Date.now()` не зовёт (workflows). Поэтому лимит 30 мин, свежий клон, гейт и запись `verify-<sha>.txt` — у лаунчера `bin/verify-phase`. Вердикт считает скрипт: `PASS` ⇔ блокирующих 0.

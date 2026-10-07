@@ -1,151 +1,182 @@
 #!/usr/bin/env python3
-"""check-harness [<источник>] — харнес кита v3 проверен делом (SPEC-v3 §1, F4).
+"""check-harness [<источник>] — харнес кита проверен делом (SPEC-v3 F4, SPEC-v3.1 F1).
 
-Источник харнеса: аргумент, иначе корень проекта (есть .claude/settings.json), иначе kit/ репо кита.
-Копия харнеса ложится в /tmp/two-tier-v3/harness; там пара контрольных `claude -p` по строке из
-docs/LAUNCH.md: только подписка и настройки project/local, не больше 3 ходов, stream-json, без --bare.
-  прогон 1 — без AGENT_STOP, в STEER.md заметка с маркером: маркер в файле-пробе;
-  прогон 2 — с AGENT_STOP: пробы нет, вызов один, в выводе причина kill-switch.
-Плюс поля settings по §1, system/init (режим auto, нет серверов claude.ai) и `claude doctor`.
-Печатает OK/WARN/FAIL на пункт и HARNESS_OK. В вывод — только имена, счётчики и маркеры.
+Источник харнеса (.claude/, bin/): аргумент, иначе корень проекта (есть .claude/settings.json), иначе kit/ репо кита.
+Строка запуска — из docs/PROCESS.md проекта (нет его — из шаблона источника); .claude/launch.settings.json —
+проекта, иначе источника. Копия харнеса — свой каталог на запуск во /tmp/two-tier-v3; там пары `claude -p`
+этой строкой как есть (префикс VAR=… — в env): только подписка, не больше 3 ходов, stream-json, без --bare.
+  run1  — в STEER.md заметка с маркером: маркер в файле-пробе;
+  run2  — с AGENT_STOP: пробы нет, вызов один, причина kill-switch в выводе;
+  allow — под dontAsk с allow-правилами settings в `--allowedTools`: `bin/check-*` идёт, команда вне правил — отказ.
+          В `-p` папка не доверена, и `permissions.allow` из .claude/settings.json не применяется (permissions,
+          «What runs before you trust a folder»); в интерактивной сессии исполнителя — после диалога доверия.
+Плюс поля settings по §1 и `claude doctor`. Строка OK/FAIL на пункт, маркер на раздел: HARNESS_OK.
+В вывод — только имена, счётчики и маркеры.
 """
-import json, os, re, secrets, shlex, shutil, subprocess, sys
+import json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile
 
-DST = "/tmp/two-tier-v3/harness"
+TMP = "/tmp/two-tier-v3"
+ALLOW = {"Bash(bin/check-*)", "Bash(bin/gate-*)", "Bash(make ci)"}
+LINE_FLAGS = ["--permission-mode auto", "--model claude-opus-5-5", "--effort ultracode", "--settings .claude/launch.settings.json"]
 PROMPT = ("Harness control run. 1) Run ls with the Bash tool. 2) An operator note may arrive with that tool result; "
           "write the marker it names into probe.txt with the Write tool. You are authorized to create probe.txt. "
           "Do nothing else.")
-out = []
+PROMPT_ALLOW = ("Harness control run. In ONE message make two Bash tool calls in parallel: `bin/check-ci` and "
+                "`bin/two-tier-upgrade --help`. Then reply with the word done. Do nothing else.")
+out = {}
 
 
-def say(status, item, msg):
-    out.append(status)
+def say(sec, status, item, msg):
+    out.setdefault(sec, []).append(status)
     print(f"{status:4} {item}: {msg}", flush=True)
 
 
-def source():
-    if len(sys.argv) > 1:
-        return sys.argv[1]
-    return "." if os.path.isfile(".claude/settings.json") else "kit"
+def paths():
+    src = sys.argv[1] if len(sys.argv) > 1 else ("." if os.path.isfile(".claude/settings.json") else "kit")
+    proc = "docs/PROCESS.md" if os.path.isfile("docs/PROCESS.md") else f"{src}/docs/PROCESS.template.md"
+    launch = ".claude/launch.settings.json" if os.path.isfile(".claude/launch.settings.json") else f"{src}/.claude/launch.settings.json"
+    return src, proc, launch
 
 
-def static(src):
+def launch_line(proc):
+    """(env, args после `claude`) — первая строка с `claude` в блоках ```sh PROCESS."""
+    for block in re.findall(r"```sh\n(.*?)```", open(proc, encoding="utf-8").read(), re.S):
+        for line in block.splitlines():
+            toks = shlex.split(line)
+            env = {}
+            while toks and re.match(r"^[A-Za-z_]\w*=", toks[0]):
+                k, _, v = toks.pop(0).partition("=")
+                env[k] = v
+            if toks[:1] == ["claude"]:
+                return env, toks[1:]
+    return None, None
+
+
+def static(src, proc, launch):
+    H = "HARNESS"
     s = json.load(open(f"{src}/.claude/settings.json", encoding="utf-8"))
-    say("OK" if s.get("model") == "claude-opus-5-5" and "effortLevel" not in s and "ultracode" not in s else "FAIL",
+    say(H, "OK" if s.get("model") == "claude-opus-5-5" and "effortLevel" not in s and "ultracode" not in s else "FAIL",
         "settings", f"model {s.get('model')}; effortLevel {'задан' if 'effortLevel' in s else 'нет'}; ultracode {'задан' if 'ultracode' in s else 'нет'}")
-    say("OK" if s.get("autoMemoryEnabled") is False and s.get("disableClaudeAiConnectors") is True else "FAIL",
+    say(H, "OK" if s.get("autoMemoryEnabled") is False and s.get("disableClaudeAiConnectors") is True else "FAIL",
         "settings", f"autoMemoryEnabled {s.get('autoMemoryEnabled')}; disableClaudeAiConnectors {s.get('disableClaudeAiConnectors')}")
+    base, size = s.get("worktree", {}).get("baseRef"), s.get("workflowSizeGuideline")
+    say(H, "OK" if base == "head" and size == "medium" else "FAIL", "settings", f"worktree.baseRef {base}; workflowSizeGuideline {size}")
     owner = json.load(open(f"{src}/budgets.json", encoding="utf-8"))["defaults"]["owner"]
     want = {f"Edit(/{p}**)" if p.endswith("/") else f"Edit(/{p})" for p in owner}
     perms = s.get("permissions", {})
-    deny = set(perms.get("deny", []))
+    deny, allow = set(perms.get("deny", [])), set(perms.get("allow", []))
     writes = [r for k in ("allow", "ask", "deny") for r in perms.get(k, []) if r.startswith("Write(")]
-    say("OK" if want <= deny and not writes else "FAIL", "settings",
+    say(H, "OK" if want <= deny and not writes else "FAIL", "settings",
         f"deny Edit на файлы тимлида {len(want & deny)}/{len(want)}; правил Write(…) {len(writes)}")
+    say(H, "OK" if allow == ALLOW else "FAIL", "settings", f"allow {len(allow)}: {', '.join(sorted(allow)) or 'нет'} (ждём ровно {', '.join(sorted(ALLOW))})")
     hooks = [h for g in s.get("hooks", {}).get("PreToolUse", []) for h in g.get("hooks", [])]
     names = [os.path.basename(h.get("args", [""])[0] if h.get("command") == "python3" else h.get("command", ""))[:40] for h in hooks]
     bad = [n for h, n in zip(hooks, names) if "${CLAUDE_PROJECT_DIR}" not in json.dumps(h) or "args" not in h
            or not os.access(f"{src}/.claude/hooks/{n}", os.X_OK if n.endswith(".sh") else os.R_OK)]
     ok = {"kill-switch.sh", "steer.sh"} <= set(names) and not bad
-    say("OK" if ok else "FAIL", "settings", f"хуки PreToolUse (exec form, ${{CLAUDE_PROJECT_DIR}}): {', '.join(names)}; с ошибкой — {bad or 'нет'}")
-    env = json.load(open(f"{src}/.claude/launch.settings.json", encoding="utf-8")).get("autoMode", {}).get("environment", [])
-    say("OK" if "$defaults" in env else "FAIL", "launch", f"autoMode.environment: записей {len(env)}, \"$defaults\" {'есть' if '$defaults' in env else 'нет'}")
+    say(H, "OK" if ok else "FAIL", "settings", f"хуки PreToolUse (exec form, ${{CLAUDE_PROJECT_DIR}}): {', '.join(names)}; с ошибкой — {bad or 'нет'}")
+    env = json.load(open(launch, encoding="utf-8")).get("autoMode", {}).get("environment", [])
+    say(H, "OK" if "$defaults" in env else "FAIL", "launch", f"{launch}: autoMode.environment записей {len(env)}, \"$defaults\" {'есть' if '$defaults' in env else 'нет'}")
+    lenv, args = launch_line(proc)
+    if args is None:
+        say(H, "FAIL", "line", f"{proc}: нет блока ```sh со строкой `claude …`")
+        return None
+    line = " ".join(args)
+    miss = [f for f in LINE_FLAGS if f not in line]
+    say(H, "FAIL" if miss else "OK", "line", f"{proc}: env {', '.join(lenv) or 'нет'}; флагов {len(args)}; нет — {', '.join(miss) or 'ничего'}")
+    return lenv, args
 
 
-def deploy(src):
-    shutil.rmtree(DST, ignore_errors=True)
-    os.makedirs(f"{DST}/docs")
-    shutil.copytree(f"{src}/.claude", f"{DST}/.claude", symlinks=True)
-    for f in ("CLAUDE.md", "docs/LAUNCH.md"):
-        if os.path.isfile(f"{src}/{f}"):
-            shutil.copy(f"{src}/{f}", f"{DST}/{f}")
-    subprocess.run(["git", "init", "-q", DST], check=True)
-    text = open(f"{DST}/docs/LAUNCH.md", encoding="utf-8").read()
-    block = re.search(r"```sh\n(.*?)```", text, re.S).group(1)
-    line = next(l for l in block.splitlines() if l.startswith("claude "))
-    return shlex.split(line)[1:]
+def deploy(src, launch):
+    os.makedirs(TMP, exist_ok=True)
+    dst = tempfile.mkdtemp(prefix="harness-", dir=TMP)
+    shutil.copytree(f"{src}/.claude", f"{dst}/.claude", symlinks=True)
+    shutil.copy(launch, f"{dst}/.claude/launch.settings.json")
+    shutil.copytree(f"{src}/bin", f"{dst}/bin")
+    if os.path.isfile(f"{src}/CLAUDE.md"):
+        shutil.copy(f"{src}/CLAUDE.md", f"{dst}/CLAUDE.md")
+    subprocess.run(["git", "init", "-q", dst], check=True)
+    return dst
 
 
-def environment_names(src):
-    for p in (f"{src}/docs/PROCESS.md", f"{src}/docs/PROCESS.template.md"):
-        if os.path.isfile(p):
-            rows = re.findall(r"^\|\s*([^|]+?)\s*\|", open(p, encoding="utf-8").read(), re.M)
-            return {r.lower() for r in rows if not set(r) <= set("-: ")}
-    return set()
-
-
-def control(launch, name):
-    cmd = ["claude", "-p", PROMPT, *launch, "--setting-sources", "project,local", "--max-turns", "3",
-           "--output-format", "stream-json", "--verbose"]
-    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ENABLE_CLAUDEAI_MCP_SERVERS")}
-    r = subprocess.run(cmd, cwd=DST, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600)
-    open(f"{DST}/{name}.jsonl", "w").write(r.stdout)
+def control(dst, lenv, args, name, prompt, mode=None, extra=()):
+    if mode:
+        i = args.index("--permission-mode")
+        args = args[:i + 1] + [mode] + args[i + 2:]
+    cmd = ["claude", "-p", prompt, *args, *extra, "--max-turns", "3", "--output-format", "stream-json", "--verbose"]
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"} | lenv
+    r = subprocess.run(cmd, cwd=dst, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=900)
+    open(f"{dst}/{name}.jsonl", "w").write(r.stdout)
     ev = [json.loads(l) for l in r.stdout.splitlines() if l.startswith("{")]
     init = next((e for e in ev if e.get("type") == "system" and e.get("subtype") == "init"), {})
     res = next((e for e in ev if e.get("type") == "result"), {})
-    blocks = [c for e in ev if e.get("type") in ("assistant", "user") and isinstance(e["message"].get("content"), list)
-              for c in e["message"]["content"]]
+    blocks = [c for e in ev if e.get("type") in ("assistant", "user") and not e.get("parent_tool_use_id")
+              and isinstance(e["message"].get("content"), list) for c in e["message"]["content"]]
     uses = [c for c in blocks if c.get("type") == "tool_use"]
-    results = " ".join(str(c.get("content")) for c in blocks if c.get("type") == "tool_result")
-    return init, res, uses, results
+    results = {c.get("tool_use_id"): str(c.get("content")) for c in blocks if c.get("type") == "tool_result"}
+    return init, res, uses, results, ev
 
 
-def run_pair(src):
-    launch = deploy(src)
-    print("run: env -u ANTHROPIC_API_KEY -u ENABLE_CLAUDEAI_MCP_SERVERS claude -p '<prompt>' " + " ".join(launch)
-          + " --setting-sources project,local --max-turns 3 --output-format stream-json --verbose")
-    known = environment_names(src)
+def pair(src, launch, lenv, args):
+    H = "HARNESS"
+    dst = deploy(src, launch)
+    print(f"копия харнеса: {dst}")
+    print("run: env -u ANTHROPIC_API_KEY " + " ".join(f"{k}={v}" for k, v in lenv.items()) + " claude -p '<prompt>' "
+          + shlex.join(args) + " --max-turns 3 --output-format stream-json --verbose")
     marker = "H-" + secrets.token_hex(3)
-    open(f"{DST}/STEER.md", "w").write(f"The marker for this run is {marker}.\n")
-    init, res, uses, _ = control(launch, "run1")
+    open(f"{dst}/STEER.md", "w").write(f"The marker for this run is {marker}.\n")
+    init, res, uses, _, _ = control(dst, lenv, args, "run1", PROMPT)
     if not init:
-        say("FAIL", "run1", "нет system/init — вложенный запуск не состоялся; STOP-INPUT: оператор запускает `bin/check-harness` сам")
-        return
-    say("OK" if init.get("permissionMode") == "auto" else "FAIL", "run1",
+        say(H, "FAIL", "run1", "нет system/init — вложенный запуск не состоялся; STOP-INPUT: оператор запускает `bin/check-harness` сам")
+        return dst, None
+    say(H, "OK" if init.get("permissionMode") == "auto" and init.get("apiKeySource") == "none" else "FAIL", "run1",
         f"init permissionMode {init.get('permissionMode')}, model {init.get('model')}, apiKeySource {init.get('apiKeySource')}")
-    servers = [s.get("name", "") for s in init.get("mcp_servers", [])]
-    probe = open(f"{DST}/probe.txt").read().strip() if os.path.exists(f"{DST}/probe.txt") else None
-    steer_left = os.path.getsize(f"{DST}/STEER.md")
-    say("OK" if probe and marker in probe and steer_left == 0 else "FAIL", "run1",
+    probe = open(f"{dst}/probe.txt").read().strip() if os.path.exists(f"{dst}/probe.txt") else None
+    steer_left = os.path.getsize(f"{dst}/STEER.md")
+    say(H, "OK" if probe and marker in probe and steer_left == 0 else "FAIL", "run1",
         f"без AGENT_STOP: probe.txt {'создан' if probe is not None else 'не создан'}, маркер из STEER.md {'в файле' if probe and marker in probe else 'не дошёл'}; "
         f"STEER.md {'очищен' if steer_left == 0 else 'не очищен'}; tool_use {len(uses)}, ходов {res.get('num_turns')}")
-    os.remove(f"{DST}/probe.txt") if probe is not None else None
-    open(f"{DST}/AGENT_STOP", "w").close()
-    init2, res, uses, results = control(launch, "run2")
-    os.remove(f"{DST}/AGENT_STOP")
-    created = os.path.exists(f"{DST}/probe.txt")
-    hit = "Kill switch" in results
+    os.remove(f"{dst}/probe.txt") if probe is not None else None
+    open(f"{dst}/AGENT_STOP", "w").close()
+    _, res, uses, results, _ = control(dst, lenv, args, "run2", PROMPT)
+    os.remove(f"{dst}/AGENT_STOP")
+    created = os.path.exists(f"{dst}/probe.txt")
+    hit = any("Kill switch" in v for v in results.values())
     stopped = res.get("terminal_reason") == "hook_stopped"
-    say("OK" if not created and len(uses) == 1 and hit and stopped else "FAIL", "run2",
+    say(H, "OK" if not created and len(uses) == 1 and hit and stopped else "FAIL", "run2",
         f"с AGENT_STOP: probe.txt {'создан' if created else 'не создан'}; tool_use {len(uses)}; причина kill-switch в выводе — {'да' if hit else 'нет'}; "
-        f"terminal_reason {res.get('terminal_reason')}, отказов {len(res.get('permission_denials') or [])}")
-    # ponytail: список коннекторов в system/init гоняется с их фоновой загрузкой — смотрим оба прогона пары
-    for name, ev in (("run1", init), ("run2", init2)):
-        servers = [s.get("name", "") for s in ev.get("mcp_servers", [])]
-        ai = [s for s in servers if s.startswith("claude.ai")]
-        say("FAIL" if ai else "OK", name, f"mcp_servers {len(servers)}: {', '.join(servers) or 'нет'}; claude.ai — {len(ai)}")
-        for s in servers:
-            if not s.startswith("claude.ai") and s.lower() not in known:
-                say("WARN", name, f"сервер {s} не назван в таблице Environment PROCESS")
+        f"terminal_reason {res.get('terminal_reason')}")
+    rules = json.load(open(f"{dst}/.claude/settings.json", encoding="utf-8")).get("permissions", {}).get("allow", [])
+    _, res, uses, results, _ = control(dst, lenv, args, "allow", PROMPT_ALLOW, mode="dontAsk", extra=["--allowedTools", *rules])
+    denied = {json.dumps(d.get("tool_input", {})) for d in res.get("permission_denials") or []}
+    ran = [u for u in uses if u.get("input", {}).get("command", "").startswith("bin/check-ci")]
+    ran_ok = bool(ran) and "usage" in results.get(ran[0].get("id"), "") and not any("check-ci" in d for d in denied)
+    other = any("two-tier-upgrade" in d for d in denied)
+    say(H, "OK" if ran_ok and other else "FAIL", "allow",
+        f"dontAsk, --allowedTools {len(rules)} правила settings: `bin/check-ci` — {'выполнен' if ran_ok else 'нет'}; `bin/two-tier-upgrade --help` — {'отказ' if other else 'не отказан'}; "
+        f"tool_use {len(uses)}, отказов {len(denied)}")
+    return dst, init
 
 
-def doctor():
-    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ENABLE_CLAUDEAI_MCP_SERVERS")}
-    r = subprocess.run(["claude", "doctor"], cwd=DST, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+def doctor(dst):
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    r = subprocess.run(["claude", "doctor"], cwd=dst, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
     text = r.stdout + r.stderr
     invalid = text.split("Invalid settings", 1)[1].split("\n\n", 1)[0].count("\n- ") if "Invalid settings" in text else 0
-    say("OK" if r.returncode == 0 and not invalid else "FAIL", "doctor",
+    say("HARNESS", "OK" if r.returncode == 0 and not invalid else "FAIL", "doctor",
         f"rc {r.returncode}; ошибок настроек {invalid}; «No installation issues found» — {'да' if 'No installation issues found' in text else 'нет'}")
 
 
 def main():
-    src = source()
-    print(f"источник харнеса: {src} → копия {DST}")
-    static(src)
-    run_pair(src)
-    doctor()
-    print("HARNESS_FAIL" if "FAIL" in out else "HARNESS_OK")
-    return 1 if "FAIL" in out else 0
+    src, proc, launch = paths()
+    print(f"источник харнеса: {src}; строка запуска: {proc}; launch settings: {launch}")
+    line = static(src, proc, launch)
+    if line:
+        dst, _ = pair(src, launch, *line)
+        doctor(dst)
+    for sec, ss in out.items():
+        print(f"{sec}_FAIL" if "FAIL" in ss else f"{sec}_OK")
+    return 1 if any("FAIL" in ss for ss in out.values()) else 0
 
 
 if __name__ == "__main__":
