@@ -1,0 +1,231 @@
+ok  size · team_lead_copy_lines: ждали OK, получили OK
+ok  size · team_lead_copy_lines+1: ждали FAIL, получили FAIL
+ok  size · team_lead_copy_chars: ждали OK, получили OK
+ok  size · team_lead_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · brief_copy_lines: ждали OK, получили OK
+ok  size · brief_copy_lines+1: ждали FAIL, получили FAIL
+ok  size · brief_copy_chars: ждали OK, получили OK
+ok  size · brief_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · role_copy_chars: ждали OK, получили OK
+ok  size · role_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · grilling_copy_chars: ждали OK, получили OK
+ok  size · grilling_copy_chars+1: ждали FAIL, получили FAIL
+ok  size · skill_chars: ждали OK, получили OK
+ok  size · skill_chars+1: ждали FAIL, получили FAIL
+ok  size · claude_md_lines: ждали OK, получили OK
+ok  size · claude_md_lines+1: ждали FAIL, получили FAIL
+ok  size · intent_chars: ждали OK, получили OK
+ok  size · intent_chars+1: ждали WARN, получили WARN
+ok  size · progress_lines: ждали OK, получили OK
+ok  size · progress_lines+1: ждали FAIL, получили FAIL
+SIZE_OK
+ok  dollar · скилл без $ с цифрой: ждали OK, получили OK
+ok  dollar · скилл с $0: ждали FAIL, получили FAIL
+ok  dollar · копия тимлида с $5: ждали FAIL, получили FAIL
+DOLLAR_OK
+ok  goal · goal_chars: ждали OK, получили OK
+ok  goal · goal_chars+1: ждали FAIL, получили FAIL
+ok  goal · read_first_files: ждали OK, получили OK
+ok  goal · read_first_files+1: ждали FAIL, получили FAIL
+ok  goal · read_first_chars: ждали OK, получили OK
+ok  goal · read_first_chars+1: ждали FAIL, получили FAIL
+ok  goal · Read first: нет файла: ждали FAIL, получили FAIL
+GOAL_OK
+ok  spec · spec_feature_chars: ждали OK, получили OK
+ok  spec · spec_feature_chars+1: ждали FAIL, получили FAIL
+ok  spec · первый Read first — не SPEC: ждали FAIL, получили FAIL
+SPEC_OK
+ok  plan · plan_lines: ждали OK, получили OK
+ok  plan · plan_lines+1: ждали FAIL, получили FAIL
+PLAN_OK
+ok  review · review_blocking: ждали OK, получили OK
+ok  review · review_blocking+1: ждали FAIL, получили FAIL
+REVIEW_OK
+ok  budgets · project ужесточает progress_lines: ждали OK, получили OK
+ok  budgets · project ослабляет progress_lines: ждали FAIL, получили FAIL
+ok  budgets · project добавляет owner_add: ждали OK, получили OK
+ok  budgets · project подменяет owner: ждали FAIL, получили FAIL
+ok  budgets · project с чужим ключом: ждали FAIL, получили FAIL
+BUDGETS_OK
+ok  intent · пин = hash-object: ждали OK, получили OK
+ok  intent · пин ≠ hash-object: ждали FAIL, получили FAIL
+ok  intent · пина нет: ждали FAIL, получили FAIL
+ok  intent · маркер в SPEC: ждали FAIL, получили FAIL
+ok  intent · маркер в SPEC в `кавычках`: ждали OK, получили OK
+ok  intent · маркер в INTENT: ждали WARN, получили WARN
+ok  intent · фича служит S1: ждали OK, получили OK
+ok  intent · фича служит несуществующему S9: ждали FAIL, получили FAIL
+ok  intent · у фичи нет поля служит: ждали FAIL, получили FAIL
+INTENT_OK
+ok  owner · файл тимлида коммитом без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · файл тимлида коммитом «Тимлид:»: ждали OK, получили OK
+ok  owner · коммит без файлов тимлида: ждали OK, получили OK
+ok  owner · git mv файла тимлида без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · не-ASCII пути тимлида (core.quotePath=true, умолчание git) коммитом без «Тимлид:»: ждали FAIL, получили FAIL
+ok  owner · END STATE называет docs/STATUS.md: ждали FAIL, получили FAIL
+ok  owner · END STATE называет docs/PROGRESS.md: ждали OK, получили OK
+ok  owner · END STATE: путь тимлида перед точкой — «updates docs/STATUS.md.»: ждали FAIL, получили FAIL
+ok  owner · END STATE: путь тимлида перед запятой — «docs/GOAL.txt,»: ждали FAIL, получили FAIL
+ok  owner · END STATE: путь тимлида перед скобкой — «docs/PROCESS.md)»: ждали FAIL, получили FAIL
+ok  owner · END STATE: путь тимлида с ./ — «see ./docs/STATUS.md»: ждали FAIL, получили FAIL
+ok  owner · END STATE: «.claude/launch.settings.json.» в конце фразы: ждали FAIL, получили FAIL
+ok  owner · END STATE: свой путь в конце фразы — «docs/PROGRESS.md.»: ждали OK, получили OK
+ok  owner · END STATE «(A) the team lead updates intent/ and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches intent/.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) intent/, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see intent/: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see intent/)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `intent/` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **intent/** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _intent/_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <intent/> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./intent/ for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates docs/SPEC-*.md and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches docs/SPEC-*.md.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) docs/SPEC-*.md, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see docs/SPEC-*.md: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see docs/SPEC-*.md)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `docs/SPEC-*.md` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **docs/SPEC-*.md** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _docs/SPEC-*.md_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <docs/SPEC-*.md> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./docs/SPEC-*.md for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates docs/GOAL.txt and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches docs/GOAL.txt.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) docs/GOAL.txt, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see docs/GOAL.txt: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see docs/GOAL.txt)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `docs/GOAL.txt` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **docs/GOAL.txt** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _docs/GOAL.txt_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <docs/GOAL.txt> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./docs/GOAL.txt for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates docs/STATUS.md and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches docs/STATUS.md.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) docs/STATUS.md, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see docs/STATUS.md: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see docs/STATUS.md)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `docs/STATUS.md` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **docs/STATUS.md** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _docs/STATUS.md_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <docs/STATUS.md> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./docs/STATUS.md for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates docs/PROCESS.md and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches docs/PROCESS.md.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) docs/PROCESS.md, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see docs/PROCESS.md: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see docs/PROCESS.md)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `docs/PROCESS.md` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **docs/PROCESS.md** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _docs/PROCESS.md_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <docs/PROCESS.md> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./docs/PROCESS.md for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates docs/reviews/ and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches docs/reviews/.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) docs/reviews/, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see docs/reviews/: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see docs/reviews/)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `docs/reviews/` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **docs/reviews/** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _docs/reviews/_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <docs/reviews/> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./docs/reviews/ for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates docs/drafts/ and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches docs/drafts/.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) docs/drafts/, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see docs/drafts/: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see docs/drafts/)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `docs/drafts/` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **docs/drafts/** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _docs/drafts/_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <docs/drafts/> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./docs/drafts/ for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates claude/ and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches claude/.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) claude/, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see claude/: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see claude/)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `claude/` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **claude/** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _claude/_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <claude/> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./claude/ for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates .claude/launch.settings.json and stops»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the pin matches .claude/launch.settings.json.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) .claude/launch.settings.json, then the rest is done.»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see .claude/launch.settings.json: done»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the verdict is set (see .claude/launch.settings.json)»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) a new review in `.claude/launch.settings.json` says PASS»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) **.claude/launch.settings.json** is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) _.claude/launch.settings.json_ is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) <.claude/launch.settings.json> is updated»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) see ./.claude/launch.settings.json for it»: ждали FAIL, получили FAIL
+ok  owner · END STATE «(A) the team lead updates docs/PROGRESS.md and stops»: ждали OK, получили OK
+ok  owner · END STATE «(A) the pin matches docs/PROGRESS.md.»: ждали OK, получили OK
+ok  owner · END STATE «(A) docs/PROGRESS.md, then the rest is done.»: ждали OK, получили OK
+ok  owner · END STATE «(A) see docs/PROGRESS.md: done»: ждали OK, получили OK
+ok  owner · END STATE «(A) the verdict is set (see docs/PROGRESS.md)»: ждали OK, получили OK
+ok  owner · END STATE «(A) a new review in `docs/PROGRESS.md` says PASS»: ждали OK, получили OK
+ok  owner · END STATE «(A) **docs/PROGRESS.md** is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) _docs/PROGRESS.md_ is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) <docs/PROGRESS.md> is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) see ./docs/PROGRESS.md for it»: ждали OK, получили OK
+ok  owner · END STATE «(A) the team lead updates docs/evidence/ and stops»: ждали OK, получили OK
+ok  owner · END STATE «(A) the pin matches docs/evidence/.»: ждали OK, получили OK
+ok  owner · END STATE «(A) docs/evidence/, then the rest is done.»: ждали OK, получили OK
+ok  owner · END STATE «(A) see docs/evidence/: done»: ждали OK, получили OK
+ok  owner · END STATE «(A) the verdict is set (see docs/evidence/)»: ждали OK, получили OK
+ok  owner · END STATE «(A) a new review in `docs/evidence/` says PASS»: ждали OK, получили OK
+ok  owner · END STATE «(A) **docs/evidence/** is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) _docs/evidence/_ is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) <docs/evidence/> is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) see ./docs/evidence/ for it»: ждали OK, получили OK
+ok  owner · END STATE «(A) the team lead updates docs/evidence/F2-intent-result.txt and stops»: ждали OK, получили OK
+ok  owner · END STATE «(A) the pin matches docs/evidence/F2-intent-result.txt.»: ждали OK, получили OK
+ok  owner · END STATE «(A) docs/evidence/F2-intent-result.txt, then the rest is done.»: ждали OK, получили OK
+ok  owner · END STATE «(A) see docs/evidence/F2-intent-result.txt: done»: ждали OK, получили OK
+ok  owner · END STATE «(A) the verdict is set (see docs/evidence/F2-intent-result.txt)»: ждали OK, получили OK
+ok  owner · END STATE «(A) a new review in `docs/evidence/F2-intent-result.txt` says PASS»: ждали OK, получили OK
+ok  owner · END STATE «(A) **docs/evidence/F2-intent-result.txt** is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) _docs/evidence/F2-intent-result.txt_ is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) <docs/evidence/F2-intent-result.txt> is updated»: ждали OK, получили OK
+ok  owner · END STATE «(A) see ./docs/evidence/F2-intent-result.txt for it»: ждали OK, получили OK
+OWNER_OK
+SELFTEST_OK
+OK   budgets: defaults кита — 18 ключей, ключей проекта — 1
+OK   team_lead_copy_lines: docs/drafts/team-lead-v6.md 72/80
+OK   team_lead_copy_chars: docs/drafts/team-lead-v6.md 11242/12000
+OK   brief_copy_lines: docs/drafts/team-lead-brief.md 145/150
+OK   brief_copy_chars: docs/drafts/team-lead-brief.md 14938/15000
+OK   skill_chars: kit/.claude/skills/accept/SKILL.md 1737/4000
+OK   skill_chars: kit/.claude/skills/plan-phase/SKILL.md 1356/4000
+OK   claude_md_lines: kit/CLAUDE.md 15/40
+OK   intent_chars: intent/INTENT.md 4925/6000
+OK   progress_lines: docs/PROGRESS.md 51/60
+OK   dollar_digit: `$` с цифрой — 0 в 4 файлах
+OK   goal_chars: docs/GOAL.txt, знаков 3751/4000
+OK   read_first_files: Read first, файлов 3/3
+OK   read_first_chars: Read first + CLAUDE.md, знаков 23180/50000
+OK   spec_feature_chars: docs/SPEC-v3.md: фич 9, длиннее 600 знаков — нет
+OK   plan_lines: docs/PLAN-v3.md, строк 142/150
+OK   review_blocking: docs/reviews/v3-1.md: блокирующих 3/5
+OK   review_blocking: docs/reviews/v3-2.md: блокирующих 1/5
+OK   intent: intent/INTENT.md: маркеров неясности 0
+OK   intent: docs/SPEC-v3.md: маркеров неясности 0
+OK   pin: пин SPEC e5e66199712a · git hash-object intent/INTENT.md e5e66199712a
+OK   signal: сигналы intent S1,S2,S3,S4,S5,S6; фич без существующего S — нет
+OK   owner: END STATE docs/GOAL.txt: путей 5, файлов тимлида — нет
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 5: b20513c Тимлид: приёмка v3-2 — NEEDS_WORK (1 блокирующая), GOAL фикс-раунда 2, STATUS; f7ffa41 Тимлид: ultracode — изучение, решения оператора 07.10, фронтир v3.1; STATUS — фикс-раунд закончен; dfe007b Тимлид: STATUS — S2 фикс-раунда по замеру check-budget; 1b8e977 Тимлид: приёмка v3-1 — NEEDS_WORK, GOAL фикс-раунда, STATUS; 49e873c Тимлид: seed v3
+BUDGET_OK
+rc=0
+--- дополнение PLAN: на ките — (cd kit && ../bin/check-budget)
+OK   budgets: defaults кита — 18 ключей, ключей проекта — 0
+OK   skill_chars: .claude/skills/accept/SKILL.md 1737/4000
+OK   skill_chars: .claude/skills/plan-phase/SKILL.md 1356/4000
+OK   claude_md_lines: CLAUDE.md 15/40
+OK   dollar_digit: `$` с цифрой — 0 в 2 файлах
+OK   goal: нет docs/GOAL.txt — фаза не открыта, правила фазы пропущены
+OK   review: нет docs/reviews/*.md
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 5: b20513c Тимлид: приёмка v3-2 — NEEDS_WORK (1 блокирующая), GOAL фикс-раунда 2, STATUS; f7ffa41 Тимлид: ultracode — изучение, решения оператора 07.10, фронтир v3.1; STATUS — фикс-раунд закончен; dfe007b Тимлид: STATUS — S2 фикс-раунда по замеру check-budget; 1b8e977 Тимлид: приёмка v3-1 — NEEDS_WORK, GOAL фикс-раунда, STATUS; 49e873c Тимлид: seed v3
+BUDGET_OK
+rc=0

@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""check-kit [<корень>] — скиллы кита v3 (SPEC-v3 F6): набор, frontmatter, контракт accept и plan-phase, evaluator без правок.
+
+Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
+копии workflow совпадают, defaults бюджета в kit/budgets.json и budgets.json совпадают. KIT_OK или exit 1.
+"""
+import json, os, re, sys
+
+out = []
+
+
+def say(ok, item, msg):
+    out.append(bool(ok))
+    print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}")
+
+
+def read(p):
+    with open(p, encoding="utf-8") as f:
+        return f.read()
+
+
+root = sys.argv[1] if len(sys.argv) > 1 else ("kit" if os.path.isdir("kit/.claude") else ".")
+sk = f"{root}/.claude/skills"
+names = sorted(d for d in os.listdir(sk) if os.path.isfile(f"{sk}/{d}/SKILL.md"))
+say(names == ["accept", "plan-phase"], "skills", f"{sk}: {', '.join(names)} (ждём accept, plan-phase)")
+limit = json.loads(read(f"{root}/budgets.json"))["defaults"]["skill_chars"]
+CONTRACT = {"accept": ["docs/evidence/accept-", "evaluator", "свеж", "REVIEW.md", "Named, not built"],
+            "plan-phase": ["docs/PLAN-", "PLAN.template.md", "Environment", "платн", "необратим", "bin/check-budget"]}
+for n in names:
+    t = read(f"{sk}/{n}/SKILL.md")
+    fm = dict(re.findall(r"^([\w-]+):\s*(.*)$", t.split("---")[1], re.M)) if t.startswith("---") else {}
+    say(fm.get("name", "").strip('"') == n and fm.get("description") and fm.get("disable-model-invocation") == "true",
+        n, f"frontmatter: name {fm.get('name')}, description {'есть' if fm.get('description') else 'нет'}, disable-model-invocation {fm.get('disable-model-invocation')}")
+    say(len(t) <= limit and not re.search(r"\$\d", t), n, f"знаков {len(t)}/{limit}, `$` с цифрой — {len(re.findall(r'[$][0-9]', t))}")
+    miss = [w for w in CONTRACT.get(n, []) if w not in t]
+    say(not miss, n, f"контракт ({len(CONTRACT.get(n, []))} слов): нет — {', '.join(miss) or 'ничего'}")
+if "accept" in names:
+    say("docs/STATUS.md" not in read(f"{sk}/accept/SKILL.md"), "accept", "STATUS не пишет: пути docs/STATUS.md в скилле нет")
+ev = read(f"{root}/.claude/agents/evaluator.md")
+tools = re.search(r"^tools:(.*)$", ev, re.M).group(1).strip()
+say("Write" not in tools and "Edit" not in tools and "REVIEW.md" in ev, "evaluator", f"tools {tools}; формат REVIEW.md {'есть' if 'REVIEW.md' in ev else 'нет'}")
+if root == "kit":
+    arch = [s for s in ("team-lead", "grilling") if os.path.isfile(f"docs/archive/kit-v2/claude-config/skills/{s}/SKILL.md")]
+    say(len(arch) == 2, "archive", f"скиллы v2 в docs/archive/kit-v2/claude-config/skills/: {', '.join(arch)}")
+    say(read(".github/workflows/two-tier.yml") == read("kit/.github/workflows/two-tier.yml"), "workflow",
+        ".github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml")
+    say(json.loads(read("budgets.json"))["defaults"] == json.loads(read("kit/budgets.json"))["defaults"], "budgets",
+        "defaults budgets.json = kit/budgets.json")
+print("KIT_OK" if all(out) else "KIT_FAIL")
+sys.exit(0 if all(out) else 1)

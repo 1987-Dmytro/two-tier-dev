@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""two-tier-upgrade <путь> — перевести проект на кит two-tier-dev v3 без потери истории (SPEC-v3 §1, F7).
+two-tier-upgrade --self-test — то же на синтетической фикстуре во /tmp/two-tier-v3: UPGRADE_OK.
+
+В проекте: ветка kit-v3 от HEAD, механика v3 из кита, прежние версии — `git mv` в docs/archive/kit-v2/,
+раздутые PROGRESS и PLAN — в docs/archive/ с датой, свежие — из шаблонов со ссылкой на архив, отчёт
+docs/upgrade-v3.md, один коммит. Remotes не трогает и не пушит. Файлы тимлида не пишет — они в отчёте.
+Повторный запуск ничего не меняет. Сначала план и по нему предусловия: на путях апгрейда нет файла вне git
+и пути из .gitignore, budgets.json — в форме кита, путь архива свободен; нарушено — rc 1 и причины, проект не тронут.
+Сбой после старта — откат: исходная ветка и HEAD, пустой индекс, файлы этого запуска убраны.
+Кит: <репо>/kit, если скрипт в репо кита, иначе корень, где он лежит.
+"""
+import json, os, shutil, subprocess, sys, time
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]) or ".", ".."))
+KIT = os.path.join(ROOT, "kit") if os.path.isdir(os.path.join(ROOT, "kit", ".claude")) else ROOT
+KIT_FILES = [".claude/settings.json", ".claude/hooks/kill-switch.sh", ".claude/hooks/steer.sh",
+             ".claude/hooks/refuse_sweeping_commands.py", ".claude/agents/evaluator.md",
+             ".claude/skills/accept/SKILL.md", ".claude/skills/plan-phase/SKILL.md",
+             "docs/INTENT.template.md", "docs/SPEC.template.md", "docs/GOAL.template.txt", "docs/PLAN.template.md",
+             "docs/PROGRESS.template.md", "docs/STATUS.template.md", "docs/PROCESS.template.md", "docs/LAUNCH.md",
+             "REVIEW.md", "bin/check-budget", "bin/check-ci", "bin/check-harness", "bin/check-kit",
+             "bin/two-tier-upgrade", ".github/workflows/two-tier.yml"]
+IF_ABSENT = ["CLAUDE.md", "budgets.json"]          # файлы с фактами проекта: ставятся, только если их нет
+TL_IN_KIT = [".claude/launch.settings.json"]       # файл тимлида: апгрейд его не пишет
+RETIRED = [".claude/hooks/verify-gate.sh", ".claude/hooks/track-read.sh", ".claude/hooks/commit-on-stop.sh",
+           ".claude/hooks/test-output-filter.sh", ".claude/rules/graphify.md", ".claude/skills/team-lead/SKILL.md",
+           ".claude/skills/grilling/SKILL.md", "intent/intent.template.md"]
+TODAY = time.strftime("%Y-%m-%d")
+
+
+def read(p):
+    with open(p, encoding="utf-8") as f:
+        return f.read()
+
+
+def write(p, text):
+    os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def archived(rel):
+    return "docs/archive/kit-v2/" + rel.replace(".claude/", "claude-config/", 1)
+
+
+def upgrade(target):
+    git = lambda *a, **k: subprocess.run(["git", "-C", target, *a], capture_output=True, text=True, **k)
+    T = lambda rel: os.path.join(target, rel)
+    if git("rev-parse", "--git-dir").returncode:
+        print(f"two-tier-upgrade: {target} — не git-репо"); return 1
+    if git("status", "--porcelain", "--untracked-files=no").stdout.strip():
+        print("two-tier-upgrade: в дереве незакоммиченные правки — сначала коммит или stash"); return 1
+    owner = json.loads(read(os.path.join(KIT, "budgets.json")))["defaults"]["owner"]
+    is_tl = lambda p: any(p.startswith(e) if e.endswith("/") else p == e for e in owner)
+    start, head0 = git("branch", "--show-current").stdout.strip(), git("rev-parse", "HEAD").stdout.strip()
+    had = git("rev-parse", "--verify", "-q", "refs/heads/kit-v3").returncode == 0
+
+    def run(*a):  # git, который обязан пройти: иначе исключение с ответом git
+        r = git(*a)
+        if r.returncode:
+            raise RuntimeError(f"git {a[0]}: {(r.stderr or r.stdout).strip()}")
+    made, fresh, started = [], set(), False
+    try:
+        if start != "kit-v3" and had:  # прежняя kit-v3: план считается на её дереве
+            run("switch", "-q", "kit-v3")
+        # план: moves — путь → архив, copies — путь ← файл кита, texts — путь ← текст
+        moves, copies, texts, conflicts, tl_todo = [], [], [], [], []
+        for rel in KIT_FILES + IF_ABSENT:
+            src = os.path.join(KIT, rel)
+            if os.path.isfile(T(rel)):
+                if rel in IF_ABSENT or read(T(rel)) == read(src):
+                    continue
+                if os.path.exists(T(archived(rel))):
+                    conflicts.append(rel); continue
+                moves.append((rel, archived(rel)))
+            copies.append((rel, src))
+        for rel in RETIRED:
+            if os.path.isfile(T(rel)):
+                (tl_todo.append(f"`{rel}` (v2) — в `{archived(rel)}` коммитом «Тимлид: …»") if is_tl(rel) else moves.append((rel, archived(rel))))
+        for rel in TL_IN_KIT:
+            if not os.path.isfile(T(rel)):
+                tl_todo.append(f"`{rel}` — из кита two-tier-dev (`kit/{rel}`): доверенная инфраструктура проекта, коммитом «Тимлид: …»")
+        why = []  # предусловия — по этому же плану: всё, что уронило бы апгрейд посередине
+        try:
+            b = json.loads(read(T("budgets.json") if os.path.isfile(T("budgets.json")) else os.path.join(KIT, "budgets.json")))["defaults"]
+            limit = {"PROGRESS": int(b["progress_lines"]), "PLAN": int(b["plan_lines"])}
+        except (ValueError, KeyError, TypeError) as e:
+            why.append(f"budgets.json — не форма кита (нужны defaults.progress_lines и defaults.plan_lines): {e!r}")
+            limit = {}
+        docs = sorted(f for f in os.listdir(T("docs")) if f.startswith("PLAN-") and f.endswith(".md")) if os.path.isdir(T("docs")) else []
+        for rel, tpl in [("docs/PROGRESS.md", "PROGRESS")] + [(f"docs/{f}", "PLAN") for f in docs]:
+            n = len(read(T(rel)).splitlines()) if os.path.isfile(T(rel)) else 0
+            if tpl in limit and n > limit[tpl]:
+                arch = f"docs/archive/{os.path.basename(rel)[:-3]}-{TODAY}.md"
+                title, rest = read(os.path.join(KIT, f"docs/{tpl}.template.md")).split("\n", 1)
+                moves.append((rel, arch))
+                texts.append((rel, f"{title}\n\n> Прежний файл ({n} строк) — `{arch}` (two-tier-upgrade, {TODAY}).\n{rest}"))
+        if not os.path.isfile(T("docs/upgrade-v3.md")):
+            L = [f"# Переход на кит two-tier-dev v3 — {TODAY} (`bin/two-tier-upgrade`)", "",
+                 "Ветка `kit-v3`; remotes не тронуты, push не делался — его делает исполнитель проекта по своему GOAL.", "",
+                 "## Сделано"] + [f"- поставлено из кита: `{r}`" for r, _ in copies] + [f"- архив: `{a} → {d}`" for a, d in moves] + \
+                [f"- не тронуто, отличается от кита и уже в архиве: `{c}` — сверить руками" for c in conflicts] + \
+                ["- не тронуто: `CLAUDE.md` и `budgets.json` проекта, если были; файлы тимлида.", "",
+                 "## Тимлиду",
+                 "- `intent/INTENT.md` по `docs/INTENT.template.md`; SPEC фазы — в формат `docs/SPEC.template.md` (пин, фичи до 600 знаков с полем «служит»); `docs/GOAL.txt` по `docs/GOAL.template.txt`."] + \
+                [f"- {x}" for x in tl_todo] + ["",
+                 "## Исполнителю",
+                 "- `CLAUDE.md` — к v3: до 40 строк, без ссылок на выведенные из кита файлы; головы PROGRESS и PLAN; `bin/check-budget` → `BUDGET_OK`.",
+                 "- Поля прежнего `.claude/settings.json` (архив) сверить с v3: своё проекта вернуть по settings-reference.",
+                 "- Push ветки `kit-v3` — по своему GOAL.", "",
+                 "## Оператору",
+                 "- `autoMode.environment` (`/auto-mode-setup` или `.claude/launch.settings.json`); запуск — `docs/LAUNCH.md`, контрольный прогон — `bin/check-harness`.",
+                 "- Merge `kit-v3` — после приёмки."]
+            texts.append(("docs/upgrade-v3.md", "\n".join(L) + "\n"))
+        tracked, puts = set(git("ls-files", "-z").stdout.split("\0")), [rel for rel, _ in copies + texts]
+        why += [f"{a}: файл вне git — git mv его не возьмёт" for a, _ in moves if a not in tracked]
+        why += [f"{d}: путь архива занят" for _, d in moves if os.path.lexists(T(d))]
+        ignored = git("check-ignore", "-z", "--stdin", "--no-index", input="\0".join(puts)).stdout.split("\0") if puts else []
+        why += [f"{p}: в .gitignore — git add его не возьмёт" for p in ignored if p]
+        if why:
+            raise RuntimeError("проект не готов, апгрейд не начат:" + "".join(f"\n  - {w}" for w in why))
+        made = [p for p in puts if not os.path.lexists(T(p))]  # файлы и каталоги этого запуска — откат их убирает
+        for p in [d for _, d in moves] + puts:
+            d = os.path.dirname(p)
+            while d and not os.path.isdir(T(d)):
+                fresh.add(d); d = os.path.dirname(d)
+        if start != "kit-v3" and not had:
+            run("switch", "-q", "-c", "kit-v3")
+        print("ветка: kit-v3")
+        started = True
+        for rel, dst in moves:
+            os.makedirs(os.path.dirname(T(dst)), exist_ok=True)
+            run("mv", rel, dst)
+        for rel, src in copies:
+            os.makedirs(os.path.dirname(T(rel)), exist_ok=True)
+            shutil.copy2(src, T(rel))
+        for rel, text in texts:
+            write(T(rel), text)
+        if puts:
+            run("add", "--", *puts)
+        if not git("diff", "--cached", "--quiet").returncode:
+            print("изменений нет"); return 0
+        run("commit", "-q", "-m", "kit-v3: механика two-tier-dev v3 (two-tier-upgrade)")
+    except BaseException as e:  # откат: проект — как до запуска
+        if started:
+            git("reset", "-q", "--hard")  # до старта отслеживаемое дерево чистое (проверено выше) — reset возвращает ровно его
+            for p in made:
+                if os.path.lexists(T(p)):
+                    os.remove(T(p))
+            for d in sorted(fresh, key=len, reverse=True):
+                if os.path.isdir(T(d)) and not os.listdir(T(d)):
+                    os.rmdir(T(d))
+        if not start or git("branch", "--show-current").stdout.strip() != start:
+            git("switch", "-q", start) if start else git("switch", "-q", "--detach", head0)
+        if not had:
+            git("branch", "-q", "-D", "kit-v3")
+        print(f"two-tier-upgrade: {str(e) or type(e).__name__}\n  проект как до запуска: ветка {start or 'без ветки'} @ {head0[:7]}, индекс пуст")
+        return 1
+    print(f"коммит {git('rev-parse', '--short', 'HEAD').stdout.strip()}: поставлено {len(copies)}, в архив {len(moves)}, "
+          f"конфликтов {len(conflicts)}, тимлиду {len(tl_todo)}; отчёт docs/upgrade-v3.md")
+    return 0
+
+
+# ---------- self-test: синтетический проект v2, тестовый клон без origin ----------
+ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
+           GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
+V2 = {".claude/settings.json": '{"model": "opus", "ultracode": true}\n',
+      ".claude/hooks/kill-switch.sh": '#!/usr/bin/env bash\necho \'{"decision":"block"}\'\n',
+      ".claude/hooks/verify-gate.sh": "#!/usr/bin/env bash\n", ".claude/hooks/track-read.sh": "#!/usr/bin/env bash\n",
+      ".claude/hooks/commit-on-stop.sh": "#!/usr/bin/env bash\n", ".claude/rules/graphify.md": "# graphify\n",
+      ".claude/skills/team-lead/SKILL.md": "---\nname: team-lead\n---\nv4\n", ".claude/skills/grilling/SKILL.md": "---\nname: grilling\n---\n",
+      ".claude/skills/accept/SKILL.md": "---\nname: accept\n---\nv2\n", "CLAUDE.md": "# CLAUDE.md — проект\n" + "факт\n" * 20,
+      "docs/PROGRESS.md": "# PROGRESS\n" + "строка истории\n" * 200, "docs/PLAN-1.md": "# PLAN-1\n" + "поправка\n" * 400,
+      "docs/SPEC-1.md": "# SPEC-1\n", "docs/STATUS.md": "# STATUS\n", "intent/intent.template.md": "# intent v2\n",
+      "src/app.py": "print('app')\n"}
+
+
+def self_test():
+    fix = "/tmp/two-tier-v3/upgrade"
+    shutil.rmtree(fix, ignore_errors=True)
+    src, proj = f"{fix}/src", f"{fix}/proj"
+    g = lambda d, *a: subprocess.run(["git", "-C", d, *a], env=ENV, capture_output=True, text=True)
+    os.makedirs(src)
+    g(src, "init", "-q", "-b", "main")
+    for rel, text in V2.items():
+        write(f"{src}/{rel}", text)
+        os.chmod(f"{src}/{rel}", 0o755) if rel.endswith(".sh") else None
+    g(src, "add", "-A"); g(src, "commit", "-qm", "v2: проект")
+    write(f"{src}/src/app.py", "print('app v2')\n"); g(src, "commit", "-qam", "v2: правка продукта")
+    subprocess.run(["git", "clone", "-q", src, proj], env=ENV, check=True)
+    g(proj, "remote", "remove", "origin")
+    hist, main0 = g(proj, "rev-list", "HEAD").stdout.split(), g(proj, "rev-parse", "main").stdout.strip()
+    me = os.path.abspath(sys.argv[0])
+    run = lambda d=proj: subprocess.run([sys.executable, me, d], env=ENV, capture_output=True, text=True)
+    out, ok = [], True
+
+    def check(cond, msg):
+        nonlocal ok
+        ok &= bool(cond)
+        print(f"{'OK  ' if cond else 'FAIL'} {msg}")
+    kitfiles = sorted(os.path.relpath(os.path.join(d, f), KIT) for d, ds, fs in os.walk(KIT) if not {".git", "__pycache__"} & set(d.split(os.sep)) for f in fs)
+    check(set(kitfiles) == set(KIT_FILES + IF_ABSENT + TL_IN_KIT), f"список апгрейда = файлы кита ({len(kitfiles)})")
+    check(g(proj, "remote").stdout.strip() == "", "фикстура: тестовый клон без origin (`git remote` пуст)")
+    r1 = run()
+    print("  прогон 1: " + " | ".join(l for l in r1.stdout.splitlines()))
+    P = lambda rel: f"{proj}/{rel}"
+    check(r1.returncode == 0 and g(proj, "branch", "--show-current").stdout.strip() == "kit-v3", "ветка kit-v3")
+    check(g(proj, "rev-parse", "main").stdout.strip() == main0, "main не тронут")
+    check(all(read(P(r)) == read(f"{KIT}/{r}") for r in KIT_FILES), f"механика v3: {len(KIT_FILES)} файлов кита на месте")
+    check(read(P(archived(".claude/settings.json"))) == V2[".claude/settings.json"]
+          and read(P(archived(".claude/skills/accept/SKILL.md"))) == V2[".claude/skills/accept/SKILL.md"],
+          "прежние версии (settings, accept v2) — в docs/archive/kit-v2/")
+    gone = [r for r in RETIRED[:7] if r in V2]
+    check(all(not os.path.exists(P(r)) and os.path.isfile(P(archived(r))) for r in gone), f"выведенные из кита v2 ({len(gone)}) — в архиве")
+    pa, la = P(f"docs/archive/PROGRESS-{TODAY}.md"), P(f"docs/archive/PLAN-1-{TODAY}.md")
+    check(os.path.isfile(pa) and read(pa) == V2["docs/PROGRESS.md"] and os.path.isfile(la) and read(la) == V2["docs/PLAN-1.md"],
+          "раздутые PROGRESS (201 строка) и PLAN-1 (401) — в docs/archive/ с датой, байт в байт")
+    check(f"docs/archive/PROGRESS-{TODAY}.md" in read(P("docs/PROGRESS.md")) and len(read(P("docs/PROGRESS.md")).splitlines()) <= 60
+          and f"docs/archive/PLAN-1-{TODAY}.md" in read(P("docs/PLAN-1.md")), "свежие PROGRESS и PLAN-1 из шаблонов, со ссылкой на архив")
+    tl = ["docs/SPEC-1.md", "docs/STATUS.md", "intent/intent.template.md", "CLAUDE.md"]
+    check(all(read(P(r)) == V2[r] for r in tl) and not os.path.exists(P(".claude/launch.settings.json")),
+          "файлы тимлида и CLAUDE.md проекта не тронуты, launch.settings.json не создан")
+    rep = read(P("docs/upgrade-v3.md")) if os.path.isfile(P("docs/upgrade-v3.md")) else ""
+    check(all(s in rep for s in ("## Тимлиду", "## Исполнителю", "## Оператору", "launch.settings.json", "intent/intent.template.md")),
+          "отчёт docs/upgrade-v3.md: тимлиду, исполнителю, оператору")
+    check(all(g(proj, "merge-base", "--is-ancestor", h, "kit-v3").returncode == 0 for h in hist), f"история цела: {len(hist)} коммита v2 — предки kit-v3")
+    cb = subprocess.run([P("bin/check-budget")], cwd=proj, env=ENV, capture_output=True, text=True)
+    check(cb.stdout.strip().endswith("BUDGET_OK"), "в проекте после апгрейда bin/check-budget → BUDGET_OK")
+    head1 = g(proj, "rev-parse", "HEAD").stdout.strip()
+    r2 = run()
+    print("  прогон 2: " + " | ".join(r2.stdout.splitlines()))
+    check(r2.returncode == 0 and g(proj, "rev-parse", "HEAD").stdout.strip() == head1 and not g(proj, "status", "--porcelain").stdout.strip(),
+          "повторный прогон: тот же HEAD, `git status` пуст")
+    check(g(proj, "remote").stdout.strip() == "", "remotes не тронуты, push некуда и не было")
+
+    # сбои: формы проекта из приёмки (accept-fe2f33f, стр. 11–14) и (д) сбой после старта — выход ≠0 с причиной, проект как был
+    def state(d):  # ветка, HEAD, ветки, индекс; файлы (с неотслеживаемыми и игнорируемыми) и каталоги дерева без .git
+        tree = {}
+        for root, ds, fs in os.walk(d):
+            ds[:] = [x for x in ds if os.path.join(root, x) != os.path.join(d, ".git")]
+            tree[os.path.relpath(root, d) + "/"] = b""
+            for f in fs:
+                with open(os.path.join(root, f), "rb") as h:
+                    tree[os.path.relpath(os.path.join(root, f), d)] = h.read()
+        return [g(d, *a).stdout for a in (("branch", "--show-current"), ("rev-parse", "HEAD"), ("diff", "--cached", "--name-only"),
+                                          ("for-each-ref", "--format=%(refname) %(objectname)", "refs/heads"))] + [tree]
+    commit = lambda d, msg: (g(d, "add", "-A"), g(d, "commit", "-qm", msg))
+    hook = "#!/bin/sh\necho 'pre-commit: отказ (фикстура)' >&2\nexit 1\n"
+    shapes = [("а", "`bin/` в .gitignore", lambda d: (write(f"{d}/.gitignore", "bin/\n"), commit(d, "v2: .gitignore"))),
+              ("б", "свой неотслеживаемый bin/check-ci", lambda d: write(f"{d}/bin/check-ci", "#!/bin/sh\necho своё\n")),
+              ("в", "свой budgets.json другой формы", lambda d: (write(f"{d}/budgets.json", '{"limits": {"progress": 100}}\n'),
+                                                                commit(d, "v2: budgets.json"))),
+              ("г", "игнорируемый .claude/settings.json", lambda d: (g(d, "rm", "-q", "--cached", ".claude/settings.json"),
+                                                                   write(f"{d}/.gitignore", ".claude/settings.json\n"), commit(d, "v2: settings вне git"))),
+              ("д", "сбой после старта — pre-commit отказал", lambda d: (write(f"{d}/.git/hooks/pre-commit", hook),
+                                                                       os.chmod(f"{d}/.git/hooks/pre-commit", 0o755)))]
+    for i, (letter, what, tweak) in enumerate(shapes, 1):
+        d = f"{fix}/fail-{i}"
+        subprocess.run(["git", "clone", "-q", src, d], env=ENV, check=True)
+        g(d, "remote", "remove", "origin")
+        tweak(d)
+        s0 = state(d)
+        r = run(d)
+        s1 = state(d)
+        print(f"  сбой ({letter}) {what}: rc {r.returncode} | " + " | ".join(r.stdout.splitlines()))
+        pre = letter != "д"  # (а)–(г) ловят предусловия до старта, (д) — откат после старта
+        check(r.returncode and "two-tier-upgrade:" in r.stdout and "Traceback" not in r.stderr and s1 == s0 and not s1[2]
+              and ("апгрейд не начат" in r.stdout) == pre and ("ветка: kit-v3" in r.stdout) != pre,
+              f"сбой ({letter}): выход ≠0 с причиной, без трассировки, {'отказ до старта' if pre else 'откат после старта'}; "
+              f"как до запуска — ветка {s0[0].strip()}, HEAD, ветки, пустой индекс, дерево ({len(s0[4])} путей)")
+    print("UPGRADE_OK" if ok else "UPGRADE_FAIL")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--self-test"]:
+        sys.exit(self_test())
+    if len(sys.argv) != 2 or sys.argv[1].startswith("-"):
+        print(__doc__); sys.exit(2)
+    sys.exit(upgrade(os.path.abspath(sys.argv[1])))

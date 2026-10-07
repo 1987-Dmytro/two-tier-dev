@@ -20,7 +20,7 @@ Judge against the spec, not against taste. This project follows the Ponytail lad
 
 Plausibility is not correctness. A diff that looks reasonable paired with a screenshot that shows a broken layout is NEEDS_WORK. Missing evidence for any acceptance criterion is NEEDS_WORK. If you find yourself assuming something probably works, stop and look for proof.
 
-Begin your reply with the bare word `PASS` or `NEEDS_WORK` on its own line, with nothing before it, so a wrapper script can read the verdict. Then:
+Begin your reply with the bare word `PASS` or `NEEDS_WORK` on its own line, with nothing before it, so a wrapper script can read the verdict. Then write findings in the format of `REVIEW.md`: at most five blocking findings (symptom · evidence file and line · violated criterion · acceptance check), everything else one line each under `Named, not built`. In short:
 
 - `PASS`: one line stating what evidence convinced you.
 - `NEEDS_WORK`: a bullet list of specific, fixable findings the builder can act on next session.

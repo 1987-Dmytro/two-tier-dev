@@ -1,0 +1,181 @@
+база e0b5f6e · HEAD fe2f33f · свежий проход: role-checker (режим evaluator), отдельный субагент, свой клон · 06.10.2026
+VERDICT: NEEDS_WORK
+
+Проверено: two-tier-dev, ветка `v3` @ `fe2f33f` (origin/v3 = fe2f33f8…), база `main` @ `e0b5f6e` (origin/main не тронут), 18 коммитов `49e873c..fe2f33f`. Режим (б), свой клон, свои прогоны. Отчёт исполнителя на слово не принят: evidence F1, F2, F5, F6, F7 и F8 я воспроизвёл на тех коммитах, где они записаны. Всё, что сейчас заявлено зелёным, — правда. Но в правиле владения (F2) я нашёл два класса ложнозелёного, а у апгрейда (F7, путь следующей фазы) — сбой без отката.
+
+## Блокирующие
+
+- [блокирующая] `kit/bin/check-budget:215` (сопоставление — стр. 220) → SPEC-v3 F2 «готово: красное, если файл тимлида изменён коммитом без «Тимлид:»», §3 «файлы тимлида не правятся»; REVIEW.md — баг на пути, который заказчик запускает (CI на push, `bin/check-budget` в каждом проекте). → `git log --name-only` вызывается без `-z` и без `core.quotePath=false`. При настройке git по умолчанию (`core.quotePath=true`, в том числе на раннере CI и в git на macOS) путь с не-ASCII символами печатается в кавычках с восьмеричными escape (`"intent/\320\270…"`). `is_tl()` такой путь не узнаёт, и правило молчит: строка owner «коммитов «Тимлид:» … — 0», итог `BUDGET_OK`. Доказательство — мой прогон во временном репо. Коммит «F1: …» правит `intent/Gesprächsleitfaden.md`, `docs/reviews/ревью-1.md`, `claude/передача.md`, `docs/drafts/entwurf-ü.md` → `OK   owner: коммитов «Тимлид:» после merge-base 9cabbd5 — 0: —` и `BUDGET_OK`. Тот же репо с `core.quotePath=false` → `FAIL owner: 931de47 «F1: executor edits 4 team-lead files (non-ASCII names)» меняет файлы тимлида без «Тимлид:»: claude/передача.md, docs/drafts/entwurf-ü.md, docs/reviews/ревью-1.md, intent/Gesprächsleitfaden.md` и `BUDGET_FAIL: 1`. Красные фикстуры владения (стр. 352–355) — только ASCII-пути, поэтому self-test этот класс не покрывает. По шаблону INTENT в `intent/` лежат эталонные входы: профили, сценарии, записи, гайды интервью. У русско- и немецкоязычного оператора их имена — как раз этот класс. Deny `Edit` подпроцессы не покрывает (permissions), так что для таких записей lint — единственный рубеж. → Что сделать: читать пути без кавычек (`git -c core.quotePath=false log …` или `--name-only -z` с разбором по `\0`) и добавить красную фикстуру owner с не-ASCII путём тимлида. Чек: `bin/check-budget --self-test owner` → `OWNER_OK`.
+- [блокирующая] `kit/bin/check-budget:207` → SPEC-v3 F2 «красное, если файл тимлида … назван в END STATE», §1 строка «Владение»; REVIEW.md — баг на пути заказчика (тимлид гоняет `check-budget` по своему GOAL до запуска). → В классе символов регэкспа путей есть `.`, поэтому путь в конце предложения захватывается вместе с точкой (`docs/STATUS.md.`), и `fnmatchcase` его не узнаёт. То же с ведущим `./` (`./docs/STATUS.md`). Доказательство — мои прогоны. END STATE «(A) the verdict goes to docs/STATUS.md.» → `OK   owner: END STATE docs/GOAL.txt: путей 1, файлов тимлида — нет`. Так для всех пяти файловых записей списка: `docs/STATUS.md`, `docs/GOAL.txt`, `docs/PROCESS.md`, `docs/SPEC-2.md`, `.claude/launch.settings.json`. Тот же путь в середине фразы («… is written.») → FAIL. Записи-каталоги (`intent/`, `docs/reviews/`) ловятся. Красная фикстура (стр. 356–357) ставит путь только в середину фразы. → Что сделать: снимать хвостовую пунктуацию и ведущий `./` с захваченного пути; добавить красную фикстуру с путём тимлида в конце предложения. Чек: `bin/check-budget --self-test owner` → `OWNER_OK`.
+- [блокирующая] `kit/bin/two-tier-upgrade:53-54` (переключение на `kit-v3`), `:63`, `:83`, `:112` (вызовы с `check=True` без отката) → SPEC-v3 §1 и F7 («живой проект перейдёт без потери истории», «повторный запуск ничего не меняет»), п. 4 задачи; REVIEW.md — баг на пути, который заказчик запускает: следующая фаза — `two-tier-upgrade` в живом проекте. → Скрипт сначала переводит проект на ветку `kit-v3` и только потом делает `git mv`, копирование и `git add` — без предпроверки и без отката. Любой сбой даёт трассировку Python: проект остаётся на `kit-v3` с наполовину применённым апгрейдом в индексе, а повторный запуск отказывает: «в дереве незакоммиченные правки». Доказательство — мои фикстуры:
+  (а) `bin/` в `.gitignore` → `git add … bin/check-budget` падает уже после всех `git mv`: ветка `kit-v3`, 39 путей в индексе, повтор — отказ;
+  (б) свой неотслеживаемый `bin/check-ci` → падает `git mv`: `kit-v3`, 1 путь в индексе и 18 неотслеживаемых, повтор — отказ;
+  (в) свой `budgets.json` другой формы → `KeyError: 'defaults'` (стр. 83) уже после копирования;
+  (г) игнорируемый `.claude/settings.json` → падает `git mv`.
+  После такого сбоя обычный `git switch main` уносит застейдженную половину апгрейда в индекс `main`. История коммитов и файлы пользователя в этих прогонах не пропали. В self-test нет ни одной такой формы проекта. → Что сделать: все предусловия проверять до переключения ветки — игнорируемое и неотслеживаемое на путях кита, форму `budgets.json`, занятость путей архива. При ошибке — откат: индекс, исходная ветка, созданная `kit-v3`; rc≠0 и понятная причина. В `--self-test` — фикстура со сбоем и проверкой, что проект вернулся в исходное состояние. Чек: `bin/two-tier-upgrade --self-test` → `UPGRADE_OK`.
+
+## Named, not built
+- `kit/bin/check-budget:211-214` — нет `main`/`origin/main` (голый `git init` из Quick start README даёт `master` на стандартном git; клон `--depth 1`) → lint коммитов пропускается строкой `OK` и итогом `BUDGET_OK` (мой прогон: правка `docs/STATUS.md` и `intent/INTENT.md` коммитом «F1:» → `OK   owner: нет main/origin/main или коммитов — lint коммитов пропущен`, `BUDGET_OK`). Пропуск правила честнее печатать WARN или брать базу из `origin/HEAD`; в Notes PROGRESS эта развилка не записана.
+- `budgets.json` в проекте — файл не тимлида, а `defaults` из него (числа и `owner`) правит кто угодно. Мой прогон: убрал `intent/` из `defaults.owner`, правка `intent/INTENT.md` коммитом «F1:» → `BUDGET_OK`. `check-kit` в репо кита ловит расхождение двух копий, но не одинаковое ослабление обеих (K8 → `KIT_OK`, PROGRESS 135/600). Это развилка уровня SPEC, исполнитель её назвал. Решение — за тимлидом: внести `budgets.json` в список владения или закрепить defaults в коде.
+- `two-tier-upgrade:66-76` — `.claude/settings.json` проекта заменяется целиком (старый — в архив). Проектные deny, хуки и env выпадают из живого харнеса, пока их не вернут руками; об этом говорит только строка отчёта. В SPEC перевода нужен шаг «вернуть до первого прогона и до любого платного шага».
+- Если HEAD живого проекта впереди `main` и там есть коммиты v2 в файлы тимлида без «Тимлид:» (v2 `/accept` писал STATUS коммитом «accept: …»), после апгрейда `bin/check-budget` красный навсегда. Показал на фикстуре: `FAIL owner: … «accept: STATUS phase 1 …» … docs/STATUS.md`. Исполнитель это не исправит: amend и force-push запрещены. Фикстура F7 апгрейдит только от `main`. Предусловие перевода: влить фазовую ветку в `main` или привязать lint к коммиту апгрейда.
+- `two-tier-upgrade:53-54` берёт уже существующую `kit-v3` (например, оставшуюся после сбоя), не сверяя её с текущим HEAD. Новые коммиты `main` в ветку апгрейда не попадают; показал, в `main` ничего не теряется.
+- `--self-test` не проверяет агрегатор `report()`: мутация `fails = 0` оставляет `SELFTEST_OK`, а живой прогон печатает `FAIL progress_lines: docs/PROGRESS.md 65/60` и при этом `BUDGET_OK`. Сейчас агрегатор верен: красная сторона `--templates` даёт `BUDGET_FAIL: 1`, rc 1.
+- SPEC §5 дословно (`bin/two-tier-init /tmp/x && cd /tmp/x && bin/check-budget`) на несуществующем `/tmp/x` падает: `two-tier-init: нет каталога …`, rc 1. Каталог должен существовать — так было и в v2; гейт делает `mkdir` сам. Строки отклонения в PLAN нет.
+- Бюджет S2 считает только корневой `CLAUDE.md`. Другая автозагружаемая память — `.claude/CLAUDE.md`, `.claude/rules/*.md` (апгрейд их оставляет), `CLAUDE.local.md` — в счёт не входит.
+- `check-budget:156-163` `blocking()` различает регистр заголовка («## блокирующие» → 0) и не считает пункты со `*`.
+- `spec_feature_chars` меряет только первую строку фичи: подпункты фичи 600 знаков обходят.
+- В CHANGELOG «до/после» для `commit-on-stop`, `subagentPromptCacheTtl` и `workflowSizeGuideline` пусты по построению: пара прогонов эти поля не задевает. Абляции по S5 для них нет; строки таблицы говорят это честно.
+- `bin/check-docs` проверяет пути в обратных кавычках только под `bin|kit|intent|claude|docs/(archive|drafts|evidence)`; `docs/*.md` в кавычках не сверяются. Мой расширенный проход мёртвых путей не нашёл.
+- F7 (`two-tier-upgrade --self-test`) не входит в `make ci`, хотя claude ему не нужен.
+- Публичный репо, вне инварианта и унаследовано от `main`. В `docs/archive/PLAN-v2.md:215,220` — абсолютный путь домашнего каталога; файл перенесён побайтно, как требует C1. В `claude/handoff-…` у тимлида — путь вида `~/…`. Адрес автора есть в метаданных коммитов (не в сообщениях), как во всей истории `main`.
+
+## Сверка по фичам F1–F9 (п. 1 задачи)
+| F | «готово» | чем доказано (моё) | evidence ↔ код |
+|---|---|---|---|
+| F1 | да | self-test зелёный; `BUDGET_OK` на репо и на ките; мутации продукта M1–M4 → `SELFTEST_FAIL` | `F1-budget-result.txt` воспроизведён побайтно на `b60ff86` (с PROGRESS родителя), часть «на ките» — тоже |
+| F2 | частично: пин, маркер, сигнал S и список «Тимлид:» в evidence — да; владение — ложнозелёное (блокирующие 1, 2) | группы intent и owner зелёные; мутации пина, lint коммитов и END STATE → FAIL | `F2-intent-result.txt` побайтно на `abf7742`, обе части |
+| F3 | по evidence — да для HEAD `4edfb15` на тот момент; CI для `fe2f33f` не проверял | `check-ci`: CI_OK только при ветке = HEAD, прогоне этого sha и `watch --exit-status` = 0; ложнозелёного пути не нашёл; шаги CI в свежем клоне зелёные | формат evidence = вывод `check-ci` |
+| F4 | статика settings — да; пару `claude -p` и doctor не прогонял (запрет) | `static()` без вызова claude совпал построчно с `F4-harness-result.txt` (стр. 2–6) и с baseline v2 (стр. 3–7); в коде нет пути к HARNESS_OK без init, без `hook_stopped`, при пробе или tool_use≠1 | baseline v2 — красная сторона на продукте (v2 → `terminal_reason completed`) |
+| F5 | да | `--templates` → `BUDGET_OK`; красная сторона: CLAUDE.md в 41 строку и фича в 790 знаков → `BUDGET_FAIL: 1`, rc 1; INTENT, SPEC и GOAL побайтно равны `docs/drafts/` | побайтно на `b9f026b` |
+| F6 | да | `KIT_OK`; мутации K1–K7 (team-lead вернулся, accept вызывается моделью, evaluator с Write, accept пишет STATUS, копии workflow разошлись, контракт, defaults) → `KIT_FAIL` | побайтно на `2ca1760` |
+| F7 | на фикстуре — да; на реальной форме проекта — блокирующая 3 | `UPGRADE_OK`; мутации U1–U4 (удаление вместо архива, нестабильное имя архива, неидемпотентный отчёт, потеря коммита) → `UPGRADE_FAIL` | на `c3757e7` совпало, кроме sha фикстуры |
+| F8 | да | `DOCS_OK`; красная проба (мёртвый путь в README и нет строки поля) → `DOCS_FAIL`, rc 1 | основная часть побайтно на `b7fa66e` |
+| F9 | по коду — да | `mark()` требует rc 0 и строку, равную маркеру; `GATE_OK` — только при 0 сбоев; F1, F2, F5, F6 и F7 из свежего t3 — все маркеры | evidence — прогон до коммита `e2a9e73`; финального прогона после последнего push в репо нет (по PLAN — только транскрипт) |
+
+Ложнозелёные пути по чекам (п. 2): `check-budget` — блокирующие 1 и 2, плюс пропуск без `main` и непроверенный агрегатор (Named). `check-kit` — одинаковое ослабление обеих копий defaults (Named). `two-tier-upgrade` — блокирующая 3. В `check-ci`, `check-harness` (статическая часть и логика вердикта), `check-docs` и `gate-v3` я не нашёл ни маркера при rc≠0, ни проглоченной ошибки, ни таймаута без FAIL.
+
+## Инварианты SPEC §3 (п. 3)
+- C1 — выполнен. `git diff --diff-filter=D` с поиском переименований пуст; все 20 удалений — R100 в `docs/archive/…`. `PROGRESS-v2.md`, `PLAN-v2.md` и `kit-v2/claude-config/settings.json` побайтно равны оригиналам (хэши блобов совпадают). Ни один блоб базы не потерян, 17 файлов изменены на месте. 0 merge-коммитов.
+- `main` не тронут: origin/main = `e0b5f6e`, ветка `v3` растёт от него линейно.
+- Файлы тимлида после сида не правились. Лог по путям — 0 коммитов. Проверил и `-z`-разбором (без проблемы кавычек), со списком `owner_add`: 0. «Тимлид:» — ровно один коммит, `49e873c`.
+- Публичный репо: в evidence и сообщениях коммитов нет почты, путей домашнего каталога, id аккаунтов и организаций. Есть id прогона CI и трейлер Claude-Session, как во всей истории `main`. Секретов в дифе нет.
+- Ничего платного: по коду — `env -u ANTHROPIC_API_KEY` и `--max-turns 3`; по evidence — `apiKeySource none`. Сами прогоны я не наблюдал.
+
+## Отклонения PLAN-v3 (15)
+Все 15 законны: это детали доков, порядок или раскладка, а не подмена «готово». Отдельно сверил три. Откл. 3: вложенные `.claude/skills` подгружаются при первом чтении файла в подкаталоге (skills) — архив должен быть инертным. Откл. 4: exec form — дословно из hooks. Откл. 15: «stopReason в выводе» заменён на строку kill-switch в выводе плюс `terminal_reason = hook_stopped`. Это строже, а различающая сила показана baseline v2 (`completed`). Сам формат stream-json без `claude -p` не проверял.
+
+## two-tier-upgrade до перевода живого проекта (п. 4)
+- Историю не теряет: во всех моих прогонах коммиты v2 — предки `kit-v3`, `main` не тронут.
+- Файлы не теряет: перед заменой файл уходит в архив через `git mv`; при сбое неотслеживаемый файл пользователя остаётся цел.
+- Сломанное состояние оставить может: сбой без отката (блокирующая 3).
+- Риски перевода, названные выше: замена `settings.json` целиком, красный lint на ветке впереди `main` с коммитами «accept:», переиспользование старой `kit-v3`.
+
+## Проверенные факты
+| что | верно? | что на самом деле |
+|---|---|---|
+| permissions: `/path` в project settings | верно | «`<primary working directory>/path` in project settings» — deny кита привязаны к корню запуска |
+| permissions: Edit покрывает Write, правила `Write(…)` не проверяются | верно | «Claude Code accepts the rule but never consults it» |
+| permissions: deny не покрывает подпроцессы | верно | «arbitrary subprocesses … like a Python or Node script» — поэтому lint владения и есть рубеж |
+| hooks: exec form, плейсхолдер в `args` | верно | «Prefer exec form for any hook that references a path placeholder» |
+| hooks: `continue:false` + `stopReason` для PreToolUse | верно по дословной цитате | «For PreToolUse and PostToolUse hooks, the stop applies…»; пересказ инструмента ей противоречил — опирался на цитату и на `hook_stopped` в evidence F4 |
+| hooks: `additionalContext` фактами | верно | «factual statements rather than imperative» |
+| skills: вложенные `.claude/skills` | верно | грузятся при первом чтении файла в подкаталоге |
+| settings-reference: `model`, `autoMemoryEnabled`, `disableClaudeAiConnectors`, `workflowSizeGuideline`, `subagentPromptCacheTtl`, `ultracode`, `effortLevel` | верно | все ключи есть |
+| PROGRESS «F1–F9 закрыты своим чеком с evidence» | верно по файлам | маркеры есть; шесть evidence воспроизведены |
+| PROGRESS «CI зелёный на HEAD» | не проверено | gh не авторизован, задача запрещает |
+| F7 «после апгрейда `check-budget` → `BUDGET_OK`» | верно для фикстуры | неверно для проекта на ветке впереди `main` с коммитами v2 в файлы тимлида (Named) |
+
+## Свои прогоны (Linux, свой клон, скрипты пишут во `/tmp/two-tier-v3`)
+1. `bin/check-budget --self-test`
+```
+ok  owner · END STATE называет docs/PROGRESS.md: ждали OK, получили OK
+OWNER_OK
+SELFTEST_OK
+rc=0
+```
+2. `bin/check-budget`
+```
+OK   owner: END STATE docs/GOAL.txt: путей 3, файлов тимлида — нет
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 1: 49e873c Тимлид: seed v3
+BUDGET_OK
+rc=0
+```
+3. `(cd kit && ../bin/check-budget)`
+```
+OK   review: нет docs/reviews/*.md
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 1: 49e873c Тимлид: seed v3
+BUDGET_OK
+rc=0
+```
+4. `bin/check-budget --templates`
+```
+OK   owner: END STATE docs/GOAL.txt: путей 2, файлов тимлида — нет
+OK   owner: нет main/origin/main или коммитов — lint коммитов пропущен
+BUDGET_OK
+rc=0
+```
+5. `bin/check-kit`
+```
+OK   workflow: .github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml
+OK   budgets: defaults budgets.json = kit/budgets.json
+KIT_OK
+rc=0
+```
+6. `bin/check-docs`
+```
+OK   CHANGELOG v3: полей харнеса v2 и v3 — 18, строк таблицы со ссылкой на док и столбцами до/после — 19; без строки — нет
+OK   dev-system.ru.md: разделы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение
+DOCS_OK
+rc=0
+```
+7. `bin/two-tier-upgrade --self-test`
+```
+  прогон 2: ветка: kit-v3 | изменений нет
+OK   повторный прогон: тот же HEAD, `git status` пуст
+OK   remotes не тронуты, push некуда и не было
+UPGRADE_OK
+rc=0
+```
+8. `make ci` → rc=0, строк BAD/FAIL в логе — 0, хвост:
+```
+OK   CHANGELOG v3: полей харнеса v2 и v3 — 18, строк таблицы со ссылкой на док и столбцами до/после — 19; без строки — нет
+OK   dev-system.ru.md: разделы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение
+DOCS_OK
+```
+9. Аналог SPEC §5: `bin/two-tier-init <пустой каталог> && cd <каталог> && bin/check-budget` → `OK   owner: нет main/origin/main или коммитов — lint коммитов пропущен` / `BUDGET_OK` / `rc=0`. Дословно на несуществующем каталоге → `two-tier-init: нет каталога …`, `rc=1`.
+10. Эмуляция гейта без F3 и F4: `git init` → `two-tier-init` (25 файлов) → из t3:
+```
+[bin/check-budget --self-test] rc=0 last: SELFTEST_OK | FAIL/BAD lines: 0
+[bin/check-budget] rc=0 last: BUDGET_OK | FAIL/BAD lines: 0
+[bin/check-budget --self-test intent owner] rc=0 last: SELFTEST_OK | FAIL/BAD lines: 0
+[bin/check-budget --templates] rc=0 last: BUDGET_OK | FAIL/BAD lines: 0
+[bin/check-kit] rc=0 last: KIT_OK | FAIL/BAD lines: 0
+[bin/two-tier-upgrade --self-test] rc=0 last: UPGRADE_OK | FAIL/BAD lines: 0
+```
+11. Evidence на своих коммитах (`git worktree`, PROGRESS родителя):
+```
+F1 main part with pre-commit PROGRESS: IDENTICAL
+F1 kit part: IDENTICAL
+F2 self-test part: IDENTICAL
+F2 live part: IDENTICAL
+F5: IDENTICAL
+F6: IDENTICAL
+F7: IDENTICAL (modulo fixture sha)
+F8 main part: IDENTICAL
+```
+Статическая часть `check-harness` (только `static()`, без claude): `--- diff with F4 evidence lines 2-6` / `IDENTICAL`; baseline v2: `IDENTICAL to baseline lines 3-7`.
+12. CI локально, в свежем клоне (только origin/main и origin/v3): `bin/check-budget` → `BUDGET_OK`, rc=0; `make ci` → rc=0, `SIZE_OK DOLLAR_OK GOAL_OK SPEC_OK PLAN_OK REVIEW_OK BUDGETS_OK INTENT_OK OWNER_OK SELFTEST_OK BUDGET_OK KIT_OK DOCS_OK`. YAML обоих workflow разбирается, копии совпадают.
+13. Мутации продукта, во временных копиях:
+```
+M1 owner commit lint off: rc=1; BAD: 2; markers: INTENT_OK OWNER_FAIL SELFTEST_FAIL
+M2 pin always OK: rc=1; BAD: 2; markers: INTENT_FAIL OWNER_OK SELFTEST_FAIL
+M3 END STATE rule off: rc=1; BAD: 1; markers: OWNER_FAIL SELFTEST_FAIL
+M4 check() off-by-one: rc=1; BAD: 15; markers: SIZE_FAIL DOLLAR_OK GOAL_FAIL SPEC_OK PLAN_FAIL REVIEW_FAIL BUDGETS_OK INTENT_OK OWNER_OK SELFTEST_FAIL
+M5 report() never fails (self-test): rc=0; BAD: 0; … SELFTEST_OK
+M5 (live): FAIL progress_lines: docs/PROGRESS.md 65/60 / BUDGET_OK
+K1–K7 → rc=1 … last=KIT_FAIL;  K8 both copies loosened together: rc=0 last=KIT_OK
+U1 retired files deleted instead of archived: rc=1 … last=UPGRADE_FAIL
+U2 archive name not date-stable: rc=1 … last=UPGRADE_FAIL
+U3 report rewritten on every run: rc=1 … last=UPGRADE_FAIL
+U4 drops the last commit before branching: rc=1 FAIL: FAIL main не тронут|FAIL история цела … last=UPGRADE_FAIL
+check-docs red: … DOCS_FAIL / rc=1 (expected 1)
+templates red: FAIL claude_md_lines: CLAUDE.md 41/40 / BUDGET_FAIL: 1 (rc=1); FAIL spec_feature_chars: … F1: 790 / BUDGET_FAIL: 1 (rc=1)
+```
+14. Пробы находок — выводы цитирую в блокирующих и в Named. Апгрейд: (а) `rc=1` → `subprocess.CalledProcessError: … 'add', '--', …` / `state: branch=kit-v3 staged=39 untracked=0` / `rerun: two-tier-upgrade: в дереве незакоммиченные правки — сначала коммит или stash`; (б) `rc=1` → `… 'mv', 'bin/check-ci', 'docs/archive/kit-v2/bin/check-ci']' returned non-zero exit status 128.` / `branch=kit-v3 staged=1 untracked=18`; (в) `rc=1` → `KeyError: 'defaults'`; переход назад: `after plain 'git switch main': branch=main staged on main=1`.
+
+## Что не запускалось и почему
+- `bin/check-harness` и `bin/gate-v3` целиком, `claude -p`, `claude doctor` — запрет задачи: харнес меряется на подписке оператора на его Mac. Прогнал только `static()` из `check-harness`, без вызова claude.
+- `bin/check-ci v3` и статус CI для `fe2f33f` — `gh` не авторизован, а задача велит проверять F3 только по коду и evidence. Финальный прогон `gate-v3` после последнего push (END STATE (A)) в репо не сохраняется — по PLAN он только в транскрипте; это проверяет тимлид.
+- Живые проекты и инструменты удалённого компьютера — запрет (C4 и задача). Поэтому раскладку projekt_1_telefon (`.gitignore`, свои `budgets.json` и `settings.json`, ветки) я не видел. Триггеры блокирующей 3 и рисков перевода показаны только на фикстурах.
+- Прямой `curl` к code.claude.com прокси отклонил (403); доки читал через WebFetch и сверял по дословным цитатам.

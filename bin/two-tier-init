@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# two-tier-init — развернуть кит two-tier-dev v2 в целевом репозитории.
+# two-tier-init — развернуть кит two-tier-dev v3 в целевом репозитории.
 #
 #   bin/two-tier-init <target-dir>
 #
 # Содержимое kit/ ложится в КОРЕНЬ цели: kit/CLAUDE.md → <target>/CLAUDE.md,
-# kit/.claude/ → <target>/.claude/; вложенного kit/ в цели нет.
+# kit/.claude/ → <target>/.claude/, kit/bin/ → <target>/bin/; вложенного kit/ в цели нет.
 # Существующий файл не перезаписывается — печатается «skip (exists)».
 # Режимы сохраняются (cp -p): хуки должны остаться исполняемыми.
 # Цель должна существовать; git init скрипт не делает и не требует.
@@ -38,9 +38,9 @@ done
 cat <<'EOF'
 
 Дальше:
-  1. Заполнить CLAUDE.md (факты проекта: стек, команды запуска и чека) и docs/PROCESS.md
-     (Environment под названные чеки, деньги, каталог развилок) — из шаблонов docs/*.template.md.
-  2. Оператор пишет intent/<slug>.md; тимлид прожаривает его в Cowork по grilling → docs/SPEC-1.md.
-  3. Исполнитель: plan mode → docs/PLAN-1.md коммитом → один /goal на фазу → /accept.
-  Остановить исполнителя в любой момент: touch AGENT_STOP (снять — rm AGENT_STOP).
+  1. Тимлид: intent/INTENT.md, docs/SPEC-1.md, docs/GOAL.txt — по шаблонам docs/*.template.*;
+     .claude/launch.settings.json — доверенная инфраструктура проекта; коммиты «Тимлид: …».
+  2. CLAUDE.md — факты проекта; docs/PROCESS.md — Environment, Деньги, каталог развилок.
+  3. bin/check-budget → BUDGET_OK; запуск исполнителя и контрольный прогон — docs/LAUNCH.md.
+  Остановить исполнителя: touch AGENT_STOP (снять — rm AGENT_STOP); подсказать — строка в STEER.md.
 EOF

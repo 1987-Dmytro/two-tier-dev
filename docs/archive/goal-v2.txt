@@ -1,0 +1,15 @@
+Кит two-tier-dev v2 собран по docs/SPEC-v2.md и docs/two-tier-dev-v2-architecture.md (§3–§5 — обязательная раскладка и settings.json), план — docs/PLAN-v2.md.
+
+Конечное состояние, всё одновременно:
+1. bin/two-tier-init /tmp/t2 на пустом git-репо создаёт kit/ целиком (архитектура §3), шаблоны kit/docs/*.template.md и kit/intent/intent.template.md заполнены по SPEC F1.
+2. kit/.claude/: settings.json ровно по §5 (ключи model, ultracode, workflowSizeGuideline, subagentPromptCacheTtl, autoMemoryEnabled, permissions.deny, hooks; БЕЗ CLAUDE_CODE_MAX_*); пять хуков из anthropics/cwc-long-running-agents/claude-code-config/.claude/hooks verbatim с лицензионной шапкой; refuse_sweeping_commands.py из v1; test-output-filter.sh, который оставляет строку «N passed»/«FAILED»; agents/evaluator.md = cwc + абзац про лестницу Ponytail и docs/evidence/; rules/graphify.md.
+3. kit/.claude/skills/{team-lead,grilling,plan-phase,accept}/SKILL.md: team-lead — из docs/drafts/team-lead-v4-draft.md, ≤80 строк; grilling — verbatim из mattpocock/skills/skills/productivity/grilling/SKILL.md + строка источника (MIT); plan-phase и accept — с disable-model-invocation: true, содержание по SPEC F3.
+4. kit/CLAUDE.md ≤40 строк с десятью блоками §4 и evidence-правилом; без фраз verify with a subagent / double-check / re-verify / keep spawn counts low. kit/REVIEW.md — четыре раздела по SPEC F4.
+5. Всё из v1 перемещено git mv в docs/archive/ (team-lead-v3.20.md, executor-kit-v1/, templates-v1/, brain-init-v1/, new-project.sh); в корне нет executor-kit/, templates/, skills/brain-init/; в docs/archive нет CLAUDE.md; git log --diff-filter=D за фазу пуст. README.md, docs/dev-system.ru.md, CHANGELOG.md — под v2.
+6. docs/STATUS.md со строкой «Запуск: …» и датой гейта.
+
+Доказательство — команды из SPEC §2 для F1–F6 прогнаны из корня репо, каждая печатает свой маркер (HARNESS_OK, SKILLS_OK, CLAUDEMD_OK, ARCHIVE_OK, GATE_OK; для F1 — совпадение find с §3), вывод каждой в транскрипте И в docs/evidence/F<n>-<check>-result.txt. Чек, у которого нет вывода в транскрипте, не считается пройденным.
+
+Ограничения: работать по порядку PLAN-v2 (F1 → F2/F3/F4 параллельно → F5 → F6); один коммит на фичу «F<n>: …»; отклонение от PLAN — обновить PLAN-v2.md тем же коммитом; не редактировать docs/SPEC-v2.md, intent/, docs/two-tier-dev-v2-architecture.md; сеть — только github.com; ничего платного; не проверять свою работу сабагентами — evaluator запускается отдельно через /accept после гейта.
+
+Стоп: если cwc-long-running-agents или grilling недоступны или их файлы не совпадают с SPEC §0 — записать «STOP: STOP-1 <расхождение>» в PROGRESS.md и остановиться; это выполненный goal. Stop after 60 turns: записать в PROGRESS.md что сделано, что нет, следующую команду.

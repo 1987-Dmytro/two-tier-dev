@@ -1,0 +1,38 @@
+{
+  "defaults": {
+    "team_lead_copy_lines": 80,
+    "team_lead_copy_chars": 12000,
+    "brief_copy_lines": 150,
+    "brief_copy_chars": 15000,
+    "role_copy_chars": 10000,
+    "grilling_copy_chars": 3500,
+    "skill_chars": 4000,
+    "dollar_digit": 0,
+    "claude_md_lines": 40,
+    "intent_chars": 6000,
+    "spec_feature_chars": 600,
+    "progress_lines": 60,
+    "plan_lines": 150,
+    "goal_chars": 4000,
+    "read_first_files": 3,
+    "read_first_chars": 50000,
+    "review_blocking": 5,
+    "owner": [
+      "intent/",
+      "docs/SPEC-*.md",
+      "docs/GOAL.txt",
+      "docs/STATUS.md",
+      "docs/PROCESS.md",
+      "docs/reviews/",
+      "docs/drafts/",
+      "claude/",
+      ".claude/launch.settings.json"
+    ]
+  },
+  "project": {
+    "owner_add": [
+      "docs/OFFICIAL-SOURCES.md",
+      "docs/archive/team-lead-*.md"
+    ]
+  }
+}
