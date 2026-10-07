@@ -15,9 +15,10 @@
 - **F5 `/accept` v3.1**: `bin/check-kit` → `KIT_OK` — `F5-kit-result.txt`: вердикт — `bin/verify-phase` (свежий клон, `Workflow(verify-phase)`, 30 мин), скилл 1 999/4 000 знаков.
 - **F6 Шаблоны и CLAUDE.md**: `bin/check-budget --templates` → `BUDGET_OK` с контрактом фраз — `F6-templates-result.txt`; красная проба (шаблон PROCESS без `--effort ultracode`) → `BUDGET_FAIL`.
 - **F8 Документы**: `bin/check-docs` → `DOCS_OK` — `F8-docs-result.txt`: CHANGELOG v3.1 (поле — док, до, после), LAUNCH (каждый флаг строки), README и dev-system — ultracode и `/verify-phase`; красная проба → `DOCS_FAIL`.
+- **F9 Гейт v3.1**: `bin/gate-v3.1` → `F1 HARNESS_OK` … `F8 DOCS_OK`, `v3 GATE_OK`, `F9 GATE_OK` — `F9-gate-result.txt`; `bin/gate-v3` — CI текущей ветки, свои каталоги на запуск.
 
 ## Next — один айтем
-1. **F9 Гейт v3.1**: `bin/gate-v3.1` → `GATE_OK`.
+1. **`/verify-phase` фазы**: `bin/verify-phase` из свежего клона запушенного HEAD → `VERDICT: PASS` в `docs/evidence/verify-<sha>.txt`.
 
 ## Open stop — NONE
 

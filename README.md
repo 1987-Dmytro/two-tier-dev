@@ -44,6 +44,7 @@ GATE     the operator runs the product and judges it by the success signals of t
 | `bin/two-tier-upgrade <path>` | a live project moves to v3 on branch `kit-v3` without losing history; `--self-test` on a fixture | `UPGRADE_OK` |
 | `bin/check-docs` | links in these documents are alive; CHANGELOG covers every harness field | `DOCS_OK` |
 | `bin/gate-v3` | the kit on an empty repo: F1, F2, F4–F7 rerun from there, F3 and F8 from the branch root | `GATE_OK` |
+| `bin/gate-v3.1` | the v3.1 markers F1–F8 (the kit on an empty repo and the branch root) and `bin/gate-v3` still green | `GATE_OK` |
 
 The numbers live in [`kit/budgets.json`](kit/budgets.json): kit defaults plus a `project` block that may only
 tighten them. The team-lead files are listed there too (`owner`); they are guarded by `Edit` deny rules and by

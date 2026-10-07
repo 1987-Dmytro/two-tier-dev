@@ -1,0 +1,35 @@
+$ bin/gate-v3.1
+F9: bin/two-tier-init t3 — файлов кита 27; логи — /tmp/two-tier-v3/gate31-Ky2PcD
+init: (t3) bin/check-budget — rc 0
+kit: (t3) bin/check-kit — rc 0
+templates: (t3) bin/check-budget --templates — rc 0
+owner: (t3) bin/check-budget --self-test intent owner — rc 0
+docs: (корень ветки) bin/check-docs — rc 0
+verify: (корень ветки) bin/check-verify — rc 0
+harness-repo: (корень ветки) bin/check-harness — rc 0
+harness-t3: (t3) bin/check-harness — rc 0
+gate-v3: (корень ветки) bin/gate-v3 — rc 0
+F9-init BUDGET_OK
+F1 HARNESS_OK
+F2 ENV_OK
+F3 HOOKS_OK
+F4 VERIFY_OK
+F5 KIT_OK
+    templates: WARN intent: intent/INTENT.md: маркеров неясности 1
+F6 BUDGET_OK
+F7 OWNER_OK
+F8 DOCS_OK
+    gate-v3: F9-init BUDGET_OK
+    gate-v3: F1 BUDGET_OK
+    gate-v3: F2 INTENT_OK
+    gate-v3: F3 CI_OK
+    gate-v3: F4 HARNESS_OK
+    gate-v3: F5 BUDGET_OK
+    gate-v3: F6 KIT_OK
+    gate-v3: F7 UPGRADE_OK
+    gate-v3: F8 DOCS_OK
+    gate-v3: F9 GATE_OK
+v3 GATE_OK
+F9 GATE_OK
+GATE_OK
+rc 0
