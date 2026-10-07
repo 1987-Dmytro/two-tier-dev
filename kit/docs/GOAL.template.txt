@@ -5,12 +5,12 @@ Read first: docs/SPEC-<n>.md, docs/PROGRESS.md, <current review file or nothing>
 Authorized in this goal: <actions this phase needs that the auto-mode classifier may stop: push branch <b>, edit .claude/**, deploy to <host>, …>
 
 END STATE (met when one holds):
-(A) Every feature of SPEC-<n> §2 is closed: its check ran in this session and its output is in docs/evidence/<F>-<check>-result.txt; branch <b> is pushed; in the final turn, after the last push, <gate command> prints every marker of the phase; the head of docs/PROGRESS.md says what is done, what the operator does next and when.
+(A) Every feature of SPEC-<n> §2 is closed: its check ran in this session and its output is in docs/evidence/<F>-<check>-result.txt; branch <b> is pushed and its CI is green; /verify-phase, run by `bin/verify-phase` from a fresh clone of the pushed HEAD, wrote VERDICT: PASS to docs/evidence/verify-<sha>.txt, its blocking findings fixed in this session first; in the final turn, after the last push, <gate command> prints every marker of the phase; the head of docs/PROGRESS.md says what is done, what the operator does next and when.
 (B) docs/PROGRESS.md has a NEW line written in this session `STOP: <id>` for one of the stops of SPEC-<n> §4, with the question and a resume line. STOP lines already in the file do not count.
 (C) <N> turns are reached and a checkpoint is in PROGRESS (done, not done, exact next command), committed and pushed.
 
 CONSTRAINTS:
-- Branch <b> only; never push to main. At least one commit per feature, `git add` with exact paths; fix-ups are new commits; never amend a pushed commit or force-push.
+- Branch <b> only; never push to main: main changes only through a pull request after the operator's yes. At least one commit per feature, `git add` with exact paths; fix-ups are new commits; never amend a pushed commit or force-push. Workflow agents edit only inside their own worktrees or only read; the main session commits.
 - Never print secrets; never bypass the spend guard; irreversible or paid above the PROCESS threshold only after the operator's yes.
 - Team-lead files are read-only: intent/, docs/SPEC-*.md, docs/GOAL.txt, docs/STATUS.md, docs/PROCESS.md, docs/reviews/, docs/drafts/, claude/, .claude/launch.settings.json, budgets.json.
 - On stochastic checks iterate on your own within the budget of SPEC §4 (time, €): one metric, keep or discard by git, a line per run in the run log; stop only by SPEC §4.

@@ -467,6 +467,15 @@ TEMPLATES = {  # шаблон кита → куда его кладёт прим
 }
 
 
+CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из шаблонов — фразы, без которых шаблон её не ведёт
+    "docs/GOAL.template.txt": ["bin/verify-phase", "VERDICT: PASS", "its blocking findings fixed in this session",
+                               "Workflow agents edit only inside their own worktrees", "never push to main"],
+    "docs/PROCESS.template.md": ["| инструмент | форма | id | вкл | фича или чек | установка | удаление |", "--effort ultracode",
+                                 "--strict-mcp-config", "% недели"],
+    "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase"],
+}
+
+
 def templates():
     """Пример — шаблон как есть, только номер фазы, пин и Read first подставлены; плейсхолдеры <…> остаются."""
     root = "kit" if os.path.isdir("kit/docs") else "."
@@ -476,6 +485,9 @@ def templates():
     b, out = load_budgets(f"{root}/budgets.json")
     if not b:
         return report(out)
+    for f, words in CONTRACT.items():
+        miss = [w for w in words if w not in read(f"{root}/{f}")]
+        out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words)}, нет — {'; '.join(miss) or 'ничего'}"))
     pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
     subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),
             ("<первые 12 знаков git hash-object>", pin)]
