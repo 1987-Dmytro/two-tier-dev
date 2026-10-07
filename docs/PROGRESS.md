@@ -9,13 +9,15 @@
 - **F1 Харнес ultracode**: `bin/check-harness` → `HARNESS_OK` — `F1-harness-result.txt`; `baseRef` `fresh` → `main-base`, `head` → `head-feature` — `F1-baseref-result.txt`.
 
 - **F2 Окружение = таблица**: `bin/check-harness` → `ENV_OK` на репо кита и на t3 — `F2-harness-result.txt`; `--self-test` — в `make ci`.
+- **F3 Хуки на агентах**: `bin/check-harness` → `HOOKS_OK` на репо и t3 — `F3-harness-result.txt`; «до» на хуках v3 → `HOOKS_FAIL` — `F3-harness-v3-baseline.txt`.
 
 ## Next — один айтем
-1. **F3 Хуки на агентах**: `bin/check-harness` → `HOOKS_OK`.
+1. **F7 Владение: хвосты 3 и 5**: `bin/check-budget --self-test intent owner` → `OWNER_OK`.
 
 ## Open stop — NONE
 
 ## Notes
+- Риск 1 PLAN снят замером: `continue:false` kill-switch останавливает агента воркфлоу, `kill-switch.sh` не менялся. Проба требует попытки записи: агент, прочитавший CLAUDE.md, иначе останавливался сам.
 - Встроенные плагины `@builtin` (`cc-plugin-*`) в сверке не считаются: PROCESS называет их прозой, строки таблицы нет.
 - `permissions.allow` из `.claude/settings.json` в `-p` не действует (папка не доверена) — пара и `bin/verify-phase` передают те же правила `--allowedTools`; отклонение 3 PLAN.
 
