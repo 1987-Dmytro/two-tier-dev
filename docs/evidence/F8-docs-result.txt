@@ -1,0 +1,16 @@
+$ bin/check-docs
+OK   README.md: ссылок 10, путей репо 25; мёртвых — нет
+OK   docs/README.md: ссылок 0, путей репо 1; мёртвых — нет
+OK   docs/dev-system.ru.md: ссылок 0, путей репо 21; мёртвых — нет
+OK   docs/LAUNCH.md: ссылок 0, путей репо 1; мёртвых — нет
+OK   CHANGELOG.md: ссылок 0, путей репо 34; мёртвых — нет
+OK   CHANGELOG v3–v3.1: полей харнеса v2, v3 и v3.1 — 20, строк таблицы со ссылкой на док и столбцами до/после — 32; без строки — нет
+OK   dev-system.ru.md: разделы и темы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение, ultracode, /verify-phase, Окружение = таблица; нет — ничего
+OK   README.md: v3.1: нет — ничего
+OK   LAUNCH.md: флагов строки запуска шаблона PROCESS 7; без объяснения — нет
+DOCS_OK
+rc 0
+
+$ cd /tmp/two-tier-v3/docs-red && bin/check-docs   # красная проба: в копии README «ultracode» стёрт
+FAIL README.md: v3.1: нет — ultracode
+DOCS_FAIL

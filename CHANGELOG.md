@@ -8,11 +8,29 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
 ## Unreleased — named debts
 - The Cowork card v3.22 that the v2 architecture §3 sends to the archive is not producible from repo content (PLAN-v2,
   risk 6); either the operator exports it or the line is retired.
-- A measured effort sweep stays a separate $0 item: v3 pins effort in the launch line (`medium`, the Opus 5.5 default
-  by model-config) instead of `ultracode` in settings.
+- The limit cost of ultracode is measured on the v3.1 leg (SPEC-v3.1 §2: ≤40 % of the week, ordinary phases 15 %); the
+  bar for ordinary phases is reset by that measurement at the v3.1 retro, together with `fix-until-green.js` (Q4).
 - Living projects move to v3 by `bin/two-tier-upgrade` in the next phase (SPEC-v3 §6); the kit's S6 is measured there.
 
 ## v3.1 — 2026-10-07 — ultracode in full: the executor's standard mode, its environment equal to a table, hooks proven on workflow agents, acceptance by a saved workflow
+- **Ultracode is the executor's standard mode** (D4, N2): `--effort ultracode` in the launch line of `docs/PROCESS.md`;
+  workflow agents edit only in their own worktrees or only read, the main session commits by exact paths, push to
+  `main` is forbidden (`kit/CLAUDE.md` — the auto-mode classifier reads it). Taught by: the operator, 07.10 — «изучи все
+  его возможности и давай использовать его по полной»; the facts — `claude/ultracode-2026-10-07.md`.
+- **Environment = table:** the Environment table of `docs/PROCESS.md` (tool · form · id · on · feature · install · remove)
+  drives `enabledPlugins`, `skillOverrides` and the MCP of the launch line; `bin/check-harness` compares `system/init` of
+  the pair with it — `ENV_OK`. Taught by: Cowork skills, user plugins and MCP leaking into the executor (team lead's
+  measurement 07.10), and the v3 rule «`mcp_servers` 0» that cut Context7 off too.
+- **Acceptance by a saved workflow:** `/verify-phase` (`kit/.claude/workflows/verify-phase.js`) — per feature a fresh
+  check run, edge cases against «done» and a mutation (`claude-sonnet-5-5`, own worktree), a refuter per blocking
+  candidate, a judge (`claude-opus-5-5`, schema, ≤5 blocking); `bin/verify-phase` clones the pushed HEAD, runs the gate,
+  holds the 30-minute limit (`VERIFY_TIMEOUT`) and writes `docs/evidence/verify-<sha>.txt`; `/accept` and the GOAL
+  template's (A) run it. Proven on fixtures by `bin/check-verify` (`docs/evidence/F4-verify-result.txt`). Taught by:
+  acceptance longer than the leg (06.10: 4 h against 1 h; 07.10: ~35 min by one subagent).
+- **Ownership, tails 3 and 5:** `budgets.json` is a team-lead file; the commit lint takes the owner list at each
+  commit's parent, so the commit that adds an entry is green and an executor's later edit is red; END STATE catches a
+  team-lead file with a sign stuck to it (`—`, `…`, `‘’`, `„“`, `@`, a leading `/`, `#`, `{}`, `&&`, `’s`), a root-level
+  team-lead file and a two-level team-lead directory without `/`. Taught by: `docs/evidence/accept-8f1d232.txt`.
 - **Harness fields** — the doc, and the same control pair (`bin/check-harness`, `docs/LAUNCH.md`) before, on kit v3
   (`docs/archive/evidence-v3/F4-harness-result.txt`, `main` @ `7957d68`), and after, on v3.1 (`docs/evidence/F1-harness-result.txt`):
 
@@ -29,6 +47,7 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
 | `hooks`: `refuse_sweeping_commands.py` | refusal «— CLAUDE.md Rules» → a self-contained reason | [hooks](https://code.claude.com/docs/en/hooks) | probe `guards`: the refusal points to «CLAUDE.md Rules», a section that does not exist | the refusal names the rule itself; `git add -A` refused on the main session and on a workflow agent, index empty |
 | `hooks`: `kill-switch.sh` | unchanged; proven on a workflow agent | [hooks](https://code.claude.com/docs/en/hooks), [workflows](https://code.claude.com/docs/en/workflows) | run2 only: the main session stops at its first call | probe `kill`: the agent creates `AGENT_STOP` itself, its next call is refused, the probe file is not created — same on v3 and v3.1 |
 | `permissions` (deny) on a workflow agent | unchanged; proven | [sub-agents](https://code.claude.com/docs/en/sub-agents#permission-modes), [workflows](https://code.claude.com/docs/en/workflows) | proven on the main session only | Write to `docs/STATUS.md` denied on the main session and on the agent: «File is in a directory that is denied by your permission settings» |
+| `workflows/verify-phase.js` | none → the saved workflow `/verify-phase`, launched by `bin/verify-phase` | [workflows](https://code.claude.com/docs/en/workflows#save-the-workflow-for-reuse), [headless](https://code.claude.com/docs/en/headless#background-tasks-at-exit) | acceptance by one fresh subagent: 07.10 `role-checker`, ~19 min, one finding (`docs/evidence/accept-8f1d232.txt`) | fixtures: a planted edge defect → `NEEDS_WORK`, the defect named; a clean phase → `PASS`, 0 blocking; past the limit → `VERIFY_TIMEOUT`; ~80 s per one-feature fixture (`docs/evidence/F4-verify-result.txt`) |
 
 ## v3.0 — 2026-10-06 — budgets enforced by code, the result instead of the path, the harness from the official docs, a living intent pinned in the SPEC
 - **Budgets:** `bin/check-budget` + `budgets.json` (kit defaults; a project may only tighten) — skills, CLAUDE.md, the

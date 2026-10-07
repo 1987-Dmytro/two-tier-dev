@@ -14,9 +14,10 @@
 - **F4 `/verify-phase`**: `bin/check-verify` → `VERIFY_OK` — `F4-verify-result.txt`: красная фикстура → `NEEDS_WORK`, дефект назван; чистая → `PASS`, блокирующих 0; `--limit 20` → `VERIFY_TIMEOUT`.
 - **F5 `/accept` v3.1**: `bin/check-kit` → `KIT_OK` — `F5-kit-result.txt`: вердикт — `bin/verify-phase` (свежий клон, `Workflow(verify-phase)`, 30 мин), скилл 1 999/4 000 знаков.
 - **F6 Шаблоны и CLAUDE.md**: `bin/check-budget --templates` → `BUDGET_OK` с контрактом фраз — `F6-templates-result.txt`; красная проба (шаблон PROCESS без `--effort ultracode`) → `BUDGET_FAIL`.
+- **F8 Документы**: `bin/check-docs` → `DOCS_OK` — `F8-docs-result.txt`: CHANGELOG v3.1 (поле — док, до, после), LAUNCH (каждый флаг строки), README и dev-system — ultracode и `/verify-phase`; красная проба → `DOCS_FAIL`.
 
 ## Next — один айтем
-1. **F8 Документы**: `bin/check-docs` → `DOCS_OK`.
+1. **F9 Гейт v3.1**: `bin/gate-v3.1` → `GATE_OK`.
 
 ## Open stop — NONE
 
