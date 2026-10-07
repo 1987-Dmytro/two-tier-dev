@@ -1,0 +1,120 @@
+база fe2f33f · HEAD f7ffa41 · свежий проход: role-checker (режим evaluator), отдельный субагент, свой клон · 07.10.2026
+VERDICT: NEEDS_WORK
+
+Проверено: two-tier-dev, ветка `v3` @ `f7ffa41`, свой клон `origin/v3`. Коммиты исполнителя раунда — `93f14f8`, `139d4cb`, `b7d64ef`, `92fdc86`, `2e9010f`. Отчёт исполнителя на слово не принят.
+- Находка 1 (не-ASCII путь в lint коммитов) закрыта и по чеку, и по классу.
+- Находка 3 (сбой апгрейда без отката) закрыта и по чеку, и по классу.
+- Находка 2 (путь тимлида в END STATE) закрыта только по чеку. Названные написания (точка, `./`) теперь ловятся. Но тот же вид дефекта остался на других написаниях: каталог тимлида в той форме, в какой он стоит в самом списке владения, и путь в разметке. Это не регрессия — так же было и на `fe2f33f`.
+- Регрессий в `check-budget` и `two-tier-upgrade` нет.
+- Evidence F1, F2 и F7 сходятся с кодом.
+- Файлы тимлида не тронуты.
+
+## Блокирующие
+
+- [блокирующая] `kit/bin/check-budget:208-209` (захват и нормализация путей END STATE; сопоставление — `is_tl`, стр. 64)
+  → Критерий: `docs/reviews/v3-1.md`, находка 2 «по всему её классу»; SPEC-v3 F2 «красное, если файл тимлида … назван в END STATE»; SPEC-v3 §1, строка «Владение». В списке владения 4 из 9 записей — каталоги: `intent/`, `docs/reviews/`, `docs/drafts/`, `claude/`. `kit/REVIEW.md`: баг на пути, который заказчик запускает.
+  → Симптом:
+    - Регэксп `[\w.<>*-]+(?:/[\w.<>*-]+)+` не захватывает хвостовой `/`. Однослойный каталог (`intent/`, `claude/`) он не захватывает вовсе, а `docs/reviews/` превращает в `docs/reviews`. В результате каталог тимлида, записанный так же, как в списке владения и в CONSTRAINTS шаблона GOAL (`intent/, …, docs/reviews/, docs/drafts/, claude/`), проходит как `OK`.
+    - Знаки класса `*`, `_`, `<`, `>`, прилипшие к пути, как и точка до фикса, тоже дают `OK`.
+    - Что это артефакт захвата, а не политика правила, видно по одной записи: `intent/` с точкой после → `FAIL`, тот же `intent/` без точки → `OK`.
+    - Доказательство — прогон из корня клона. Для каждой строки создан временный каталог с `kit/budgets.json` и `docs/GOAL.txt`, где END STATE = эта строка; затем `bin/check-budget | grep 'END STATE'`:
+```
+(A) a new review in `docs/reviews/` says PASS.  →  OK   owner: END STATE docs/GOAL.txt: путей 1, файлов тимлида — нет
+(A) the team lead updates claude/, then stops.  →  OK   owner: END STATE docs/GOAL.txt: путей 0, файлов тимлида — нет
+(A) **docs/STATUS.md** is updated by the team lead  →  OK   owner: END STATE docs/GOAL.txt: путей 1, файлов тимлида — нет
+(A) the pin matches intent/.  →  FAIL owner: END STATE docs/GOAL.txt: путей 1, файлов тимлида — intent/
+```
+    - Мои фикстуры класса (`f2_class.py`) на HEAD: 13 случаев, из них 11 красных и 2 зелёных. Ловятся 7 из 11 красных:
+      - BAD (ждали FAIL, получили OK): `**docs/STATUS.md**`, `_docs/GOAL.txt_`, `<docs/STATUS.md>`, «in docs/reviews/ says PASS»;
+      - FAIL, как и нужно: `docs/STATUS.md...`, `intent/.`, `././docs/GOAL.txt`, `'docs/PROCESS.md'.`, `docs/SPEC-v4.md.`, CRLF, `docs/STATUS.md:12`;
+      - зелёные `./docs/PROGRESS.md.` и `kit/.claude/settings.json.` → OK.
+    - На продукте `fe2f33f` те же 4 тоже `OK`. Регрессии нет, но класс находки не закрыт.
+    - В v3-1 этого нет ни среди блокирующих, ни в «Named, not built». Прошлый проверяющий записал обратное: «Записи-каталоги (`intent/`, `docs/reviews/`) ловятся» (`accept-fe2f33f.txt`, стр. 9). Для голого написания каталога это неверно.
+  → Чек приёмки: `bin/check-budget --self-test owner` → `OWNER_OK`.
+    - В выводе должны быть красные фикстуры:
+      - END STATE называет каталог тимлида так, как он записан в списке: `` `docs/reviews/` `` посреди фразы, `claude/,`, `intent/` перед пробелом;
+      - путь тимлида в разметке: `**docs/STATUS.md**`.
+    - Зелёная фикстура — `docs/PROGRESS.md` в тех же обрамлениях.
+    - Красная сторона: на коде `f7ffa41` эти фикстуры дают BAD.
+
+## Сверка по трём находкам v3-1
+
+| находка | чек приёмки v3-1 | класс (мои фикстуры, git по умолчанию) | итог |
+|---|---|---|---|
+| 1. не-ASCII путь тимлида в lint коммитов (`139d4cb`) | `--self-test owner` → `OWNER_OK`, не-ASCII фикстура — FAIL; на продукте `fe2f33f` — BAD | 8 красных вариантов → `FAIL owner`, `BUDGET_FAIL: 1` на HEAD и `BUDGET_OK` на `fe2f33f`: не-ASCII в `claude/` и `docs/drafts/`; `"`, `\` и таб (git квотирует их и при `core.quotePath=false`, `-z` закрывает их тоже); перевод строки в имени; NFD-имя (как в macOS); не-ASCII запись `owner_add`; `git mv` и удаление не-ASCII файла тимлида; байты Latin-1. Зелёные: не-ASCII не-тимлидовский путь и коммит «Тимлид:» → `BUDGET_OK`. Разбор `-z` на диапазоне из 5 коммитов (с пустым коммитом) → ровно 2 FAIL и 1 «Тимлид:» | закрыта |
+| 2. путь тимлида в END STATE (`b7d64ef`) | `OWNER_OK`; точка, запятая, скобка, `./`, `.claude/launch.settings.json.` — FAIL. На `fe2f33f` BAD — точка, `./`, `.claude/…json.` (запятая и скобка были зелёными и раньше — это фикстуры от регрессии) | не закрыта: блокирующая выше | по чеку — да, по классу — нет |
+| 3. сбой апгрейда без отката (`92fdc86`) | `UPGRADE_OK`; (а)–(г) — отказ до старта, (д) — откат после старта. Проект как до запуска: ветка, HEAD, ветки, пустой индекс, дерево. На `upgrade()` из `fe2f33f` — FAIL ровно (а)–(д) | 13 форм. Сбой → rc 1, без трассировки, состояние (ветка, HEAD, индекс, refs, дерево с режимами, неотслеживаемые и игнорируемые файлы) не изменилось: `bin/` в `.git/info/exclude`; `*.yml` в `core.excludesFile`; нет identity git; `commit.gpgsign` с падающим подписантом; detached HEAD + pre-commit; старая `kit-v3` + pre-commit (`kit-v3` на своём sha); файл `docs/archive` вместо каталога (сбой Python после старта); три формы `budgets.json` (битый JSON, `defaults: []`, Latin-1); бинарный `bin/check-ci`; `.claude/settings.json` — симлинк наружу + pre-commit (внешний файл цел). Откат не трогает чужого: неотслеживаемые `bin/deploy.sh`, `.github/ISSUE_TEMPLATE/bug.md`, `docs/Заметки.md` и игнорируемый `.env` целы после отката. Успешные исходы — по построению: `docs/archive/` в `.gitignore` → апгрейд проходит; занятый путь архива → «конфликт, сверить руками», как и раньше | закрыта |
+
+Регрессии:
+- `check-budget`: `--self-test`, живой прогон, `--templates` и `(cd kit && ../bin/check-budget)` зелёные.
+- `two-tier-upgrade`: успешный путь на одной фикстуре v2 совпадает со старым — у `fe2f33f` и у HEAD 42 пути, те же блобы, кроме самих изменённых `bin/check-budget` и `bin/two-tier-upgrade`. Тот же отчёт: «поставлено 23, в архив 11, конфликтов 0, тимлиду 2». Повтор → «изменений нет», `git status` пуст.
+- `bin/two-tier-init` в пустой репо: маркеры `BUDGET_OK`, `SELFTEST_OK`, `KIT_OK`, `UPGRADE_OK` при 0 строк FAIL/BAD.
+
+## Evidence ↔ код
+- `F1-budget-result.txt`: основная часть (стр. 1–98) и часть «на ките» (стр. 100–108) совпали побайтно с моим прогоном на `b7d64ef`. Там evidence и записан: PROGRESS 35/60, «Тимлид:» — 3.
+- `F2-intent-result.txt`:
+  - self-test (стр. 1–25) совпал побайтно с прогоном на HEAD;
+  - живая часть (стр. 27–34) совпала побайтно с прогоном на `b7d64ef`;
+  - красная проба (стр. 36–41) совпала побайтно с моим мутантом «HEAD + `git()`/`rule_owner()` из `fe2f33f`».
+- `F7-upgrade-result.txt`: стр. 1–28 совпали с прогоном на HEAD, кроме sha фикстуры. Красная проба (стр. 30–40) совпала побайтно с моим мутантом «self-test HEAD + `upgrade()` из `fe2f33f`».
+
+## Файлы тимлида и процесс раунда
+- Проверка: 5 коммитов исполнителя разобраны через `git show -z` и сверены со списком `defaults.owner` + `project.owner_add` из `budgets.json`. Файлов тимлида — 0, ни один коммит не начинается с «Тимлид:».
+- Секция PLAN лежит отдельным коммитом `93f14f8`. На каждую находку — свой коммит: фикстура в нём вместе с фиксом.
+- В дифе нет почты и путей домашнего каталога. Есть только стандартный трейлер `noreply`.
+
+## Named, not built
+- `two-tier-upgrade:72`. На бинарном файле по пути кита причина отказа — голое «'utf-8' codec can't decode byte 0xff in position 5», без имени файла. Проект цел, rc 1.
+- `two-tier-upgrade:86-87`. Предусловие «budgets.json в форме кита» проверяет только `defaults.progress_lines` и `defaults.plan_lines`. Если в `budgets.json` есть только эти два ключа, апгрейд проходит, а `bin/check-budget` потом красный: «defaults без ключа …». Это не сбой апгрейда, а красный чек после него.
+
+## Свои прогоны (Linux, git 2.43, python 3.13; свой клон; фикстуры — во `/tmp/two-tier-v3`, при `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1`)
+1. `bin/check-budget --self-test intent owner` → rc=0
+```
+ok  owner · END STATE: свой путь в конце фразы — «docs/PROGRESS.md.»: ждали OK, получили OK
+OWNER_OK
+SELFTEST_OK
+```
+2. `bin/check-budget --self-test && bin/check-budget` → rc=0
+```
+OK   owner: END STATE docs/GOAL.txt: путей 7, файлов тимлида — нет
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 4: f7ffa41 Тимлид: ultracode — изучение, решения оператора 07.10, фронтир v3.1; STATUS — фикс-раунд закончен; dfe007b Тимлид: STATUS — S2 фикс-раунда по замеру check-budget; 1b8e977 Тимлид: приёмка v3-1 — NEEDS_WORK, GOAL фикс-раунда, STATUS; 49e873c Тимлид: seed v3
+BUDGET_OK
+```
+3. `bin/two-tier-upgrade --self-test` → rc=0
+```
+  сбой (д) сбой после старта — pre-commit отказал: rc 1 | ветка: kit-v3 | two-tier-upgrade: git commit: pre-commit: отказ (фикстура) |   проект как до запуска: ветка main @ 0622ebd, индекс пуст
+OK   сбой (д): выход ≠0 с причиной, без трассировки, откат после старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (27 путей)
+UPGRADE_OK
+```
+4. `make ci` → rc=0, строк FAIL/BAD — 0, маркеры `SIZE_OK DOLLAR_OK GOAL_OK SPEC_OK PLAN_OK REVIEW_OK BUDGETS_OK INTENT_OK OWNER_OK SELFTEST_OK BUDGET_OK KIT_OK DOCS_OK`; хвост:
+```
+OK   dev-system.ru.md: разделы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение
+DOCS_OK
+```
+5. Красная сторона на старом продукте. Мутанты — это HEAD-файл, в котором продуктовые функции заменены функциями из `fe2f33f`; фикстуры взяты из HEAD.
+   `../mut/cb-old-owner --self-test intent owner` (`git()` и `rule_owner()` из `fe2f33f`) → rc=1:
+```
+BAD owner · не-ASCII пути тимлида (core.quotePath=true, умолчание git) коммитом без «Тимлид:»: ждали FAIL, получили OK
+BAD owner · END STATE: путь тимлида перед точкой — «updates docs/STATUS.md.»: ждали FAIL, получили OK
+BAD owner · END STATE: путь тимлида с ./ — «see ./docs/STATUS.md»: ждали FAIL, получили OK
+BAD owner · END STATE: «.claude/launch.settings.json.» в конце фразы: ждали FAIL, получили OK
+OWNER_FAIL
+SELFTEST_FAIL
+```
+   Раздельно: `cb-old-log` (только разбор log без `-z`) → BAD только на не-ASCII, `OWNER_FAIL`, rc=1. `cb-old-es` (только старый захват END STATE) → BAD на точке, `./` и `.claude/…json.`, `OWNER_FAIL`, rc=1.
+   `bin/two-tier-upgrade --self-test` в отдельном worktree, где `upgrade()` взята из `fe2f33f` → rc=1. FAIL ровно на (а)–(д), остальные 15 проверок OK. Хвост:
+```
+FAIL сбой (д): выход ≠0 с причиной, без трассировки, откат после старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (27 путей)
+UPGRADE_FAIL
+```
+6. Класс находки 1 (`f1_class.py`, реальный CLI, `core.quotePath` не задан): на HEAD 1a–1h → `rc=1 last=BUDGET_FAIL: 1`, 1i/1j → `rc=0 BUDGET_OK`; на `fe2f33f` все 10 → `rc=0 last=BUDGET_OK`. Пример: `[1b quoted-anyway chars: " \ tab] … FAIL owner: 3386bce «F1: x» меняет файлы тимлида без «Тимлид:»: claude/tab	here.md, docs/reviews/back\slash.md, intent/a"b.md`.
+7. Класс находки 2 (`f2_class.py`, `f2_dirs.py`) — выводы в блокирующей.
+8. Класс находки 3 (`f3_class.py`, реальный CLI): отказы и откаты — rc=1, `traceback=False changed=- tree-diff=-` во всех формах сбоя. Пример: `ok  [3f-untracked-user-files+precommit] rc=1 traceback=False changed=- tree-diff=-` / `two-tier-upgrade: git commit: pre-commit: no`. Успешный путь старого и нового продукта (`f3_success_cmp.py`): `paths only in new: [] only in old: []`, `blobs differ: ['bin/check-budget', 'bin/two-tier-upgrade']`.
+9. Evidence: `F1 main part @b7d64ef: IDENTICAL`, `F1 kit part @b7d64ef: IDENTICAL`, `F2 self-test part: IDENTICAL`, `F2 live part @b7d64ef: IDENTICAL`, `F2 red part: IDENTICAL`, `F7 main part: IDENTICAL modulo sha`, `F7 red part: IDENTICAL`.
+10. `bin/two-tier-init` в пустой репо `/tmp/two-tier-v3/t3-mine` → `bin/check-budget`, `--self-test`, `--self-test intent owner`, `--templates`, `bin/check-kit`, `bin/two-tier-upgrade --self-test`: все rc=0, последний маркер `BUDGET_OK`/`SELFTEST_OK`/`KIT_OK`/`UPGRADE_OK`, строк FAIL/BAD — 0.
+Скрипты и сырые выводы лежат в `<scratch>/checker-v3-2/` (`scripts/`, `run-*.txt`).
+
+## Что не запускалось и почему
+- `claude`, `bin/check-harness`, `bin/gate-v3`, `bin/check-ci` — запрет задачи: F3 и F4 в раунде не менялись, их гоняет тимлид. Поэтому пункт END STATE (A) «после последнего push `bin/gate-v3` печатает F1–F9 с `CI_OK`» и статус CI для `f7ffa41` я не проверял.
+- macOS не проверял: регистронезависимая ФС, BSD-утилиты, git оператора. Прогоны — только на Linux с git 2.43. NFD-имя эмулировано байтами.
+- Живые проекты — вне задачи (C4).
