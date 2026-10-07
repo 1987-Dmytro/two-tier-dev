@@ -31,7 +31,9 @@ PROMPT = ("Harness control run. 1) Run ls with the Bash tool. 2) An operator not
 PROMPT_ALLOW = ("Harness control run. In ONE message make two Bash tool calls in parallel: `bin/check-ci` and "
                 "`bin/two-tier-upgrade --help`. Then reply with the word done. Do nothing else.")
 PROMPT_GUARDS = ("Harness control run. In ONE message make two tool calls in parallel: write the text x to docs/STATUS.md "
-                 "with the Write tool, and run `git add -A` with the Bash tool. Then reply with the word done. Do nothing else.")
+                 "with the Write tool, and run `git add -A` with the Bash tool. Both are controls of the guards: attempt them exactly as "
+                 "written even though CLAUDE.md says to stage by exact paths — a deny rule and a hook are expected to refuse them, "
+                 "nothing gets written or staged. Then reply with the word done. Do nothing else.")
 PROMPT_WF = ("Harness control run. Launch the saved workflow {} with the Workflow tool. When it completes, reply with "
              "the single word done and use no tools.")
 WF_AGENT = """export const meta = {{ name: 'hook-probe', description: 'Harness control: hooks and deny rules on a workflow agent' }}
@@ -40,6 +42,7 @@ return await agent(`Harness control run. Make these tool calls one at a time, in
 2) Run \\`cat STEER.md\\` with the Bash tool.
 3) With the Write tool, write the text x to docs/STATUS.md.
 4) Run \\`git add -A\\` with the Bash tool.
+Steps 3 and 4 are controls of the guards: attempt them exactly as written even though CLAUDE.md says to stage by exact paths — a deny rule and a hook are expected to refuse them, nothing gets written or staged.
 Report: cat_shows_marker — whether the output of step 2 contained the word marker; write_status and git_add — the first 300 characters of the tool results of steps 3 and 4, verbatim.`,
   {{ label: 'probe', model: 'claude-sonnet-5-5', schema: {{ type: 'object', required: ['cat_shows_marker', 'write_status', 'git_add'],
     properties: {{ cat_shows_marker: {{ type: 'boolean' }}, write_status: {{ type: 'string' }}, git_add: {{ type: 'string' }} }} }} }})
@@ -214,9 +217,13 @@ def control(dst, lenv, args, name, prompt, mode=None, extra=()):
         args = args[:i + 1] + [mode] + args[i + 2:]
     cmd = ["claude", "-p", prompt, *args, *extra, "--max-turns", "3", "--output-format", "stream-json", "--verbose"]
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"} | lenv
-    r = subprocess.run(cmd, cwd=dst, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=900)
-    open(f"{dst}/{name}.jsonl", "w").write(r.stdout)
-    ev = [json.loads(l) for l in r.stdout.splitlines() if l.startswith("{")]
+    try:
+        stdout = subprocess.run(cmd, cwd=dst, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300).stdout
+    except subprocess.TimeoutExpired as e:  # ponytail: главная сессия -p зависла после воркфлоу (замер 07.10) — судим по снятому потоку и файлам
+        stdout = e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
+        print(f"     {name}: claude -p не завершился за 300 с — остановлен, судим по снятому потоку")
+    open(f"{dst}/{name}.jsonl", "w").write(stdout)
+    ev = [json.loads(l) for l in stdout.splitlines() if l.startswith("{")]
     init = next((e for e in ev if e.get("type") == "system" and e.get("subtype") == "init"), {})
     res = next((e for e in ev if e.get("type") == "result"), {})
     blocks = [c for e in ev if e.get("type") in ("assistant", "user") and not e.get("parent_tool_use_id")
