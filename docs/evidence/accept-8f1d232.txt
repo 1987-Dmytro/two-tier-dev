@@ -1,0 +1,126 @@
+база b20513c · HEAD 8f1d232 · свежий проход: role-checker (режим evaluator), отдельный субагент, свой клон · 07.10.2026
+VERDICT: PASS
+
+Проверено: ветка `v3` @ `8f1d23282922c96e5cd2377d1167bd136872f8ae` (полный sha сверен, это `origin/v3` своего клона). Диф `b20513c..8f1d232` — коммиты исполнителя `36237e0` (PLAN), `3c0c2fe` (фикс вместе с фикстурами), `8f1d232` (evidence F1, F2, голова PROGRESS). `kit/bin/check-budget` на `f7ffa41` и `b20513c` одинаковый: «правило из f7ffa41» — это продукт базы. Отчёт исполнителя на слово не принят. Прогоны — Linux, git 2.43.0, python 3.13, фикстуры под `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1`; около 20 минут.
+
+Итог по пунктам задачи:
+1. Находка v3-2 закрыта по классу, а не только по названным фикстурам. Мои фикстуры — 9 записей `defaults.owner` из `kit/budgets.json`, записанные как в списке, × 55 обрамлений прозы и разметки (группы N, C, P, M ниже). На HEAD красных 495 из 495, на правиле `f7ffa41` — 216 из 495. Зелёных (11 путей исполнителя в тех же обрамлениях) — 605 из 605 на обоих. С `owner_add` корня (`docs/OFFICIAL-SOURCES.md`, `docs/archive/team-lead-*.md`): 605 из 605 красных на HEAD, 296 на `f7ffa41`, 0 ложнокрасных. На живом `docs/GOAL.txt` ложнокрасного нет: `путей 5, файлов тимлида — нет`. На шести исторических текстах /goal HEAD и `f7ffa41` совпадают, файлов тимлида — 0.
+2. Регрессий в прочих правилах нет. Строки self-test вне owner совпадают с `f7ffa41` побайтно, 13 прежних фикстур owner — тоже. Живой `bin/check-budget` у HEAD и у продукта `f7ffa41` на одном дереве совпадает побайтно. `--templates`, `make ci` — rc 0. Код lint коммитов и `is_tl` в дифе не менялись.
+3. Evidence F1 и F2 совпадают побайтно с моими прогонами. Красная проба настоящая: мутация стоит в продукте (`rule_owner` из `f7ffa41`), фикстуры взяты из HEAD. Итог: rc 1, ok 82, BAD 51, `OWNER_FAIL`; строки 157–209 совпадают побайтно.
+4. Файлы тимлида коммитами исполнителя не тронуты. Ни один коммит не начинается с «Тимлид:».
+
+## Блокирующие
+Нет.
+
+## Неблокирующие
+- [неблокирующая] `kit/bin/check-budget:209-210` → критерий: регрессии того же правила (SPEC-v3 F2, «назван в END STATE») → что не так: захват стал токенным. Файл тимлида, к которому вплотную прилип знак не из числа разделителей и снимаемых краёв, на `f7ffa41` был `FAIL`, а на HEAD стал `OK`. Это 55 случаев: 5 записей-файлов × 11 обрамлений — неразбитое тире `—` и `–`, `…`, `‘…’`, `„…“`, `@path`, ведущий `/`, `#якорь`, `{…}`, `&&`, `’s`. С `owner_add` таких случаев 77. Пример: `(A) the team lead updates docs/STATUS.md—then stops` → на HEAD `OK … файлов тимлида — нет`, на `f7ffa41` → `FAIL … — docs/STATUS.md`. Каталоги в тех же обрамлениях, наоборот, стали красными: `intent/—then` → `FAIL`, на `f7ffa41` было `OK`.
+  Почему не блокирующая:
+    - В класс v3-2 эти обрамления не входят. В текстах /goal репо их нет: в трёх версиях `docs/GOAL.txt`, двух шаблонах GOAL и `goal-v2` рядом с путём их 0.
+    - Тире в текстах /goal всегда с пробелами: `"Тимлид: seed v3" — the only commit`. `…` после пути стоит только у каталогов (`docs/evidence/…`), а их HEAD ловит.
+    - `team-lead-v6` §4 требует писать пути в /goal «как в SPEC».
+    - `kit/REVIEW.md`: это не путь, который запускает заказчик.
+  Что сделать, если тимлид захочет закрыть и это: одна строка после стр. 210 — объединить с прежним захватом:
+    paths |= {re.sub(r"^(?:\./)+", "", p).rstrip(".") for p in re.findall(r"[\w.<>*-]+(?:/[\w.<>*-]+)+", es.group(1) if es else "")}
+  Мой прототип (`<rc>/mut/cb-proto-union`, тот же прогон): N, C, P, M — 495 из 495, ложнокрасных 0; все 55 случаев снова красные (X: 88 из 117 против 33 у HEAD).
+- [неблокирующая] `docs/PROGRESS.md:4` → голова PROGRESS → формулировки шире кода. «кавычки»: `‘…’` и `„…“` не снимаются. «знаки конца фразы»: `…` после файла не снимается (см. выше). Что сделать: назвать знаки списком (`" ' « » “ ”`, `. ! ?`).
+- [неблокирующая] `docs/PROGRESS.md:46` (развилка в Notes) → `docs/GOAL.txt` CONSTRAINTS, правило развилок → двухуровневый каталог тимлида без хвостового `/` (`(A) a review in docs/reviews is written`) остаётся `OK` и на HEAD, и на `f7ffa41`.
+    - В класс v3-2 это не входит: путь записан не так, как в списке. Развилка законно записана в Notes.
+    - Довод про голое `intent` касается только однословных записей. Токен с `/`, равный записи без хвостового `/`, можно красить без этой проблемы.
+    - Кандидат в v3.1.
+
+## Свои прогоны (команда → хвост вывода дословно)
+1. `bin/check-budget --self-test intent owner` → rc 0, ok 142, BAD 0; red END STATE «…» 90 (9×10), green 30 (3×10), всего owner 133
+```
+ok  owner · END STATE «(A) see ./docs/evidence/F2-intent-result.txt for it»: ждали OK, получили OK
+OWNER_OK
+SELFTEST_OK
+```
+2. `bin/check-budget --self-test && bin/check-budget` → rc 0, маркеры `SIZE_OK DOLLAR_OK GOAL_OK SPEC_OK PLAN_OK REVIEW_OK BUDGETS_OK INTENT_OK OWNER_OK SELFTEST_OK BUDGET_OK`
+```
+OK   owner: END STATE docs/GOAL.txt: путей 5, файлов тимлида — нет
+OK   owner: коммитов «Тимлид:» после merge-base e0b5f6e — 5: b20513c Тимлид: приёмка v3-2 — NEEDS_WORK (1 блокирующая), GOAL фикс-раунда 2, STATUS; f7ffa41 Тимлид: ultracode — изучение, решения оператора 07.10, фронтир v3.1; STATUS — фикс-раунд закончен; dfe007b Тимлид: STATUS — S2 фикс-раунда по замеру check-budget; 1b8e977 Тимлид: приёмка v3-1 — NEEDS_WORK, GOAL фикс-раунда, STATUS; 49e873c Тимлид: seed v3
+BUDGET_OK
+```
+3. `bin/check-budget --templates` → rc 0. Строка не-OK одна: `WARN intent: intent/INTENT.md: маркеров неясности 1` (вес WARN по SPEC §1). Вывод совпадает с `F5-templates-result.txt`.
+```
+OK   owner: END STATE docs/GOAL.txt: путей 2, файлов тимлида — нет
+OK   owner: нет main/origin/main или коммитов — lint коммитов пропущен
+BUDGET_OK
+```
+4. `make ci` → rc 0, строк FAIL/BAD — 0, маркеры `SIZE_OK DOLLAR_OK GOAL_OK SPEC_OK PLAN_OK REVIEW_OK BUDGETS_OK INTENT_OK OWNER_OK SELFTEST_OK BUDGET_OK KIT_OK DOCS_OK`
+```
+OK   dev-system.ru.md: разделы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение
+DOCS_OK
+```
+5. Регрессия прочих правил.
+   - `<rc>/mut/cb-f7ffa41 --self-test` (файл `git show f7ffa41:kit/bin/check-budget`) против `bin/check-budget --self-test`: обе rc 0. Вывод: `non-owner self-test lines: IDENTICAL`, `13 prior owner fixtures: IDENTICAL names and results`.
+   - Живой прогон обоих на дереве HEAD: `live check-budget HEAD vs f7ffa41 product on HEAD tree: IDENTICAL`.
+6. Красная проба. `<rc>/mut/cb-hybrid-old-owner` — это HEAD, где `rule_owner` заменена через AST на функцию из `f7ffa41`; по `diff` отличаются только строки захвата. Команда `--self-test owner` → rc 1, ok 82, BAD 51. Сверка: `F2 red probe lines 157-209: IDENTICAL to own hybrid`.
+```
+ok  owner · END STATE «(A) see ./docs/evidence/F2-intent-result.txt for it»: ждали OK, получили OK
+OWNER_FAIL
+SELFTEST_FAIL
+```
+7. Мои фикстуры класса — `<rc>/scripts/f2_class_r2.py`, реальный CLI.
+   - На каждый случай — проект с `budgets.json` и `docs/GOAL.txt`. Вне END STATE в нём лежат пути тимлида: в абзаце цели и в CONSTRAINTS полным списком. Вердикт — строка `owner: END STATE`.
+   - Группы обрамлений:
+     - N — 10 названных находкой, своими словами;
+     - C — 18 сочетаний: `` `x`. ``, `**x**.`, `_x_,`, `<x>:`, `` (`x`) ``, `(**x**)`, `` `./x` ``, `**./x**`, `./x.`, `(./x)`, `_./x_`, `<./x>`, `` **`x`** ``, `` `**x**` ``, `./x,`, `(see x.)`, `././x`, `**x**:`;
+     - P — 20 из прозы: начало строки, `;`, `?`, `!`, `...`, `"x"`, `'x'`, `«x»`, `“x”`, `x's`, пункт списка, последнее слово, таб, CRLF, NBSP, тире с пробелами, `[x]`, цель ссылки md, текст ссылки md, строка таблицы;
+     - M — 7 из разметки: `*x*`, `***x***`, `__x__`, `~~x~~`, ` ```x``` `, заголовок, цитата;
+     - X — 13 экзотических, только для сравнения со старым правилом.
+   - Зелёные пути: `docs/PROGRESS.md`, `docs/PLAN-v3.md`, `docs/evidence/`, `docs/evidence/F2-intent-result.txt`, `bin/check-budget`, `kit/bin/check-budget`, `kit/docs/GOAL.template.txt`, `.claude/settings.json`, `kit/.claude/launch.settings.json`, `docs/archive/PLAN-v2.md`, `src/main.py`.
+   `kit/budgets.json`:
+```
+group N expect FAIL: cases 90, HEAD right 90, f7ffa41 right 39, regress(old right, HEAD wrong) 0
+group N expect OK: cases 110, HEAD right 110, f7ffa41 right 110, regress(old right, HEAD wrong) 0
+group C expect FAIL: cases 162, HEAD right 162, f7ffa41 right 53, regress(old right, HEAD wrong) 0
+group C expect OK: cases 198, HEAD right 198, f7ffa41 right 198, regress(old right, HEAD wrong) 0
+group P expect FAIL: cases 180, HEAD right 180, f7ffa41 right 104, regress(old right, HEAD wrong) 0
+group P expect OK: cases 220, HEAD right 220, f7ffa41 right 220, regress(old right, HEAD wrong) 0
+group M expect FAIL: cases 63, HEAD right 63, f7ffa41 right 20, regress(old right, HEAD wrong) 0
+group M expect OK: cases 77, HEAD right 77, f7ffa41 right 77, regress(old right, HEAD wrong) 0
+group X expect FAIL: cases 117, HEAD right 33, f7ffa41 right 60, regress(old right, HEAD wrong) 55
+group X expect OK: cases 143, HEAD right 143, f7ffa41 right 143, regress(old right, HEAD wrong) 0
+```
+   Примеры строк: `ok  [N] N7 bold · docs/reviews/: ждали FAIL, HEAD FAIL, f7ffa41 OK` · `ok  [C] C2 **x**. · claude/: ждали FAIL, HEAD FAIL, f7ffa41 OK` · `ok  [P] P6 "x" · intent/: ждали FAIL, HEAD FAIL, f7ffa41 OK` · `ok  [N] N9 angle · docs/evidence/F2-intent-result.txt: ждали OK, HEAD OK, f7ffa41 OK` · `BAD [X] X1 em dash unspaced · docs/STATUS.md: ждали FAIL, HEAD OK, f7ffa41 FAIL`.
+   Корневой `budgets.json` (+`owner_add`): N 110/110 (f7ffa41 53), C 198/198 (71), P 220/220 (144), M 77/77 (28), зелёные 605/605 на обоих; X 35/143 (f7ffa41 84, регресс 77). Пример: `ok  [C] C8 **./x** · docs/archive/team-lead-*.md: ждали FAIL, HEAD FAIL, f7ffa41 OK`.
+8. Воспроизведения из `docs/reviews/v3-2.md` и `accept-f7ffa41.txt`, 16 строк. HEAD прав во всех 16, `f7ffa41` — в 8. Примеры:
+   `ok (A) a review in docs/reviews/ is written … ждали FAIL HEAD FAIL f7ffa41 OK`
+   `ok (A) **docs/STATUS.md** is written … ждали FAIL HEAD FAIL f7ffa41 OK`
+   `ok (A) see ./docs/PROGRESS.md. … ждали OK HEAD OK f7ffa41 OK`.
+9. Исторические /goal — `docs/GOAL.txt` @ `49e873c`, `1b8e977`, `b20513c`, шаблоны GOAL кита и `docs/drafts`, `goal-v2`. Каждый прогнан как `docs/GOAL.txt`: HEAD = `f7ffa41` по каждому, файлов тимлида — 0. Пример: `docs_GOAL.txt@b20513c | HEAD: END STATE docs/GOAL.txt: путей 5, файлов тимлида — нет | f7ffa41: … путей 5, файлов тимлида — нет`.
+10. Evidence против своих прогонов:
+    - `F1 main part: IDENTICAL` — 220 строк;
+    - `F1 kit part: IDENTICAL` — `(cd kit && ../bin/check-budget)`;
+    - `F2 self-test part: IDENTICAL` — 146 строк;
+    - `F2 live part: IDENTICAL` — стр. 148–155;
+    - красная часть — п. 6.
+11. Владение коммитов — разбор `git show -z --name-only` против `defaults.owner` и `owner_add`:
+```
+36237e0 | starts with Тимлид: False | files ['docs/PLAN-v3.md'] | team-lead files []
+3c0c2fe | starts with Тимлид: False | files ['kit/bin/check-budget'] | team-lead files []
+8f1d232 | starts with Тимлид: False | files ['docs/PROGRESS.md', 'docs/evidence/F1-budget-result.txt', 'docs/evidence/F2-intent-result.txt'] | team-lead files []
+```
+    В дифе и сообщениях коммитов нет почты и путей домашнего каталога, кроме стандартного трейлера `noreply`.
+
+## Проверенные утверждения
+| что | верно? | на самом деле |
+|---|---|---|
+| PLAN: раздел «Фикс-раунд 2» отдельным коммитом до фикса (GOAL, шаг 0) | верно | `36237e0` меняет только `docs/PLAN-v3.md`, стр. 132–142: файлы, порядок, фикс, фикстуры, риски, доказательство; PLAN 142/150 |
+| Фикстуры вместе с фиксом одним коммитом | верно | `3c0c2fe` — только `kit/bin/check-budget`: стр. 207–210 (захват) и 375–382 (фикстуры) |
+| Описание фикса в PLAN совпадает с кодом | верно | разделители `\s` `` ` `` `' " « » “ ”` `( ) [ ] , ; : |`; края `* _ ~ < >`, `./`, справа `. ! ?`; хвостовой `/` остаётся |
+| Красная фикстура на каждую запись `defaults.owner` как в списке × 10 обрамлений находки | верно | 90 = 9×10, записи берутся из `budgets.json` при прогоне, в самом тесте не захардкожены |
+| Зелёные — пути исполнителя в тех же обрамлениях | верно | 30 = 3×10 |
+| Красная проба: rc 1, ok 82, BAD 51, `OWNER_FAIL` (F2:156–209, коммит `3c0c2fe`, PROGRESS:6) | верно | мой гибрид: те же числа, строки побайтно |
+| Живой GOAL: `путей 5, файлов тимлида — нет` | верно | 5 путей: `bin/check-budget`, `bin/gate-v3`, `docs/evidence/F1-…`, `docs/evidence/F2-…`, `docs/PROGRESS.md`; слово `intent` без `/` путём не считается |
+| F1: `BUDGET_OK`, rc 0, и на ките | верно | побайтно, PROGRESS 51/60, «Тимлид:» — 5 |
+| PROGRESS:26 — «90 красных и 30 зелёных» | верно | 90 / 30 |
+| PROGRESS:4 — «кавычки», «знаки конца фразы» | частично | `‘’`, `„“` и `…` после файла не ловятся — неблокирующая |
+| PROGRESS: голова (что изменилось, шаг оператора, когда закончим) | верно | стр. 3–9; Open stop — NONE, STOP-строк новых нет |
+| `origin/v3` = 8f1d232 (ветка запушена) | верно | свой клон `-b v3` |
+
+## Что не запускалось и почему
+- `bin/gate-v3`, `bin/check-ci v3` (F3 CI), `bin/check-harness` (F4, `claude -p`, `claude doctor`) — запрет задачи: нужны claude CLI, gh и сеть. Не проверены пункт END STATE (A) «после последнего push `bin/gate-v3` печатает F1–F9 с `CI_OK`» и статус CI для `8f1d232` — это тимлид гоняет сам на Mac.
+- macOS (регистронезависимая ФС, BSD-утилиты, git оператора) не проверял: прогоны только на Linux с git 2.43.
+- Скрипты и сырые выводы лежат в `<rc>/scripts/`, `<rc>/mut/`, `<rc>/runs/`: `f2-class-kit.txt` — 1360 строк, `f2-class-root.txt` — 1496.
