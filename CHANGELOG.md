@@ -18,8 +18,9 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
   `Read first:` from the start prompt (the older `docs/GOAL.txt` until it is moved) under the budget `prompt_chars` (a project's older
   `goal_chars` — WARN; in the kit, `--templates` fails `kit-prompt` until `kit/budgets.json` and `kit/CLAUDE.md` drop the GOAL scheme)
   and fails on any `/goal` left in the kit; `bin/two-tier-upgrade` moves a project's `docs/GOAL.txt` to `docs/PROMPT.txt` in its own «Тимлид:» commit
-  and brings a project upgraded before to the kit in full: its previous kit files go to a free archive `docs/archive/kit-<date>/`, the report
-  `docs/upgrade-v3.md` speaks of this run, and a kit file left stale in HEAD is rc 1 with a rollback (review v3.2-2, B1).
+  and brings a project upgraded before to the kit in full: a `kit-v3` (local or on origin) ahead of HEAD carries the work on, one behind
+  HEAD is moved onto it, a diverged one is rc 1; the previous kit files of each run go to a new archive `docs/archive/kit-<date>/`, the
+  report `docs/upgrade-v3.md` speaks of this run, and a kit file left stale in HEAD is rc 1 with a rollback (review v3.2-2, B1).
   Taught by: the operator, 09.10 — «`/goal` мешает разработке, нужна только правильная спека».
 - **`spec-gate`** — the kit's Stop hook: by code, every feature of the phase SPEC has its evidence file with the marker, the branch is
   pushed, the PROGRESS head differs from the one committed before the session, `/verify-phase` gave PASS for HEAD, all judged from the
