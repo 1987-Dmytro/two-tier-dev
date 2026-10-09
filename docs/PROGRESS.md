@@ -14,13 +14,12 @@
 - **F6 handoff**: `bin/check-kit` → `KIT_OK · HANDOFF_OK` (строка шаблона 70 %, `/clear`; `pluginConfigs` кита — threshold 70, autoClear, `handoffs`; `.gitignore`; команда установки в `bin/two-tier-init`; `claude plugin validate` — 18 calls, `claude plugin test` — 8 из 8) — `docs/evidence/F6-kit-result.txt`.
 - **F7 Запуск без `/goal`**: `bin/check-budget --templates` → `BUDGET_OK` (`kit-prompt`: `prompt_chars` и `docs/PROMPT.txt` в owner кита, схемы GOAL нет — grep пуст; `/goal` в ките — 0; `--` перед запросом — контракт шаблона); красные стороны: `docs/PROMPT.txt` в 4001 знак в проекте из кита — `FAIL prompt_chars`, шаблон без `--` — `FAIL contract`; `UPGRADE_OK`; t3 — пара из `docs/PROMPT.txt`; `VERIFY_OK` — `docs/evidence/F7-templates-result.txt`.
 - **F8 Расход Jev**: `bin/check-spend` → `SPEND_OK` (фикстура сходится до токена и своих фикстур не оставляет; битые строки, BOM и копии отслеживаемого журнала в клонах не искажают итог; плечо: вызовов 6801, ~15 млн входных токенов, $0,64 ≈ €0,55, из них Toolgate — 5476, оценка) — `docs/evidence/F8-spend-result.txt`.
+- **F10 Гейт v3.2**: `bin/gate-v3.2` на `b53dda5` → `F1 JEV_OK` … `F9 DOCS_OK`, уцелевшие v3.1 `HARNESS_OK`, `HOOKS_OK`, `VERIFY_OK`, `KIT_OK`, `OWNER_OK`, `F10 GATE_OK`, rc 0 (3 мин 27 с); `two-tier-init` кладёт ровно кит из git — 35 из 35, без кэша Python (ревью v3.2-1); CI `b53dda5` — `CI_OK` — `docs/evidence/F10-gate-result.txt`.
 - **F9 Документы**: `bin/check-docs` → `DOCS_OK` (CHANGELOG v3.2 — 12 строк полей; LAUNCH — каждый флаг строки и `--` перед запросом, режимы `spec-gate`, ключ в окружении) — `docs/evidence/F9-docs-result.txt`.
 
-## Open
-- **F10 Гейт v3.2**: `bin/gate-v3.2` на запушенном HEAD — теперь сверяет и число файлов кита в проекте с `git ls-files kit` (`two-tier-init` не копирует кэш Python, ревью v3.2-1).
 
 ## Next — один айтем
-1. **Приёмка**: push, `bin/check-ci v3.2`; гейт → evidence F10; `bin/verify-phase` из свежего клона; финальный `bin/gate-v3.2` после последнего push; голова PROGRESS.
+1. **Приёмка**: `bin/verify-phase` из свежего клона запушенного HEAD → `VERDICT: PASS`; финальный `bin/gate-v3.2` после последнего push; голова PROGRESS.
 
 ## Open stop — NONE
 

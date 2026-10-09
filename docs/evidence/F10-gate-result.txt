@@ -1,39 +1,37 @@
 $ bin/gate-v3.2
-F10: bin/two-tier-init t3 — файлов кита 38; логи — /tmp/two-tier-v3/gate32-HKCSR3
+F10: bin/two-tier-init t3 — файлов кита 35 (в git 35); логи — /tmp/two-tier-v3/gate32-bRFSTS
 init: (t3) bin/check-budget — rc 0
 jev: (t3) bin/jev --self-test — rc 0
 templates: (t3) bin/check-budget --templates — rc 0
-templates-repo: (корень ветки) bin/check-budget --templates — rc 1
+templates-repo: (корень ветки) bin/check-budget --templates — rc 0
 owner: (t3) bin/check-budget --self-test intent owner — rc 0
 kit-t3: (t3) bin/check-kit — rc 0
-kit-repo: (корень ветки) bin/check-kit — rc 1
+kit-repo: (корень ветки) bin/check-kit — rc 0
 upgrade: (корень ветки) bin/two-tier-upgrade --self-test — rc 0
 spend: (корень ветки) bin/check-spend — rc 0
 docs: (корень ветки) bin/check-docs — rc 0
 verify: (корень ветки) bin/check-verify — rc 0
-harness-repo: (корень ветки) bin/check-harness — rc 0
 harness-t3: (t3) bin/check-harness — rc 0
+harness-repo: (корень ветки) bin/check-harness — rc 0
 F10-init BUDGET_OK
 F1 JEV_OK
 F2 GATE_HOOK_OK
 F3 ABIDE_OK
 F4 ENV_OK
 F5 TOOLGATE_OK
-    kit-repo: FAIL handoff: launch settings кита: включён — True; pluginConfigs: записи handoff@two-tier-mods нет
-F6 FAIL: HANDOFF_OK — kit-repo: нет HANDOFF_OK; kit-repo: rc 1
+F6 HANDOFF_OK
     templates: WARN intent: intent/INTENT.md: маркеров неясности 1
-    templates-repo: FAIL kit-prompt: kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: нет prompt_chars; goal_chars; нет docs/PROMPT.txt в owner; docs/GOAL.txt в owner; kit/CLAUDE.md:3; kit/CLAUDE.md:11
     templates-repo: WARN intent: intent/INTENT.md: маркеров неясности 1
-F7 FAIL: BUDGET_OK — templates-repo: нет BUDGET_OK; templates-repo: rc 1
+F7 BUDGET_OK
 F7 UPGRADE_OK
 F8 SPEND_OK
 F9 DOCS_OK
 v3.1 HARNESS_OK
 v3.1 HOOKS_OK
 v3.1 VERIFY_OK
-    kit-repo: FAIL handoff: launch settings кита: включён — True; pluginConfigs: записи handoff@two-tier-mods нет
-v3.1 FAIL: KIT_OK — kit-repo: rc 1
+v3.1 KIT_OK
 v3.1 OWNER_OK
-GATE_FAIL: 3
-bin/gate-v3.2  170,65s user 71,93s system 111% cpu 3:38,04 total
-rc 1
+F10 GATE_OK
+GATE_OK
+bin/gate-v3.2  176,77s user 81,81s system 125% cpu 3:26,59 total
+rc 0
