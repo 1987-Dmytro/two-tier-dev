@@ -17,10 +17,20 @@
       "Edit(/claude/**)",
       "Edit(/.claude/launch.settings.json)",
       "Edit(/.claude/spec-gate.json)",
+      "Edit(/.abide/rubric.json)",
       "Edit(/budgets.json)"
     ]
   },
   "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "session-start"], "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "turn-start"], "timeout": 10 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "post-tool-use"], "timeout": 20 } ] }
+    ],
     "PreToolUse": [
       {
         "matcher": "*",
@@ -39,7 +49,8 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/spec-gate.mjs"], "timeout": 30 }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/spec-gate.mjs"], "timeout": 30 },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "stop"], "timeout": 30 }
         ]
       }
     ]

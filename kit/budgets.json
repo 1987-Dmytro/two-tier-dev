@@ -17,6 +17,7 @@
     "read_first_files": 3,
     "read_first_chars": 50000,
     "review_blocking": 5,
+    "abide_rules": 15,
     "owner": [
       "intent/",
       "docs/SPEC-*.md",
@@ -28,6 +29,7 @@
       "claude/",
       ".claude/launch.settings.json",
       ".claude/spec-gate.json",
+      ".abide/rubric.json",
       "budgets.json"
     ]
   },

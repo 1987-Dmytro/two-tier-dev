@@ -15,7 +15,7 @@ import json, os, shutil, subprocess, sys, time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]) or ".", ".."))
 KIT = os.path.join(ROOT, "kit") if os.path.isdir(os.path.join(ROOT, "kit", ".claude")) else ROOT
 KIT_FILES = [".claude/settings.json", ".claude/hooks/kill-switch.sh", ".claude/hooks/steer.sh",
-             ".claude/hooks/refuse_sweeping_commands.py", ".claude/hooks/spec-gate.mjs", ".claude/agents/evaluator.md",
+             ".claude/hooks/refuse_sweeping_commands.py", ".claude/hooks/spec-gate.mjs", ".claude/hooks/abide.mjs", ".claude/agents/evaluator.md",
              ".claude/skills/accept/SKILL.md", ".claude/skills/plan-phase/SKILL.md",
              "docs/INTENT.template.md", "docs/SPEC.template.md", "docs/GOAL.template.txt", "docs/PLAN.template.md",
              "docs/PROGRESS.template.md", "docs/STATUS.template.md", "docs/PROCESS.template.md", "docs/LAUNCH.md",
