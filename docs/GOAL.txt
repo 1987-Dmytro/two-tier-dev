@@ -6,11 +6,11 @@ Done means all of this holds: every feature of SPEC-v3.2 section 2 is closed, it
 
 Do not end a turn before that. The only other way to end is a stop of SPEC-v3.2 section 4: a new line `STOP: <id>` in the progress file with the question and a resume line, written after every feature that does not need the missing input is closed and pushed. If the context fills up, the handoff mod moves the work into a fresh context; continue from its file.
 
-Authorized in this phase: push branch v3.2; edit kit/.claude/** and mods/**; nested `claude -p` control runs and Workflow(verify-phase); calls to api.typesafe.ai with the key from the environment, within 1 EUR for the whole run; npm installs inside the repo or /tmp/two-tier-v3 only.
+Authorized in this phase: push branch v3.2; edit kit/.claude/** and mods/**; nested `claude -p` control runs and Workflow(verify-phase); calls to api.typesafe.ai with the key from the environment (no spend ceiling in this phase); npm installs inside the repo or /tmp/two-tier-v3 only.
 
 Constraints:
 - Branch v3.2 only; never push to main. At least one commit per feature, `git add` with exact paths; fix-ups are new commits; never amend a pushed commit or force-push. Workflow agents edit only inside their own worktrees or only read; the main session commits.
-- Never print the TypeSafe key or write it into the repo, evidence or logs; never go above the spend ceiling; nothing irreversible without the operator's yes.
+- Never print the TypeSafe key or write it into the repo, evidence or logs; nothing irreversible without the operator's yes.
 - Team-lead files are read-only: the intent folder, the phase specs, this start prompt, the status and process files, the reviews and drafts folders, the claude folder, the launch settings file, budgets.json.
 - User-level settings and installs are read-only; a new user-level install is STOP-INPUT with the exact command.
 - A third-party tool is a harness field: source, pinned version, a control run before and after, a CHANGELOG line. A hook of the layer never prints allow, never asks a question nobody can answer, and lets the turn pass on its own error.
