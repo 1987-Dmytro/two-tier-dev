@@ -58,3 +58,10 @@
 {"ts":"2026-10-09T11:20:26.383Z","caller":"spec-gate","model":"jev-1.13.0","questions":3,"status":200,"version":"jev-1.13.0","ms":325,"input_tokens":975,"output_tokens":69}
 {"ts":"2026-10-09T11:20:27.092Z","caller":"spec-gate","model":"jev-1.13.0","questions":3,"status":0,"error":"timeout after 10000 ms","ms":10005}
 {"ts":"2026-10-09T11:20:37.265Z","caller":"spec-gate","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":378,"input_tokens":661,"output_tokens":24}
+{"ts":"2026-10-09T11:27:21.959Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":418,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-10-09T11:32:52.499Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":573,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-10-09T11:53:40.852Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":363,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-10-09T12:00:33.961Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":400,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-10-09T12:00:34.451Z","caller":"cli","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":348,"input_tokens":320,"output_tokens":20}
+{"ts": "2026-10-09T12:01:02Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
+{"ts":"2026-10-09T12:08:28.527Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":354,"input_tokens":300,"output_tokens":20}
