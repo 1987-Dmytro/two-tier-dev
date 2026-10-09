@@ -69,7 +69,8 @@ async function ask(questions, state) {
   if (!key) die(2, 'TYPESAFE_API_KEY is not set — the key comes from the environment only')
   const model = process.env.JEV_MODEL || PIN
   if (!PINNED.test(model)) die(2, `model ${model} is not a pinned version (jev-X.Y.Z); aliases such as jev-latest float`)
-  const ms = Number(process.env.JEV_TIMEOUT_MS) || 15000
+  const ms = process.env.JEV_TIMEOUT_MS === undefined ? 15000 : Number(process.env.JEV_TIMEOUT_MS)
+  if (!Number.isInteger(ms) || ms <= 0) die(2, 'JEV_TIMEOUT_MS must be a positive whole number of milliseconds')
   const url = (process.env.TYPESAFE_BASE_URL || 'https://api.typesafe.ai').replace(/\/+$/, '') + '/v1/systemone'
   const caller = process.env.JEV_CALLER || 'cli'
   const t0 = Date.now()
@@ -95,9 +96,11 @@ async function ask(questions, state) {
   } catch {}
   const usage = json?.usage || {}
   spend({ ...line, status: res.status, version: json?.model, ms: Date.now() - t0, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens })
-  if (res.status !== 200) die(3, `HTTP ${res.status}: ${String(json?.detail || json?.error || body).replace(/\s+/g, ' ').slice(0, 200)}`)
+  // a body that echoes the request must not carry the key to stderr
+  if (res.status !== 200) die(3, `HTTP ${res.status}: ${String(json?.detail || json?.error || body).split(key).join('<key>').replace(/\s+/g, ' ').slice(0, 200)}`)
   const missing = Object.keys(questions).filter(k => !json?.answers?.[k])
   if (missing.length) die(3, `HTTP 200 without answers for: ${missing.join(', ')}`)
+  if (json.model !== model) die(3, `HTTP 200 from model ${json.model ?? 'none'}, not the pinned ${model}`)
   process.stdout.write(JSON.stringify(json) + '\n')
   process.stderr.write(`jev: HTTP 200 · model ${json.model} · ${Date.now() - t0} ms · tokens in ${usage.input_tokens ?? '?'} out ${usage.output_tokens ?? '?'}\n`)
 }
@@ -123,6 +126,7 @@ async function selfTest() {
       const send = (code, obj) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(obj))
       if (req.headers.authorization !== `Bearer ${key}`) return send(401, { detail: 'invalid API key' })
       if (route === 'e500') return send(500, { detail: 'internal' })
+      if (route === 'echo') return send(400, { detail: `bad request; authorization: ${req.headers.authorization}` })
       if (route === 'empty') return send(200, { model: PIN, answers: {}, usage: { input_tokens: 5, output_tokens: 0 } })
       const answers = {}
       for (const [k, q] of Object.entries(b.questions || {})) {
@@ -130,7 +134,7 @@ async function selfTest() {
         if (q.type === 'choice') answers[k] = { type: 'choice', choice: Object.keys(q.criteria)[0], probabilities: { [Object.keys(q.criteria)[0]]: 1 }, confidence: 0.9 }
         if (q.type === 'score') answers[k] = { type: 'score', score: 1, legend: { 0: q.criteria[0], 1: q.criteria[1] }, probabilities: { 0: 0, 1: 1 }, confidence: 0.8 }
       }
-      send(200, { model: PIN, answers, usage: { input_tokens: 120, output_tokens: 0 } })
+      send(200, { model: route === 'other' ? 'jev-1.12.0' : PIN, answers, usage: { input_tokens: 120, output_tokens: 0 } })
     })
   })
   await new Promise(r => server.listen(0, '127.0.0.1', r))
@@ -200,6 +204,13 @@ async function selfTest() {
   leak(r)
   r = await run({ TYPESAFE_BASE_URL: `${base}/empty` })
   check(r.code === 3 && /without answers for: done, kind, detail/.test(r.err), `200 without the answers: rc ${r.code}`)
+  r = await run({ TYPESAFE_BASE_URL: `${base}/other` })
+  check(r.code === 3 && /from model jev-1\.12\.0, not the pinned jev-1\.13\.0/.test(r.err), `200 from another model: rc ${r.code}`)
+  r = await run({ TYPESAFE_BASE_URL: `${base}/echo` })
+  check(r.code === 3 && /HTTP 400/.test(r.err) && /<key>/.test(r.err), `an error body that echoes the key: rc ${r.code}, the key masked on stderr`)
+  leak(r)
+  r = await run({ JEV_TIMEOUT_MS: '1.5' })
+  check(r.code === 2 && /JEV_TIMEOUT_MS/.test(r.err), `JEV_TIMEOUT_MS=1.5: rc ${r.code}, refused before the network`)
   r = await run({ TYPESAFE_BASE_URL: `${base}/hang`, JEV_TIMEOUT_MS: '500' })
   check(r.code === 4 && /timeout after 500 ms/.test(r.err) && r.ms < 5000, `timeout: rc ${r.code} after ${r.ms} ms`)
   leak(r)

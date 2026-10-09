@@ -61,8 +61,14 @@ def main(argv):
         res = {}
     steps = res.get("results", [])
     passed = [s for s in steps if s.get("ok") and s.get("status") in ("done", "likely_done")]
+    try:
+        asserted = [i for i, st in enumerate(json.load(open(flow, encoding="utf-8")).get("steps", [])) if st.get("assert")]
+    except (OSError, ValueError, AttributeError):
+        asserted = []
     truths = [s.get("truth") for s in steps]
-    ok = r.returncode == 0 and steps and len(steps) == res.get("steps") == res.get("passed") == len(passed) and all(t is not False for t in truths)
+    # an assert that throws comes back as the string «assert error: …», one that returns nothing — without truth: only true passes
+    ok = (r.returncode == 0 and steps and len(steps) == res.get("steps") == res.get("passed") == len(passed)
+          and all(i < len(steps) and steps[i].get("truth") is True for i in asserted))
     print(f"{'OK  ' if ok else 'FAIL'} check-ui: rc {r.returncode}; steps {res.get('steps')}, passed {res.get('passed')}, "
           f"statuses {', '.join(str(s.get('status')) for s in steps) or 'none'}, assert {', '.join(str(t).lower() for t in truths) or '—'}; "
           f"Jev calls {res.get('calls')}, tokens {res.get('tokens')}, {res.get('total_ms')} ms in the run, {time.monotonic() - t0:.1f} s in all")
