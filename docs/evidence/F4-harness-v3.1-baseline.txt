@@ -1,0 +1,92 @@
+# «До» v3.2: bin/check-harness на ките v3.1 (HEAD 5a1913f, kit/ не тронут), 09.10.2026 11:33
+# (1) корень репо — строка и launch settings тимлида (--setting-sources project,local, проводка Abide и Toolgate); (2) t3 — свежий bin/two-tier-init, шаблон PROCESS и launch settings кита v3.1
+
+$ bin/check-harness   # корень репо
+фикстура таблицы: строк 10; CLI: 2; флаг: 1; плагин: 1 …
+ok  env · зелёная: init = таблица, встроенный плагин и бандл-скилл не в счёт: расхождений нет
+ok  env · лишний плагин: плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»
+ok  env · плагин таблицы не загружен: плагин ponytail@ponytail: нет в system/init
+ok  env · MCP needs-auth: MCP context7: статус needs-auth, ждём connected
+ok  env · MCP таблицы нет: MCP context7: нет в system/init
+ok  env · лишний MCP из «нет»: MCP ref: лишний — в таблице «нет»
+ok  env · коннектор claude.ai: MCP claude.ai Gmail: лишний — в таблице «нет»
+ok  env · скилл Cowork включён: скилл anthropic-skills:docx: включён — в таблице «нет»
+ok  env · скилл таблицы не загружен: скилл graphify: нет в system/init
+ok  env · флага нет в строке: флаг --effort ultracode: нет в строке запуска
+ok  env · CLI нет в PATH: CLI gh: нет в PATH
+OK   self-test: фикстуры обеих сторон сверки
+источник харнеса: kit; строка запуска: docs/PROCESS.md; launch settings: .claude/launch.settings.json
+OK   settings: model claude-opus-5-5; effortLevel нет; ultracode нет
+OK   settings: autoMemoryEnabled False; disableClaudeAiConnectors True
+OK   settings: worktree.baseRef head; workflowSizeGuideline medium
+OK   settings: deny Edit на файлы тимлида 10/10; правил Write(…) 0
+OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (ждём ровно Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci))
+OK   settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, refuse_sweeping_commands.py; с ошибкой — нет
+OK   launch: .claude/launch.settings.json: autoMode.environment записей 6, "$defaults" есть
+OK   line: docs/PROCESS.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 16; нет — ничего
+копия харнеса: /tmp/two-tier-v3/harness-wwvvopn0
+run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p '<prompt>' --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]},"jev-browser":{"command":"npx","args":["-y","-p","jev-browser@0.1.2","jev-browser-mcp"]}}}' --add-dir /tmp/two-tier-v3 --max-turns 3 --output-format stream-json --verbose
+OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
+OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
+OK   run2: с AGENT_STOP: probe.txt не создан; tool_use 1; причина kill-switch в выводе — да; terminal_reason hook_stopped
+OK   allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` — выполнен; `bin/two-tier-upgrade --help` — отказ; tool_use 2, отказов 1
+OK   run1: system/init = таблица docs/PROCESS.md: плагинов 8, MCP 2 (context7 connected, jev-browser connected), скиллов 34; строк таблицы 35
+OK   run2: system/init = таблица docs/PROCESS.md: плагинов 8, MCP 2 (context7 connected, jev-browser connected), скиллов 34; строк таблицы 35
+OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
+OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 5; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
+OK   kill: воркфлоу completed; агент создал AGENT_STOP — да; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
+OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
+ENV_OK
+HARNESS_OK
+HOOKS_OK
+bin/check-harness  27,69s user 11,24s system 35% cpu 1:49,25 total
+
+$ bin/two-tier-init t3 && (cd t3 && bin/check-harness)
+фикстура таблицы: строк 10; CLI: 2; флаг: 1; плагин: 1 …
+ok  env · зелёная: init = таблица, встроенный плагин и бандл-скилл не в счёт: расхождений нет
+ok  env · лишний плагин: плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»
+ok  env · плагин таблицы не загружен: плагин ponytail@ponytail: нет в system/init
+ok  env · MCP needs-auth: MCP context7: статус needs-auth, ждём connected
+ok  env · MCP таблицы нет: MCP context7: нет в system/init
+ok  env · лишний MCP из «нет»: MCP ref: лишний — в таблице «нет»
+ok  env · коннектор claude.ai: MCP claude.ai Gmail: лишний — в таблице «нет»
+ok  env · скилл Cowork включён: скилл anthropic-skills:docx: включён — в таблице «нет»
+ok  env · скилл таблицы не загружен: скилл graphify: нет в system/init
+ok  env · флага нет в строке: флаг --effort ultracode: нет в строке запуска
+ok  env · CLI нет в PATH: CLI gh: нет в PATH
+OK   self-test: фикстуры обеих сторон сверки
+источник харнеса: .; строка запуска: ./docs/PROCESS.template.md; launch settings: .claude/launch.settings.json
+OK   settings: model claude-opus-5-5; effortLevel нет; ultracode нет
+OK   settings: autoMemoryEnabled False; disableClaudeAiConnectors True
+OK   settings: worktree.baseRef head; workflowSizeGuideline medium
+OK   settings: deny Edit на файлы тимлида 10/10; правил Write(…) 0
+OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (ждём ровно Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci))
+OK   settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, refuse_sweeping_commands.py; с ошибкой — нет
+OK   launch: .claude/launch.settings.json: autoMode.environment записей 5, "$defaults" есть
+OK   line: ./docs/PROCESS.template.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 11; нет — ничего
+копия харнеса: /tmp/two-tier-v3/harness-t_9iakfp
+run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p '<prompt>' --permission-mode auto --model claude-opus-5-5 --effort ultracode --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --max-turns 3 --output-format stream-json --verbose
+OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
+FAIL run1: без AGENT_STOP: probe.txt не создан, маркер из STEER.md не дошёл; STEER.md очищен; tool_use 2, ходов 3
+OK   run2: с AGENT_STOP: probe.txt не создан; tool_use 1; причина kill-switch в выводе — да; terminal_reason hook_stopped
+FAIL allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` — выполнен; `bin/two-tier-upgrade --help` — не отказан; tool_use 2, отказов 0
+FAIL run1: system/init = таблица ./docs/PROCESS.template.md: плагинов 8, MCP 1 (context7 connected), скиллов 34; строк таблицы 20
+FAIL run1: плагин compact-adviser@compact-adviser: лишний — нет в таблице
+FAIL run1: плагин handoff@two-tier-mods: лишний — нет в таблице
+FAIL run1: плагин jev-belay@jev-belay: лишний — нет в таблице
+FAIL run1: плагин jev-steer-or-queue@jev-steer-or-queue: лишний — нет в таблице
+FAIL run1: плагин typesafe@typesafe-ai: лишний — нет в таблице
+FAIL run2: system/init = таблица ./docs/PROCESS.template.md: плагинов 8, MCP 1 (context7 connected), скиллов 34; строк таблицы 20
+FAIL run2: плагин compact-adviser@compact-adviser: лишний — нет в таблице
+FAIL run2: плагин handoff@two-tier-mods: лишний — нет в таблице
+FAIL run2: плагин jev-belay@jev-belay: лишний — нет в таблице
+FAIL run2: плагин jev-steer-or-queue@jev-steer-or-queue: лишний — нет в таблице
+FAIL run2: плагин typesafe@typesafe-ai: лишний — нет в таблице
+OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
+FAIL agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 5; STEER.md после агента — пуст, агент видел её в cat — False; Write docs/STATUS.md — файл не создан, ответ инструмента «<\tool_use_error>File is in a directory that is denied by your permiss»; `git add -A` — отказ хука; в индексе 0
+FAIL kill: воркфлоу completed; агент создал AGENT_STOP — нет; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
+OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
+ENV_FAIL
+HARNESS_FAIL
+HOOKS_FAIL
+bin/check-harness  23,41s user 9,06s system 24% cpu 2:14,99 total

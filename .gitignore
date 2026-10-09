@@ -3,3 +3,9 @@
 __pycache__/
 *.pyc
 .venv/
+.env
+.env.*
+# engine-written type declarations of mods (laid at every load; regenerate, never edit)
+mods/*/.claude-plugin/types/
+# handoff mod: the executor's handoffs, written from the live transcript (SPEC-v3.2 F6)
+handoffs/

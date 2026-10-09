@@ -30,6 +30,6 @@ bin/verify-phase   # свежий клон, гейт фазы, claude -p с allo
 Лаунчер пишет отчёт в `docs/evidence/verify-<SHA>.txt`. Первая строка — `VERDICT: PASS` или `VERDICT: NEEDS_WORK`; блокирующих не больше пяти по `REVIEW.md`, остальное — `Named, not built`. Лимит истёк — `VERIFY_TIMEOUT`, вердикта нет: это находка «приёмка не уложилась в 30 мин». Воркфлоу недоступен — свежий субагент `evaluator` по `REVIEW.md`, вердикт — в `docs/evidence/accept-<SHA>.txt`.
 
 ## 3. Коммит
-`git add docs/evidence/verify-<SHA>.txt && git commit -m "accept: <вердикт> <SHA>"`, затем push ветки. На `NEEDS_WORK` в этой сессии ничего не чинить: блокирующие находки — вход следующего `/goal`.
+`git add docs/evidence/verify-<SHA>.txt && git commit -m "accept: <вердикт> <SHA>"`, затем push ветки. На `NEEDS_WORK` в этой сессии ничего не чинить: блокирующие находки — вход следующего запуска фазы.
 
 Оператору — три строки: вердикт · чем доказано (файлы) · что дальше.

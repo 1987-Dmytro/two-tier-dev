@@ -1,0 +1,8 @@
+{
+  "name": "two-tier-mods",
+  "owner": { "name": "two-tier-dev" },
+  "metadata": { "description": "Mods of the two-tier-dev system: handoff (automatic handoff + fresh context)." },
+  "plugins": [
+    { "name": "handoff", "source": "./handoff", "description": "Writes a handoff from the live transcript past a context threshold or on /handoff, then /clear and resume." }
+  ]
+}

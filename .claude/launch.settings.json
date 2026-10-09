@@ -1,5 +1,7 @@
 {
-  "worktree": { "baseRef": "head" },
+  "worktree": {
+    "baseRef": "head"
+  },
   "enabledPlugins": {
     "ponytail@ponytail": true,
     "pr-review-toolkit@claude-plugins-official": true,
@@ -9,7 +11,45 @@
     "security-guidance@claude-plugins-official": false,
     "frontend-design@claude-plugins-official": false,
     "code-review@claude-plugins-official": false,
-    "serena@claude-plugins-official": false
+    "serena@claude-plugins-official": false,
+    "typesafe@typesafe-ai": true,
+    "jev-belay@jev-belay": true,
+    "jev-steer-or-queue@jev-steer-or-queue": true,
+    "compact-adviser@compact-adviser": true,
+    "handoff@two-tier-mods": true,
+    "rust-analyzer-lsp@claude-plugins-official": false,
+    "improve@improve": false,
+    "drawio@365-skills": false
+  },
+  "pluginConfigs": {
+    "jev-belay@jev-belay": {
+      "options": {
+        "threshold": 0.75,
+        "log": true,
+        "shadow": true,
+        "check": "^bin/(check|gate)-"
+      }
+    },
+    "jev-steer-or-queue@jev-steer-or-queue": {
+      "options": {
+        "mode": "shadow"
+      }
+    },
+    "compact-adviser@compact-adviser": {
+      "options": {
+        "mode": "hint",
+        "logRequests": true
+      }
+    },
+    "handoff@two-tier-mods": {
+      "options": {
+        "threshold": 70,
+        "handoffDir": "handoffs",
+        "autoClear": true,
+        "minTurns": 2,
+        "language": "ru"
+      }
+    }
   },
   "skillOverrides": {
     "brain-init": "off",
@@ -37,17 +77,20 @@
   },
   "permissions": {
     "deny": [
-      "Edit(/intent/**)",
-      "Edit(/docs/SPEC-*.md)",
-      "Edit(/docs/GOAL.txt)",
-      "Edit(/docs/STATUS.md)",
-      "Edit(/docs/PROCESS.md)",
-      "Edit(/docs/reviews/**)",
-      "Edit(/docs/drafts/**)",
-      "Edit(/claude/**)",
-      "Edit(/.claude/launch.settings.json)",
-      "Edit(/docs/OFFICIAL-SOURCES.md)",
-      "Edit(/docs/archive/team-lead-*.md)"
+      "Edit(./intent/**)",
+      "Edit(./docs/SPEC-*.md)",
+      "Edit(./docs/PROMPT.txt)",
+      "Edit(./docs/STATUS.md)",
+      "Edit(./docs/PROCESS.md)",
+      "Edit(./docs/reviews/**)",
+      "Edit(./docs/drafts/**)",
+      "Edit(./claude/**)",
+      "Edit(./.claude/launch.settings.json)",
+      "Edit(./docs/OFFICIAL-SOURCES.md)",
+      "Edit(./docs/archive/team-lead-*.md)",
+      "Edit(./budgets.json)",
+      "Edit(./CLAUDE.md)",
+      "Edit(./.abide/rubric.json)"
     ]
   },
   "autoMode": {
@@ -55,8 +98,68 @@
       "$defaults",
       "Project: two-tier-dev — the operator's public kit for AI-agent development: scripts, skills, saved workflows, templates and docs. Primary use: software development.",
       "Source control: github.com/1987-Dmytro/two-tier-dev — pushing feature branches there is routine; main changes only through a pull request after the operator's acceptance.",
-      "Trusted domains: github.com, code.claude.com, registry.npmjs.org, context7.com.",
-      "Key services: GitHub Actions CI of this repo; scratch repos and fixtures under /tmp/two-tier-v3; nested claude -p control runs on the subscription."
+      "Trusted domains: github.com, code.claude.com, registry.npmjs.org, context7.com, api.typesafe.ai, docs.typesafe.ai.",
+      "Key services: GitHub Actions CI of this repo; scratch repos and fixtures under /tmp/two-tier-v3; nested claude -p control runs on the subscription.",
+      "Decision-model vendor: TypeSafe (Jev) at api.typesafe.ai — paid calls from hooks and bin/ scripts with the key from the environment are routine inside the phase ceiling; the key is never printed or written into the repo."
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" turn-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "toolgate decide 2>/dev/null | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{const d=JSON.parse(s);if(d.verdict===\"deny\")console.log(JSON.stringify({hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"deny\",permissionDecisionReason:\"[toolgate] \"+d.reason}}))}catch(e){}})'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" post-tool-use",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" stop",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   }
 }

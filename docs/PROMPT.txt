@@ -1,0 +1,20 @@
+Read first: docs/SPEC-v3.2.md, docs/PROGRESS.md, docs/reviews/v3.2-2.md
+
+This is the start prompt of phase v3.2 of two-tier-dev, "Jev layer, no /goal", after the team lead's acceptance v3.2-2. It is passed as the launch-line argument; there is no /goal, the spec drives the phase. The phase is built and its gate is green; the acceptance returned two blocking findings, both in docs/reviews/v3.2-2.md (B1 and B2). Close them. Each finding names the symptom, the evidence, the SPEC clause and the acceptance check; how to fix is yours. Begin with `git pull --ff-only origin v3.2`: the team lead moved docs/GOAL.txt to docs/PROMPT.txt and wrote the review. Step 0 is a short fix section in docs/PLAN-v3.2.md in its own commit, then one commit per finding, its probe (both sides) in the same commit. The `## Named, not built` list of the review is not this leg's work, except the one line it marks for the executor.
+
+Done means all of this holds: both blocking findings of review v3.2-2 are closed, their acceptance checks ran in this session and the evidence of F2 and F7 in docs/evidence/ is fresh; every feature of SPEC-v3.2 section 2 is still closed; branch v3.2 is pushed and `bin/check-ci v3.2` prints CI_OK; `bin/verify-phase` from a fresh clone of the pushed HEAD wrote VERDICT: PASS, its blocking findings fixed in this session first; in the final turn, after the last push, `bin/gate-v3.2` prints every marker of the phase; the head of the progress file says what is done, what the operator does next and when.
+
+Do not end a turn before that. The only other way to end is a stop of SPEC-v3.2 section 4: a new line `STOP: <id>` in the progress file with the question and a resume line, written after everything that does not need the missing input is closed and pushed. If the context fills up, the handoff mod moves the work into a fresh context; continue from its file.
+
+Authorized in this phase: push branch v3.2; edit kit/.claude/** and mods/**; nested `claude -p` control runs and Workflow(verify-phase); calls to api.typesafe.ai with the key from the environment (no spend ceiling in this phase); npm installs inside the repo or /tmp/two-tier-v3 only.
+
+Constraints:
+- Branch v3.2 only; never push to main. `git add` with exact paths; fix-ups are new commits; never amend a pushed commit or force-push. Workflow agents edit only inside their own worktrees or only read; the main session commits.
+- Never print the TypeSafe key or write it into the repo, evidence or logs; nothing irreversible without the operator's yes.
+- Team-lead files are read-only: the intent folder, the phase specs, this start prompt, the status and process files, the reviews and drafts folders, the claude folder, the launch settings file, budgets.json, CLAUDE.md, the Abide rubric.
+- Live projects are off limits, reading and cloning included: the upgrade finding is reproduced on a synthetic project under /tmp/two-tier-v3 that the v3.1 kit of `main` has upgraded; the team lead reruns it on a clone of the live project at acceptance.
+- User-level settings and installs are read-only; a new user-level install is STOP-INPUT with the exact command.
+- Public repo: evidence and commit messages carry counts, exit codes, markers and repo-relative paths, never emails, account ids, client names or home-directory paths.
+- After an auto-mode block, do not repeat the action: take another path or stop with STOP-INPUT and the exact command for the operator.
+- A fork the spec leaves open: take the simplest reading and add a line to `## Notes` in the progress file; that is not a stop.
+- For every check show the command and its output in the transcript; a check without output is not passed.

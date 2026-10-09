@@ -4,10 +4,15 @@
 
 Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
 копии workflow CI и verify-phase совпадают, defaults бюджета в kit/budgets.json и budgets.json совпадают. KIT_OK или exit 1.
+Мод handoff (SPEC-v3.2 F6, только репо кита): строка шаблона Environment (70 %, /clear), включение и режим в launch settings кита
+(pluginConfigs, иначе userConfig мода по умолчанию), handoffs/ в .gitignore, команда установки в выводе bin/two-tier-init,
+`claude plugin validate` и `claude plugin test` мода — HANDOFF_OK; без claude в PATH (CI) validate и test не гоняются, маркера нет.
 """
-import json, os, re, sys
+import json, os, re, shutil, subprocess, sys, tempfile
 
 out = []
+V32_KEYS, V32_OWNER = {"prompt_chars", "abide_rules"}, {"docs/PROMPT.txt", ".abide/rubric.json", ".claude/spec-gate.json", ".claude/toolgate.yaml"}
+V32_RETIRED = {"goal_chars", "docs/GOAL.txt"}
 
 
 def say(ok, item, msg):
@@ -56,7 +61,53 @@ if root == "kit":
         ".github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml")
     say(read(".claude/workflows/verify-phase.js") == read("kit/.claude/workflows/verify-phase.js"), "workflows",
         ".claude/workflows/verify-phase.js = kit/.claude/workflows/verify-phase.js")
-    say(json.loads(read("budgets.json"))["defaults"] == json.loads(read("kit/budgets.json"))["defaults"], "budgets",
-        "defaults budgets.json = kit/budgets.json")
-print("KIT_OK" if all(out) else "KIT_FAIL")
-sys.exit(0 if all(out) else 1)
+    # v3.2: корневой budgets.json — файл тимлида; ключи и записи owner, новые в ките, он вносит на приёмке (PLAN-v3.2, отклонение 8)
+    rd, kd = json.loads(read("budgets.json"))["defaults"], json.loads(read("kit/budgets.json"))["defaults"]
+    ro, ko = set(rd.get("owner", [])), set(kd.get("owner", []))
+    same = all(rd[k] == kd[k] for k in set(rd) & set(kd) - {"owner"})
+    delta = sorted(set(kd) - set(rd)) + sorted(ko - ro) + [f"−{x}" for x in sorted(set(rd) - set(kd))] + [f"−{x}" for x in sorted(ro - ko)]
+    say(same and set(kd) - set(rd) <= V32_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED, "budgets",
+        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: {', '.join(delta) or 'нет'}")
+    lim = kd.get("prompt_chars", kd.get("goal_chars"))
+    owned = {"docs/PROMPT.txt", "docs/GOAL.txt"} & ko
+    say(kd.get("abide_rules", 0) <= 15 and lim is not None and lim <= 4000 and owned and {".claude/spec-gate.json", ".abide/rubric.json", ".claude/toolgate.yaml"} <= ko,
+        "budgets", f"kit/budgets.json: abide_rules {kd.get('abide_rules')} (≤ 15, SPEC-v3.2 F3), стартовый запрос {lim} знаков (≤ 4000), "
+                   f"во владении — {', '.join(sorted(owned)) or 'нет'} и файлы тимлида слоя (spec-gate.json, rubric.json, toolgate.yaml)")
+kit_ok = all(out)
+print("KIT_OK" if kit_ok else "KIT_FAIL")
+hand = []
+if root == "kit" and os.path.isdir("mods/handoff"):  # v3.2, F6: мод handoff — в репо кита
+    def hsay(ok, item, msg):
+        hand.append(bool(ok))
+        print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}")
+    row = next((l for l in read("kit/docs/PROCESS.template.md").splitlines() if "`handoff@two-tier-mods`" in l), "")
+    hsay(row and "| да |" in row and "70 %" in row and "/clear" in row, "handoff", f"строка шаблона Environment: {'да, 70 %, /clear' if row else 'нет'}")
+    ls = json.loads(read("kit/.claude/launch.settings.json"))
+    opts = ls.get("pluginConfigs", {}).get("handoff@two-tier-mods", {}).get("options")  # SPEC-v3.2 F6: 70 % и /clear — в pluginConfigs, не умолчания мода
+    on = ls.get("enabledPlugins", {}).get("handoff@two-tier-mods") is True
+    hsay(on and opts and opts.get("threshold") == 70 and opts.get("autoClear") is True, "handoff",
+         f"launch settings кита: включён — {on}; pluginConfigs: " + (f"threshold {opts.get('threshold')}, autoClear {opts.get('autoClear')}, handoffDir {opts.get('handoffDir')}"
+                                                                     if opts else "записи handoff@two-tier-mods нет"))
+    hsay("handoffs/" in read(".gitignore").splitlines(), "handoff", f".gitignore: handoffs/ — {'есть' if 'handoffs/' in read('.gitignore').splitlines() else 'нет'}")
+    os.makedirs("/tmp/two-tier-v3", exist_ok=True)
+    t = tempfile.mkdtemp(prefix="check-kit-init-", dir="/tmp/two-tier-v3")
+    init = subprocess.run(["bin/two-tier-init", t], capture_output=True, text=True).stdout
+    shutil.rmtree(t, ignore_errors=True)
+    hsay("install handoff@two-tier-mods" in init and "marketplace add" in init, "handoff",
+         f"bin/two-tier-init печатает команду установки мода — {'да' if 'install handoff@two-tier-mods' in init else 'нет'}")
+    if shutil.which("claude"):
+        v = subprocess.run(["claude", "plugin", "validate", "mods/handoff"], capture_output=True, text=True, timeout=120)
+        txt = v.stdout + v.stderr
+        hooks = next((m.group(1) for l in txt.splitlines() for m in [re.search(r"\./\S+ hooks: (.+)$", l)] if m), "")  # строка модуля, не «Validating hooks: <путь>»
+        calls = next((m.group(1).count("$.") for l in txt.splitlines() for m in [re.search(r"\./\S+ calls: (.+)$", l)] if m), 0)
+        hsay(v.returncode == 0 and "Validation passed" in txt and hooks, "handoff", f"claude plugin validate mods/handoff: rc {v.returncode}; hooks: {hooks}; calls: {calls}")
+        r = subprocess.run(["claude", "plugin", "test", "mods/handoff"], capture_output=True, text=True, timeout=300)
+        txt = r.stdout + r.stderr
+        npass, nfail = re.search(r"(\d+) pass", txt), re.search(r"(\d+) fail", txt)
+        hsay(r.returncode == 0 and npass and int(npass.group(1)) > 0 and nfail and nfail.group(1) == "0", "handoff",
+             f"claude plugin test mods/handoff: rc {r.returncode}, pass {npass.group(1) if npass else '?'}, fail {nfail.group(1) if nfail else '?'}")
+        print("HANDOFF_OK" if all(hand) else "HANDOFF_FAIL")
+    else:
+        print("--   handoff: claude нет в PATH (CI) — validate и test не гонялись, маркера HANDOFF нет")
+        print("HANDOFF_FAIL" if not all(hand) else "--   handoff: проверки без claude — зелёные")
+sys.exit(0 if kit_ok and all(hand) else 1)

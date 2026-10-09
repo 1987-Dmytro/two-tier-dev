@@ -1,0 +1,45 @@
+{
+  "name": "handoff",
+  "version": "0.2.0",
+  "description": "Writes a handoff document from the live transcript when the context fills past a threshold (or on /handoff), then clears the context and resumes from the handoff — a fresh session without retyping anything.",
+  "author": {
+    "name": "two-tier-dev"
+  },
+  "userConfig": {
+    "threshold": {
+      "type": "number",
+      "default": 70,
+      "description": "Context fill (percent of the window) at which the handoff is written automatically after the turn ends.",
+      "title": "Auto-handoff threshold (%)"
+    },
+    "handoffDir": {
+      "type": "string",
+      "default": "handoffs",
+      "description": "Directory for handoff files, relative to the project root (e.g. `claude` for a team-lead repo).",
+      "title": "Handoff directory"
+    },
+    "autoClear": {
+      "type": "boolean",
+      "default": true,
+      "description": "After writing the handoff, run /clear and submit the resume prompt so work continues in a fresh context.",
+      "title": "Clear and resume after the handoff"
+    },
+    "minTurns": {
+      "type": "number",
+      "default": 2,
+      "description": "Never hand off automatically before this many user prompts in the session.",
+      "title": "Minimum prompts before auto-handoff"
+    },
+    "language": {
+      "type": "string",
+      "default": "ru",
+      "options": [
+        "ru",
+        "en"
+      ],
+      "description": "Language of the handoff document and the resume prompt.",
+      "title": "Language"
+    }
+  },
+  "types": "./types/index.d.ts"
+}

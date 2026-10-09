@@ -9,6 +9,7 @@
     "deny": [
       "Edit(/intent/**)",
       "Edit(/docs/SPEC-*.md)",
+      "Edit(/docs/PROMPT.txt)",
       "Edit(/docs/GOAL.txt)",
       "Edit(/docs/STATUS.md)",
       "Edit(/docs/PROCESS.md)",
@@ -16,10 +17,22 @@
       "Edit(/docs/drafts/**)",
       "Edit(/claude/**)",
       "Edit(/.claude/launch.settings.json)",
+      "Edit(/.claude/spec-gate.json)",
+      "Edit(/.abide/rubric.json)",
+      "Edit(/.claude/toolgate.yaml)",
       "Edit(/budgets.json)"
     ]
   },
   "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "session-start"], "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "turn-start"], "timeout": 10 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "post-tool-use"], "timeout": 20 } ] }
+    ],
     "PreToolUse": [
       {
         "matcher": "*",
@@ -32,6 +45,20 @@
         "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/refuse_sweeping_commands.py"], "timeout": 30 }
+        ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/toolgate-deny.mjs"], "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/spec-gate.mjs"], "timeout": 30 },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", "stop"], "timeout": 30 }
         ]
       }
     ]

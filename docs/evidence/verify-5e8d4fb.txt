@@ -1,0 +1,50 @@
+VERDICT: NEEDS_WORK
+/verify-phase · docs/SPEC-v3.2.md · HEAD 5e8d4fb · проверяющие claude-sonnet-5-5 (фич 10, опровергателей 5) · судья claude-opus-5-5
+
+Свежий `bin/gate-v3.2` на 5e8d4fb кончается на GATE_FAIL, и строка FAIL одна и та же в гейте, в собственном прогоне верификатора и в evidence: у handoff нет `pluginConfigs` в launch settings кита (F6, а с ним v3.1 KIT_OK), а `kit/budgets.json` и `kit/CLAUDE.md` всё ещё держат `goal_chars` и `docs/GOAL.txt` (F7) — это я подтвердил, прочитав файлы. F1–F5, F8 и F9 доказаны маркерами, мутации на них краснеют, а их находки не противоречат «готово» и не нарушают §3, поэтому вердикт — NEEDS_WORK по F6, F7 и F10.
+
+## Блокирующие
+- **F7: Чек F7 красный в корне ветки: `bin/check-budget --templates` падает на правиле kit-prompt. В ките остался старый GOAL. В `kit/budgets.json` нет `prompt_chars`, зато есть `"goal_chars": 4000` (строка 16) и `docs/GOAL.txt` в owner (строка 24); `docs/PROMPT.txt` в owner нет. `kit/CLAUDE.md:3` называет `docs/GOAL.txt`, а `kit/CLAUDE.md:11` говорит «это выполненный goal».** · доказательство: gate.log: 'templates-repo: FAIL kit-prompt: kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: нет prompt_chars; goal_chars; нет docs/PROMPT.txt в owner; docs/GOAL.txt в owner; kit/CLAUDE.md:3; kit/CLAUDE.md:11' и 'F7 FAIL: нет BUDGET_OK (templates templates-repo)'. Файл docs/evidence/F7-templates-result.txt кончается на 'BUDGET_FAIL: 1', BUDGET_OK в нём нет. Файлы кита на HEAD 5e8d4fb я прочитал сам, и они это подтверждают. · критерий: (a) фича не доказана чеком: свежий прогон красный, маркера в evidence нет. (c) Готово F7 требует, чтобы шаблон GOAL и `goal_chars` ушли в архив, а `check-budget` считал бюджет `prompt_chars`. Проект из кита получает старый ключ и старый owner. · чек приёмки: bin/check-budget --templates → BUDGET_OK в корне ветки и в t3; grep -c BUDGET_OK docs/evidence/F7-templates-result.txt ≥ 1
+- **F6: Чек F6 красный: `bin/check-kit` печатает HANDOFF_FAIL. В `kit/.claude/launch.settings.json` мод `handoff@two-tier-mods` включён, но записи `pluginConfigs` для него (70 %, `/clear`) нет. Из-за той же причины v3.1 `KIT_OK` тоже не печатается.** · доказательство: Свежий прогон bin/check-kit: 'FAIL handoff: launch settings кита: включён — True; pluginConfigs: записи handoff@two-tier-mods нет' → HANDOFF_FAIL, rc 1. В gate.log стоят 'F6 FAIL: нет HANDOFF_OK (kit-repo)' и 'v3.1 FAIL: нет KIT_OK (kit-t3 kit-repo)' с той же строкой FAIL. `grep -c HANDOFF_OK docs/evidence/F6-kit-result.txt` даёт 0. · критерий: (a) фича не доказана чеком: свежий прогон красный, маркера в evidence нет. (c) Готово F6 требует `pluginConfigs` (70 %, `/clear`). · чек приёмки: bin/check-kit → HANDOFF_OK и KIT_OK; в kit/.claude/launch.settings.json есть pluginConfigs['handoff@two-tier-mods'] с порогом 70 и /clear
+- **F10: Гейт v3.2 красный на HEAD 5e8d4fb: нет ни `F10 GATE_OK`, ни `GATE_OK`. Зелёный прогон в docs/evidence/F10-gate-result.txt старше коммитов ревью: в нём 37 файлов кита, а на HEAD их 35.** · доказательство: gate.log кончается на 'GATE_FAIL: 4', собственный прогон верификатора — на 'GATE_FAIL: 3', rc 1. Красные строки: F6 HANDOFF, F7 BUDGET (kit-prompt), v3.1 KIT_OK (тот же handoff) и F7 UPGRADE_OK. Последняя нестабильна: каталог /tmp/two-tier-v3/upgrade захардкожен, и параллельные прогоны в нём сталкиваются. Отдельный прогон self-test зелёный. PROGRESS.md:20 сам пишет, что F6 и F7 красные. · критерий: (a) фича не доказана чеком: свежий прогон красный, маркер в evidence устарел. · чек приёмки: bin/gate-v3.2 → 'F10 GATE_OK', rc 0; свежий вывод записан в docs/evidence/F10-gate-result.txt на финальном HEAD
+
+## Named, not built
+- F1: ответ 200 с эхом ключа печатается без маски; маска стоит только на пути ошибок не-200 (надуманный случай)
+- F1: массив `detail` в теле ошибки печатается как '[object Object]'; код выхода 3 сохраняется
+- F1: JEV_TIMEOUT_MS сверх предела и ключ с переводом строки дают 'network: RangeError/TypeError' и пишутся в журнал со status 0
+- F1: state с BOM уходит строкой, ключ из одних пробелов принимается, на TTY нет подсказки
+- F1/F3/F10: --self-test, check-harness и гейт пачкают отслеживаемый docs/evidence/jev.jsonl; живая часть self-test игнорирует JEV_LOG
+- F2: без ответа Jev PROGRESS.md из одних пробелов считается обновлённой головой, и выходит SPEC_GATE_OK
+- F2: без transcript_path проверка свежей головы молча пропускается (fail-open)
+- F2: строка `STOP: STOP-INPUT` внутри ``` или без вопроса и resume без Jev кончает ход
+- F2: неизвестный режим ('banana') молча ведёт себя как shadow
+- F3: Stop-блок Abide без reason даёт заметку '...: undefined'
+- F3: калибровка рубрики 'skipped' у 3 из 13 правил (evidence-anonymized, tmp-only-fixtures, marker-after-assertions)
+- F3: матчер PostToolUse — только Edit|Write|MultiEdit; правки через Bash и NotebookEdit судятся лишь на Stop как заметка
+- F3: живой прогон секрета показан на фикстуре и маркере ZEBRA-42; печать кредов в bin/** не проверена повторно
+- F4: modes() сравнивает слово таблицы с любым значением опции, а не с её ключом
+- F4: разбор таблицы чувствителен к регистру ('Да', '`Hint`') и молча пропускает строку
+- F4: режимы launch settings кита сверяются только в t3 из гейта, в корне — нет
+- F5: регэксп force-push пропускает `env git push -f`, `--mirror`, `--delete`; ложный deny на комментарий с `-f`
+- F5: без ключа force-push всё равно получает deny (статическое правило); без бинаря toolgate — тишина
+- F5: флейк пробы run1 (AGENT_STOP/STEER) в мутированном прогоне
+- F6: handoffDir вида '../x' не отвергается, запись возможна вне корня (не проверено прогоном)
+- F7: копия GOAL.template.txt лежит в docs/drafts/ вне архива
+- F7/F10: self-test two-tier-upgrade нестабилен: фиксированный каталог /tmp/two-tier-v3/upgrade без mktemp
+- F8: строка журнала — валидный JSON, но не объект, или токены NaN или строкой роняют команду трассой
+- F8: неверный EUR_PER_USD падает трассой; BOM в журнале выбрасывает первую строку
+- F8: на неверные аргументы печатается весь docstring вместо краткой строки usage
+- F9: чек не сверяет строки `hooks:` и `calls:` CHANGELOG с выводом `claude plugin validate` (мутация уцелела, содержимое сейчас верно)
+- F9: проверка ссылок не покрывает пути `docs/*.md` в обратных кавычках; LAUNCH проверяется через симлинк kit/docs
+
+## По фичам
+- F1: чек `bin/jev --self-test` rc 0, маркер есть (own_run); мутация kit/bin/jev (bin/jev is a symlink to it): removed the key masking .split(key).join('<key>') from the non-200 error message path → red; находок 5, блокирующих-кандидатов 0, опровергнуто 0
+- F2: чек `bin/check-harness` rc 0, маркер есть (gate_log); мутация kit/.claude/hooks/spec-gate.mjs: cap of blocks: `blocks >= cfg.caps.blocks` changed to `blocks > cfg.caps.blocks` (off-by-one in the cap). Restored with git checkout; git status clean afterwards. → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F3: чек `bin/check-harness (gate log line 18 of /tmp/two-tier-v3/verify-5e8d4fb-a6rzl7eb/gate.log: 'F3 ABIDE_OK'; evidence docs/evidence/F3-harness-result.txt line 87 holds ABIDE_OK, its abide-live, abide-clean and secret lines are OK, rc 0)` rc 0, маркер есть (gate_log); мутация kit/.claude/hooks/abide.mjs: Stop branch condition `out.decision === 'block'` changed to `'blocked'`, so a Stop block from Abide is no longer turned into an operator note and passes through raw, holding the end of the turn → red; находок 5, блокирующих-кандидатов 0, опровергнуто 0
+- F4: чек `bin/check-harness` rc 0, маркер есть (own_run); мутация kit/.claude/launch.settings.json: compact-adviser pluginConfigs mode hint -> auto; bin/two-tier-init into /tmp/two-tier-v3/f4acc/t3, then bin/check-harness there → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F5: чек `gate.log line 20 'F5 TOOLGATE_OK' (gate ran bin/check-harness in a fresh clone; harness-repo and harness-t3 rc 0); docs/evidence/F5-harness-result.txt contains TOOLGATE_OK (grep -c = 1, 'bin/check-harness ... rc 0'). Own full run not repeated clean (3.5 min); only run was the mutated one.` rc 0, маркер есть (gate_log); мутация kit/.claude/hooks/toolgate-deny.mjs: line 21: `d.verdict === 'deny'` -> `d.verdict !== 'allow'` (ask/passthrough would print a deny) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F6: чек `bin/check-kit` rc 1, маркер нет (own_run); мутация mods/handoff/hooks/register.tsx: planned: threshold default 70 -> 60 (and `<` -> `<=` on the trigger comparison); not applied → skipped; находок 2, блокирующих-кандидатов 1, опровергнуто 0
+- F7: чек `bin/check-budget --templates (gate.log line 'templates-repo: (корень ветки) bin/check-budget --templates — rc 1'; my own run was refused by the toolgate hook, 4 attempts, risk 86-88% >= 85%)` rc 1, маркер нет (gate_log); мутация kit/budgets.json: not made: the toolgate PreToolUse hook denied every run of bin/check-budget, so no check could be run to see red or green; I did not work around the block → skipped; находок 5, блокирующих-кандидатов 3, опровергнуто 1
+- F8: чек `bin/check-spend` rc 0, маркер есть (own_run); мутация bin/check-spend: Count every jev.jsonl row with a status, not only status 200 (`e.get("status") == 200` changed to `is not None`). Applied to a scratch copy under /tmp/two-tier-v3/f8-scratch, because Toolgate denied in-place edits (sed, Python) in the worktree. The worktree file is unchanged. → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F9: чек `bin/check-docs` rc 0, маркер есть (own_run); мутация kit/docs/LAUNCH.md: removed the words shadow and active (spec-gate modes) from LAUNCH.md via sed → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F10: чек `bin/gate-v3.2` rc 1, маркер нет (own_run); мутация bin/gate-v3.2: skipped: the gate is already red at HEAD (rc 1, no F10 GATE_OK), so a mutation could not be told apart from the existing failures. The check takes about 4 minutes and has no self-test. → skipped; находок 4, блокирующих-кандидатов 1, опровергнуто 0

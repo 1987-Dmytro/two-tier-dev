@@ -1,0 +1,33 @@
+$ bin/jev --self-test
+ok  answer: rc 0, model jev-1.13.0, answers done, kind, detail
+ok  request: POST /ok/v1/systemone, Bearer key sent, model jev-1.13.0, state as JSON, questions 3
+ok  summary on stderr: «jev: HTTP 200 · model jev-1.13.0 · 27 ms · tokens in 120 out 0»
+ok  text state goes as a string: rc 0
+ok  JEV_MODEL with a pinned version: rc 0
+ok  no key: rc 2, no request, «jev: TYPESAFE_API_KEY is not set — the key comes from the environment only»
+ok  model jev-latest: rc 2, refused before the network
+ok  model jev-preview: rc 2, refused before the network
+ok  model jev-1.13: rc 2, refused before the network
+ok  missing questions file: rc 2
+ok  unknown question type: rc 2
+ok  empty state: rc 2
+ok  wrong key: rc 3, «jev: HTTP 401: invalid API key»
+ok  HTTP 500: rc 3
+ok  200 without the answers: rc 3
+ok  200 from another model: rc 3
+ok  an error body that echoes the key: rc 3, the key masked on stderr
+ok  HTTP 422 with a structured detail: rc 3, «jev: HTTP 422: [{"loc":["body","questions"],"msg":"field req»
+ok  JEV_TIMEOUT_MS=1.5: rc 2, refused before the network
+ok  JEV_TIMEOUT_MS=1e12: rc 2, refused before the network
+ok  a key with a newline: rc 2, refused before the network
+ok  a key of spaces: rc 2, refused before the network
+ok  timeout: rc 4 after 562 ms
+ok  dead address: rc 4, «jev: network: ECONNREFUSED»
+ok  spend log: 11 lines for 11 calls that reached the network; first — HTTP 200, tokens 120, version jev-1.13.0
+ok  the key appears in no output and no log line; the log carries no state (0 leaks)
+ok  live call: rc 0, jev: HTTP 200 · model jev-1.13.0 · 375 ms · tokens in 300 out 20, noul 0.99
+JEV_OK
+
+$ echo '{"message":"Готово: F1 закрыта"}' | bin/jev <one noul question>   # live call, pinned model
+answer: model jev-1.13.0 · noul 0.95 · usage {'input_tokens': 320, 'output_tokens': 20}
+jev: HTTP 200 · model jev-1.13.0 · 328 ms · tokens in 320 out 20

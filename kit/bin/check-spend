@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""check-spend [--since <ISO-время>] | --self-test — расход Jev за плечо одной командой (SPEC-v3.2 F8): SPEND_OK или exit 1.
+
+Складывает журналы инструментов слоя — вызовы, входные токены, $ и € — и печатает итог без планки. Цена — $0,042 за 1 млн
+входных токенов, выход бесплатен (docs.typesafe.ai/models); курс — EUR_PER_USD (по умолчанию 0,86). Окно — с --since, иначе с
+первого коммита после merge-base с main (начало плеча). Журналы (нет журнала — ноль, строка «нет»):
+  bin/jev и spec-gate — docs/evidence/jev.jsonl репо и фикстур во /tmp/two-tier-v3 (токены точно);
+  check-ui (Jev Browser) — строки check-ui в том же журнале (вызовы и токены точно);
+  Abide — .abide/events.jsonl репо и фикстур (строки check: токены точно, вызовов — не меньше числа строк);
+  Belay — его decisions.jsonl (решения allowed/blocked/shadow: токены точно);
+  Toolgate — аудит кита во /tmp/two-tier-v3/toolgate и аудит пользователя (source model: токенов в журнале нет — оценка
+  по длине входа и вопросов, замер 09.10: ~240 токенов на запрос, ~3,4 байта на токен);
+  Steer-or-Queue — его log.jsonl (вызов без ошибки; токенов нет — оценка 1100 на вызов);
+  Compact Adviser — его compact-adviser-requests-*.jsonl (строка request; оценка по длине тела запроса);
+  Quicksilver — его stats.json (накопительно с since: вне окна, отдельной строкой).
+В вывод — только имена инструментов, счётчики и суммы: ни путей домашнего каталога, ни текста из журналов.
+--self-test — фикстура журналов во /tmp/two-tier-v3 с известной суммой: итог сходится до цента; каталог фикстуры удаляется,
+а сбор расхода каталоги check-spend-* не читает.
+"""
+import glob, json, os, shutil, subprocess, sys, tempfile, time
+from datetime import datetime, timezone
+
+TMP = "/tmp/two-tier-v3"
+USD_PER_MTOK = 0.042
+try:
+    EUR_PER_USD = float(os.environ.get("EUR_PER_USD", "0.86"))  # ponytail: курс — константа; уточнять по счёту вендора
+except ValueError:
+    EUR_PER_USD = float("nan")
+if not 0 < EUR_PER_USD < float("inf"):
+    sys.exit("check-spend: EUR_PER_USD must be a positive number")
+HOME = os.path.expanduser("~")
+FIXED, BYTES_PER_TOKEN = 240, 3.4      # замер 09.10 (4 живых вызова jev-1.13.0): постоянная часть и байт на токен
+TG_Q_TASK, TG_Q_NOTASK = 8314, 4155    # байт вопросов Toolgate 0.16.0 с контекстом задачи и без
+STEER_TOKENS = 1100                    # ponytail: Steer-or-Queue токенов не пишет — середина оценки 0,5–1,7 тыс.
+
+
+def lines(paths, unique=False):
+    """JSON-объекты журналов; битые строки и не объекты — счётчиком, не падением; BOM в начале файла — не помеха.
+    unique — одинаковая строка считается раз: журнал Jev отслеживается git, и каждый клон гейта и приёмки во /tmp несёт его копию."""
+    out, bad, seen = [], 0, set()
+    for p in paths:
+        try:
+            with open(p, encoding="utf-8-sig", errors="replace") as f:
+                for l in f:
+                    l = l.strip()
+                    if not l or (unique and l in seen):
+                        continue
+                    seen.add(l)
+                    try:
+                        e = json.loads(l)
+                    except ValueError:
+                        e = None
+                    if isinstance(e, dict):
+                        out.append(e)
+                    else:
+                        bad += 1
+        except OSError:
+            continue
+    return out, bad
+
+
+def tok(v):
+    """Число из журнала; строка, NaN, бесконечность, bool, нет поля — 0."""
+    return v if type(v) in (int, float) and v == v and abs(v) != float("inf") else 0
+
+
+def sub(e, k):
+    """Вложенный объект строки журнала; не объект — {}."""
+    return e.get(k) if isinstance(e.get(k), dict) else {}
+
+
+def when(v):
+    """ISO-строка или эпоха (секунды) → секунды эпохи; не разобрать — None."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def collect(since, roots):
+    """{инструмент: (вызовов, токенов, точно ли, строк журналов, битых строк)} — для отчёта и для фикстуры."""
+    rows = {}
+    def put(tool, calls, tokens, exact, n, bad):
+        rows[tool] = (calls, int(round(tokens)), exact, n, bad)
+    inwin = lambda e, key: (when(e.get(key)) or 0) >= since
+    repo, tmp, home = roots
+    own = lambda paths: [p for p in paths if not p.startswith(f"{tmp}/check-spend-")]  # фикстуры self-test — не расход плеча
+    jev, bad = lines(own(glob.glob(f"{repo}/docs/evidence/jev.jsonl") + glob.glob(f"{tmp}/**/docs/evidence/jev.jsonl", recursive=True)), unique=True)
+    jev = [e for e in jev if inwin(e, "ts")]
+    ui = [e for e in jev if e.get("caller") == "check-ui"]
+    api = [e for e in jev if e.get("caller") != "check-ui"]
+    put("bin/jev и spec-gate", sum(1 for e in api if e.get("status") == 200), sum(tok(e.get("input_tokens")) for e in api), True, len(api), bad)
+    put("Jev Browser (check-ui)", sum(tok(e.get("calls")) for e in ui), sum(tok(e.get("input_tokens")) for e in ui), True, len(ui), 0)
+    ab, bad = lines(own(glob.glob(f"{repo}/.abide/events.jsonl") + glob.glob(f"{tmp}/**/.abide/events.jsonl", recursive=True)), unique=True)
+    ab = [e for e in ab if e.get("kind") == "check" and inwin(e, "at") and tok(sub(e, "usage").get("inputTokens")) > 0]
+    put("Abide", len(ab), sum(tok(sub(e, "usage").get("inputTokens")) for e in ab), True, len(ab), bad)
+    be, bad = lines(glob.glob(f"{home}/.claude/belay/decisions.jsonl*"))
+    be = [e for e in be if e.get("verdict") in ("allowed", "blocked", "shadow") and inwin(e, "ts")]
+    put("Jev Belay", len(be), sum(tok(sub(e, "usage").get("input_tokens")) for e in be), True, len(be), bad)
+    tg, bad = lines(glob.glob(f"{tmp}/toolgate/audit.jsonl") + glob.glob(f"{home}/.toolgate/audit.jsonl"))
+    tg = [e for e in tg if e.get("source") == "model" and inwin(e, "ts")]
+    est = lambda e: FIXED + ((TG_Q_TASK if sub(e, "task").get("present") else TG_Q_NOTASK) + tok(e.get("input_chars"))
+                             + tok(sub(e, "task").get("chars"))) / BYTES_PER_TOKEN
+    put("Toolgate", len(tg), sum(est(e) for e in tg), False, len(tg), bad)
+    st, bad = lines(glob.glob(f"{home}/.claude/plugins/data/jev-steer-or-queue-jev-steer-or-queue/log.jsonl"))
+    st = [e for e in st if isinstance(e.get("jev"), dict) and not e["jev"].get("error") and inwin(e, "ts")]
+    put("Steer-or-Queue", len(st), len(st) * STEER_TOKENS, False, len(st), bad)
+    ca, bad = lines(glob.glob(f"{home}/.claude/compact-adviser-requests-*.jsonl"))
+    ca = [e for e in ca if e.get("kind") == "request" and inwin(e, "at")]
+    put("Compact Adviser", len(ca), sum(FIXED + len(json.dumps(e.get("body"), separators=(",", ":"))) / BYTES_PER_TOKEN for e in ca), False, len(ca), bad)
+    return rows
+
+
+def money(tokens):
+    usd = tokens * USD_PER_MTOK / 1e6
+    return usd, usd * EUR_PER_USD
+
+
+def report(rows, title):
+    print(title)
+    tc = tt = 0
+    for tool, (calls, tokens, exact, n, bad) in rows.items():
+        usd, eur = money(tokens)
+        tc, tt = tc + calls, tt + tokens
+        print(f"  {tool:24} вызовов {calls:6}  токенов {tokens:10} ({'точно' if exact else 'оценка'})  ${usd:.4f}  €{eur:.4f}"
+              + (f"  · битых строк {bad}" if bad else "") + ("" if n or calls else "  · записей нет"))
+    usd, eur = money(tt)
+    print(f"  {'итого':24} вызовов {tc:6}  токенов {tt:10}             ${usd:.4f}  €{eur:.4f}")
+    return tc, tt
+
+
+def leg_start():
+    base = subprocess.run(["git", "merge-base", "main", "HEAD"], capture_output=True, text=True).stdout.strip()
+    first = subprocess.run(["git", "log", "--reverse", "--format=%cI", f"{base}..HEAD"], capture_output=True, text=True).stdout.split() if base else []
+    return when(first[0]) if first else time.time() - 86400
+
+
+def self_test():
+    """Фикстура: по журналу на инструмент с известными числами; итог должен сойтись до цента и до токена."""
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="check-spend-", dir=TMP)
+    repo, tmp, home = f"{d}/repo", f"{d}/tmp", f"{d}/home"
+    t0 = "2026-10-09T09:00:00Z"
+    old, new = "2026-10-08T09:00:00Z", "2026-10-09T10:00:00Z"
+    files = {
+        f"{repo}/docs/evidence/jev.jsonl": [
+            {"ts": new, "caller": "spec-gate", "status": 200, "input_tokens": 1000}, {"ts": new, "caller": "cli", "status": 200, "input_tokens": 500},
+            {"ts": new, "caller": "cli", "status": 0, "error": "timeout"}, {"ts": old, "caller": "cli", "status": 200, "input_tokens": 999999},
+            {"ts": new, "caller": "check-ui", "status": 200, "calls": 2, "input_tokens": 2200},
+            {"ts": new, "caller": "cli", "status": 200, "input_tokens": "abc"}, {"ts": new, "caller": "cli", "status": 500, "input_tokens": 0}, "[1, 2]"],
+        f"{tmp}/gate-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "spec-gate", "status": 200, "input_tokens": 300}],
+        f"{tmp}/check-spend-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "cli", "status": 200, "input_tokens": 777}],
+        f"{repo}/.abide/events.jsonl": [{"kind": "check", "at": new, "usage": {"inputTokens": 400, "outputTokens": 25}},
+                                        {"kind": "check", "at": new, "usage": {"inputTokens": 0}}, {"kind": "compile-needed", "at": new}],
+        f"{home}/.claude/belay/decisions.jsonl": [{"ts": new, "verdict": "shadow", "usage": {"input_tokens": 700}},
+                                                  {"ts": new, "verdict": "passed"}, {"ts": old, "verdict": "allowed", "usage": {"input_tokens": 5}}],
+        f"{tmp}/toolgate/audit.jsonl": [{"ts": new, "source": "model", "input_chars": 340, "task": {"present": False}},
+                                        {"ts": new, "source": "static-rule"}],
+        f"{home}/.toolgate/audit.jsonl": [{"ts": new, "source": "model", "input_chars": 0, "task": {"present": True, "chars": 0}}],
+        f"{home}/.claude/plugins/data/jev-steer-or-queue-jev-steer-or-queue/log.jsonl": [
+            {"ts": when(new), "jev": {"choice": "steer"}}, {"ts": when(new), "jev": {"error": "missing_api_key"}}, {"ts": when(new)}],
+        f"{home}/.claude/compact-adviser-requests-s1.jsonl": [{"at": new, "kind": "request", "body": {"x": "a" * 3390}}, {"at": new, "kind": "response"}],
+    }
+    files[f"{tmp}/verify-x/repo/docs/evidence/jev.jsonl"] = files[f"{repo}/docs/evidence/jev.jsonl"]  # клон приёмки: копия журнала репо
+    for p, rows in files.items():
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(("\ufeff" if p.endswith(".abide/events.jsonl") else "") + "".join((r if isinstance(r, str) else json.dumps(r)) + "\n" for r in rows)
+                    + ("not json\n" if p.endswith("belay/decisions.jsonl") else ""))
+    try:
+        got = collect(when(t0), (repo, tmp, home))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)  # фикстура не переживает self-test
+    tg = round(FIXED + (TG_Q_NOTASK + 340) / BYTES_PER_TOKEN) + round(FIXED + TG_Q_TASK / BYTES_PER_TOKEN)
+    body = len(json.dumps({"x": "a" * 3390}, separators=(",", ":")))
+    want = {"bin/jev и spec-gate": (4, 1800), "Jev Browser (check-ui)": (2, 2200), "Abide": (1, 400), "Jev Belay": (1, 700),
+            "Toolgate": (2, tg), "Steer-or-Queue": (1, STEER_TOKENS), "Compact Adviser": (1, round(FIXED + body / BYTES_PER_TOKEN))}
+    ok = True
+    for tool, (calls, tokens) in want.items():
+        c, t, *_ = got[tool]
+        good = c == calls and abs(t - tokens) <= 1  # ±1 токен — округление суммы оценок
+        ok &= good
+        print(f"{'ok ' if good else 'BAD'} фикстура · {tool}: вызовов {c} (ждали {calls}), токенов {t} (ждали {tokens})")
+    tc, tt = report(got, "фикстура журналов (известная сумма):")
+    total = sum(t for _, t in want.values())
+    usd, _ = money(tt)
+    good = tc == sum(c for c, _ in want.values()) and abs(tt - total) <= 2 and abs(usd - total * USD_PER_MTOK / 1e6) < 0.005
+    print(f"{'ok ' if good else 'BAD'} фикстура · итог: вызовов {tc}, токенов {tt} (ждали {total}), ${usd:.4f}; строка вне окна и битая строка не в сумме")
+    ok &= good
+    good = got["Jev Belay"][4] == 1 and got["bin/jev и spec-gate"][4] == 1
+    print(f"{'ok ' if good else 'BAD'} фикстура · битая строка и строка-не-объект посчитаны, а не уронили подсчёт ({got['Jev Belay'][4]}, {got['bin/jev и spec-gate'][4]}); "
+          "токены строкой — 0; BOM в начале журнала Abide — не помеха; копия журнала в клоне и HTTP 500 — не вызовы")
+    ok &= good
+    good = not os.path.exists(d)
+    print(f"{'ok ' if good else 'BAD'} фикстура · чужой check-spend-* не в сумме, свой каталог фикстуры удалён")
+    return ok & good
+
+
+def main(argv):
+    since = None
+    if argv[:1] == ["--since"] and len(argv) == 2:
+        since = when(argv[1])
+        if since is None:
+            print(__doc__)
+            return 2
+    elif argv == ["--self-test"]:
+        ok = self_test()
+        print("SPEND_OK" if ok else "SPEND_FAIL")
+        return 0 if ok else 1
+    elif argv:
+        print(__doc__)
+        return 2
+    ok = self_test()
+    since = since or leg_start()
+    stamp = datetime.fromtimestamp(since, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    report(collect(since, (os.getcwd(), TMP, HOME)), f"плечо с {stamp} (журналы слоя; цена ${USD_PER_MTOK} за 1 млн входных токенов, курс {EUR_PER_USD} €/$):")
+    try:
+        qs = [json.load(open(f"{os.environ.get('QUICKSILVER_HOME') or HOME + '/.quicksilver'}/stats.json", encoding="utf-8"))]
+    except (OSError, ValueError):
+        qs = []
+    for s in qs:
+        tok = s.get("jev_input_tokens") or 0
+        usd, eur = money(tok)
+        print(f"  {'Quicksilver':24} запросов {s.get('requests', 0)}  токенов {tok} (точно, накопительно с {str(s.get('since', '?'))[:10]} — вне окна)  ${usd:.4f}  €{eur:.4f}")
+    print("SPEND_OK" if ok else "SPEND_FAIL")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

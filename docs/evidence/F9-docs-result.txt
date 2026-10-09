@@ -1,0 +1,17 @@
+$ bin/check-docs
+OK   README.md: ссылок 12, путей репо 29; мёртвых — нет
+OK   docs/README.md: ссылок 0, путей репо 2; мёртвых — нет
+OK   docs/dev-system.ru.md: ссылок 0, путей репо 24; мёртвых — нет
+OK   docs/LAUNCH.md: ссылок 0, путей репо 4; мёртвых — нет
+OK   CHANGELOG.md: ссылок 0, путей репо 56; мёртвых — нет
+OK   CHANGELOG v3–v3.1: полей харнеса v2, v3 и v3.1 — 20, строк таблицы со ссылкой на док и столбцами до/после — 45; без строки — нет
+OK   dev-system.ru.md: разделы и темы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение, ultracode, /verify-phase, Окружение = таблица; нет — ничего
+OK   README.md: v3.1: нет — ничего
+OK   LAUNCH.md: флагов строки запуска шаблона PROCESS 12; без объяснения — нет
+OK   CHANGELOG v3.2: полей v3.2 — 13, строк таблицы с источником и до/после — 12; без строки — нет
+OK   CHANGELOG v3.2: моды с строками hooks: и calls: из claude plugin validate: handoff, compact-adviser; без них — нет
+OK   LAUNCH.md v3.2: стартовый запрос, режимы spec-gate, ключ в окружении: нет — ничего
+OK   README.md v3.2: цикл без /goal, слой Jev, три судьи: нет — ничего
+OK   dev-system.ru.md v3.2: цикл без /goal, слой Jev, три судьи: нет — ничего
+DOCS_OK
+rc 0

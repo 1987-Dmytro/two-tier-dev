@@ -1,0 +1,19 @@
+Read first: docs/SPEC-<n>.md, docs/PROGRESS.md, <current review file or nothing>
+
+This is the start prompt of phase <n> of <project>, "<phase name>". It is passed as the launch-line argument; the spec drives the phase. <One paragraph: what this phase delivers and why, in the words of SPEC §0; intent/INTENT.md holds the "why" when a fork needs it.> You own the path: step 0 is docs/PLAN-<n>.md in its own commit, then the features in the order PLAN sets. <A phase with paid or irreversible steps: "Follow the accepted docs/PLAN-<n>.md.">
+
+Done means all of this holds: every feature of SPEC-<n> section 2 is closed, its check ran in this session and its output is in docs/evidence/<F>-<check>-result.txt; branch <b> is pushed and `bin/check-ci <b>` prints CI_OK; `bin/verify-phase` from a fresh clone of the pushed HEAD wrote VERDICT: PASS, its blocking findings fixed in this session first; in the final turn, after the last push, `<gate command>` prints every marker of the phase; the head of docs/PROGRESS.md says what is done, what the operator does next and when. The Stop hook spec-gate holds the end of a turn until the evidence files show this.
+
+Do not end a turn before that. The only other way to end is a stop of SPEC-<n> section 4: a new line `STOP: <id>` in docs/PROGRESS.md with the question and a resume line, written after every feature that does not need the missing input is closed and pushed.
+
+Authorized in this phase: <actions this phase needs that the auto-mode classifier may stop: push branch <b>, edit .claude/**, deploy to <host>, …>
+
+Constraints:
+- Branch <b> only; never push to main: main changes only through a pull request after the operator's yes. At least one commit per feature, `git add` with exact paths; fix-ups are new commits; never amend a pushed commit or force-push. Workflow agents edit only inside their own worktrees or only read; the main session commits.
+- Never print secrets; irreversible or paid above the PROCESS threshold only after the operator's yes.
+- Team-lead files are read-only: intent/, docs/SPEC-*.md, docs/PROMPT.txt, docs/STATUS.md, docs/PROCESS.md, docs/reviews/, docs/drafts/, claude/, .claude/launch.settings.json, .claude/spec-gate.json, .claude/toolgate.yaml, .abide/rubric.json, budgets.json.
+- On stochastic checks iterate on your own within the budget of SPEC §4 (time, €): one metric, keep or discard by git, a line per run in the run log; stop only by SPEC §4.
+- <Public repo only: evidence and commit messages carry counts, exit codes, markers and repo-relative paths, never emails, account ids, client names or home-directory paths.>
+- After an auto-mode block, do not repeat the action: take another path or stop with STOP-INPUT and the exact command for the operator.
+- A fork the spec leaves open: take the simplest reading and add a line to `## Notes` in PROGRESS; that is not a stop.
+- For every check show the command and its output in the transcript; a check without output is not passed.

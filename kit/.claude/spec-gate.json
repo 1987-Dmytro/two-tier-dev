@@ -1,0 +1,31 @@
+{
+  "mode": "active",
+  "caps": { "blocks": 12, "hours": 3, "same_list": 3 },
+  "jev": { "timeout_ms": 10000, "threshold": 0.75 },
+  "questions": {
+    "stop_unfounded": {
+      "type": "noul",
+      "instructions": "The executor ended its turn with a new stop line in its progress file: `stop_lines`. A valid stop names one of the allowed stop reasons `stop_reasons`, asks the operator a concrete question, and gives a resume line that says how the work continues once the question is answered. Does this stop line miss any of these three parts?",
+      "criteria": {
+        "true": "it names no allowed stop reason, or it has no question for the operator, or it has no resume line",
+        "false": "it names an allowed stop reason, asks the operator a concrete question and says how to resume"
+      }
+    },
+    "head_incomplete": {
+      "type": "noul",
+      "instructions": "`progress_head` is the head of the executor's progress file at the end of a phase. It must say what is done, what the operator does next, and when the work will be finished. Does it fail to state any of these three?",
+      "criteria": {
+        "true": "what is done, the operator's next step, or when the work ends is missing or empty",
+        "false": "all three are stated"
+      }
+    },
+    "evidence_contradicts": {
+      "type": "noul",
+      "instructions": "Feature `features[{i}].id` is done when: `features[{i}].done`. Its check printed `features[{i}].evidence_tail` — the end of the check output, the marker `features[{i}].marker` included. Does this evidence contradict the done clause, for example by reporting a failure, a skipped or not-run part of the done clause, or a subject other than the feature?",
+      "criteria": {
+        "true": "the evidence shows a failure, a skip, or something other than what the done clause describes",
+        "false": "the evidence is consistent with the done clause"
+      }
+    }
+  }
+}

@@ -7,7 +7,8 @@
 
 budgets.json: {"defaults": кит, "project": только ужесточение — число не выше defaults, owner_add}.
 Знаки — символы Unicode. Пути правил — от корня проекта; в репо кита те же правила видят kit/.
-SPEC и PLAN — файлы текущей фазы: первый `Read first:` в docs/GOAL.txt и PLAN с тем же суффиксом.
+SPEC и PLAN — файлы текущей фазы: первый `Read first:` стартового запроса docs/PROMPT.txt (v3.2; нет его — прежнее имя
+docs/GOAL.txt) и PLAN с тем же суффиксом.
 """
 import fnmatch, glob, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 
@@ -33,8 +34,9 @@ SIZES = [  # ключ budgets.json · файлы · мера
     ("skill_chars", "skill", "chars"), ("claude_md_lines", "claude_md", "lines"),
     ("intent_chars", "intent", "chars"), ("progress_lines", "progress", "lines"),
 ]
-REQUIRED = [k for k, _, _ in SIZES] + ["dollar_digit", "spec_feature_chars", "plan_lines", "goal_chars",
+REQUIRED = [k for k, _, _ in SIZES] + ["dollar_digit", "spec_feature_chars", "plan_lines",
                                        "read_first_files", "read_first_chars", "review_blocking", "owner"]
+PROMPTS = ["docs/PROMPT.txt", "docs/GOAL.txt"]  # v3.2: стартовый запрос; прежнее имя — до переноса тимлидом или апгрейдом
 
 
 def read(p):
@@ -64,6 +66,11 @@ def is_tl(path, owner):
     return any(path.startswith(e) if e.endswith("/") else fnmatch.fnmatchcase(path, e) for e in owner)
 
 
+def with_prompt(owner):
+    """v3.2: стартовый запрос наследует владение прежнего имени — docs/GOAL.txt в списке тимлида значит и docs/PROMPT.txt."""
+    return owner + ["docs/PROMPT.txt"] if "docs/GOAL.txt" in owner and "docs/PROMPT.txt" not in owner else owner
+
+
 def load_budgets(path="budgets.json"):
     try:
         raw = json.loads(read(path))
@@ -74,27 +81,38 @@ def load_budgets(path="budgets.json"):
     if out:
         return None, out
     b = dict(d)
+    b["owner"] = with_prompt(d["owner"])
     for k, v in p.items():
         if k == "owner_add" and isinstance(v, list) and all(isinstance(x, str) for x in v):
-            b["owner"] = d["owner"] + v
+            b["owner"] = b["owner"] + v
         elif k in d and k != "owner" and type(v) is int and v <= d[k]:
             b[k] = v
         else:
             out.append(("FAIL", "budgets", f"project.{k}={v!r}: проект только ужесточает (defaults: {d.get(k)!r})"))
     out.append(("OK", "budgets", f"defaults кита — {len(d)} ключей, ключей проекта — {len(p)}"))
+    kit = "kit/budgets.json"
+    if path == "budgets.json" and os.path.isfile(kit):  # репо кита: ключ, нового в ките, тимлид вносит в свой budgets.json сам
+        try:
+            new = {k: v for k, v in json.loads(read(kit))["defaults"].items() if k not in d and k != "owner"}
+        except (OSError, ValueError, KeyError):
+            new = {}
+        if new:
+            b.update(new)
+            out.append(("WARN", "budgets", f"ключей кита нет в budgets.json — {', '.join(sorted(new))}: взяты из {kit}; вносит тимлид"))
     return b, out
 
 
 def phase():
-    """(текст GOAL, Read first, SPEC, PLAN) или None, если docs/GOAL.txt нет."""
-    if not os.path.isfile("docs/GOAL.txt"):
+    """(текст стартового запроса, Read first, SPEC, PLAN, путь запроса) или None, если запроса нет."""
+    path = next((p for p in PROMPTS if os.path.isfile(p)), None)
+    if not path:
         return None
-    g = read("docs/GOAL.txt")
+    g = read(path)
     m = re.search(r"^Read first:(.*)$", g, re.M)
     rf = [x.strip() for x in m.group(1).split(",") if x.strip()] if m else []
     spec = rf[0] if rf and re.fullmatch(r"(.*/)?SPEC-[^/]+\.md", rf[0]) else None
     plan = re.sub(r"SPEC-([^/]+)$", r"PLAN-\1", spec) if spec else None
-    return g, rf, spec, plan
+    return g, rf, spec, plan, path
 
 
 def rule_sizes(b):
@@ -113,14 +131,19 @@ def rule_dollar(b):
     return [("FAIL" if bad else "OK", "dollar_digit", "`$` с цифрой — " + ("; ".join(bad) if bad else f"0 в {len(fs)} файлах"))]
 
 
-def rule_goal(b):
+def rule_prompt(b):
     ph = phase()
     if not ph:
-        return [("OK", "goal", "нет docs/GOAL.txt — фаза не открыта, правила фазы пропущены")]
-    g, rf, _, _ = ph
-    out = [check("goal_chars", len(g), b["goal_chars"], "docs/GOAL.txt, знаков")]
+        return [("OK", "prompt", "нет docs/PROMPT.txt — фаза не открыта, правила фазы пропущены")]
+    g, rf, _, _, path = ph
+    key = "prompt_chars" if "prompt_chars" in b else "goal_chars"  # прежний budgets.json проекта — прежнее имя ключа
+    if key not in b:
+        return [("FAIL", "prompt", "в budgets.json нет prompt_chars")]
+    out = [check(key, len(g), b[key], f"{path}, знаков")]
+    if path != PROMPTS[0]:
+        out.append(("WARN", "prompt", f"стартовый запрос — прежнее имя {path}; переносит тимлид (git mv в {PROMPTS[0]}) или two-tier-upgrade"))
     if not rf:
-        return out + [("FAIL", "goal", "в docs/GOAL.txt нет строки Read first:")]
+        return out + [("FAIL", "prompt", f"в {path} нет строки Read first:")]
     out.append(check("read_first_files", len(rf), b["read_first_files"], "Read first, файлов"))
     missing = [p for p in rf if not os.path.isfile(p)]
     if missing:
@@ -208,29 +231,14 @@ def owner_at(rev, fallback):
         return []
     try:
         raw = json.loads(r.stdout)
-        return raw["defaults"]["owner"] + ((raw.get("project") or {}).get("owner_add") or [])
+        return with_prompt(raw["defaults"]["owner"] + ((raw.get("project") or {}).get("owner_add") or []))
     except (ValueError, KeyError, TypeError, AttributeError):
         return fallback
 
 
 def rule_owner(b):
-    out, owner, ph = [], b["owner"], phase()
-    if ph:
-        es = re.search(r"END STATE(.*?)(?:\nCONSTRAINTS|\Z)", ph[0], re.S)
-        # путь из прозы — токен между пробелами, кавычками, скобками и «,;:|»; с краёв сняты разметка * _ ~ < >,
-        # ведущие «./» и знаки конца фразы, хвостовой «/» каталога остаётся: «**docs/STATUS.md**», «`intent/`», «see ./claude/.»
-        toks = re.split(r"[\s`'\"«»“”()\[\],;:|]+", es.group(1)) if es else []
-        paths = {p for t in toks for p in [re.sub(r"^(?:[*_~<>]|\./)+", "", re.sub(r"[*_~<>.!?]+$", "", t))] if "/" in p}
-        # v3.1, хвост 5: и путь, к которому прилип знак вне разделителей — «docs/STATUS.md—then», «@…», «/…», «#…», «{…}», «’s»
-        paths |= {re.sub(r"^(?:[*_~<>]|\./)+", "", re.sub(r"[*_~<>.]+$", "", p)) for p in re.findall(r"[\w.<>*-]+(?:/[\w.<>*-]+)+", es.group(1) if es else "")}
-        # двухуровневый каталог тимлида без хвостового «/» («docs/reviews»); однословный («intent») — нет: это слово прозы
-        dirs = {e.rstrip("/") for e in owner if e.endswith("/") and e.count("/") > 1}
-        named = {p for p in paths if is_tl(p, owner) or p.rstrip("/") in dirs}
-        # файл тимлида в корне («budgets.json») — без «/»: целое имя, не хвост чужого пути («kit/budgets.json»)
-        named |= {e for e in owner if "/" not in e and re.search(r"(?<![^\W_]|[.-])(?<!\w/)" + re.escape(e) + r"(?![^\W_]|-)", es.group(1) if es else "")}  # «_» — разметка
-        named = sorted(named)
-        out.append(("FAIL" if named else "OK", "owner",
-                    f"END STATE docs/GOAL.txt: путей {len(paths)}, файлов тимлида — {', '.join(named) or 'нет'}"))
+    # v3.2: проверка END STATE ушла вместе с шаблоном GOAL (SPEC-v3.2 §1; прежняя версия — в истории git); остался lint коммитов
+    out, owner = [], b["owner"]
     base = next((r.stdout.strip() for ref in ("main", "origin/main")
                  for r in [git("merge-base", ref, "HEAD")] if r.returncode == 0), None)
     if not base:
@@ -250,7 +258,21 @@ def rule_owner(b):
     return out + [("OK", "owner", f"коммитов «Тимлид:» после merge-base {base[:7]} — {len(tl)}: {'; '.join(tl) or '—'}")]
 
 
-RULES = [rule_sizes, rule_dollar, rule_goal, rule_spec, rule_plan, rule_review, rule_intent, rule_owner]
+def rule_abide(b):
+    """v3.2, F3: правил в рубрике Abide (файл тимлида) — не больше abide_rules; нет рубрики — нет правила."""
+    p = ".abide/rubric.json"
+    if not os.path.isfile(p):
+        return [("OK", "abide_rules", f"нет {p} — рубрики Abide нет")]
+    try:
+        n = len(json.loads(read(p)).get("rules", []))
+    except (ValueError, AttributeError):
+        return [("FAIL", "abide_rules", f"{p}: не JSON-объект")]
+    if "abide_rules" not in b:
+        return [("WARN", "abide_rules", f"{p}: правил {n}; в budgets.json нет abide_rules — ключ вносит тимлид")]
+    return [check("abide_rules", n, b["abide_rules"], f"{p}, правил")]
+
+
+RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_plan, rule_review, rule_intent, rule_owner, rule_abide]
 
 
 def run(b):
@@ -329,33 +351,48 @@ def fixtures(b, defaults):
     add("dollar", "скилл с $0", "FAIL", {at["skill"]: "первым $0-коммитом\n"}, rule_dollar)
     add("dollar", "копия тимлида с $5", "FAIL", {at["team_lead_copy"]: "потолок $5\n"}, rule_dollar)
 
-    def goal(rf=("docs/SPEC-1.md",), total=None, extra=None):
+    def prompt(rf=("docs/SPEC-1.md",), total=None, extra=None, name="docs/PROMPT.txt"):
         fs = {p: "x" for p in rf if p != "docs/nope.md"}
         head = "Read first: " + ", ".join(rf) + "\n"
-        fs["docs/GOAL.txt"] = head + "y" * ((total or len(head)) - len(head))
+        fs[name] = head + "y" * ((total or len(head)) - len(head))
         fs.update(extra or {})
         return fs
-    gl = b["goal_chars"]
-    add("goal", "goal_chars", "OK", goal(total=gl), rule_goal)
-    add("goal", "goal_chars+1", "FAIL", goal(total=gl + 1), rule_goal)
+    pl = b.get("prompt_chars", b.get("goal_chars"))
+    kit_form = lambda _b: rule_prompt({k: v for k, v in _b.items() if k != "goal_chars"} | {"prompt_chars": pl})  # ключ кита v3.2
+    legacy = lambda _b: rule_prompt({k: v for k, v in _b.items() if k != "prompt_chars"} | {"goal_chars": pl})  # budgets.json проекта v3.1
+    add("prompt", "prompt_chars", "OK", prompt(total=pl), kit_form)
+    add("prompt", "prompt_chars+1", "FAIL", prompt(total=pl + 1), kit_form)
+    add("prompt", "прежний ключ goal_chars проекта v3.1", "OK", prompt(total=pl), legacy)
+    add("prompt", "прежний ключ goal_chars+1", "FAIL", prompt(total=pl + 1), legacy)
+    add("prompt", "в budgets.json нет ни prompt_chars, ни goal_chars", "FAIL", prompt(),
+        lambda _b: rule_prompt({k: v for k, v in _b.items() if k not in ("prompt_chars", "goal_chars")}))
     three = ("docs/SPEC-1.md", "docs/PROGRESS.md", "docs/reviews/r.md")
-    add("goal", "read_first_files", "OK", goal(rf=three), rule_goal)
-    add("goal", "read_first_files+1", "FAIL", goal(rf=three + ("docs/x.md",)), rule_goal)
+    add("prompt", "read_first_files", "OK", prompt(rf=three), rule_prompt)
+    add("prompt", "read_first_files+1", "FAIL", prompt(rf=three + ("docs/x.md",)), rule_prompt)
     rc = b["read_first_chars"]
-    add("goal", "read_first_chars", "OK", goal(extra={"docs/SPEC-1.md": "x" * (rc - 100), "CLAUDE.md": "c" * 100}), rule_goal)
-    add("goal", "read_first_chars+1", "FAIL", goal(extra={"docs/SPEC-1.md": "x" * (rc - 100), "CLAUDE.md": "c" * 101}), rule_goal)
-    add("goal", "Read first: нет файла", "FAIL", goal(rf=("docs/SPEC-1.md", "docs/nope.md")), rule_goal)
+    add("prompt", "read_first_chars", "OK", prompt(extra={"docs/SPEC-1.md": "x" * (rc - 100), "CLAUDE.md": "c" * 100}), rule_prompt)
+    add("prompt", "read_first_chars+1", "FAIL", prompt(extra={"docs/SPEC-1.md": "x" * (rc - 100), "CLAUDE.md": "c" * 101}), rule_prompt)
+    add("prompt", "Read first: нет файла", "FAIL", prompt(rf=("docs/SPEC-1.md", "docs/nope.md")), rule_prompt)
+    add("prompt", "прежнее имя docs/GOAL.txt — читается, с WARN", "WARN", prompt(name="docs/GOAL.txt"), rule_prompt)
 
     def feat(n, fid="F1", serves="S1"):
         s = f"- **{fid} x** · готово · служит: {serves} · after: — "
         return s + "y" * (n - len(s))
-    spec1 = lambda body: {"docs/GOAL.txt": "Read first: docs/SPEC-1.md\n", "docs/SPEC-1.md": body}
+    spec1 = lambda body: {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n", "docs/SPEC-1.md": body}
     sf = b["spec_feature_chars"]
     add("spec", "spec_feature_chars", "OK", spec1(feat(sf) + "\n"), rule_spec)
     add("spec", "spec_feature_chars+1", "FAIL", spec1(feat(sf + 1) + "\n"), rule_spec)
-    add("spec", "первый Read first — не SPEC", "FAIL", {"docs/GOAL.txt": "Read first: docs/PROGRESS.md\n", "docs/PROGRESS.md": "x"}, rule_spec)
+    add("spec", "первый Read first — не SPEC", "FAIL", {"docs/PROMPT.txt": "Read first: docs/PROGRESS.md\n", "docs/PROGRESS.md": "x"}, rule_spec)
     add("plan", "plan_lines", "OK", dict(spec1(feat(80)), **{"docs/PLAN-1.md": "x\n" * b["plan_lines"]}), rule_plan)
     add("plan", "plan_lines+1", "FAIL", dict(spec1(feat(80)), **{"docs/PLAN-1.md": "x\n" * (b["plan_lines"] + 1)}), rule_plan)
+    rub = lambda n: {".abide/rubric.json": json.dumps({"version": 1, "rules": [{"id": f"r{i}"} for i in range(n)]})}
+    if "abide_rules" in b:
+        add("rubric", "abide_rules", "OK", rub(b["abide_rules"]), rule_abide)
+        add("rubric", "abide_rules+1", "FAIL", rub(b["abide_rules"] + 1), rule_abide)
+    else:  # budgets.json проекта до v3.2: правило предупреждает, а не падает
+        add("rubric", "нет abide_rules в budgets.json — WARN", "WARN", rub(3), rule_abide)
+    add("rubric", "нет рубрики", "OK", {}, rule_abide)
+    add("rubric", "рубрика не JSON", "FAIL", {".abide/rubric.json": "{"}, rule_abide)
     rv = lambda n: {"docs/reviews/r.md": "## Блокирующие\n" + "- f\n" * n + "## Named, not built\n- a\n- b\n- c\n"}
     add("review", "review_blocking", "OK", rv(b["review_blocking"]), rule_review)
     add("review", "review_blocking+1", "FAIL", rv(b["review_blocking"] + 1), rule_review)
@@ -369,7 +406,7 @@ def fixtures(b, defaults):
 
     def phase_fs(intent="**S1** — x\n", serves="S1", pin=None, spec_extra=""):
         p = pin_of(intent) if pin is None else pin
-        return {"intent/INTENT.md": intent, "docs/GOAL.txt": "Read first: docs/SPEC-1.md\n",
+        return {"intent/INTENT.md": intent, "docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n",
                 "docs/SPEC-1.md": f"**intent:** `intent/INTENT.md @ {p}`\n{feat(80, serves=serves)}\n{spec_extra}"}
     marker = "[NEEDS CLARIFICATION: объём?]"
     add("intent", "пин = hash-object", "OK", phase_fs(), rule_intent)
@@ -384,42 +421,12 @@ def fixtures(b, defaults):
     add("owner", "файл тимлида коммитом без «Тимлид:»", "FAIL", {}, rule_owner, [("F1: x", {"docs/STATUS.md": "x\n"}, [])])
     add("owner", "файл тимлида коммитом «Тимлид:»", "OK", {}, rule_owner, [("Тимлид: x", {"docs/STATUS.md": "x\n"}, [])])
     add("owner", "коммит без файлов тимлида", "OK", {}, rule_owner, [("F1: x", {"src/x.py": "x\n"}, [])])
+    add("owner", "docs/PROMPT.txt коммитом без «Тимлид:» при docs/GOAL.txt в owner родителя", "FAIL",
+        {"budgets.json": json.dumps({"defaults": dict(defaults, owner=[e for e in defaults["owner"] if e != "docs/PROMPT.txt"] + ["docs/GOAL.txt"]), "project": {}})},
+        rule_owner, [("F1: x", {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n"}, [])])
     add("owner", "git mv файла тимлида без «Тимлид:»", "FAIL", {}, rule_owner, [("F1: mv", {"docs/old.md": "s\n"}, ["docs/STATUS.md"])])
     add("owner", "не-ASCII пути тимлида (core.quotePath=true, умолчание git) коммитом без «Тимлид:»", "FAIL", {}, rule_owner,
         [("F1: x", {"intent/Gesprächsleitfaden.md": "x\n", "docs/reviews/ревью-1.md": "x\n"}, [])])
-    es = lambda text: {"docs/GOAL.txt": f"END STATE:\n{text}\n\nCONSTRAINTS:\n- docs/SPEC-1.md is read-only.\n"}
-    add("owner", "END STATE называет docs/STATUS.md", "FAIL", es("(A) docs/STATUS.md is written."), rule_owner)
-    add("owner", "END STATE называет docs/PROGRESS.md", "OK", es("(A) docs/PROGRESS.md is written."), rule_owner)
-    add("owner", "END STATE: путь тимлида перед точкой — «updates docs/STATUS.md.»", "FAIL",
-        es("(A) the team lead updates docs/STATUS.md."), rule_owner)
-    add("owner", "END STATE: путь тимлида перед запятой — «docs/GOAL.txt,»", "FAIL", es("(A) docs/GOAL.txt, then the rest is done."), rule_owner)
-    add("owner", "END STATE: путь тимлида перед скобкой — «docs/PROCESS.md)»", "FAIL", es("(A) the verdict is set (docs/PROCESS.md)"), rule_owner)
-    add("owner", "END STATE: путь тимлида с ./ — «see ./docs/STATUS.md»", "FAIL", es("(A) see ./docs/STATUS.md"), rule_owner)
-    add("owner", "END STATE: «.claude/launch.settings.json.» в конце фразы", "FAIL",
-        es("(A) the team lead edits .claude/launch.settings.json."), rule_owner)
-    add("owner", "END STATE: свой путь в конце фразы — «docs/PROGRESS.md.»", "OK", es("(A) the head of docs/PROGRESS.md."), rule_owner)
-    # класс находки v3-2: каждая запись defaults.owner как в списке (каталог с «/», glob как есть) в каждом обрамлении прозы
-    frames = ["(A) the team lead updates {} and stops", "(A) the pin matches {}.", "(A) {}, then the rest is done.",
-              "(A) see {}: done", "(A) the verdict is set (see {})", "(A) a new review in `{}` says PASS",
-              "(A) **{}** is updated", "(A) _{}_ is updated", "(A) <{}> is updated", "(A) see ./{} for it"]
-    own = ("docs/PROGRESS.md", "docs/evidence/", "docs/evidence/F2-intent-result.txt")
-    for p, expect in [(e, "FAIL") for e in defaults["owner"]] + [(e, "OK") for e in own]:
-        for f in frames:
-            add("owner", f"END STATE «{f.format(p)}»", expect, es(f.format(p)), rule_owner)
-    # v3.1, хвост 5: знак вне разделителей прилип к файлу (классы — docs/evidence/accept-8f1d232.txt, «Неблокирующие»)
-    stuck = ["(A) the team lead updates {}—then stops", "(A) the team lead updates {}–then stops", "(A) see {}… and stop",
-             "(A) see ‘{}’ for it", "(A) see „{}“ for it", "(A) cc @{} please", "(A) the file /{} is updated",
-             "(A) see {}#top for it", "(A) the map {{{}}} is updated", "(A) make ci && {} is updated", "(A) the {}’s head is updated"]
-    files_tl = [e for e in defaults["owner"] if not e.endswith("/")]
-    stuck += ["(A) see **{}**—then stop", "(A) see _{}_… and stop", "(A) see <{}>’s head"]  # разметка и прилипший знак вместе
-    for p, expect in [(e, "FAIL") for e in files_tl] + [(e, "OK") for e in own if not e.endswith("/")]:
-        for f in stuck:
-            add("owner", f"END STATE, знак прилип: «{f.format(p)}»", expect, es(f.format(p)), rule_owner)
-    for e in [e for e in defaults["owner"] if e.endswith("/") and e.count("/") > 1]:
-        for f in frames[:5]:
-            add("owner", f"END STATE, каталог тимлида без «/»: «{f.format(e.rstrip('/'))}»", "FAIL", es(f.format(e.rstrip("/"))), rule_owner)
-    add("owner", "END STATE: однословное «intent» в команде — не путь", "OK", es("(A) `bin/check-budget --self-test intent owner` prints OWNER_OK."), rule_owner)
-    add("owner", "END STATE: каталог исполнителя без «/» — «docs/evidence»", "OK", es("(A) the files in docs/evidence are written."), rule_owner)
     # v3.1, хвост 3: budgets.json — файл тимлида; список владения — на родителе коммита
     bud = lambda owner: json.dumps({"defaults": dict(defaults, owner=owner), "project": {}})
     old = [e for e in defaults["owner"] if e != "budgets.json"]
@@ -462,19 +469,21 @@ def self_test(groups):
 
 TEMPLATES = {  # шаблон кита → куда его кладёт пример в проекте
     "docs/INTENT.template.md": "intent/INTENT.md", "docs/SPEC.template.md": "docs/SPEC-1.md",
-    "docs/GOAL.template.txt": "docs/GOAL.txt", "docs/PLAN.template.md": "docs/PLAN-1.md",
+    "docs/PROMPT.template.txt": "docs/PROMPT.txt", "docs/PLAN.template.md": "docs/PLAN-1.md",
     "docs/PROGRESS.template.md": "docs/PROGRESS.md", "docs/STATUS.template.md": "docs/STATUS.md",
     "docs/PROCESS.template.md": "docs/PROCESS.md", "REVIEW.md": "docs/reviews/1-1.md", "CLAUDE.md": "CLAUDE.md",
 }
 
 
 CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из шаблонов — фразы, без которых шаблон её не ведёт
-    "docs/GOAL.template.txt": ["bin/verify-phase", "VERDICT: PASS", "its blocking findings fixed in this session",
-                               "Workflow agents edit only inside their own worktrees", "never push to main"],
+    "docs/PROMPT.template.txt": ["bin/verify-phase", "VERDICT: PASS", "its blocking findings fixed in this session",
+                                 "Workflow agents edit only inside their own worktrees", "never push to main",
+                                 "spec-gate", "`STOP: <id>`", "launch-line argument"],
     "docs/PROCESS.template.md": ["| инструмент | форма | id | вкл | фича или чек | установка | удаление |",
                                  "claude --permission-mode auto --model claude-opus-5-5 --effort ultracode",
-                                 "--strict-mcp-config", "% недели"],
-    "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase"],
+                                 "--setting-sources project,local", '-- "$(cat docs/PROMPT.txt)"', "--strict-mcp-config", "% недели"],
+    "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase",
+                  "## Rules for every edit", "Abide", ".abide/rubric.json"],
 }
 
 
@@ -490,6 +499,25 @@ def templates():
     for f, words in CONTRACT.items():
         miss = [w for w in words if w not in read(f"{root}/{f}")]
         out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words)}, нет — {'; '.join(miss) or 'ничего'}"))
+    slash = re.compile("/" + "goal" + r"\b")  # v3.2: фазу запускает стартовый запрос — команды в ките не остаётся (строка не ловит сама себя)
+    hits = []
+    kit_paths = [os.path.join(d, f) for top in (".claude", "bin") for d, _, fs in os.walk(f"{root}/{top}") for f in fs]
+    kit_paths += [f"{root}/{t}" for t in list(TEMPLATES) + ["docs/LAUNCH.md"] if os.path.isfile(f"{root}/{t}")]
+    for path in sorted(set(kit_paths)):  # только файлы кита: архив и история проекта (C1) не в счёт
+        try:
+            n = len(slash.findall(read(path)))
+        except (UnicodeDecodeError, OSError):
+            continue
+        hits += [f"{os.path.relpath(path, root)}: {n}"] if n else []
+    out.append(("FAIL" if hits else "OK", "no-goal", f"упоминаний команды {slash.pattern[:5]} в {root}/ — {'; '.join(hits) or 'нет'}"))
+    if root == "kit":  # v3.2, F7: кит, который получает новый проект, — без схемы GOAL (в проекте прежнее имя — WARN, см. rule_prompt)
+        kd = json.loads(read("kit/budgets.json"))["defaults"]
+        own = kd.get("owner", [])
+        old = (["нет prompt_chars"] if "prompt_chars" not in kd else []) + (["goal_chars"] if "goal_chars" in kd else []) \
+            + (["нет docs/PROMPT.txt в owner"] if "docs/PROMPT.txt" not in own else []) + (["docs/GOAL.txt в owner"] if "docs/GOAL.txt" in own else []) \
+            + [f"kit/CLAUDE.md:{i}" for i, l in enumerate(read("kit/CLAUDE.md").splitlines(), 1) if re.search(r"GOAL|\bgoal\b", l)]
+        out.append(("FAIL" if old else "OK", "kit-prompt", f"kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: "
+                    + ("; ".join(old) if old else "prompt_chars, docs/PROMPT.txt в owner, схемы GOAL нет")))
     pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
     subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),
             ("<первые 12 знаков git hash-object>", pin)]
