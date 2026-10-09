@@ -25,23 +25,27 @@ USD_PER_MTOK = 0.042
 try:
     EUR_PER_USD = float(os.environ.get("EUR_PER_USD", "0.86"))  # ponytail: курс — константа; уточнять по счёту вендора
 except ValueError:
-    sys.exit("check-spend: EUR_PER_USD must be a number")
+    EUR_PER_USD = float("nan")
+if not 0 < EUR_PER_USD < float("inf"):
+    sys.exit("check-spend: EUR_PER_USD must be a positive number")
 HOME = os.path.expanduser("~")
 FIXED, BYTES_PER_TOKEN = 240, 3.4      # замер 09.10 (4 живых вызова jev-1.13.0): постоянная часть и байт на токен
 TG_Q_TASK, TG_Q_NOTASK = 8314, 4155    # байт вопросов Toolgate 0.16.0 с контекстом задачи и без
 STEER_TOKENS = 1100                    # ponytail: Steer-or-Queue токенов не пишет — середина оценки 0,5–1,7 тыс.
 
 
-def lines(paths):
-    """JSON-объекты журналов; битые строки и не объекты — счётчиком, не падением; BOM в начале файла — не помеха."""
-    out, bad = [], 0
+def lines(paths, unique=False):
+    """JSON-объекты журналов; битые строки и не объекты — счётчиком, не падением; BOM в начале файла — не помеха.
+    unique — одинаковая строка считается раз: журнал Jev отслеживается git, и каждый клон гейта и приёмки во /tmp несёт его копию."""
+    out, bad, seen = [], 0, set()
     for p in paths:
         try:
             with open(p, encoding="utf-8-sig", errors="replace") as f:
                 for l in f:
                     l = l.strip()
-                    if not l:
+                    if not l or (unique and l in seen):
                         continue
+                    seen.add(l)
                     try:
                         e = json.loads(l)
                     except ValueError:
@@ -83,13 +87,13 @@ def collect(since, roots):
     inwin = lambda e, key: (when(e.get(key)) or 0) >= since
     repo, tmp, home = roots
     own = lambda paths: [p for p in paths if not p.startswith(f"{tmp}/check-spend-")]  # фикстуры self-test — не расход плеча
-    jev, bad = lines(own(glob.glob(f"{repo}/docs/evidence/jev.jsonl") + glob.glob(f"{tmp}/**/docs/evidence/jev.jsonl", recursive=True)))
+    jev, bad = lines(own(glob.glob(f"{repo}/docs/evidence/jev.jsonl") + glob.glob(f"{tmp}/**/docs/evidence/jev.jsonl", recursive=True)), unique=True)
     jev = [e for e in jev if inwin(e, "ts")]
     ui = [e for e in jev if e.get("caller") == "check-ui"]
     api = [e for e in jev if e.get("caller") != "check-ui"]
     put("bin/jev и spec-gate", sum(1 for e in api if e.get("status") == 200), sum(tok(e.get("input_tokens")) for e in api), True, len(api), bad)
     put("Jev Browser (check-ui)", sum(tok(e.get("calls")) for e in ui), sum(tok(e.get("input_tokens")) for e in ui), True, len(ui), 0)
-    ab, bad = lines(own(glob.glob(f"{repo}/.abide/events.jsonl") + glob.glob(f"{tmp}/**/.abide/events.jsonl", recursive=True)))
+    ab, bad = lines(own(glob.glob(f"{repo}/.abide/events.jsonl") + glob.glob(f"{tmp}/**/.abide/events.jsonl", recursive=True)), unique=True)
     ab = [e for e in ab if e.get("kind") == "check" and inwin(e, "at") and tok(sub(e, "usage").get("inputTokens")) > 0]
     put("Abide", len(ab), sum(tok(sub(e, "usage").get("inputTokens")) for e in ab), True, len(ab), bad)
     be, bad = lines(glob.glob(f"{home}/.claude/belay/decisions.jsonl*"))
@@ -145,7 +149,7 @@ def self_test():
             {"ts": new, "caller": "spec-gate", "status": 200, "input_tokens": 1000}, {"ts": new, "caller": "cli", "status": 200, "input_tokens": 500},
             {"ts": new, "caller": "cli", "status": 0, "error": "timeout"}, {"ts": old, "caller": "cli", "status": 200, "input_tokens": 999999},
             {"ts": new, "caller": "check-ui", "status": 200, "calls": 2, "input_tokens": 2200},
-            {"ts": new, "caller": "cli", "status": 200, "input_tokens": "abc"}, "[1, 2]"],
+            {"ts": new, "caller": "cli", "status": 200, "input_tokens": "abc"}, {"ts": new, "caller": "cli", "status": 500, "input_tokens": 0}, "[1, 2]"],
         f"{tmp}/gate-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "spec-gate", "status": 200, "input_tokens": 300}],
         f"{tmp}/check-spend-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "cli", "status": 200, "input_tokens": 777}],
         f"{repo}/.abide/events.jsonl": [{"kind": "check", "at": new, "usage": {"inputTokens": 400, "outputTokens": 25}},
@@ -159,6 +163,7 @@ def self_test():
             {"ts": when(new), "jev": {"choice": "steer"}}, {"ts": when(new), "jev": {"error": "missing_api_key"}}, {"ts": when(new)}],
         f"{home}/.claude/compact-adviser-requests-s1.jsonl": [{"at": new, "kind": "request", "body": {"x": "a" * 3390}}, {"at": new, "kind": "response"}],
     }
+    files[f"{tmp}/verify-x/repo/docs/evidence/jev.jsonl"] = files[f"{repo}/docs/evidence/jev.jsonl"]  # клон приёмки: копия журнала репо
     for p, rows in files.items():
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "w", encoding="utf-8") as f:
@@ -186,7 +191,7 @@ def self_test():
     ok &= good
     good = got["Jev Belay"][4] == 1 and got["bin/jev и spec-gate"][4] == 1
     print(f"{'ok ' if good else 'BAD'} фикстура · битая строка и строка-не-объект посчитаны, а не уронили подсчёт ({got['Jev Belay'][4]}, {got['bin/jev и spec-gate'][4]}); "
-          "токены строкой — 0; BOM в начале журнала Abide — не помеха")
+          "токены строкой — 0; BOM в начале журнала Abide — не помеха; копия журнала в клоне и HTTP 500 — не вызовы")
     ok &= good
     good = not os.path.exists(d)
     print(f"{'ok ' if good else 'BAD'} фикстура · чужой check-spend-* не в сумме, свой каталог фикстуры удалён")

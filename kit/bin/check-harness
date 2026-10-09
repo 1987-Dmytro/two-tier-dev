@@ -562,6 +562,11 @@ def gate_probes(src, launch, lenv, args):
     reason = res.get("reason", "")
     say(S, "OK" if rc == 0 and res.get("decision") == "block" and "- F2:" in reason and "- F1:" not in reason else "FAIL", "partial",
         f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in reason else 'нет'}, F1 — {'да' if '- F1:' in reason else 'нет'}; rc {rc}")
+    twin, trw = gate_fixture(src, launch, full=True)  # маркер — целая строка: «B_OK_MAYBE» и «NOT B_OK» не в счёт
+    open(f"{twin}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("$ bin/b\nB_OK_MAYBE\nNOT B_OK\n")
+    res8 = gate_run(twin, trw, "probe-twin")[1]
+    say(S, "OK" if res8.get("decision") == "block" and "- F2:" in res8.get("reason", "") else "FAIL", "partial",
+        f"в evidence F2 только строки-близнецы маркера: решение {res8.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in res8.get('reason', '') else 'нет'}")
     open(f"{repo}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + GATE_STOP)
     rc, res, _, log, _ = gate_run(repo, tr, "probe-stop")
     say(S, "OK" if rc == 0 and "decision" not in res and log[-1]["decision"] == "stop" and log[-1]["reason"] == "STOP-INPUT" else "FAIL", "stop",
