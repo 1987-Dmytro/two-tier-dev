@@ -1,5 +1,5 @@
 $ bin/gate-v3.2
-F10: bin/two-tier-init t3 — файлов кита 35 (в git 35); логи — /tmp/two-tier-v3/gate32-bRFSTS
+F10: bin/two-tier-init t3 — файлов кита 35 (в git 35); логи — /tmp/two-tier-v3/gate32-TLV86v
 init: (t3) bin/check-budget — rc 0
 jev: (t3) bin/jev --self-test — rc 0
 templates: (t3) bin/check-budget --templates — rc 0
@@ -33,5 +33,5 @@ v3.1 KIT_OK
 v3.1 OWNER_OK
 F10 GATE_OK
 GATE_OK
-bin/gate-v3.2  176,77s user 81,81s system 125% cpu 3:26,59 total
+bin/gate-v3.2  189,98s user 96,65s system 122% cpu 3:53,57 total
 rc 0
