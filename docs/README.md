@@ -4,7 +4,7 @@
   spec, the executor's plan (files, order, risks, proof, deviations), the executor's report.
 - `SPEC-v3.1.md` · `PLAN-v3.1.md` · `archive/PROGRESS-v3.1.md` — the phase that built kit v3.1; its evidence is in `archive/evidence-v3.1/`.
 - `SPEC-v3.md` · `PLAN-v3.md` · `archive/PROGRESS-v3.md` — the phase that built kit v3.
-- `GOAL.txt` — the start prompt of the current phase under its v3.1 name (the team lead moves it to `PROMPT.txt` at acceptance); `Read first:` names its SPEC, the launch line passes it as the argument.
+- `PROMPT.txt` — the start prompt of the current phase (the team lead moved it from `GOAL.txt` at acceptance v3.2-2); `Read first:` names its SPEC, the launch line passes it as the argument after `--`.
 - `OFFICIAL-SOURCES.md` — the only sources by which the harness, the kit and the skills may change.
 - `LAUNCH.md` — the executor's launch line and the paired control run (a link to `kit/docs/LAUNCH.md`).
 - `dev-system.ru.md` — the whole system in the operator's language (v3).
