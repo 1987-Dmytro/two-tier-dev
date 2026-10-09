@@ -45,16 +45,16 @@
 `mkdir -p /tmp/two-tier-v3/skills/.claude/skills && for s in graphify; do ln -sfn ~/.claude/skills/$s /tmp/two-tier-v3/skills/.claude/skills/$s; done`
 
 ```sh
-ENABLE_CLAUDEAI_MCP_SERVERS=false CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3/skills
+ENABLE_CLAUDEAI_MCP_SERVERS=false CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3/skills "$(cat docs/PROMPT.txt)"
 ```
 
-Затем `/goal ` и текст `docs/GOAL.txt` целиком.
+Фаза стартует без ручного набора: последний аргумент строки — стартовый запрос `docs/PROMPT.txt` (шаблон `docs/PROMPT.template.txt`, пишет тимлид). Конец хода держит Stop-хук `spec-gate` кита — режимы и ключ в окружении — `docs/LAUNCH.md`.
 
 ## Деньги
 1. **Потолок проекта:** <€> — слово оператора и константа предохранителя.
 2. **Лимиты подписки:** планка на фазу исполнителя — <N> % недели (обычная фаза — 15 %, D4 two-tier-dev); исполнитель работает под ultracode, его веер воркфлоу ест лимиты быстрее. `/usage` до и после плеча записывает тимлид в STATUS; превышение — на ретро, ultracode сгоряча не выключается.
 3. **Лимит вендора:** <где выставлен, сколько>; проверен на экране до первого платного вызова.
-4. **Порог платного шага:** <€>. Выше порога или необратимо — STOP-PAY и отдельный `/goal` после «да» оператора; мелкие вызовы ниже порога внутри потолка идут без стопов.
+4. **Порог платного шага:** <€>. Выше порога или необратимо — STOP-PAY и отдельный запуск после «да» оператора; мелкие вызовы ниже порога внутри потолка идут без стопов.
 5. **Предохранитель по факту:** <команда или файл> считает факт расхода (или оценку, откалиброванную по счёту вендора); журнал только дописывается; второй рубеж после лимита вендора.
 
 ## Каталог развилок

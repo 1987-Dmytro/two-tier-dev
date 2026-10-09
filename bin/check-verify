@@ -68,14 +68,13 @@ SPEC = '''# SPEC-1 — slug — фаза 1
 ## 3. Инварианты и границы
 - Только stdlib python3; сеть не нужна.
 '''
-GOAL = '''Read first: docs/SPEC-1.md, docs/PROGRESS.md
+PROMPT = '''Read first: docs/SPEC-1.md, docs/PROGRESS.md
 
-Phase 1 of slug: F1 of SPEC-1 §2.
+This is the start prompt of phase 1 of slug: F1 of SPEC-1 §2.
 
-END STATE (met when one holds):
-(A) Every feature of SPEC-1 §2 is closed: its check ran and its output is in docs/evidence/F1-slug-result.txt; in the final turn `bin/gate-1` prints every marker of the phase.
+Done means: every feature of SPEC-1 §2 is closed, its check ran and its output is in docs/evidence/F1-slug-result.txt; in the final turn `bin/gate-1` prints every marker of the phase.
 
-CONSTRAINTS:
+Constraints:
 - Branch main only.
 '''
 
@@ -89,7 +88,7 @@ def fixture(kind):
     side = "red" if kind == "red" else "clean"
     files = {"bin/slug": SLUG.format(strip="" if side == "red" else '.strip("-")'), "bin/check-slug": CHECK[side],
              "bin/gate-1": '#!/bin/sh\nbin/check-slug && echo "F1 SLUG_OK" && echo GATE_OK\n',
-             "docs/SPEC-1.md": SPEC, "docs/GOAL.txt": GOAL,
+             "docs/SPEC-1.md": SPEC, "docs/PROMPT.txt": PROMPT,
              "docs/PROGRESS.md": "# PROGRESS — slug, SPEC-1\n\n## Done\n- **F1 Слаг**: `bin/check-slug` → `SLUG_OK` — `docs/evidence/F1-slug-result.txt`.\n"}
     for p, text in files.items():
         os.makedirs(os.path.dirname(f"{d}/{p}"), exist_ok=True)

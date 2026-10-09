@@ -126,8 +126,12 @@ def paths():
     return src, proc, launch
 
 
+PROMPT_FILE = None  # v3.2, F7: строка кончается стартовым запросом "$(cat docs/PROMPT.txt)" — пары стартуют запросом из этого файла
+
+
 def launch_line(proc):
-    """(env, args после `claude`) — первая строка с `claude` в блоках ```sh PROCESS."""
+    """(env, args после `claude`) — первая строка с `claude` в блоках ```sh PROCESS; последний аргумент "$(cat <файл>)" — в PROMPT_FILE."""
+    global PROMPT_FILE
     for block in re.findall(r"```sh\n(.*?)```", open(proc, encoding="utf-8").read(), re.S):
         for line in block.splitlines():
             toks = shlex.split(line)
@@ -136,7 +140,9 @@ def launch_line(proc):
                 k, _, v = toks.pop(0).partition("=")
                 env[k] = v
             if toks[:1] == ["claude"]:
-                return env, toks[1:]
+                m = re.fullmatch(r"\$\(cat\s+(\S+)\)", toks[-1])
+                PROMPT_FILE = m.group(1) if m else None
+                return env, toks[1:-1] if m else toks[1:]
     return None, None
 
 
@@ -337,7 +343,8 @@ def static(src, proc, launch):
         return None
     line = f" {' '.join(args)} "
     miss = [f for f in LINE_FLAGS if f" {f} " not in line]  # флаг и значение — целыми токенами
-    say(H, "FAIL" if miss else "OK", "line", f"{proc}: env {', '.join(lenv) or 'нет'}; флагов {len(args)}; нет — {', '.join(miss) or 'ничего'}")
+    say(H, "FAIL" if miss else "OK", "line", f"{proc}: env {', '.join(lenv) or 'нет'}; флагов {len(args)}; нет — {', '.join(miss) or 'ничего'}; "
+        f"стартовый запрос аргументом — {PROMPT_FILE or 'нет (запуск — словами PROCESS)'}")
     return lenv, args
 
 
@@ -355,7 +362,11 @@ def deploy(src, launch):
     return dst
 
 
-def control(dst, lenv, args, name, prompt, mode=None, extra=(), env_over=None, turns=3):
+def control(dst, lenv, args, name, prompt, mode=None, extra=(), env_over=None, turns=3, from_file=False):
+    if from_file and PROMPT_FILE:  # как строка запуска: запрос — содержимое файла стартового запроса копии
+        os.makedirs(os.path.dirname(f"{dst}/{PROMPT_FILE}") or dst, exist_ok=True)
+        open(f"{dst}/{PROMPT_FILE}", "w", encoding="utf-8").write(prompt)
+        prompt = open(f"{dst}/{PROMPT_FILE}", encoding="utf-8").read()
     if mode:
         i = args.index("--permission-mode")
         args = args[:i + 1] + [mode] + args[i + 2:]
@@ -381,11 +392,11 @@ def pair(src, proc, launch, lenv, args):
     H = "HARNESS"
     dst = deploy(src, launch)
     print(f"копия харнеса: {dst}")
-    print("run: env -u ANTHROPIC_API_KEY " + " ".join(f"{k}={v}" for k, v in lenv.items()) + " claude -p '<prompt>' "
-          + shlex.join(args) + " --max-turns 3 --output-format stream-json --verbose")
+    print("run: env -u ANTHROPIC_API_KEY " + " ".join(f"{k}={v}" for k, v in lenv.items()) + " claude -p "
+          + (f'"$(cat {PROMPT_FILE})"' if PROMPT_FILE else "'<prompt>'") + " " + shlex.join(args) + " --max-turns 3 --output-format stream-json --verbose")
     marker = word_marker("H")
     open(f"{dst}/STEER.md", "w").write(f"The marker for this run is {marker}.\n")
-    init, res, uses, _, _ = control(dst, lenv, args, "run1", PROMPT)
+    init, res, uses, _, _ = control(dst, lenv, args, "run1", PROMPT, from_file=True)
     if not init:
         say(H, "FAIL", "run1", "нет system/init — вложенный запуск не состоялся; STOP-INPUT: оператор запускает `bin/check-harness` сам")
         say("ENV", "FAIL", "run1", "сверки system/init с таблицей не было")
@@ -399,7 +410,7 @@ def pair(src, proc, launch, lenv, args):
         f"STEER.md {'очищен' if steer_left == 0 else 'не очищен'}; tool_use {len(uses)}, ходов {res.get('num_turns')}")
     os.remove(f"{dst}/probe.txt") if probe is not None else None
     open(f"{dst}/AGENT_STOP", "w").close()
-    init2, res, uses, results, _ = control(dst, lenv, args, "run2", PROMPT)
+    init2, res, uses, results, _ = control(dst, lenv, args, "run2", PROMPT, from_file=True)
     os.remove(f"{dst}/AGENT_STOP")
     created = os.path.exists(f"{dst}/probe.txt")
     hit = any("Kill switch" in v for v in results.values())
@@ -408,7 +419,7 @@ def pair(src, proc, launch, lenv, args):
         f"с AGENT_STOP: probe.txt {'создан' if created else 'не создан'}; tool_use {len(uses)}; причина kill-switch в выводе — {'да' if hit else 'нет'}; "
         f"terminal_reason {res.get('terminal_reason')}")
     rules = json.load(open(f"{dst}/.claude/settings.json", encoding="utf-8")).get("permissions", {}).get("allow", [])
-    _, res, uses, results, _ = control(dst, lenv, args, "allow", PROMPT_ALLOW, mode="dontAsk", extra=["--allowedTools", *rules])
+    _, res, uses, results, _ = control(dst, lenv, args, "allow", PROMPT_ALLOW, mode="dontAsk", extra=["--allowedTools", *rules], from_file=True)
     denied = {json.dumps(d.get("tool_input", {})) for d in res.get("permission_denials") or []}
     ran = [u for u in uses if u.get("input", {}).get("command", "").startswith("bin/check-ci")]
     ran_ok = bool(ran) and "usage" in results.get(ran[0].get("id"), "") and not any("check-ci" in d for d in denied)
@@ -443,7 +454,7 @@ def workflow(ev):
 def hooks(dst, lenv, args):
     S = "HOOKS"
     staged = lambda: subprocess.run(["git", "ls-files"], cwd=dst, capture_output=True, text=True).stdout.split()
-    _, res, uses, results, _ = control(dst, lenv, args, "guards", PROMPT_GUARDS)
+    _, res, uses, results, _ = control(dst, lenv, args, "guards", PROMPT_GUARDS, from_file=True)
     denied = [d for d in res.get("permission_denials") or [] if "STATUS.md" in json.dumps(d.get("tool_input", {}))]
     add = [u for u in uses if "git add" in u.get("input", {}).get("command", "")]
     refusal = results.get(add[0].get("id"), "") if add else ""

@@ -1,7 +1,7 @@
 # LAUNCH — строка запуска исполнителя и парный контрольный прогон
 
 ## Запуск исполнителя
-Строка запуска фазы — в `docs/PROCESS.md` проекта, раздел «Строка запуска исполнителя»; её пишет тимлид по таблице Environment. Из корня проекта, затем `/goal ` и текст `docs/GOAL.txt` целиком. Флаги:
+Строка запуска фазы — в `docs/PROCESS.md` проекта, раздел «Строка запуска исполнителя»; её пишет тимлид по таблице Environment. Из корня проекта; последний аргумент строки — стартовый запрос `"$(cat docs/PROMPT.txt)"` (шаблон `docs/PROMPT.template.txt`): фаза стартует без ручного набора — `claude "query"` открывает интерактивную сессию со стартовым запросом (cli-reference). Флаги:
 - `--permission-mode auto` (D2): `defaultMode: "auto"` из `.claude/settings.json` не действует, флаг перекрывает настройки (permission-modes);
 - `--model claude-opus-5-5` — полным id: алиас `opus` меняется сам (model-config);
 - `--effort ultracode` — `xhigh` и ultracode на сессию: Claude сам планирует воркфлоу на каждую существенную задачу (workflows, model-config). Нужен Claude Code 2.1.203+ и модель с `xhigh`. В `system/init` ultracode не виден — его доказывает флаг в строке;

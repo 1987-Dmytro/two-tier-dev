@@ -9,6 +9,7 @@
     "deny": [
       "Edit(/intent/**)",
       "Edit(/docs/SPEC-*.md)",
+      "Edit(/docs/PROMPT.txt)",
       "Edit(/docs/GOAL.txt)",
       "Edit(/docs/STATUS.md)",
       "Edit(/docs/PROCESS.md)",

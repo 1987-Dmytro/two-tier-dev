@@ -1,0 +1,94 @@
+$ bin/check-budget --templates   # до правок F7: красная сторона новых проверок
+OK   contract: kit/docs/PROMPT.template.txt: фраз 8, нет — ничего
+FAIL contract: kit/docs/PROCESS.template.md: фраз 6, нет — "$(cat docs/PROMPT.txt)"
+OK   contract: kit/CLAUDE.md: фраз 9, нет — ничего
+FAIL no-goal: упоминаний команды /goal в kit/ — .claude/skills/accept/SKILL.md: 1; .claude/skills/plan-phase/SKILL.md: 4; docs/LAUNCH.md: 1; docs/PROCESS.template.md: 2; docs/SPEC.template.md: 1
+BUDGET_FAIL: 2
+
+$ bin/check-budget --templates
+пример: kit/docs/INTENT.template.md → intent/INTENT.md
+пример: kit/docs/SPEC.template.md → docs/SPEC-1.md
+пример: kit/docs/PROMPT.template.txt → docs/PROMPT.txt
+пример: kit/docs/PLAN.template.md → docs/PLAN-1.md
+пример: kit/docs/PROGRESS.template.md → docs/PROGRESS.md
+пример: kit/docs/STATUS.template.md → docs/STATUS.md
+пример: kit/docs/PROCESS.template.md → docs/PROCESS.md
+пример: kit/REVIEW.md → docs/reviews/1-1.md
+пример: kit/CLAUDE.md → CLAUDE.md
+OK   budgets: defaults кита — 19 ключей, ключей проекта — 0
+OK   contract: kit/docs/PROMPT.template.txt: фраз 8, нет — ничего
+OK   contract: kit/docs/PROCESS.template.md: фраз 6, нет — ничего
+OK   contract: kit/CLAUDE.md: фраз 9, нет — ничего
+OK   no-goal: упоминаний команды /goal в kit/ — нет
+OK   claude_md_lines: CLAUDE.md 22/40
+OK   intent_chars: intent/INTENT.md 2001/6000
+OK   progress_lines: docs/PROGRESS.md 19/60
+OK   dollar_digit: `$` с цифрой — 0 в 0 файлах
+OK   goal_chars: docs/PROMPT.txt, знаков 2947/4000
+OK   read_first_files: Read first, файлов 3/3
+OK   read_first_chars: Read first + CLAUDE.md, знаков 6789/50000
+OK   spec_feature_chars: docs/SPEC-1.md: фич 1, длиннее 600 знаков — нет
+OK   plan_lines: docs/PLAN-1.md, строк 25/150
+OK   review_blocking: docs/reviews/1-1.md: блокирующих 1/5
+WARN intent: intent/INTENT.md: маркеров неясности 1
+OK   intent: docs/SPEC-1.md: маркеров неясности 0
+OK   pin: пин SPEC 377d61ea7dd4 · git hash-object intent/INTENT.md 377d61ea7dd4
+OK   signal: сигналы intent S1,S2; фич без существующего S — нет
+OK   owner: нет main/origin/main или коммитов — lint коммитов пропущен
+OK   abide_rules: нет .abide/rubric.json — рубрики Abide нет
+BUDGET_OK
+
+$ bin/two-tier-upgrade --self-test
+OK   список апгрейда = файлы кита (34)
+OK   фикстура: тестовый клон без origin (`git remote` пуст)
+OK   ветка kit-v3
+OK   main не тронут
+OK   механика v3: 29 файлов кита на месте
+OK   прежние версии (settings, accept v2) — в docs/archive/kit-v2/
+OK   выведенные из кита v2 (6) — в архиве
+OK   раздутые PROGRESS (201 строка) и PLAN-1 (401) — в docs/archive/ с датой, байт в байт
+OK   свежие PROGRESS и PLAN-1 из шаблонов, со ссылкой на архив
+OK   файлы тимлида и CLAUDE.md проекта не тронуты, launch.settings.json не создан
+OK   отчёт docs/upgrade-v3.md: тимлиду, исполнителю, оператору
+OK   история цела: 2 коммита v2 — предки kit-v3
+OK   в проекте после апгрейда bin/check-budget → BUDGET_OK
+OK   повторный прогон: тот же HEAD, `git status` пуст
+OK   remotes не тронуты, push некуда и не было
+OK   v3.1 → v3.2: docs/GOAL.txt → docs/PROMPT.txt (git mv, байт в байт) отдельным коммитом «Тимлид: …», история файла цела
+OK   в проекте v3.1 после апгрейда bin/check-budget → BUDGET_OK (lint владения: коммит переноса — «Тимлид:»)
+OK   повторный прогон проекта v3.1: тот же HEAD
+OK   сбой (а): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
+OK   сбой (б): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (29 путей)
+OK   сбой (в): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
+OK   сбой (г): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
+OK   сбой (д): выход ≠0 с причиной, без трассировки, откат после старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (27 путей)
+UPGRADE_OK
+
+$ bin/two-tier-init t3 && (cd t3 && bin/check-harness)   # пара стартует запросом из docs/PROMPT.txt
+OK   line: ./docs/PROCESS.template.md: env ENABLE_CLAUDEAI_MCP_SERVERS, CLAUDE_CODE_ENABLE_FUNCTION_HOOKS; флагов 16; нет — ничего; стартовый запрос аргументом — docs/PROMPT.txt
+OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
+OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
+OK   run2: с AGENT_STOP: probe.txt не создан; tool_use 1; причина kill-switch в выводе — да; terminal_reason hook_stopped
+OK   run1: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
+OK   run2: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
+ENV_OK
+HARNESS_OK
+ABIDE_OK
+GATE_HOOK_OK
+HOOKS_OK
+TOOLGATE_OK
+bin/check-harness  49,81s user 19,41s system 37% cpu 3:02,70 total
+
+$ bin/check-verify   # /verify-phase на фикстурах со стартовым запросом docs/PROMPT.txt
+OK   workflow: kit/.claude/workflows/verify-phase.js: meta первым оператором, литералом — да
+OK   workflow: модели: claude-opus-5-5, claude-sonnet-5-5; проверяющие CHECKER, судья JUDGE — полными id
+OK   workflow: часы и случайность в скрипте — нет
+OK   workflow: .claude/workflows/verify-phase.js корня = копия кита
+OK   launcher: kit/bin/verify-phase: лимит по умолчанию 1800 с
+OK   red: модели агентов: {'claude-sonnet-5-5': '4', 'claude-opus-5-5': '1'}
+OK   red: первая строка «VERDICT: NEEDS_WORK»; дефект (дефисы по краям) назван в блокирующих — да
+OK   clean: модели агентов: {'claude-sonnet-5-5': '2', 'claude-opus-5-5': '1'}
+OK   clean: первая строка «VERDICT: PASS»; блокирующих 0
+OK   limit: --limit 20: rc 3, VERIFY_TIMEOUT — да, файл вердикта — нет
+VERIFY_OK
+bin/check-verify  32,79s user 14,33s system 47% cpu 1:39,69 total

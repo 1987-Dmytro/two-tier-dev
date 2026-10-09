@@ -23,7 +23,7 @@ const FINDING = {
 
 phase('Scope')
 const scope = await agent(
-  'Scope reader of a phase acceptance. Read docs/GOAL.txt: the first file of its `Read first:` line is the phase SPEC. In that SPEC, section §2 lists the features as lines that start with `- **F<n>`. Return sha — the output of `git rev-parse --short HEAD`; spec — the SPEC path; gate_log — the output of `printenv VERIFY_GATE_LOG` (empty if unset); features — one entry per feature line: id (`F<n>`) and line (the whole line, verbatim). Read only; change nothing.',
+  'Scope reader of a phase acceptance. Read the start prompt docs/PROMPT.txt (if it is absent, the older docs/GOAL.txt): the first file of its `Read first:` line is the phase SPEC. In that SPEC, section §2 lists the features as lines that start with `- **F<n>`. Return sha — the output of `git rev-parse --short HEAD`; spec — the SPEC path; gate_log — the output of `printenv VERIFY_GATE_LOG` (empty if unset); features — one entry per feature line: id (`F<n>`) and line (the whole line, verbatim). Read only; change nothing.',
   { label: 'scope', model: CHECKER, effort: 'low', schema: {
     type: 'object', required: ['sha', 'spec', 'gate_log', 'features'],
     properties: { sha: str, spec: str, gate_log: str,
