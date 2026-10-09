@@ -651,34 +651,65 @@ def gate_probes(src, launch, lenv, args):
         f"после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение {res6.get('decision') or 'нет'}, "
         f"вердикт не в счёт — {'да' if 'no VERDICT' in res6.get('reason', '') else 'нет'}")
     # B2 (ревью v3.2-2): комплект — из запушенного HEAD; файл комплекта вне HEAD или отличный от HEAD держит ход по имени
-    s1, t1 = gate_fixture(src, launch, full=True, loose=("docs/evidence/F2-b-result.txt", "verify", "docs/PROGRESS.md"))
-    r1 = gate_run(s1, t1, "probe-set-loose")[1]  # состояние ревью: голова, evidence F2 и вердикт — вне коммита
-    s2, t2 = gate_fixture(src, launch, full=True, loose=("verify",))
-    r2 = gate_run(s2, t2, "probe-set-verdict")[1]  # честный путь ревью: запушено всё, кроме вердикта
-    s3, t3 = gate_fixture(src, launch, full=True)
-    open(f"{s3}/docs/evidence/F2-b-result.txt", "a", encoding="utf-8").write("ещё строка\n")
-    r3 = gate_run(s3, t3, "probe-set-evidence")[1]  # evidence правлен на диске после push
-    s4, t4 = gate_fixture(src, launch, full=True)
-    spec = open(f"{s4}/docs/SPEC-1.md", encoding="utf-8").read()
-    open(f"{s4}/docs/SPEC-1.md", "w", encoding="utf-8").write("\n".join(l for l in spec.split("\n") if not l.startswith("- **F2")))
-    r4 = gate_run(s4, t4, "probe-set-spec")[1]  # строка фичи убрана из SPEC на диске
-    s5, t5 = gate_fixture(src, launch, full=True)
+    def state_of(tweak=None, **kw):
+        repo, tr = gate_fixture(src, launch, full=True, **kw)
+        named = tweak(repo) if tweak else None
+        return repo, tr, named
+    def drop_f2(r):
+        s = open(f"{r}/docs/SPEC-1.md", encoding="utf-8").read()
+        open(f"{r}/docs/SPEC-1.md", "w", encoding="utf-8").write("\n".join(l for l in s.split("\n") if not l.startswith("- **F2")))
+        return "docs/SPEC-1.md differs from HEAD"
+    def verdict_rewritten(r):
+        v = next(n for n in os.listdir(f"{r}/docs/evidence") if n.startswith("verify-"))
+        open(f"{r}/docs/evidence/{v}", "w", encoding="utf-8").write("VERDICT: NEEDS_WORK\n")
+        return f"docs/evidence/{v} differs from HEAD"
+    def extra(r):
+        open(f"{r}/docs/evidence/F2-rerun-result.txt", "w", encoding="utf-8").write("$ bin/b\nFAIL: 3 of 5\n")
+        return "docs/evidence/F2-rerun-result.txt is not committed"
+    def prompt_edit(r):
+        open(f"{r}/docs/PROMPT.txt", "a", encoding="utf-8").write("ещё строка\n")
+        return "docs/PROMPT.txt differs from HEAD"
+    red = {"голова, evidence F2 и вердикт вне коммита (ревью)": state_of(loose=("docs/evidence/F2-b-result.txt", "verify", "docs/PROGRESS.md")),
+           "вне git только вердикт (ревью)": state_of(loose=("verify",)),
+           "evidence F2 дописан на диске": state_of(lambda r: (open(f"{r}/docs/evidence/F2-b-result.txt", "a").write("x\n"), "docs/evidence/F2-b-result.txt differs from HEAD")[1]),
+           "evidence F2 удалён на диске": state_of(lambda r: (os.remove(f"{r}/docs/evidence/F2-b-result.txt"), "docs/evidence/F2-b-result.txt is deleted on disk")[1]),
+           "лишний evidence F2 вне git": state_of(extra),
+           "вердикт переписан на диске": state_of(verdict_rewritten),
+           "строка F2 убрана из SPEC на диске": state_of(drop_f2),
+           "стартовый запрос правлен на диске": state_of(prompt_edit)}
+    vname = lambda r: next(n for n in os.listdir(f"{r}/docs/evidence") if n.startswith("verify-"))
+    must = {"голова, evidence F2 и вердикт вне коммита (ревью)": lambda r: ["docs/PROGRESS.md differs from HEAD", "docs/evidence/F2-b-result.txt is not committed", f"docs/evidence/{vname(r)} is not committed"],
+            "вне git только вердикт (ревью)": lambda r: [f"docs/evidence/{vname(r)} is not committed"]}
+    held = []
+    for name, (repo, tr, named) in red.items():
+        r = gate_run(repo, tr, "probe-set-red")[1]
+        want = must[name](repo) if name in must else [named]
+        held.append((name, r.get("decision") == "block" and all(w in r.get("reason", "") for w in want)))
+    say(S, "OK" if all(ok for _, ok in held) else "FAIL", "set",
+        "комплект — из запушенного HEAD, файл вне HEAD или отличный от HEAD держит ход по имени: " + "; ".join(f"{n} — {'блок, назван' if ok else 'НЕТ'}" for n, ok in held))
+    green = {}
+    s5, t5, _ = state_of()  # журналы в git: чек дописывает jev.jsonl, хук — spec-gate.jsonl, в том числе своими прошлыми решениями
     for lg in ("jev.jsonl", "spec-gate.jsonl"):
         open(f"{s5}/docs/evidence/{lg}", "w", encoding="utf-8").write('{"ts": "2026-10-09T00:00:00Z"}\n')
     ship(s5, "журналы", "docs/evidence/jev.jsonl", "docs/evidence/spec-gate.jsonl")
-    open(f"{s5}/docs/evidence/jev.jsonl", "a", encoding="utf-8").write('{"ts": "2026-10-09T00:00:01Z"}\n')  # чек дописал журнал расхода
-    r5 = gate_run(s5, t5, "probe-set-logs")[1]  # spec-gate.jsonl хук дописывает сам
-    vf = lambda repo: next(n for n in os.listdir(f"{repo}/docs/evidence") if n.startswith("verify-"))
-    held = lambda r, *ps: r.get("decision") == "block" and all(p in r.get("reason", "") for p in ps)
-    want = [(r1, (), ("docs/PROGRESS.md differs from HEAD", "docs/evidence/F2-b-result.txt", f"docs/evidence/{vf(s1)}")),
-            (r2, (), (f"docs/evidence/{vf(s2)}",)), (r3, (), ("docs/evidence/F2-b-result.txt differs from HEAD",)), (r4, (), ("docs/SPEC-1.md differs from HEAD",))]
-    good = [held(r, *must) and (not anyof or any(a in r.get("reason", "") for a in anyof)) for r, anyof, must in want]
-    ok5 = r5.get("systemMessage", "").startswith("SPEC_GATE_OK")
-    say(S, "OK" if all(good) and ok5 else "FAIL", "set",
-        f"комплект — из запушенного HEAD: голова, evidence F2 и вердикт вне коммита — {r1.get('decision') or 'нет'}, названы — {'да' if good[0] else 'нет'}; "
-        f"вне git только вердикт — {r2.get('decision') or 'нет'}, назван — {'да' if good[1] else 'нет'}; evidence F2 правлен на диске — {r3.get('decision') or 'нет'}, "
-        f"назван — {'да' if good[2] else 'нет'}; строка F2 убрана из SPEC на диске — {r4.get('decision') or 'нет'}, назван — {'да' if good[3] else 'нет'}; "
-        f"запушенный комплект и дописанные журналы jev.jsonl, spec-gate.jsonl — «{short(r5)}»")
+    for lg in ("jev.jsonl", "spec-gate.jsonl"):
+        open(f"{s5}/docs/evidence/{lg}", "a", encoding="utf-8").write('{"ts": "2026-10-09T00:00:01Z"}\n')
+    green["журналы jev.jsonl и spec-gate.jsonl в git и дописаны"] = [gate_run(s5, t5, "probe-set-logs")[1] for _ in range(2)]
+    s6, t6, _ = state_of()
+    subprocess.run(["git", "mv", "docs/evidence/F2-b-result.txt", "docs/evidence/F2-сборка-result.txt"], cwd=s6, env=GIT_ENV, check=True, capture_output=True)
+    ship(s6, "не-ASCII имя evidence", "docs/evidence/F2-сборка-result.txt")
+    green["evidence F2 с не-ASCII именем"] = [gate_run(s6, t6, "probe-set-utf8")[1]]
+    s7, t7, _ = state_of()
+    gx = lambda *a: subprocess.run(["git", *a], cwd=s7, env=GIT_ENV, check=True, capture_output=True)
+    gx("config", "core.autocrlf", "true")
+    for rel in ("docs/SPEC-1.md", "docs/PROGRESS.md", "docs/PROMPT.txt", "docs/evidence/F1-a-result.txt", "docs/evidence/F2-b-result.txt"):
+        os.remove(f"{s7}/{rel}")
+    gx("checkout", "--", "docs")
+    crlf = b"\r\n" in open(f"{s7}/docs/SPEC-1.md", "rb").read()
+    green["чекаут с CRLF (core.autocrlf)" + ("" if crlf else " — CRLF не вышел")] = [gate_run(s7, t7, "probe-set-crlf")[1]] if crlf else [{}]
+    good = {n: all(r.get("systemMessage", "").startswith("SPEC_GATE_OK") for r in rs) for n, rs in green.items()}
+    say(S, "OK" if all(good.values()) else "FAIL", "set",
+        "запушенный комплект — SPEC_GATE_OK: " + "; ".join(f"{n} — {'да' if ok else 'НЕТ: ' + short(green[n][-1])}" for n, ok in good.items()))
     rc, res, _, log, _ = gate_run(full, trf, "probe-full")
     jev = log[-1].get("jev") or {}
     say(S, "OK" if rc == 0 and res.get("systemMessage", "").startswith("SPEC_GATE_OK") and log[-1]["decision"] == "ok" else "FAIL", "full",

@@ -4,9 +4,10 @@
 // Code, $0: per feature line of the phase SPEC (`- **F<n>` … `чек: `cmd` → `MARKER``) a file docs/evidence/F<n>-*-result.txt
 // with the marker on a line of its own; the branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова»
 // section) differs from the one committed before this session; VERDICT: PASS of /verify-phase for HEAD (docs/evidence/verify-<sha>.txt,
-// after it only evidence and PROGRESS). The set is judged as pushed: the phase SPEC, docs/PROGRESS.md, the evidence of each feature
-// and the verdict are read from HEAD, and a copy on disk that HEAD lacks or that differs from HEAD holds the turn by its name. The
-// logs that checks and this hook append (docs/evidence/jev.jsonl, spec-gate.jsonl) are not part of the set; STOP lines are read on disk. A STOP line ends a turn once: it is new when its text from «STOP:» on starts neither like
+// after it only evidence and PROGRESS). The set is judged as pushed: the start prompt, the phase SPEC it names, docs/PROGRESS.md,
+// the evidence files of the SPEC's features and the verdict files are read from HEAD, and any of them that `git status` shows as
+// changed, untracked or deleted (eol conversion and filters as git applies them) holds the turn by its name. The logs that checks
+// and this hook append (docs/evidence/jev.jsonl, spec-gate.jsonl) are not part of the set; STOP lines count on disk, before a commit. A STOP line ends a turn once: it is new when its text from «STOP:» on starts neither like
 // a STOP line of the PROGRESS committed before the session nor like a stop already honored (the log keeps their marks): its first
 // 60 characters, or all of a shorter line — an edited tail, «— снят» at the end or a bullet in front keep a line old.
 // The full set → SPEC_GATE_OK and the turn ends; a new line `STOP: <id>` with a reason of SPEC §4 → the turn ends; otherwise
@@ -53,7 +54,23 @@ function atHead(root, rel) {  // the file as committed at HEAD, byte for byte; n
   }
 }
 
-const headNames = (root, dir) => (git(root, 'ls-tree', '--name-only', 'HEAD', `${dir}/`) || '').split('\n').filter(Boolean).map(p => p.slice(dir.length + 1))
+const headNames = (root, dir) => (git(root, 'ls-tree', '-z', '--name-only', 'HEAD', `${dir}/`) || '').split('\0').filter(Boolean).map(p => p.slice(dir.length + 1))
+
+function changed(root, paths) {  // {path: why} for the paths `git status` names: untracked, staged only, deleted or modified
+  const out = {}
+  let raw = ''
+  try {
+    raw = execFileSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', ...paths], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 })
+  } catch {}
+  const parts = raw.split('\0')
+  for (let i = 0; i < parts.length; i++) {
+    const xy = parts[i].slice(0, 2), p = parts[i].slice(3)
+    if (!p) continue
+    if (xy[0] === 'R' || xy[0] === 'C') i++  // the next field is the source of the rename
+    out[p] = xy === '??' || xy[0] === 'A' ? 'is not committed' : xy.includes('D') ? 'is deleted on disk' : 'differs from HEAD'
+  }
+  return out
+}
 
 function sessionStart(transcript) {
   // ponytail: the first timestamp of the transcript is the session start; `--continue` keeps the old clock (fail-open: caps pass sooner)
@@ -102,8 +119,8 @@ function verdict(root, sha) {  // a verdict file committed at HEAD
     if (!m || (atHead(root, `docs/evidence/${f}`) || '').split('\n')[0].trim() !== 'VERDICT: PASS') continue
     const full = git(root, 'rev-parse', '--verify', '-q', `${m[1]}^{commit}`)
     if (!full || (full !== sha && git(root, 'merge-base', '--is-ancestor', full, sha) === null)) continue
-    const changed = (git(root, 'diff', '--name-only', '--no-renames', full, sha) || '').split('\n').filter(Boolean)  // a move into evidence names its source too
-    if (changed.every(allowed)) return f
+    const after = (git(root, 'diff', '--name-only', '-z', '--no-renames', full, sha) || '').split('\0').filter(Boolean)  // a move into evidence names its source too
+    if (after.every(allowed)) return f
   }
   return null
 }
@@ -143,9 +160,9 @@ function decide(input, root, cfg, log) {
   const prior = log.filter(l => l.session === input.session)
   const stopFile = process.env.AGENT_STOP_FILE || path.join(root, 'AGENT_STOP')
   if (fs.existsSync(stopFile)) return { decision: 'pass', reason: 'agent-stop' }
-  const promptFile = ['docs/PROMPT.txt', 'docs/GOAL.txt'].find(p => fs.existsSync(path.join(root, p)))
+  const promptFile = ['docs/PROMPT.txt', 'docs/GOAL.txt'].find(p => atHead(root, p) !== null || fs.existsSync(path.join(root, p)))
   if (!promptFile) return null // no phase is open
-  const rf = ((read(path.join(root, promptFile)) || '').match(/^Read first:(.*)$/m) || [])[1] || ''
+  const rf = ((atHead(root, promptFile) ?? read(path.join(root, promptFile)) ?? '').match(/^Read first:(.*)$/m) || [])[1] || ''
   const specPath = rf.split(',').map(s => s.trim()).find(s => /(^|\/)SPEC-[^/]+\.md$/.test(s))
   const spec = specPath && (atHead(root, specPath) ?? read(path.join(root, specPath)))
   if (!spec) return { decision: 'pass', reason: `no SPEC in Read first of ${promptFile}` }
@@ -154,14 +171,12 @@ function decide(input, root, cfg, log) {
   }
   const start = sessionStart(input.transcript_path) ?? t0 - cfg.caps.hours * 3600e3
 
-  const unpushed = rel => {  // a file of the set on disk against HEAD; null when they are the same
-    const disk = read(path.join(root, rel)), at = atHead(root, rel)
-    return disk === at ? null : at === null ? `${rel} is not committed` : disk === null ? `${rel} is missing on disk` : `${rel} differs from HEAD`
-  }
   const feats = features(spec)
   const missing = []
-  const ds = unpushed(specPath)
-  if (ds) missing.push(`${ds} — the set is judged as pushed: commit and push it`)
+  const isEvidence = n => !n.includes('/') && (/^verify-[0-9a-f]{7,40}\.txt$/.test(n) || feats.some(f => n.startsWith(`${f.id}-`) && n.endsWith('-result.txt')))
+  const loose = Object.entries(changed(root, [promptFile, specPath, 'docs/PROGRESS.md', 'docs/evidence']))
+    .filter(([p]) => [promptFile, specPath, 'docs/PROGRESS.md'].includes(p) || (p.startsWith('docs/evidence/') && isEvidence(p.slice('docs/evidence/'.length))))
+  for (const [p, why] of loose) missing.push(`${p} ${why} — the set is judged as pushed: commit and push it`)
   const evDir = path.join(root, 'docs', 'evidence')
   const evHead = headNames(root, 'docs/evidence')
   const evDisk = fs.existsSync(evDir) ? fs.readdirSync(evDir) : []
@@ -170,13 +185,10 @@ function decide(input, root, cfg, log) {
     const mine = n => n.startsWith(`${f.id}-`) && n.endsWith('-result.txt')
     const has = text => (text || '').split('\n').some(l => [f.marker, `${f.id} ${f.marker}`].includes(l.trim()))
     const hit = evHead.filter(mine).find(n => has(atHead(root, `docs/evidence/${n}`)))
-    const loose = !hit && evDisk.filter(mine).find(n => has(read(path.join(evDir, n))))
+    const onDisk = !hit && evDisk.filter(mine).find(n => has(read(path.join(evDir, n))))
     const names = [...new Set([...evHead, ...evDisk].filter(mine))]
-    if (hit) {
-      f.evidence = hit
-      const d = unpushed(`docs/evidence/${hit}`)
-      if (d) missing.push(`${f.id}: ${d} — commit and push it`)
-    } else if (loose) missing.push(`${f.id}: the line ${f.marker} is only on disk — ${unpushed(`docs/evidence/${loose}`)}; commit and push it`)
+    if (hit) f.evidence = hit
+    else if (onDisk) missing.push(`${f.id}: the line ${f.marker} is in docs/evidence/${onDisk} on disk only, not in HEAD`)
     else if (!names.length) missing.push(`${f.id}: no docs/evidence/${f.id}-*-result.txt`)
     else missing.push(`${f.id}: no line ${f.marker} in docs/evidence/${names.join(', docs/evidence/')}`)
   }
@@ -189,18 +201,9 @@ function decide(input, root, cfg, log) {
   const progress = atHead(root, 'docs/PROGRESS.md') || ''  // its head counts as pushed
   const baseSha = git(root, 'log', '-1', '--format=%H', `--before=${new Date(start).toISOString()}`)
   const base = (baseSha && git(root, 'show', `${baseSha}:docs/PROGRESS.md`)) || ''
-  const dp = unpushed('docs/PROGRESS.md')
-  if (dp) missing.push(`${dp} — commit and push it`)
-  else if (!head(progress) || (base && head(progress) === head(base))) missing.push('the head of docs/PROGRESS.md was not updated in this session')
+  if (!loose.some(([p]) => p === 'docs/PROGRESS.md') && (!head(progress) || (base && head(progress) === head(base)))) missing.push('the head of docs/PROGRESS.md was not updated in this session')
   const pass = sha && verdict(root, sha)
-  const dv = pass && unpushed(`docs/evidence/${pass}`)
-  if (dv) missing.push(`${dv} — commit and push it`)
-  if (!pass) {
-    const loose = evDisk.filter(n => /^verify-[0-9a-f]{7,40}\.txt$/.test(n) && (read(path.join(evDir, n)) || '').split('\n')[0].trim() === 'VERDICT: PASS'
-      && unpushed(`docs/evidence/${n}`))
-    missing.push(`no VERDICT: PASS of /verify-phase for HEAD ${(sha || '?').slice(0, 7)} in HEAD (docs/evidence/verify-<sha>.txt; after it only evidence and PROGRESS change)`
-      + (loose.length ? `; only on disk: docs/evidence/${loose.join(', docs/evidence/')} — commit and push it` : ''))
-  }
+  if (!pass) missing.push(`no VERDICT: PASS of /verify-phase for HEAD ${(sha || '?').slice(0, 7)} in HEAD (docs/evidence/verify-<sha>.txt; after it only evidence and PROGRESS change)`)
 
   const reasons = stopReasons(spec)
   const seen = [...base.matchAll(STOP_LINE)].map(m => stopMark(m[0]))
