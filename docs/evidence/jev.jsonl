@@ -70,3 +70,4 @@
 {"ts":"2026-10-09T12:31:58.800Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":347,"input_tokens":300,"output_tokens":20}
 {"ts":"2026-10-09T12:31:59.255Z","caller":"cli","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":314,"input_tokens":320,"output_tokens":20}
 {"ts": "2026-10-09T12:32:46Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
+{"ts": "2026-10-09T12:37:19Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2192}
