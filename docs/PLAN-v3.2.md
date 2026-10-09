@@ -89,3 +89,4 @@
 |---|---|---|---|
 | 1 | `GATE_HOOK`, фикстуры | 6 FAIL: время транскрипта не читалось (`"timestamp": "…"` с пробелом) — старая строка STOP считалась новой; голова PROGRESS живого «ok» тронута до сессии | discard — регэксп и проба «ok» правит голову сама |
 | 2 | `GATE_HOOK`, фикстуры и живые | 13/13 OK; живой блок — 4 решения (block ×3, pass `no-progress`), полный комплект — `SPEC_GATE_OK` за один ответ | keep |
+| 3 | `bin/check-harness` целиком (F2) | `HARNESS_OK · ENV_OK · HOOKS_OK · GATE_HOOK_OK`, 2 мин 50 с | keep |

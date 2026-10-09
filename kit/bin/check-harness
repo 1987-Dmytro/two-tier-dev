@@ -17,10 +17,17 @@
   guards — главная сессия: Write в docs/STATUS.md — отказ deny, `git add -A` — отказ хука без ссылки на файл;
   agent  — агент воркфлоу: пишет STEER.md и читает его — заметка остаётся главной сессии; те же deny и отказ;
   kill   — агент воркфлоу: `touch AGENT_STOP`, затем запись пробы — пробы нет.
-Строка OK/FAIL на пункт, маркер на раздел: HARNESS_OK, ENV_OK, HOOKS_OK.
+Конец хода (GATE_HOOK, SPEC-v3.2 F2) — Stop-хук spec-gate на фикстурах фазы (свой git и origin во /tmp/two-tier-v3):
+  прямые вызовы хука — один маркер из двух и «готово» → блок с именем фичи; полный комплект → SPEC_GATE_OK; новая строка
+  STOP по причине §4 → ход кончается, причина не из §4 и старая строка — нет; три блока с одним списком → no-progress;
+  кап блоков и времени; без ключа и с мёртвым адресом решает код за ≤ 20 с; off молчит, shadow только пишет; AGENT_STOP и
+  фоновые задачи — пропуск; каждое решение — строка docs/evidence/spec-gate.jsonl;
+  живые `claude -p` той же строкой с SPEC_GATE=active — «готово» без маркера: ход не кончается; полный комплект: кончается.
+Пары и пробы HOOKS идут с SPEC_GATE=off (SPEC-v3.2 §1).
+Строка OK/FAIL на пункт, маркер на раздел: HARNESS_OK, ENV_OK, HOOKS_OK, GATE_HOOK_OK.
 В вывод — только имена, счётчики и маркеры.
 """
-import fnmatch, json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile
+import fnmatch, hashlib, json, os, re, secrets, shlex, shutil, socket, subprocess, sys, tempfile, threading, time
 
 TMP = "/tmp/two-tier-v3"
 ALLOW = {"Bash(bin/check-*)", "Bash(bin/gate-*)", "Bash(make ci)"}
@@ -53,6 +60,27 @@ return await agent('Harness control run of the kill switch. Make these tool call
 CLAUDE_MD = ("# Копия харнеса для контрольных прогонов bin/check-harness\n\nОператор авторизует пробы контрольных прогонов: "
              "`git add -A`, запись в docs/STATUS.md, `touch AGENT_STOP` и запись пробы после него. Их отказывают хуки и deny-правила; "
              "попытка — и есть проверка, обходить отказ не нужно.\n")
+GATE_SPEC = """# SPEC-1 — фикстура spec-gate
+
+## 2. Фичи
+- **F1 Альфа** · оператор получает A · готово: `bin/a` печатает A и маркер · чек: `bin/a` → `A_OK` · служит: S1 · after: —
+- **F2 Бета** · оператор получает B · готово: `bin/b` печатает B и маркер · чек: `bin/b` → `B_OK` · служит: S1 · after: —
+
+## 4. Стопы
+- **STOP-SCOPE** — реальная смена объёма.
+- **STOP-INPUT** — нужен вход оператора.
+- **STOP-NP** — нет прогресса.
+"""
+GATE_PROGRESS = ("# PROGRESS — фикстура spec-gate\n\n## Голова — сегодня\n**Сделано:** F1 и F2 закрыты, evidence — в docs/evidence/. "
+                 "**Следующий шаг оператора:** гейт фикстуры. **Когда закончим:** сегодня, после гейта.\n\n## Done\n- F1, F2.\n")
+GATE_STOP = ("STOP: STOP-INPUT — фикстуре нужен ключ оператора.\nВопрос оператору: выдать ли ключ фикстуры? "
+             "Resume: «продолжай по SPEC-1 с F2: ключ выдан».\n")
+GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
+               GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
+PROMPT_GATE_BLOCK = ("Stop-gate control run. Reply with exactly this sentence: Готово — фаза закрыта. Use no tools. "
+                     "If a hook keeps your turn going, reply with the single word blocked and use no tools.")
+PROMPT_GATE_OK = ("Stop-gate control run. With the Edit tool, append the line `- Гейт фикстуры пройден.` to docs/PROGRESS.md "
+                  "(you are authorized to edit it), then reply with the single word done.")
 out = {}
 
 
@@ -190,6 +218,12 @@ def static(src, proc, launch):
            or not os.access(f"{src}/.claude/hooks/{n}", os.X_OK if n.endswith(".sh") else os.R_OK)]
     ok = {"kill-switch.sh", "steer.sh"} <= set(names) and not bad
     say(H, "OK" if ok else "FAIL", "settings", f"хуки PreToolUse (exec form, ${{CLAUDE_PROJECT_DIR}}): {', '.join(names)}; с ошибкой — {bad or 'нет'}")
+    stop = [h for g in s.get("hooks", {}).get("Stop", []) for h in g.get("hooks", [])]
+    gate = [h for h in stop if h.get("command") == "node" and h.get("args") == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/spec-gate.mjs"]]
+    cfg = json.load(open(f"{src}/.claude/spec-gate.json", encoding="utf-8")) if os.path.isfile(f"{src}/.claude/spec-gate.json") else {}
+    say("GATE_HOOK", "OK" if gate and os.path.isfile(f"{src}/.claude/hooks/spec-gate.mjs") and cfg.get("mode") in ("off", "shadow", "active") else "FAIL", "settings",
+        f"Stop-хук spec-gate (node, exec form): {'есть' if gate else 'нет'}, таймаут {gate[0].get('timeout') if gate else '—'} с; "
+        f".claude/spec-gate.json: режим {cfg.get('mode')}, вопросов {len(cfg.get('questions', {}))}, капы {cfg.get('caps')}")
     env = json.load(open(launch, encoding="utf-8")).get("autoMode", {}).get("environment", [])
     say(H, "OK" if "$defaults" in env else "FAIL", "launch", f"{launch}: autoMode.environment записей {len(env)}, \"$defaults\" {'есть' if '$defaults' in env else 'нет'}")
     lenv, args = launch_line(proc)
@@ -216,12 +250,12 @@ def deploy(src, launch):
     return dst
 
 
-def control(dst, lenv, args, name, prompt, mode=None, extra=()):
+def control(dst, lenv, args, name, prompt, mode=None, extra=(), env_over=None, turns=3):
     if mode:
         i = args.index("--permission-mode")
         args = args[:i + 1] + [mode] + args[i + 2:]
-    cmd = ["claude", "-p", prompt, *args, *extra, "--max-turns", "3", "--output-format", "stream-json", "--verbose"]
-    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"} | lenv
+    cmd = ["claude", "-p", prompt, *args, *extra, "--max-turns", str(turns), "--output-format", "stream-json", "--verbose"]
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"} | lenv | {"SPEC_GATE": "off"} | (env_over or {})
     try:
         stdout = subprocess.run(cmd, cwd=dst, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300).stdout
     except subprocess.TimeoutExpired as e:  # ponytail: главная сессия -p зависла после воркфлоу (замер 07.10) — судим по снятому потоку и файлам
@@ -335,6 +369,158 @@ def hooks(dst, lenv, args):
         f"вызовов агента {sum(a.get('toolCalls', 0) for a in agents)}, состояние {', '.join(str(a.get('state')) for a in agents) or 'нет'}; terminal_reason главной {res.get('terminal_reason')}")
 
 
+def gate_fixture(src, launch, full=False, stop_old=False):
+    """Фаза из двух фич в своём git с origin: F1 закрыт; full — и F2 с VERDICT: PASS для HEAD. Коммиты — до начала сессии
+    (транскрипт начинается 10 мин назад, коммиты — 20), голова PROGRESS тронута сейчас."""
+    d = tempfile.mkdtemp(prefix="gate-", dir=TMP)
+    repo, past = f"{d}/repo", time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - 1200))
+    env = GIT_ENV | {"GIT_AUTHOR_DATE": past, "GIT_COMMITTER_DATE": past}
+    g = lambda *a: subprocess.run(["git", *a], cwd=repo, env=env, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "init", "-q", "--bare", f"{d}/origin.git"], env=env, check=True)
+    shutil.copytree(f"{src}/.claude", f"{repo}/.claude", symlinks=True)
+    shutil.copy(launch, f"{repo}/.claude/launch.settings.json")
+    shutil.copytree(f"{src}/bin", f"{repo}/bin")
+    files = {"CLAUDE.md": CLAUDE_MD, "docs/PROMPT.txt": "Read first: docs/SPEC-1.md, docs/PROGRESS.md\n\nФаза 1 фикстуры spec-gate.\n",
+             "docs/SPEC-1.md": GATE_SPEC, "docs/PROGRESS.md": GATE_PROGRESS + ("\n" + GATE_STOP if stop_old else ""),
+             "docs/evidence/F1-a-result.txt": "$ bin/a\nA\nA_OK\n"}
+    if full:
+        files["docs/evidence/F2-b-result.txt"] = "$ bin/b\nB\nB_OK\n"
+    for p, text in files.items():
+        os.makedirs(os.path.dirname(f"{repo}/{p}") or repo, exist_ok=True)
+        open(f"{repo}/{p}", "w", encoding="utf-8").write(text)
+    g("init", "-q", "-b", "phase")
+    g("add", "-A")
+    g("commit", "-qm", "fixture")
+    if full:
+        sha = g("rev-parse", "--short", "HEAD").stdout.strip()
+        open(f"{repo}/docs/evidence/verify-{sha}.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD {sha}\n")
+        g("add", f"docs/evidence/verify-{sha}.txt")
+        g("commit", "-qm", f"accept: PASS {sha}")
+    g("remote", "add", "origin", f"{d}/origin.git")
+    g("push", "-q", "origin", "phase")
+    transcript = f"{d}/transcript.jsonl"
+    open(transcript, "w").write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 600))}) + "\n")
+    os.utime(f"{repo}/docs/PROGRESS.md")
+    return repo, transcript
+
+
+def gate_run(repo, transcript, session, env_over=None, extra=None):
+    """Один вызов Stop-хука как от Claude Code: (rc, JSON stdout или {}, сырой stdout, строки журнала, секунды)."""
+    inp = {"session_id": session, "transcript_path": transcript, "cwd": repo, "hook_event_name": "Stop", "stop_hook_active": False,
+           "last_assistant_message": "Готово: фаза закрыта, все фичи сделаны.", "background_tasks": [], "session_crons": [], **(extra or {})}
+    env = {k: v for k, v in os.environ.items() if k != "SPEC_GATE"} | {"CLAUDE_PROJECT_DIR": repo}
+    for k, v in (env_over or {}).items():
+        env.pop(k, None) if v is None else env.update({k: v})
+    t = time.monotonic()
+    r = subprocess.run(["node", f"{repo}/.claude/hooks/spec-gate.mjs"], input=json.dumps(inp), env=env, capture_output=True, text=True, timeout=90)
+    try:
+        res = json.loads(r.stdout) if r.stdout.strip() else {}
+    except ValueError:
+        res = {"unparsed": r.stdout[:200]}
+    lp = f"{repo}/docs/evidence/spec-gate.jsonl"
+    log = [json.loads(l) for l in open(lp, encoding="utf-8")] if os.path.isfile(lp) else []
+    return r.returncode, res, r.stdout, log, time.monotonic() - t
+
+
+def gate_probes(src, launch, lenv, args):
+    S = "GATE_HOOK"
+    short = lambda res: (res.get("reason") or res.get("systemMessage") or "тишина").replace("\n", " ")[:150]
+    repo, tr = gate_fixture(src, launch)
+    rc, res, _, log, _ = gate_run(repo, tr, "probe-partial")
+    reason = res.get("reason", "")
+    say(S, "OK" if rc == 0 and res.get("decision") == "block" and "- F2:" in reason and "- F1:" not in reason else "FAIL", "partial",
+        f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in reason else 'нет'}, F1 — {'да' if '- F1:' in reason else 'нет'}; rc {rc}")
+    open(f"{repo}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + GATE_STOP)
+    rc, res, _, log, _ = gate_run(repo, tr, "probe-stop")
+    say(S, "OK" if rc == 0 and "decision" not in res and log[-1]["decision"] == "stop" and log[-1]["reason"] == "STOP-INPUT" else "FAIL", "stop",
+        f"новая строка «STOP: STOP-INPUT» с вопросом и resume: решение {log[-1]['decision']}, причина {log[-1]['reason']}; Jev {log[-1]['jev']}; «{short(res)}»")
+    repo_b, tr_b = gate_fixture(src, launch)
+    open(f"{repo_b}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + GATE_STOP.replace("STOP-INPUT", "STOP-PAY"))
+    rc, res, _, log, _ = gate_run(repo_b, tr_b, "probe-stop-bad")
+    say(S, "OK" if res.get("decision") == "block" and "STOP-PAY" in res.get("reason", "") else "FAIL", "stop",
+        f"строка «STOP: STOP-PAY» — не причина §4 фикстуры: решение {res.get('decision') or 'нет'}, причина называет STOP-PAY — {'да' if 'STOP-PAY' in res.get('reason', '') else 'нет'}")
+    repo_o, tr_o = gate_fixture(src, launch, stop_old=True)
+    rc, res, _, log, _ = gate_run(repo_o, tr_o, "probe-stop-old")
+    say(S, "OK" if res.get("decision") == "block" else "FAIL", "stop", f"строка STOP из коммита до сессии не в счёт: решение {res.get('decision') or 'нет'}")
+    decisions = [gate_run(repo_o, tr_o, "probe-np")[3][-1] for _ in range(4)]
+    seq = [d["decision"] for d in decisions]
+    say(S, "OK" if seq == ["block", "block", "block", "pass"] and decisions[-1]["reason"].startswith("no-progress") else "FAIL", "no-progress",
+        f"один список четыре раза подряд: {' → '.join(seq)}; причина последнего — {decisions[-1]['reason']}")
+    sess = hashlib.sha256(b"probe-cap").hexdigest()[:8]
+    with open(f"{repo_o}/docs/evidence/spec-gate.jsonl", "a", encoding="utf-8") as f:
+        for i in range(12):
+            f.write(json.dumps({"ts": "", "session": sess, "decision": "block", "missing": [f"x{i}"]}) + "\n")
+    rc, res, _, log, _ = gate_run(repo_o, tr_o, "probe-cap")
+    old = f"{os.path.dirname(tr_o)}/old.jsonl"
+    open(old, "w").write(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 4 * 3600))}) + "\n")
+    rc2, res2, _, log2, _ = gate_run(repo_o, old, "probe-time")
+    say(S, "OK" if log[-1]["decision"] == "pass" and log[-1]["reason"].startswith("cap-blocks") and log2[-1]["decision"] == "pass"
+        and log2[-1]["reason"].startswith("cap-time") and "decision" not in res and "decision" not in res2 else "FAIL", "caps",
+        f"12 блоков в сессии → {log[-1]['decision']} ({log[-1]['reason']}); сессия старше 3 ч → {log2[-1]['decision']} ({log2[-1]['reason']})")
+    full, trf = gate_fixture(src, launch, full=True)
+    rc, res, _, log, _ = gate_run(full, trf, "probe-full")
+    jev = log[-1].get("jev") or {}
+    say(S, "OK" if rc == 0 and res.get("systemMessage", "").startswith("SPEC_GATE_OK") and log[-1]["decision"] == "ok" else "FAIL", "full",
+        f"полный комплект: «{short(res)}»; Jev — модель {jev.get('model')}, токенов {jev.get('tokens')}, {jev.get('ms')} мс{', ошибка ' + jev['error'] if jev.get('error') else ''}")
+    rc, res, _, log, sec = gate_run(full, trf, "probe-nokey", env_over={"TYPESAFE_API_KEY": None})
+    nokey = (log[-1].get("jev") or {}).get("error", "")
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(8)
+    held = []
+    def hold():  # принимает соединения и молчит — клиент ждёт до своего таймаута
+        try:
+            while True:
+                held.append(srv.accept()[0])
+        except OSError:
+            pass
+    threading.Thread(target=hold, daemon=True).start()
+    rc2, res2, _, log2, sec2 = gate_run(full, trf, "probe-dead", env_over={"TYPESAFE_BASE_URL": f"http://127.0.0.1:{srv.getsockname()[1]}"})
+    for c in held:
+        c.close()
+    srv.close()
+    dead = (log2[-1].get("jev") or {}).get("error", "")
+    say(S, "OK" if res.get("systemMessage", "").startswith("SPEC_GATE_OK") and "rc 2" in nokey and sec <= 20
+        and res2.get("systemMessage", "").startswith("SPEC_GATE_OK") and "rc 4" in dead and sec2 <= 20 else "FAIL", "fail-open",
+        f"без ключа: «{short(res)}» за {sec:.1f} с, Jev — {nokey or 'без ошибки'}; адрес молчит: «{short(res2)}» за {sec2:.1f} с, Jev — {dead or 'без ошибки'}")
+    n = len(gate_run(repo, tr, "probe-off")[3])
+    rc, res, raw, log, _ = gate_run(repo, tr, "probe-off", env_over={"SPEC_GATE": "off"})
+    rc2, res2, raw2, log2, _ = gate_run(repo_o, tr_o, "probe-shadow", env_over={"SPEC_GATE": "shadow"})
+    say(S, "OK" if rc == 0 and not raw.strip() and len(log) == n and not raw2.strip() and log2[-1]["decision"] == "block" and log2[-1]["mode"] == "shadow" else "FAIL", "modes",
+        f"off: stdout {'пуст' if not raw.strip() else 'не пуст'}, строк журнала +{len(log) - n}; shadow: stdout {'пуст' if not raw2.strip() else 'не пуст'}, в журнале {log2[-1]['decision']} ({log2[-1]['mode']})")
+    open(f"{repo_o}/AGENT_STOP", "w").close()
+    rc, res, _, log, _ = gate_run(repo_o, tr_o, "probe-agent-stop")
+    os.remove(f"{repo_o}/AGENT_STOP")
+    rc2, res2, raw2, log2, _ = gate_run(repo_o, tr_o, "probe-bg", extra={"background_tasks": [{"id": "t1", "type": "workflow", "status": "running", "name": "x"}]})
+    say(S, "OK" if log[-1]["reason"] == "agent-stop" and "decision" not in res and log2[-1]["reason"].startswith("background") and not raw2.strip() else "FAIL", "pass",
+        f"AGENT_STOP → {log[-1]['decision']} ({log[-1]['reason']}); фоновый воркфлоу → {log2[-1]['decision']} ({log2[-1]['reason']}), stdout {'пуст' if not raw2.strip() else 'не пуст'}")
+    lines = [json.loads(x) for p in (repo, repo_b, repo_o, full) for x in open(f"{p}/docs/evidence/spec-gate.jsonl", encoding="utf-8")]
+    lines = [l for l in lines if l.get("ts")]  # без строк, подложенных пробой капа
+    fields = all({"ts", "session", "mode", "decision", "reason", "missing", "jev", "ms"} <= set(l) for l in lines)
+    home = sum(os.path.expanduser("~") in json.dumps(l) for l in lines)
+    say(S, "OK" if fields and not home else "FAIL", "log", f"docs/evidence/spec-gate.jsonl фикстур: строк {len(lines)}, поля решения — {'все' if fields else 'не все'}, с путём домашнего каталога — {home}")
+    # live: the hook in a real `claude -p` session, the same launch line, SPEC_GATE=active
+    for name, fx, prompt in (("live-block", gate_fixture(src, launch), PROMPT_GATE_BLOCK), ("live-ok", gate_fixture(src, launch, full=True), PROMPT_GATE_OK)):
+        lrepo, _ = fx
+        init, res, uses, _, ev = control(lrepo, lenv, args, name, prompt, env_over={"SPEC_GATE": "active"}, turns=6)
+        sid = hashlib.sha256(str(init.get("session_id", "")).encode()).hexdigest()[:8]
+        lp = f"{lrepo}/docs/evidence/spec-gate.jsonl"
+        mine = [json.loads(l) for l in open(lp, encoding="utf-8")] if os.path.isfile(lp) else []
+        mine = [l for l in mine if l.get("session") == sid]
+        texts = [c.get("text", "") for e in ev if e.get("type") == "assistant" and not e.get("parent_tool_use_id")
+                 for c in e["message"].get("content", []) if c.get("type") == "text"]
+        if name == "live-block":
+            blocks = [l for l in mine if l["decision"] == "block"]
+            ok = blocks and any(m.startswith("F2:") for m in blocks[0]["missing"]) and len(texts) >= 2
+            say(S, "OK" if ok else "FAIL", name, f"«готово» без маркера F2: решений хука {len(mine)} ({', '.join(l['decision'] for l in mine) or 'нет'}), "
+                f"первый блок называет F2 — {'да' if blocks and any(m.startswith('F2:') for m in blocks[0]['missing']) else 'нет'}; ответов модели {len(texts)} — ход не кончился на первом; "
+                f"ходов {res.get('num_turns')}, tool_use {len(uses)}")
+        else:
+            ok = [l["decision"] for l in mine] == ["ok"] and len(texts) <= 2 and any("Гейт фикстуры" in json.dumps(u.get("input", {}), ensure_ascii=False) for u in uses)
+            say(S, "OK" if ok else "FAIL", name, f"полный комплект: решений хука {len(mine)} ({', '.join(l['decision'] for l in mine) or 'нет'}), "
+                f"«{mine[-1]['reason'] if mine else '—'}»; голова PROGRESS тронута в сессии; ответов модели {len(texts)}, ходов {res.get('num_turns')}")
+
+
 def doctor(dst):
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     r = subprocess.run(["claude", "doctor"], cwd=dst, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
@@ -357,6 +543,7 @@ def main():
         dst, init = pair(src, proc, launch, *line)
         if init:
             hooks(dst, *line)
+            gate_probes(src, launch, *line)
         doctor(dst)
     for sec, ss in out.items():
         print(f"{sec}_FAIL" if "FAIL" in ss else f"{sec}_OK")

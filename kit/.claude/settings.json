@@ -16,6 +16,7 @@
       "Edit(/docs/drafts/**)",
       "Edit(/claude/**)",
       "Edit(/.claude/launch.settings.json)",
+      "Edit(/.claude/spec-gate.json)",
       "Edit(/budgets.json)"
     ]
   },
@@ -32,6 +33,13 @@
         "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/refuse_sweeping_commands.py"], "timeout": 30 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/spec-gate.mjs"], "timeout": 30 }
         ]
       }
     ]

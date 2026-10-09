@@ -27,6 +27,7 @@
       "docs/drafts/",
       "claude/",
       ".claude/launch.settings.json",
+      ".claude/spec-gate.json",
       "budgets.json"
     ]
   },

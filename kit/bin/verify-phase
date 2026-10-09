@@ -4,7 +4,7 @@
 1. HEAD запушен: есть origin — origin/<ветка> = HEAD и клон с origin; нет origin — клон этого репо (фикстуры).
 2. Свежий клон — свой каталог во /tmp/two-tier-v3. Гейт фазы — первая `bin/gate…` в END STATE docs/GOAL.txt — идёт
    в клоне, его лог агенты читают по $VERIFY_GATE_LOG: долгие чеки они не перезапускают.
-3. `claude -p` в клоне: только подписка (env -u ANTHROPIC_API_KEY; apiKeySource не none — стоп), --permission-mode auto,
+3. `claude -p` в клоне: только подписка (env -u ANTHROPIC_API_KEY; apiKeySource не none — стоп), SPEC_GATE=off, --permission-mode auto,
    allow Workflow(verify-phase) и чеки кита (в -p правила allow из .claude/settings.json не действуют), --settings
    .claude/launch.settings.json клона (worktree.baseRef: head — агенты в worktree видят HEAD, а не ветку по умолчанию).
 4. Итог воркфлоу — из task_notification.output_file → docs/evidence/verify-<sha>.txt этого репо; первая строка —
@@ -80,7 +80,8 @@ def main(argv):
     end = goal.split("END STATE", 1)[-1].split("CONSTRAINTS", 1)[0]
     gate = (re.findall(r"(?<![\w/])(bin/gate[\w.-]*)", end) or [None])[0]
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-    env.update(ENABLE_CLAUDEAI_MCP_SERVERS="false", CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="0", CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS="16")
+    env.update(ENABLE_CLAUDEAI_MCP_SERVERS="false", CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="0", CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS="16",
+               SPEC_GATE="off")  # v3.2: приёмочная сессия не держится spec-gate (SPEC-v3.2 §1)
     if gate:
         rc = run([gate], clone, env, limit, f"{d}/gate.log")
         if rc is None:

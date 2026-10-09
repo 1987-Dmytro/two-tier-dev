@@ -8,6 +8,8 @@
 import json, os, re, sys
 
 out = []
+V32_KEYS, V32_OWNER = {"prompt_chars", "abide_rules"}, {"docs/PROMPT.txt", ".abide/rubric.json", ".claude/spec-gate.json", ".claude/toolgate.yaml"}
+V32_RETIRED = {"goal_chars", "docs/GOAL.txt"}
 
 
 def say(ok, item, msg):
@@ -56,7 +58,12 @@ if root == "kit":
         ".github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml")
     say(read(".claude/workflows/verify-phase.js") == read("kit/.claude/workflows/verify-phase.js"), "workflows",
         ".claude/workflows/verify-phase.js = kit/.claude/workflows/verify-phase.js")
-    say(json.loads(read("budgets.json"))["defaults"] == json.loads(read("kit/budgets.json"))["defaults"], "budgets",
-        "defaults budgets.json = kit/budgets.json")
+    # v3.2: корневой budgets.json — файл тимлида; ключи и записи owner, новые в ките, он вносит на приёмке (PLAN-v3.2, отклонение 8)
+    rd, kd = json.loads(read("budgets.json"))["defaults"], json.loads(read("kit/budgets.json"))["defaults"]
+    ro, ko = set(rd.get("owner", [])), set(kd.get("owner", []))
+    same = all(rd[k] == kd[k] for k in set(rd) & set(kd) - {"owner"})
+    delta = sorted(set(kd) - set(rd)) + sorted(ko - ro) + [f"−{x}" for x in sorted(set(rd) - set(kd))] + [f"−{x}" for x in sorted(ro - ko)]
+    say(same and set(kd) - set(rd) <= V32_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED, "budgets",
+        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: {', '.join(delta) or 'нет'}")
 print("KIT_OK" if all(out) else "KIT_FAIL")
 sys.exit(0 if all(out) else 1)
