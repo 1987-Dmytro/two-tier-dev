@@ -38,12 +38,14 @@ wait
 
 fails=0
 mark() {  # mark <F> <маркер> <лог…>: в каждом логе rc 0 и строка, равная маркеру
-  local f=$1 m=$2 ok=1 l; shift 2
+  local f=$1 m=$2 why="" l rc; shift 2
   for l in "$@"; do
     grep -E '^(FAIL|WARN|BAD)' "$LOGS/$l.log" | sed "s/^/    $l: /"
-    [ "$(cat "$LOGS/$l.rc")" = 0 ] && grep -qx "$m" "$LOGS/$l.log" || ok=0
+    rc=$(cat "$LOGS/$l.rc")
+    grep -qx "$m" "$LOGS/$l.log" || why="$why${why:+; }$l: нет $m"
+    [ "$rc" = 0 ] || why="$why${why:+; }$l: rc $rc"
   done
-  if [ "$ok" = 1 ]; then echo "$f $m"; else echo "$f FAIL: нет $m ($*)"; fails=$((fails + 1)); fi
+  if [ -z "$why" ]; then echo "$f $m"; else echo "$f FAIL: $m — $why"; fails=$((fails + 1)); fi
 }
 mark F10-init BUDGET_OK init
 mark F1 JEV_OK jev

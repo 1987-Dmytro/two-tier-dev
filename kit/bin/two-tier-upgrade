@@ -11,7 +11,7 @@ docs/upgrade-v3.md, один коммит. Remotes не трогает и не �
 Сбой после старта — откат: исходная ветка и HEAD, пустой индекс, файлы этого запуска убраны.
 Кит: <репо>/kit, если скрипт в репо кита, иначе корень, где он лежит.
 """
-import json, os, shutil, subprocess, sys, time
+import json, os, shutil, subprocess, sys, tempfile, time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]) or ".", ".."))
 KIT = os.path.join(ROOT, "kit") if os.path.isdir(os.path.join(ROOT, "kit", ".claude")) else ROOT
@@ -198,8 +198,8 @@ V2 = {".claude/settings.json": '{"model": "opus", "ultracode": true}\n',
 
 
 def self_test():
-    fix = "/tmp/two-tier-v3/upgrade"
-    shutil.rmtree(fix, ignore_errors=True)
+    os.makedirs("/tmp/two-tier-v3", exist_ok=True)
+    fix = tempfile.mkdtemp(prefix="upgrade-", dir="/tmp/two-tier-v3")  # свой каталог: параллельный прогон (гейт в клоне приёмки) не стирает чужую фикстуру
     src, proj = f"{fix}/src", f"{fix}/proj"
     g = lambda d, *a: subprocess.run(["git", "-C", d, *a], env=ENV, capture_output=True, text=True)
     os.makedirs(src)
