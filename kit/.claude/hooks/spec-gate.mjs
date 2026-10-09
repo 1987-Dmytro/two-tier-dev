@@ -2,15 +2,19 @@
 // spec-gate — the kit's Stop hook (SPEC-v3.2 F2): the end of a turn is held by evidence files, not by words.
 //
 // Code, $0: per feature line of the phase SPEC (`- **F<n>` … `чек: `cmd` → `MARKER``) a file docs/evidence/F<n>-*-result.txt
-// with the marker on a line of its own; the branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md touched in
-// this session; VERDICT: PASS of /verify-phase for HEAD (docs/evidence/verify-<sha>.txt, after it only evidence and PROGRESS).
+// with the marker on a line of its own; the branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова»
+// section) differs from the one committed before this session; VERDICT: PASS of /verify-phase for HEAD (docs/evidence/verify-<sha>.txt,
+// after it only evidence and PROGRESS). A STOP line ends a turn once: it is new when its text from «STOP:» on starts neither like
+// a STOP line of the PROGRESS committed before the session nor like a stop already honored (the log keeps their marks): its first
+// 60 characters, or all of a shorter line — an edited tail, «— снят» at the end or a bullet in front keep a line old.
 // The full set → SPEC_GATE_OK and the turn ends; a new line `STOP: <id>` with a reason of SPEC §4 → the turn ends; otherwise
 // the end of the turn is blocked and the reason is the list of what is missing, built by code.
 // Jev — only on the fuzzy part, one call of bin/jev: does the new STOP line carry a question and a resume line; does the
 // PROGRESS head say what is done, the operator's next step and when; does a feature's evidence contradict its done clause.
 // Jev error or timeout → code decides alone.
-// Guards: a cap of blocks and of hours per session; the same list blocked `same_list` times in a row → pass `no-progress`;
-// AGENT_STOP is stronger than the hook; background tasks or session crons → pass (the session waits to be woken up).
+// Guards: a cap of blocks and of hours per session and the same list blocked `same_list` times in a row turn a block into a pass
+// (`cap-…`, `no-progress`), never an OK; AGENT_STOP is stronger than the hook; background tasks or session crons → pass (the
+// session waits to be woken up); an unreadable .claude/spec-gate.json → pass with the reason.
 // Modes off · shadow · active: SPEC_GATE from the environment, else `mode` of .claude/spec-gate.json (questions and thresholds
 // — the team lead's file). `claude -p` of acceptance and of the control pairs runs with SPEC_GATE=off. Every decision is a
 // line of docs/evidence/spec-gate.jsonl. The hook never prints a permission decision; on its own error it exits 0.
@@ -69,6 +73,10 @@ function stopReasons(spec) {
 }
 
 const STOP_LINE = /^[ \t]*(?:[-*][ \t]*)?STOP:[ \t]*(STOP-[A-Z]+)\b.*$/gm
+const sha12 = s => createHash('sha256').update(s).digest('hex').slice(0, 12)
+const canon = line => line.slice(line.indexOf('STOP:')).trim()
+const stopMark = line => { const c = canon(line).slice(0, 60); return `${c.length}:${sha12(c)}` }  // «n:hash» of its first n ≤ 60 characters
+const marked = (line, marks) => marks.some(k => { const [n, h] = k.includes(':') ? k.split(':') : [60, k]; return sha12(canon(line).slice(0, Number(n))) === h })
 
 function head(progress) {
   const m = progress.match(/\n## (?:Голова|Head)[^\n]*\n[\s\S]*?(?=\n## |$)/)
@@ -83,7 +91,7 @@ function verdict(root, sha) {
     if (!m || (read(path.join(dir, f)) || '').split('\n')[0].trim() !== 'VERDICT: PASS') continue
     const full = git(root, 'rev-parse', '--verify', '-q', `${m[1]}^{commit}`)
     if (!full || (full !== sha && git(root, 'merge-base', '--is-ancestor', full, sha) === null)) continue
-    const changed = (git(root, 'diff', '--name-only', full, sha) || '').split('\n').filter(Boolean)
+    const changed = (git(root, 'diff', '--name-only', '--no-renames', full, sha) || '').split('\n').filter(Boolean)  // a move into evidence names its source too
     if (changed.every(allowed)) return f
   }
   return null
@@ -105,7 +113,7 @@ function askJev(root, cfg, state, wanted) {
     dir = fs.mkdtempSync('/tmp/two-tier-v3/spec-gate-')
     fs.writeFileSync(path.join(dir, 'q.json'), JSON.stringify(qs))
     const r = spawnSync(path.join(root, 'bin', 'jev'), [path.join(dir, 'q.json')], {
-      input: JSON.stringify(state), encoding: 'utf8', timeout: cfg.jev.timeout_ms + 3000,
+      input: JSON.stringify(state), encoding: 'utf8', timeout: cfg.jev.timeout_ms + 3000, cwd: root,
       env: { ...process.env, JEV_CALLER: 'spec-gate', JEV_TIMEOUT_MS: String(cfg.jev.timeout_ms) },
     })
     if (r.status !== 0) return { error: `bin/jev rc ${r.status ?? r.signal ?? r.error?.code}: ${(r.stderr || '').trim().split('\n')[0].slice(0, 160)}`, ms: Date.now() - t }
@@ -134,9 +142,6 @@ function decide(input, root, cfg, log) {
     return { decision: 'pass', reason: `background: tasks ${(input.background_tasks || []).length}, crons ${(input.session_crons || []).length}` }
   }
   const start = sessionStart(input.transcript_path) ?? t0 - cfg.caps.hours * 3600e3
-  const blocks = prior.filter(l => l.decision === 'block').length
-  if (blocks >= cfg.caps.blocks) return { decision: 'pass', reason: `cap-blocks: ${blocks} blocks in this session` }
-  if (t0 - start > cfg.caps.hours * 3600e3) return { decision: 'pass', reason: `cap-time: the session is older than ${cfg.caps.hours} h` }
 
   const feats = features(spec)
   const evDir = path.join(root, 'docs', 'evidence')
@@ -155,17 +160,17 @@ function decide(input, root, cfg, log) {
   const branch = git(root, 'branch', '--show-current')
   const remote = branch && git(root, 'rev-parse', '-q', '--verify', `refs/remotes/origin/${branch}`)
   if (!sha || !branch || remote !== sha) missing.push(`branch ${branch || '(detached)'} is not pushed: HEAD ${(sha || '?').slice(0, 7)}, origin/${branch} ${(remote || 'none').slice(0, 7)}`)
-  const progressPath = path.join(root, 'docs', 'PROGRESS.md')
-  const progress = read(progressPath) || ''
-  const mtime = progress ? fs.statSync(progressPath).mtimeMs : 0
-  if (mtime < start) missing.push('the head of docs/PROGRESS.md was not updated in this session')
+  const progress = read(path.join(root, 'docs', 'PROGRESS.md')) || ''
+  const baseSha = git(root, 'log', '-1', '--format=%H', `--before=${new Date(start).toISOString()}`)
+  const base = (baseSha && git(root, 'show', `${baseSha}:docs/PROGRESS.md`)) || ''
+  if (!progress || (base && head(progress) === head(base))) missing.push('the head of docs/PROGRESS.md was not updated in this session')
   const pass = sha && verdict(root, sha)
   if (!pass) missing.push(`no VERDICT: PASS of /verify-phase for HEAD ${(sha || '?').slice(0, 7)} (docs/evidence/verify-<sha>.txt; after it only evidence and PROGRESS change)`)
 
-  const baseSha = git(root, 'log', '-1', '--format=%H', `--before=${new Date(start).toISOString()}`)
-  const base = (baseSha && git(root, 'show', `${baseSha}:docs/PROGRESS.md`)) || ''
   const reasons = stopReasons(spec)
-  const fresh = [...progress.matchAll(STOP_LINE)].filter(m => !base.split('\n').includes(m[0]))
+  const seen = [...base.matchAll(STOP_LINE)].map(m => stopMark(m[0]))
+  for (const l of log) seen.push(...(l.stops || []))  // a stop is honored once, in any session
+  const fresh = [...progress.matchAll(STOP_LINE)].filter(m => !marked(m[0], seen))
   const valid = fresh.filter(m => reasons.includes(m[1]))
   for (const m of fresh.filter(m => !reasons.includes(m[1]))) missing.push(`«STOP: ${m[1]}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
 
@@ -192,9 +197,13 @@ function decide(input, root, cfg, log) {
       if (complete && !valid.length) feats.forEach((f, i) => jev.p[`evidence_contradicts:${i}`] >= thr && problems.push(`${f.id}: docs/evidence/${f.evidence} contradicts the done clause (Jev ${jev.p[`evidence_contradicts:${i}`].toFixed(2)})`))
     }
   }
-  if (valid.length && !problems.length) return { decision: 'stop', reason: valid.map(m => m[1]).join(', '), jev }
+  if (valid.length && !problems.length) return { decision: 'stop', reason: valid.map(m => m[1]).join(', '), stops: valid.map(m => stopMark(m[0])), jev }
   if (complete && !problems.length) return { decision: 'ok', reason: `SPEC_GATE_OK: features ${feats.length}, pushed ${sha.slice(0, 7)}, ${pass}`, jev }
   const list = valid.length ? problems : complete ? problems : missing
+  // the guards only turn a block into a pass: the set is evaluated first, so a full set or a new STOP is never lost to a cap
+  const blocks = prior.filter(l => l.decision === 'block').length
+  if (blocks >= cfg.caps.blocks) return { decision: 'pass', reason: `cap-blocks: ${blocks} blocks in this session`, missing: list, jev }
+  if (t0 - start > cfg.caps.hours * 3600e3) return { decision: 'pass', reason: `cap-time: the session is older than ${cfg.caps.hours} h`, missing: list, jev }
   const last = prior.slice(-cfg.caps.same_list)
   const same = l => JSON.stringify((l || []).map(s => s.replace(/ \(Jev [0-9.]+\)$/, '')))  // Jev's figure wobbles; the list is the same
   if (last.length === cfg.caps.same_list && last.every(l => l.decision === 'block' && same(l.missing) === same(list))) {
@@ -214,23 +223,26 @@ function main() {
   } catch {}
   const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd()
   let cfg = DEFAULTS
+  let broken = null
   try {
     const c = JSON.parse(read(path.join(root, '.claude', 'spec-gate.json')) || '{}')
     cfg = { ...DEFAULTS, ...c, caps: { ...DEFAULTS.caps, ...c.caps }, jev: { ...DEFAULTS.jev, ...c.jev }, questions: c.questions || {} }
-  } catch {}
-  const mode = process.env.SPEC_GATE || cfg.mode
+  } catch (e) {
+    broken = `config: .claude/spec-gate.json is not readable JSON (${e.name}) — the gate passes`
+  }
+  const mode = String(process.env.SPEC_GATE || (broken ? 'shadow' : cfg.mode)).trim().toLowerCase()  // OFF and Active mean what they say
   if (mode === 'off') return
   input.session = createHash('sha256').update(String(input.session_id || '')).digest('hex').slice(0, 8)
   const logPath = path.join(root, 'docs', 'evidence', 'spec-gate.jsonl')
   const log = (read(logPath) || '').split('\n').filter(Boolean).flatMap(l => { try { return [JSON.parse(l)] } catch { return [] } })
   let d
   try {
-    d = decide(input, root, cfg, log)
+    d = broken ? { decision: 'pass', reason: broken } : decide(input, root, cfg, log)
   } catch (e) {
     d = { decision: 'pass', reason: `error: ${e.name}: ${String(e.message).slice(0, 120)}` }
   }
   if (!d) return
-  const line = { ts: new Date().toISOString(), session: input.session, mode, decision: d.decision, reason: d.reason, missing: d.missing || [],
+  const line = { ts: new Date().toISOString(), session: input.session, mode, decision: d.decision, reason: d.reason, missing: d.missing || [], stops: d.stops || [],
     stop_hook_active: !!input.stop_hook_active, jev: d.jev ? { model: d.jev.model, tokens: d.jev.tokens, ms: d.jev.ms, error: d.jev.error } : null, ms: Date.now() - t0 }
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
