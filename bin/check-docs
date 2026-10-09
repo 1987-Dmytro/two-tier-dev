@@ -5,7 +5,11 @@
     в README, docs/README, docs/dev-system.ru.md, docs/LAUNCH.md и записи v3 CHANGELOG существуют — в репо или в kit/;
   · записи v3 и v3.1 CHANGELOG называют каждое поле харнеса v2, v3 и v3.1 строкой таблицы со ссылкой на док и столбцами до/после;
   · dev-system.ru.md описывает цикл v3, intent, бюджеты, самоулучшение и v3.1: ultracode, /verify-phase, окружение = таблица;
-  · README называет ultracode, /verify-phase и чеки v3.1; LAUNCH.md объясняет каждый флаг строки запуска шаблона PROCESS.
+  · README называет ultracode, /verify-phase и чеки v3.1; LAUNCH.md объясняет каждый флаг строки запуска шаблона PROCESS;
+  · v3.2 (SPEC-v3.2 F9): запись v3.2 CHANGELOG — строка таблицы на каждое поле v3.2 (хуки кита, launch settings, флаги строки,
+    стартовый запрос, deny, лаунчер и воркфлоу приёмки) с источником (code.claude.com/docs/en/ или репо инструмента) и столбцами
+    до/после; у каждого мода — строки hooks: и calls: из `claude plugin validate`; LAUNCH.md — новые флаги, стартовый запрос,
+    режимы spec-gate, ключ в окружении; README и dev-system.ru.md — цикл без /goal, слой Jev, три судьи по цене вопроса.
 """
 import json, os, re, sys
 
@@ -61,5 +65,25 @@ line = next(l for l in re.findall(r"```sh\n(.*?)```", read("kit/docs/PROCESS.tem
 flags = sorted(set(re.findall(r"(?<!\S)(--[a-z-]+)", line)) | set(re.findall(r"^([A-Z_]+)=", line)))
 lm = read("kit/docs/LAUNCH.md")
 say(all(f in lm for f in flags), "LAUNCH.md", f"флагов строки запуска шаблона PROCESS {len(flags)}; без объяснения — {', '.join(f for f in flags if f not in lm) or 'нет'}")
+# v3.2: поля фазы — каждое строкой таблицы записи v3.2 с источником и столбцами до/после
+v32 = read("CHANGELOG.md").split("\n## v3.2", 1)[1].split("\n## v3.1", 1)[0] if "\n## v3.2" in read("CHANGELOG.md") else ""
+rows32 = [r for r in v32.splitlines() if r.startswith("| ") and r.count("|") >= 6 and re.search(r"code\.claude\.com/docs/en/|github\.com/", r)]
+ks = json.loads(read("kit/.claude/settings.json"))
+hooks32 = {os.path.basename(h["args"][0] if h.get("command") in ("node", "python3") and h.get("args") else h.get("command", ""))
+           for g in ks.get("hooks", {}).values() for e in g for h in e.get("hooks", [])}
+need32 = sorted({h for h in hooks32 if h.endswith(".mjs")} | {"toolgate.yaml", "spec-gate.json", "launch.settings.json", "--setting-sources", "--add-dir",
+                                                             "--no-chrome", "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "docs/PROMPT.txt", "bin/verify-phase", "verify-phase.js"})
+miss = [f for f in need32 if not any(f in r for r in rows32)]
+say(v32 and not miss, "CHANGELOG v3.2", f"полей v3.2 — {len(need32)}, строк таблицы с источником и до/после — {len(rows32)}; без строки — {', '.join(miss) or 'нет'}")
+mods = sorted(d for d in os.listdir("mods") if os.path.isfile(f"mods/{d}/.claude-plugin/plugin.json"))
+lines32 = {m: [l for l in v32.splitlines() if " hooks: " in l or " calls: " in l] for m in mods}
+bad = [m for m in mods + ["compact-adviser"] if not (re.search(rf"`{re.escape(m)}`[^\n]*\n(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n){{2}}", v32 + "\n"))]
+say(not bad, "CHANGELOG v3.2", f"моды с строками hooks: и calls: из claude plugin validate: {', '.join(m for m in mods + ['compact-adviser'] if m not in bad)}; без них — {', '.join(bad) or 'нет'}")
+need = ["SPEC_GATE", "off", "shadow", "active", "TYPESAFE_API_KEY", "docs/PROMPT.txt", "--setting-sources", "spec-gate.jsonl"]
+say(all(n in lm for n in need), "LAUNCH.md v3.2", f"стартовый запрос, режимы spec-gate, ключ в окружении: нет — {', '.join(n for n in need if n not in lm) or 'ничего'}")
+need = ["spec-gate", "GATE_HOOK_OK", "ABIDE_OK", "TOOLGATE_OK", "bin/jev", "bin/check-spend", "docs/PROMPT.txt", "Three judges", "Jev"]
+say(all(n in rd for n in need), "README.md v3.2", f"цикл без /goal, слой Jev, три судьи: нет — {', '.join(n for n in need if n not in rd) or 'ничего'}")
+need = ["без `/goal`", "spec-gate", "Jev", "Три судьи", "docs/PROMPT.txt"]
+say(all(n in ds for n in need), "dev-system.ru.md v3.2", f"цикл без /goal, слой Jev, три судьи: нет — {', '.join(n for n in need if n not in ds) or 'ничего'}")
 print("DOCS_OK" if all(out) else "DOCS_FAIL")
 sys.exit(0 if all(out) else 1)

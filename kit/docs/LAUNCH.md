@@ -13,6 +13,18 @@
 - `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` — Claude Code с 2.1.287 её не читает, а мод Compact Adviser 0.1.12 без неё молчит (`register.ts:147-159`);
 - `--add-dir /tmp/two-tier-v3/skills` — скиллы пользователя со строкой «да»: из каталога `--add-dir` скиллы грузятся источником `project` (skills, permissions); ещё — если фаза работает вне репо.
 
+Ключ Jev — `TYPESAFE_API_KEY` в окружении терминала, из которого идёт строка (не в репо, не в evidence, не в журналах); строку его длины печатать можно, значение — нельзя. Без ключа слой молчит: хуки пропускают, `bin/jev` выходит с кодом 2.
+
+## Конец хода — `spec-gate`
+Stop-хук кита `.claude/hooks/spec-gate.mjs` держит конец хода по файлам: у каждой фичи SPEC фазы — `docs/evidence/F<n>-*-result.txt` с маркером, ветка запушена, голова `docs/PROGRESS.md` тронута в этой сессии, `VERDICT: PASS` `/verify-phase` для HEAD. Полный комплект — `SPEC_GATE_OK`, ход кончается; новая строка `STOP: <id>` с причиной SPEC §4 — тоже; иначе ход продолжается, причина — список недостающего. Нечёткое (вопрос и resume-строка у STOP, голова PROGRESS, evidence против «готово») — один вызов `bin/jev`; ошибка Jev — решает код.
+- Режимы: `SPEC_GATE=off · shadow · active` в окружении, иначе `mode` в `.claude/spec-gate.json` (вопросы, пороги и капы — файл тимлида). `off` — молчит; `shadow` — только строка журнала; `active` — блок. `claude -p` приёмки и пар `check-harness` идут с `SPEC_GATE=off`.
+- Предохранители: 12 блоков и 3 ч на сессию, один список три раза подряд — пропуск `no-progress`, фоновые задачи и `AGENT_STOP` — пропуск. Каждое решение — строка журнала `spec-gate.jsonl` в `docs/evidence/` проекта.
+
+## Слой Jev в харнесе кита
+- Abide — `.claude/hooks/abide.mjs` на четырёх событиях: правила раздела `## Rules for every edit` в `CLAUDE.md`, рубрика `.abide/rubric.json` (компилирует тимлид); требование починки правки доходит до Claude, конец хода не держит.
+- Toolgate — `.claude/hooks/toolgate-deny.mjs`: `toolgate decide` по политике `.claude/toolgate.yaml`, печатает только `deny`; на `allow` и `ask` молчит — решает поток прав.
+- Плагины слоя — `enabledPlugins` и `pluginConfigs` launch settings по таблице Environment; пины моделей — `env` launch settings.
+
 Харнес кита — `.claude/settings.json`: `worktree.baseRef: "head"` (worktree агента воркфлоу ветвится от HEAD, а не от ветки по умолчанию), `workflowSizeGuideline: "medium"` (<10 агентов — совет модели, не потолок), узкие `permissions.allow` на `bin/check-*`, `bin/gate-*`, `make ci`.
 
 ## Контрольный прогон — парный
