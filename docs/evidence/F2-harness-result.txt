@@ -30,7 +30,7 @@ OK   settings: хуки Abide через .claude/hooks/abide.mjs (exec form; Pos
 OK   settings: Stop-хук spec-gate (node, exec form): есть, таймаут 30 с; .claude/spec-gate.json: режим active, вопросов 3, капы {'blocks': 12, 'hours': 3, 'same_list': 3}
 OK   launch: .claude/launch.settings.json: autoMode.environment записей 6, "$defaults" есть
 OK   line: docs/PROCESS.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 16; нет — ничего; стартовый запрос аргументом — нет (запуск — словами PROCESS)
-копия харнеса: /tmp/two-tier-v3/harness-gffoc8gq
+копия харнеса: /tmp/two-tier-v3/harness-n3ls9nv1
 run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p '<prompt>' --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]},"jev-browser":{"command":"npx","args":["-y","-p","jev-browser@0.1.2","jev-browser-mcp"]}}}' --add-dir /tmp/two-tier-v3 --max-turns 3 --output-format stream-json --verbose
 OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
 OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
@@ -44,29 +44,29 @@ OK   steer: Steer-or-Queue в той же сессии: строк журнал�
 NOTE compact-adviser: режим `hint` — статикой: в -p мод молчит (isInteractive); CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 в строке docs/PROCESS.md — нет: мод молчит и в интерактивной сессии (register.ts:147-159)
 OK   quicksilver: по задаче: `qs status` (модель пином, свой QUICKSILVER_HOME): rc 0, «ready · key from env JEV_API_KEY · model jev-1.13.0»
 OK   jev-seo: по задаче: `jevseo doctor`: rc 0, версия 0.1.1, модулей ok 7/7, ключ — present
-OK   jev-browser: по задаче: `bin/check-ui` — check-ui: rc 0; steps 1, passed 1, statuses done, assert true; Jev calls 2, tokens 2194, 1654 ms in the run, 2.5 s in all
+OK   jev-browser: по задаче: `bin/check-ui` — check-ui: rc 0; steps 1, passed 1, statuses done, assert true; Jev calls 2, tokens 2194, 1501 ms in the run, 2.3 s in all
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
 OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 6; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
 OK   kill: воркфлоу completed; агент создал AGENT_STOP — да; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
 OK   partial: один маркер из двух и «готово»: решение block, причина называет F2 — да, F1 — нет; rc 0
 OK   partial: в evidence F2 только строки-близнецы маркера: решение block, причина называет F2 — да
-OK   stop: новая строка «STOP: STOP-INPUT» с вопросом и resume: решение stop, причина STOP-INPUT; Jev {'model': 'jev-1.13.0', 'tokens': 663, 'ms': 425}; «spec-gate (active): stop — STOP-INPUT»
+OK   stop: новая строка «STOP: STOP-INPUT» с вопросом и resume: решение stop, причина STOP-INPUT; Jev {'model': 'jev-1.13.0', 'tokens': 663, 'ms': 645}; «spec-gate (active): stop — STOP-INPUT»
 OK   stop: строка STOP отпускает ход один раз: та же сессия ещё раз — block; новая сессия — block; дописан «снят» — block; запись «- STOP: … — снят» — block
 OK   stop: строка «STOP: STOP-PAY» — не причина §4 фикстуры: решение block, причина называет STOP-PAY — да
 OK   stop: строка STOP из коммита до сессии не в счёт: решение block
 OK   no-progress: один список четыре раза подряд: block → block → block → pass; причина последнего — no-progress: the same list blocked 3 times in a row
 OK   caps: 12 блоков в сессии → pass (cap-blocks: 12 blocks in this session); сессия старше 3 ч → pass (cap-time: the session is older than 3 h)
-OK   caps: полный комплект в сессии старше 3 ч — «SPEC_GATE_OK: features 2, pushed 43f6671, verify-9c0e85b.txt»: кап только смягчает блок, комплект не теряется
+OK   caps: полный комплект в сессии старше 3 ч — «SPEC_GATE_OK: features 2, pushed 961e0b7, verify-d77fa9d.txt»: кап только смягчает блок, комплект не теряется
 OK   head: полный комплект, но голова PROGRESS как до сессии (дописана только строка заметок): решение block, причина называет голову — да; PROGRESS из пробелов — block, голова названа — да
 OK   verdict: после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение block, вердикт не в счёт — да
-OK   full: полный комплект: «SPEC_GATE_OK: features 2, pushed 43f6671, verify-9c0e85b.txt»; Jev — модель jev-1.13.0, токенов 977, 435 мс
-OK   fail-open: без ключа: «SPEC_GATE_OK: features 2, pushed 43f6671, verify-9c0e85b.txt» за 0.2 с, Jev — bin/jev rc 2: jev: TYPESAFE_API_KEY is not set — the key comes from the environment only; адрес молчит: «SPEC_GATE_OK: features 2, pushed 43f6671, verify-9c0e85b.txt» за 10.2 с, Jev — bin/jev rc 4: jev: timeout after 10000 ms
+OK   full: полный комплект: «SPEC_GATE_OK: features 2, pushed 961e0b7, verify-d77fa9d.txt»; Jev — модель jev-1.13.0, токенов 977, 379 мс
+OK   fail-open: без ключа: «SPEC_GATE_OK: features 2, pushed 961e0b7, verify-d77fa9d.txt» за 0.2 с, Jev — bin/jev rc 2: jev: TYPESAFE_API_KEY is not set — the key comes from the environment only; адрес молчит: «SPEC_GATE_OK: features 2, pushed 961e0b7, verify-d77fa9d.txt» за 10.2 с, Jev — bin/jev rc 4: jev: timeout after 10000 ms
 OK   modes: OFF: stdout пуст, строк журнала +0; shadow: stdout пуст, в журнале block (shadow)
 OK   config: .claude/spec-gate.json с ошибкой JSON: «spec-gate (shadow): pass — config: .claude/spec-gate.json is not readable JSON (SyntaxError) — the gate passes» — хук пропускает, а не блокирует без вопросов
 OK   pass: AGENT_STOP → pass (agent-stop); фоновый воркфлоу → pass (background: tasks 1, crons 0), stdout пуст
 OK   log: docs/evidence/spec-gate.jsonl фикстур: строк 22, поля решения — все, с путём домашнего каталога — 0
 OK   live-block: «готово» без маркера F2: решений хука 4 (block, block, block, pass), первый блок называет F2 — да; ответов модели 4 — ход не кончился на первом; ходов 4, tool_use 0
-OK   live-ok: полный комплект: решений хука 1 (ok), «SPEC_GATE_OK: features 2, pushed 1ec240e, verify-5df8646.txt»; голову PROGRESS модель переписала в сессии — да; ответов модели 1, ходов 3
+OK   live-ok: полный комплект: решений хука 1 (ok), «SPEC_GATE_OK: features 2, pushed c52ab34, verify-554bcc2.txt»; голову PROGRESS модель переписала в сессии — да; ответов модели 1, ходов 3
 OK   session-start: рубрика устарела (CLAUDE.md изменён): rc 0, заметка оператору — да, просьба компилировать до Claude — нет
 OK   no-abide: Abide нет в PATH: rc 0, stdout пуст
 OK   stop-note: заглушка Abide блокирует Stop: решение нет, заметка оператору — да; prompt и transcript_path до Abide — не дошли
@@ -75,7 +75,7 @@ OK   secret: правка печатает секрет фикстуры (Write 
 OK   abide-live: живая правка ломает правило маркера: проверок Abide 3, блок 1 (act — 1); требование починки дошло до Claude в том же ходе — да; правок zebra.txt 2, маркер в файле после хода — нет; ходов 3
 OK   abide-clean: чистая правка: проверок Abide 2, блоков 0, требование — нет; ходов 2
 OK   policy: .claude/toolgate.yaml: модель — typesafe:jev-1.13.0; аудит — /tmp/two-tier-v3/toolgate/audit.jsonl; ledger — выключен
-OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.47 с, медиана 0.44 с (≤ 2 с)
+OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.46 с, медиана 0.44 с (≤ 2 с)
 OK   deny: `git push --force origin main`: решение deny, причина «[toolgate] a force-push is forbidden in an executor's phase (kit policy)», 0.10 с
 OK   fail-open: без ключа `rm -rf docs/archive` — тишина (0.1 с); `git push --force`: `decide` завис — тишина за 8.0 с (срок хука 8 с, таймаут настроек 10 с); нет политики — тишина
 OK   ask: `decide` ответил ask (заглушка): тишина — хук печатает только deny
@@ -89,5 +89,5 @@ ABIDE_OK
 GATE_HOOK_OK
 HOOKS_OK
 TOOLGATE_OK
-bin/check-harness  69,36s user 24,06s system 46% cpu 3:21,01 total
+bin/check-harness  73,79s user 27,72s system 46% cpu 3:39,73 total
 rc 0

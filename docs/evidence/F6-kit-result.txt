@@ -13,14 +13,14 @@ OK   verify-phase: kit/bin/verify-phase: исполняемый, ALLOW с Workfl
 OK   archive: скиллы v2 в docs/archive/kit-v2/claude-config/skills/: team-lead, grilling
 OK   workflow: .github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml
 OK   workflows: .claude/workflows/verify-phase.js = kit/.claude/workflows/verify-phase.js
-OK   budgets: defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: abide_rules, .abide/rubric.json, .claude/spec-gate.json, .claude/toolgate.yaml
-OK   budgets: kit/budgets.json: abide_rules 15 (≤ 15, SPEC-v3.2 F3), стартовый запрос 4000 знаков (≤ 4000), во владении — docs/GOAL.txt и файлы тимлида слоя (spec-gate.json, rubric.json, toolgate.yaml)
+OK   budgets: defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: abide_rules, prompt_chars, .abide/rubric.json, .claude/spec-gate.json, .claude/toolgate.yaml, docs/PROMPT.txt, −goal_chars, −docs/GOAL.txt
+OK   budgets: kit/budgets.json: abide_rules 15 (≤ 15, SPEC-v3.2 F3), стартовый запрос 4000 знаков (≤ 4000), во владении — docs/PROMPT.txt и файлы тимлида слоя (spec-gate.json, rubric.json, toolgate.yaml)
 KIT_OK
 OK   handoff: строка шаблона Environment: да, 70 %, /clear
-FAIL handoff: launch settings кита: включён — True; pluginConfigs: записи handoff@two-tier-mods нет
+OK   handoff: launch settings кита: включён — True; pluginConfigs: threshold 70, autoClear True, handoffDir handoffs
 OK   handoff: .gitignore: handoffs/ — есть
 OK   handoff: bin/two-tier-init печатает команду установки мода — да
 OK   handoff: claude plugin validate mods/handoff: rc 0; hooks: session.start, turn.complete, command.run{command=handoff}, ui.render{component=AbovePrompt}; calls: 18
 OK   handoff: claude plugin test mods/handoff: rc 0, pass 8, fail 0
-HANDOFF_FAIL
-rc 1
+HANDOFF_OK
+rc 0

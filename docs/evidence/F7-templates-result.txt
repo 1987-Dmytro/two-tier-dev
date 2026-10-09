@@ -20,14 +20,14 @@ OK   contract: kit/docs/PROMPT.template.txt: фраз 8, нет — ничего
 OK   contract: kit/docs/PROCESS.template.md: фраз 6, нет — ничего
 OK   contract: kit/CLAUDE.md: фраз 9, нет — ничего
 OK   no-goal: упоминаний команды /goal в kit/ — нет
-FAIL kit-prompt: kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: нет prompt_chars; goal_chars; нет docs/PROMPT.txt в owner; docs/GOAL.txt в owner; kit/CLAUDE.md:3; kit/CLAUDE.md:11
+OK   kit-prompt: kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: prompt_chars, docs/PROMPT.txt в owner, схемы GOAL нет
 OK   claude_md_lines: CLAUDE.md 22/40
 OK   intent_chars: intent/INTENT.md 2001/6000
 OK   progress_lines: docs/PROGRESS.md 19/60
 OK   dollar_digit: `$` с цифрой — 0 в 0 файлах
-OK   goal_chars: docs/PROMPT.txt, знаков 2947/4000
+OK   prompt_chars: docs/PROMPT.txt, знаков 2947/4000
 OK   read_first_files: Read first, файлов 3/3
-OK   read_first_chars: Read first + CLAUDE.md, знаков 6789/50000
+OK   read_first_chars: Read first + CLAUDE.md, знаков 6811/50000
 OK   spec_feature_chars: docs/SPEC-1.md: фич 1, длиннее 600 знаков — нет
 OK   plan_lines: docs/PLAN-1.md, строк 25/150
 OK   review_blocking: docs/reviews/1-1.md: блокирующих 1/5
@@ -37,13 +37,13 @@ OK   pin: пин SPEC 377d61ea7dd4 · git hash-object intent/INTENT.md 377d61ea7
 OK   signal: сигналы intent S1,S2; фич без существующего S — нет
 OK   owner: нет main/origin/main или коммитов — lint коммитов пропущен
 OK   abide_rules: нет .abide/rubric.json — рубрики Abide нет
-BUDGET_FAIL: 1
-rc 1
+BUDGET_OK
+rc 0
 
 $ bin/two-tier-upgrade --self-test
 OK   список апгрейда = файлы кита (35)
 OK   фикстура: тестовый клон без origin (`git remote` пуст)
-  прогон 1: ветка: kit-v3 | коммит f481f4b: поставлено 31, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
+  прогон 1: ветка: kit-v3 | коммит 72449a7: поставлено 31, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
 OK   ветка kit-v3
 OK   main не тронут
 OK   механика v3: 30 файлов кита на месте
@@ -58,30 +58,43 @@ OK   в проекте после апгрейда bin/check-budget → BUDGET_O
   прогон 2: ветка: kit-v3 | изменений нет
 OK   повторный прогон: тот же HEAD, `git status` пуст
 OK   remotes не тронуты, push некуда и не было
-  прогон v3.1: ветка: kit-v3 | стартовый запрос: docs/GOAL.txt → docs/PROMPT.txt, коммит «Тимлид: …» | коммит e993dca: поставлено 30, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
+  прогон v3.1: ветка: kit-v3 | стартовый запрос: docs/GOAL.txt → docs/PROMPT.txt, коммит «Тимлид: …» | коммит 7b41b54: поставлено 30, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
 OK   v3.1 → v3.2: docs/GOAL.txt → docs/PROMPT.txt (git mv, байт в байт) отдельным коммитом «Тимлид: …», история файла цела
 OK   в проекте v3.1 после апгрейда bin/check-budget → BUDGET_OK (lint владения: коммит переноса — «Тимлид:»)
 OK   повторный прогон проекта v3.1: тот же HEAD
 OK   отчёт апгрейда называет тимлиду записи owner и ключи кита, которых нет в budgets.json проекта
-  сбой (а) `bin/` в .gitignore: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-budget: в .gitignore — git add его не возьмёт |   - bin/check-ci: в .gitignore — git add его не возьмёт |   - bin/check-harness: в .gitignore — git add его не возьмёт |   - bin/check-kit: в .gitignore — git add его не возьмёт |   - bin/check-spend: в .gitignore — git add его не возьмёт |   - bin/check-ui: в .gitignore — git add его не возьмёт |   - bin/jev: в .gitignore — git add его не возьмёт |   - bin/two-tier-upgrade: в .gitignore — git add его не возьмёт |   - bin/verify-phase: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ 988891e, индекс пуст
+  сбой (а) `bin/` в .gitignore: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-budget: в .gitignore — git add его не возьмёт |   - bin/check-ci: в .gitignore — git add его не возьмёт |   - bin/check-harness: в .gitignore — git add его не возьмёт |   - bin/check-kit: в .gitignore — git add его не возьмёт |   - bin/check-spend: в .gitignore — git add его не возьмёт |   - bin/check-ui: в .gitignore — git add его не возьмёт |   - bin/jev: в .gitignore — git add его не возьмёт |   - bin/two-tier-upgrade: в .gitignore — git add его не возьмёт |   - bin/verify-phase: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ a3a4d7b, индекс пуст
 OK   сбой (а): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
-  сбой (б) свой неотслеживаемый bin/check-ci: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-ci: файл вне git — git mv его не возьмёт |   проект как до запуска: ветка main @ cffb380, индекс пуст
+  сбой (б) свой неотслеживаемый bin/check-ci: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-ci: файл вне git — git mv его не возьмёт |   проект как до запуска: ветка main @ f6f42fe, индекс пуст
 OK   сбой (б): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (29 путей)
-  сбой (в) свой budgets.json другой формы: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - budgets.json — не форма кита (нужны defaults.progress_lines и defaults.plan_lines): KeyError('defaults') |   проект как до запуска: ветка main @ 0da1963, индекс пуст
+  сбой (в) свой budgets.json другой формы: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - budgets.json — не форма кита (нужны defaults.progress_lines и defaults.plan_lines): KeyError('defaults') |   проект как до запуска: ветка main @ 5ebac00, индекс пуст
 OK   сбой (в): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
-  сбой (г) игнорируемый .claude/settings.json: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - .claude/settings.json: файл вне git — git mv его не возьмёт |   - .claude/settings.json: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ 63e5530, индекс пуст
+  сбой (г) игнорируемый .claude/settings.json: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - .claude/settings.json: файл вне git — git mv его не возьмёт |   - .claude/settings.json: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ d297c2a, индекс пуст
 OK   сбой (г): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
-  сбой (д) сбой после старта — pre-commit отказал: rc 1 | ветка: kit-v3 | two-tier-upgrade: git commit: pre-commit: отказ (фикстура) |   проект как до запуска: ветка main @ cffb380, индекс пуст
+  сбой (д) сбой после старта — pre-commit отказал: rc 1 | ветка: kit-v3 | two-tier-upgrade: git commit: pre-commit: отказ (фикстура) |   проект как до запуска: ветка main @ f6f42fe, индекс пуст
 OK   сбой (д): выход ≠0 с причиной, без трассировки, откат после старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (27 путей)
 UPGRADE_OK
 rc 0
+
+$ grep -n 'goal_chars\|GOAL' kit/budgets.json kit/CLAUDE.md   # схема GOAL в ките
+rc 1 (1 — совпадений нет)
+$ grep -n 'prompt_chars\|docs/PROMPT.txt' kit/budgets.json
+16:    "prompt_chars": 4000,
+24:      "docs/PROMPT.txt",
+
+$ T=$(mktemp -d /tmp/two-tier-v3/t3-prompt-XXXXXX) && git init -q "$T" && bin/two-tier-init "$T" && cd "$T" && <docs/PROMPT.txt из 4001 знака, Read first: docs/SPEC-1.md> && bin/check-budget   # красная сторона prompt_chars в проекте из кита; SPEC фикстуры нет — отсюда FAIL goal и spec
+FAIL prompt_chars: docs/PROMPT.txt, знаков 4001/4000
+FAIL goal: Read first: нет файлов ['docs/SPEC-1.md']
+FAIL spec: первый файл Read first — не существующий docs/SPEC-*.md: docs/SPEC-1.md
+BUDGET_FAIL: 3
+rc 1
 
 $ bin/check-budget --templates   # мутация: строка шаблона PROCESS без -- перед стартовым запросом
 OK   contract: kit/docs/PROMPT.template.txt: фраз 8, нет — ничего
 FAIL contract: kit/docs/PROCESS.template.md: фраз 6, нет — -- "$(cat docs/PROMPT.txt)"
 OK   contract: kit/CLAUDE.md: фраз 9, нет — ничего
-FAIL kit-prompt: kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: нет prompt_chars; goal_chars; нет docs/PROMPT.txt в owner; docs/GOAL.txt в owner; kit/CLAUDE.md:3; kit/CLAUDE.md:11
-BUDGET_FAIL: 2
+OK   kit-prompt: kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: prompt_chars, docs/PROMPT.txt в owner, схемы GOAL нет
+BUDGET_FAIL: 1
 
 $ T=$(mktemp -d /tmp/two-tier-v3/t3-ev-XXXXXX) && git init -q "$T" && bin/two-tier-init "$T" && (cd "$T" && bin/check-harness)   # выдержка: строка, пары из docs/PROMPT.txt, маркеры; целиком — F4-harness-result.txt
 OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (ждём ровно Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci))
@@ -94,7 +107,7 @@ OK   allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` �
 OK   run1: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
 OK   run2: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
-OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.51 с, медиана 0.50 с (≤ 2 с)
+OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.50 с, медиана 0.45 с (≤ 2 с)
 OK   pairs: с хуком кита: allow — OK; agent — OK; kill — OK (dontAsk: команда вне allow — отказ прав; агенты воркфлоу не остановлены)
 ENV_OK
 HARNESS_OK
@@ -110,54 +123,54 @@ OK   workflow: модели: claude-opus-5-5, claude-sonnet-5-5; проверя�
 OK   workflow: часы и случайность в скрипте — нет
 OK   workflow: .claude/workflows/verify-phase.js корня = копия кита
 OK   launcher: kit/bin/verify-phase: лимит по умолчанию 1800 с
---- red: /tmp/two-tier-v3/verify-fx-red-ztu9rx__ · rc 0
-    verify-phase: HEAD 9218f75 ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-9218f75-ukm6xq_u/repo; лимит 1800 с
-    verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (2 с)
-    verify-phase: claude -p rc 0; воркфлоу completed; агентов 4: claude-sonnet-5-5 ×3, claude-opus-5-5 ×1; токенов 57396; 93 с
-    verify-phase: docs/evidence/verify-9218f75.txt
+--- red: /tmp/two-tier-v3/verify-fx-red-frkm_gw3 · rc 0
+    verify-phase: HEAD 846a4fe ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-846a4fe-dbaew01i/repo; лимит 1800 с
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)
+    verify-phase: claude -p rc 0; воркфлоу completed; агентов 5: claude-sonnet-5-5 ×4, claude-opus-5-5 ×1; токенов 70881; 108 с
+    verify-phase: docs/evidence/verify-846a4fe.txt
     VERDICT: NEEDS_WORK
     | VERDICT: NEEDS_WORK
-    | /verify-phase · docs/SPEC-1.md · HEAD 9218f75 · проверяющие claude-sonnet-5-5 (фич 1, опровергателей 1) · судья claude-opus-5-5
+    | /verify-phase · docs/SPEC-1.md · HEAD 846a4fe · проверяющие claude-sonnet-5-5 (фич 1, опровергателей 2) · судья claude-opus-5-5
     | 
-    | Свежий прогон `bin/check-slug` зелёный, маркер SLUG_OK есть, мутация с удалением `.lower()` поймана, но я сам воспроизвёл: `bin/slug \"  Hello World  \"` печатает `-hello-world-`, а `bin/slug \"---\"` печатает `-` с exit 0. Это прямо противоречит «готово» F1 (без `-` по краям, пустой слаг — exit 1 и `empty slug`), поэтому вердикт NEEDS_WORK.
+    | Свежий прогон bin/check-slug зелёный (SLUG_OK), маркер есть в evidence, мутация с удалением `.lower()` ловится. Но мой прогон подтвердил: `bin/slug '  Hello, World!  '` даёт `-hello-world-`, а `bin/slug '!!!'` даёт `-` с exit 0, так что «готово» F1 нарушено на пути оператора, и это одна причина — нет обрезки `-` по краям.
     | 
     | ## Блокирующие
-    | - **F1: `bin/slug` не срезает `-` в начале и в конце: для заголовка с пробелами или пунктуацией по краям слаг начинается или кончается на `-`, а заголовок из одной пунктуации даёт `-` с exit 0, хотя должен дать exit 1 и `empty slug`.** · доказательство: `bin/slug "  Hello World  "` -> `-hello-world-`, rc=0; `bin/slug "---"` -> `-`, rc=0. В коде `re.sub(r"[^a-z0-9]+", "-", ...)` нет `.strip("-")`, поэтому проверка на пустоту идёт по необрезанной строке. `bin/check-slug` проверяет только `Hello World` и пустую строку, поэтому SLUG_OK этот дефект не ловит. · критерий: (c) наблюдаемое поведение противоречит «готово» F1: «без `-` в начале и в конце; если слаг пуст — exit 1 и `empty slug` в stderr» · чек приёмки: `bin/slug "  Hello World  "` печатает `hello-world`; `bin/slug "---"` завершается с exit 1 и пишет `empty slug` в stderr; в `bin/check-slug` есть утверждения на оба случая
+    | - **F1: bin/slug не срезает `-` по краям: заголовок с ведущими или замыкающими символами вне `a-z0-9` даёт слаг с `-` в начале и в конце. Из-за этого заголовок без `a-z0-9` (`!!!`, одни пробелы) печатает `-` с exit 0, хотя пустой слаг должен давать exit 1 и `empty slug`.** · доказательство: `python3 bin/slug '  Hello, World!  '` печатает `-hello-world-`, rc=0; `python3 bin/slug '!!!'` печатает `-`, rc=0; `python3 bin/slug ''` печатает `empty slug`, rc=1. В исходнике есть только `re.sub(r"[^a-z0-9]+", "-", ...lower())`, а `.strip('-')` нет. bin/check-slug проверяет только `Hello World` и пустую строку, поэтому SLUG_OK зелёный. · критерий: c: наблюдаемое поведение противоречит «готово» F1 («без `-` в начале и в конце; если слаг пуст — exit 1 и `empty slug` в stderr») · чек приёмки: `bin/slug '  Hello, World!  '` → `hello-world`; `bin/slug '!!!'` → exit 1 и `empty slug` в stderr; bin/check-slug дополнен этими случаями и печатает SLUG_OK
     | 
     | ## Named, not built
-    | - F1: `bin/check-slug` не покрывает обрезку `-` по краям и заголовок из одной пунктуации (покрытие чека, отдельно не блокирует)
+    | - bin/check-slug не покрывает края `-` и ввод только из пунктуации или пробелов, поэтому SLUG_OK зелёный при нарушенном «готово» (non_blocking, покрытие чека)
     | 
     | ## По фичам
-    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); мутация bin/slug: removed .lower() (lowercasing) → red; находок 2, блокирующих-кандидатов 1, опровергнуто 0
-OK   red: модели агентов: {'claude-sonnet-5-5': '3', 'claude-opus-5-5': '1'}
+    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); мутация bin/slug: removed .lower() from the re.sub input → red; находок 3, блокирующих-кандидатов 2, опровергнуто 0
+OK   red: модели агентов: {'claude-sonnet-5-5': '4', 'claude-opus-5-5': '1'}
 OK   red: первая строка «VERDICT: NEEDS_WORK»; дефект (дефисы по краям) назван в блокирующих — да
---- clean: /tmp/two-tier-v3/verify-fx-clean-j_l8ash9 · rc 0
-    verify-phase: HEAD a178dce ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-a178dce-rl8zqian/repo; лимит 1800 с
+--- clean: /tmp/two-tier-v3/verify-fx-clean-5dxjiw4o · rc 0
+    verify-phase: HEAD d1b4921 ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-d1b4921-bgfpgfpd/repo; лимит 1800 с
     verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)
-    verify-phase: claude -p rc 0; воркфлоу completed; агентов 3: claude-sonnet-5-5 ×2, claude-opus-5-5 ×1; токенов 45908; 84 с
-    verify-phase: docs/evidence/verify-a178dce.txt
+    verify-phase: claude -p rc 0; воркфлоу completed; агентов 3: claude-sonnet-5-5 ×2, claude-opus-5-5 ×1; токенов 44205; 82 с
+    verify-phase: docs/evidence/verify-d1b4921.txt
     VERDICT: PASS
     | VERDICT: PASS
-    | /verify-phase · docs/SPEC-1.md · HEAD a178dce · проверяющие claude-sonnet-5-5 (фич 1, опровергателей 0) · судья claude-opus-5-5
+    | /verify-phase · docs/SPEC-1.md · HEAD d1b4921 · проверяющие claude-sonnet-5-5 (фич 1, опровергателей 0) · судья claude-opus-5-5
     | 
-    | Свежий прогон `bin/check-slug` завершился с rc=0 и напечатал `SLUG_OK`. Тот же маркер лежит в docs/evidence/F1-slug-result.txt, а мутация, которая убирает обрезку `-`, ловится чеком (он падает). Ручной прогон подтверждает пункт «готово»: `bin/slug "  Hello, World!! "` печатает `hello-world`, а на вход `--` выдаётся exit 1 с `empty slug` в stderr. Блокирующих находок нет, нарушений §3 и проблем с безопасностью тоже не найдено.
+    | Свежий прогон `bin/check-slug` завершился с rc 0 и вывел `SLUG_OK`. Тот же маркер лежит в docs/evidence/F1-slug-result.txt, а мутация, убравшая `.strip("-")`, сделала чек красным. bin/slug — однострочный скрипт на stdlib python3, без сети, и он повторяет условие «готово» почти дословно: `hello-world`, `a-b`, а на `---` выдаёт exit 1 и `empty slug`; инвариант §3 не нарушен, блокирующих кандидатов нет.
     | 
     | ## Блокирующие
     | Нет.
     | 
     | ## Named, not built
-    | - нет
+    | - F1: Unicode-краевые случаи — lower() выполняется до фильтра `a-z0-9`, поэтому знак Кельвина U+212A превращается в `k`, а `İ` (U+0130) даёт `i-`; это буквально соответствует условию «готово», вопрос вкуса (repro: bin/slug 'Straße İ ǅ K x²٣ 3' → stra-e-i-k-x-3)
     | 
     | ## По фичам
-    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); мутация bin/slug: replaced .strip("-") with .strip() so leading and trailing dashes are no longer trimmed → red; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); мутация bin/slug: removed .strip("-") so leading/trailing dashes remain → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0
 OK   clean: модели агентов: {'claude-sonnet-5-5': '2', 'claude-opus-5-5': '1'}
 OK   clean: первая строка «VERDICT: PASS»; блокирующих 0
---- limit: /tmp/two-tier-v3/verify-fx-limit-92x4k643 · rc 3
-    verify-phase: HEAD a178dce ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-a178dce-9pbqw7ml/repo; лимит 20 с
+--- limit: /tmp/two-tier-v3/verify-fx-limit-3ar2f6hp · rc 3
+    verify-phase: HEAD d1b4921 ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-d1b4921-vijlp5ss/repo; лимит 20 с
     verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)
-    verify-phase: лимит истёк на шаге «воркфлоу /verify-phase» через 26 с
+    verify-phase: лимит истёк на шаге «воркфлоу /verify-phase» через 25 с
     VERIFY_TIMEOUT
 OK   limit: --limit 20: rc 3, VERIFY_TIMEOUT — да, файл вердикта — нет
 VERIFY_OK
-bin/check-verify  34,52s user 16,87s system 54% cpu 1:34,89 total
+bin/check-verify  38,42s user 18,57s system 52% cpu 1:49,11 total
 rc 0
