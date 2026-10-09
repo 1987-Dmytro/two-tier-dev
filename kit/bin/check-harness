@@ -87,8 +87,8 @@ GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1
                GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
 PROMPT_GATE_BLOCK = ("Stop-gate control run. Reply with exactly this sentence: Готово — фаза закрыта. Use no tools. "
                      "If a hook keeps your turn going, reply with the single word blocked and use no tools.")
-PROMPT_GATE_OK = ("Stop-gate control run. With the Edit tool, append the line `- Гейт фикстуры пройден.` to docs/PROGRESS.md "
-                  "(you are authorized to edit it), then reply with the single word done.")
+PROMPT_GATE_OK = ("Stop-gate control run. With the Edit tool, in docs/PROGRESS.md replace `**Когда закончим:** сегодня, после гейта.` with "
+                  "`**Когда закончим:** сегодня — гейт фикстуры пройден.` (you are authorized to edit it), then reply with the single word done.")
 # Секрет — прямым вызовом хука: живую правку, печатающую ключ вопреки правилу, режут защита модели и классификатор (замер 09.10:
 # отказ, откат модели, переписанный файл); доставку требования в том же ходе живой сессией несёт правило маркера.
 ABIDE_RULES = [
@@ -127,11 +127,13 @@ def paths():
 
 
 PROMPT_FILE = None  # v3.2, F7: строка кончается стартовым запросом "$(cat docs/PROMPT.txt)" — пары стартуют запросом из этого файла
+PROMPT_SEP = False  # `--` перед запросом: --add-dir и --mcp-config берут по нескольку значений и без `--` забирают запрос себе
 
 
 def launch_line(proc):
-    """(env, args после `claude`) — первая строка с `claude` в блоках ```sh PROCESS; последний аргумент "$(cat <файл>)" — в PROMPT_FILE."""
-    global PROMPT_FILE
+    """(env, args после `claude`) — первая строка с `claude` в блоках ```sh PROCESS; последний аргумент "$(cat <файл>)" — в PROMPT_FILE,
+    `--` перед ним — в PROMPT_SEP."""
+    global PROMPT_FILE, PROMPT_SEP
     for block in re.findall(r"```sh\n(.*?)```", open(proc, encoding="utf-8").read(), re.S):
         for line in block.splitlines():
             toks = shlex.split(line)
@@ -142,7 +144,8 @@ def launch_line(proc):
             if toks[:1] == ["claude"]:
                 m = re.fullmatch(r"\$\(cat\s+(\S+)\)", toks[-1])
                 PROMPT_FILE = m.group(1) if m else None
-                return env, toks[1:-1] if m else toks[1:]
+                PROMPT_SEP = bool(m) and toks[-2:-1] == ["--"]
+                return env, toks[1:-1 - PROMPT_SEP] if m else toks[1:]
     return None, None
 
 
@@ -324,11 +327,11 @@ def static(src, proc, launch):
            or not os.access(f"{src}/.claude/hooks/{n}", os.X_OK if n.endswith(".sh") else os.R_OK)]
     ok = {"kill-switch.sh", "steer.sh", "toolgate-deny.mjs"} <= set(names) and not bad
     say(H, "OK" if ok else "FAIL", "settings", f"хуки PreToolUse (exec form, ${{CLAUDE_PROJECT_DIR}}): {', '.join(names)}; с ошибкой — {bad or 'нет'}")
-    abide = {ev: [h for g in s.get("hooks", {}).get(ev, []) for h in g.get("hooks", [])
-                  if h.get("command") == "node" and h.get("args") == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", arg]]
+    abide = {ev: [h for g in s.get("hooks", {}).get(ev, []) if ev != "PostToolUse" or {"Edit", "Write", "MultiEdit"} <= set(str(g.get("matcher", "")).split("|"))
+                  for h in g.get("hooks", []) if h.get("command") == "node" and h.get("args") == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/abide.mjs", arg]]
              for ev, arg in (("SessionStart", "session-start"), ("UserPromptSubmit", "turn-start"), ("PostToolUse", "post-tool-use"), ("Stop", "stop"))}
     say("ABIDE", "OK" if all(abide.values()) and os.path.isfile(f"{src}/.claude/hooks/abide.mjs") else "FAIL", "settings",
-        f"хуки Abide через .claude/hooks/abide.mjs (exec form): {', '.join(f'{e} {len(h)}' for e, h in abide.items())}")
+        f"хуки Abide через .claude/hooks/abide.mjs (exec form; PostToolUse — на Edit, Write и MultiEdit): {', '.join(f'{e} {len(h)}' for e, h in abide.items())}")
     stop = [h for g in s.get("hooks", {}).get("Stop", []) for h in g.get("hooks", [])]
     gate = [h for h in stop if h.get("command") == "node" and h.get("args") == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/spec-gate.mjs"]]
     cfg = json.load(open(f"{src}/.claude/spec-gate.json", encoding="utf-8")) if os.path.isfile(f"{src}/.claude/spec-gate.json") else {}
@@ -343,8 +346,9 @@ def static(src, proc, launch):
         return None
     line = f" {' '.join(args)} "
     miss = [f for f in LINE_FLAGS if f" {f} " not in line]  # флаг и значение — целыми токенами
-    say(H, "FAIL" if miss else "OK", "line", f"{proc}: env {', '.join(lenv) or 'нет'}; флагов {len(args)}; нет — {', '.join(miss) or 'ничего'}; "
-        f"стартовый запрос аргументом — {PROMPT_FILE or 'нет (запуск — словами PROCESS)'}")
+    say(H, "FAIL" if miss or (PROMPT_FILE and not PROMPT_SEP) else "OK", "line", f"{proc}: env {', '.join(lenv) or 'нет'}; флагов {len(args)}; нет — {', '.join(miss) or 'ничего'}; "
+        f"стартовый запрос аргументом — {PROMPT_FILE or 'нет (запуск — словами PROCESS)'}"
+        + (f", `--` перед ним — {'есть' if PROMPT_SEP else 'нет: вариадический флаг (--add-dir, --mcp-config) заберёт запрос'}" if PROMPT_FILE else ""))
     return lenv, args
 
 
@@ -370,7 +374,9 @@ def control(dst, lenv, args, name, prompt, mode=None, extra=(), env_over=None, t
     if mode:
         i = args.index("--permission-mode")
         args = args[:i + 1] + [mode] + args[i + 2:]
-    cmd = ["claude", "-p", prompt, *args, *extra, "--max-turns", str(turns), "--output-format", "stream-json", "--verbose"]
+    own = [*extra, "--max-turns", str(turns), "--output-format", "stream-json", "--verbose"]
+    # из файла — порядок строки: её флаги последними, затем `--` (если он в строке) и запрос: вариадический флаг без `--` заберёт запрос и здесь
+    cmd = ["claude", "-p", *own, *args, *(["--"] if PROMPT_SEP else []), prompt] if from_file and PROMPT_FILE else ["claude", "-p", prompt, *args, *own]
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"} | lenv | {"SPEC_GATE": "off"} | (env_over or {})
     try:
         stdout = subprocess.run(cmd, cwd=dst, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300).stdout
@@ -392,8 +398,9 @@ def pair(src, proc, launch, lenv, args):
     H = "HARNESS"
     dst = deploy(src, launch)
     print(f"копия харнеса: {dst}")
+    own = "--max-turns 3 --output-format stream-json --verbose"
     print("run: env -u ANTHROPIC_API_KEY " + " ".join(f"{k}={v}" for k, v in lenv.items()) + " claude -p "
-          + (f'"$(cat {PROMPT_FILE})"' if PROMPT_FILE else "'<prompt>'") + " " + shlex.join(args) + " --max-turns 3 --output-format stream-json --verbose")
+          + (f"{own} {shlex.join(args)}{' --' if PROMPT_SEP else ''} \"$(cat {PROMPT_FILE})\"" if PROMPT_FILE else f"'<prompt>' {shlex.join(args)} {own}"))
     marker = word_marker("H")
     open(f"{dst}/STEER.md", "w").write(f"The marker for this run is {marker}.\n")
     init, res, uses, _, _ = control(dst, lenv, args, "run1", PROMPT, from_file=True)
@@ -492,9 +499,9 @@ def hooks(dst, lenv, args):
         f"вызовов агента {sum(a.get('toolCalls', 0) for a in agents)}, состояние {', '.join(str(a.get('state')) for a in agents) or 'нет'}; terminal_reason главной {res.get('terminal_reason')}")
 
 
-def gate_fixture(src, launch, full=False, stop_old=False):
+def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True):
     """Фаза из двух фич в своём git с origin: F1 закрыт; full — и F2 с VERDICT: PASS для HEAD. Коммиты — до начала сессии
-    (транскрипт начинается 10 мин назад, коммиты — 20), голова PROGRESS тронута сейчас."""
+    (транскрипт начинается 10 мин назад, коммиты — 20); fresh_head — голова PROGRESS переписана уже в сессии (рабочее дерево)."""
     d = tempfile.mkdtemp(prefix="gate-", dir=TMP)
     repo, past = f"{d}/repo", time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - 1200))
     env = GIT_ENV | {"GIT_AUTHOR_DATE": past, "GIT_COMMITTER_DATE": past}
@@ -512,7 +519,7 @@ def gate_fixture(src, launch, full=False, stop_old=False):
         os.makedirs(os.path.dirname(f"{repo}/{p}") or repo, exist_ok=True)
         open(f"{repo}/{p}", "w", encoding="utf-8").write(text)
     g("init", "-q", "-b", "phase")
-    g("add", "-A")
+    g("add", "--", ".claude", "bin", *files)  # точные пути, не -A
     g("commit", "-qm", "fixture")
     if full:
         sha = g("rev-parse", "--short", "HEAD").stdout.strip()
@@ -523,7 +530,9 @@ def gate_fixture(src, launch, full=False, stop_old=False):
     g("push", "-q", "origin", "phase")
     transcript = f"{d}/transcript.jsonl"
     open(transcript, "w").write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 600))}) + "\n")
-    os.utime(f"{repo}/docs/PROGRESS.md")
+    if fresh_head:
+        pg = open(f"{repo}/docs/PROGRESS.md", encoding="utf-8").read()
+        open(f"{repo}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg.replace("**Когда закончим:** сегодня, после гейта.", "**Когда закончим:** сегодня, гейт идёт."))
     return repo, transcript
 
 
@@ -557,6 +566,19 @@ def gate_probes(src, launch, lenv, args):
     rc, res, _, log, _ = gate_run(repo, tr, "probe-stop")
     say(S, "OK" if rc == 0 and "decision" not in res and log[-1]["decision"] == "stop" and log[-1]["reason"] == "STOP-INPUT" else "FAIL", "stop",
         f"новая строка «STOP: STOP-INPUT» с вопросом и resume: решение {log[-1]['decision']}, причина {log[-1]['reason']}; Jev {log[-1]['jev']}; «{short(res)}»")
+    again = gate_run(repo, tr, "probe-stop")[1].get("decision")  # та же сессия: оператор ответил, исполнитель сказал «готово»
+    other = gate_run(repo, tr, "probe-stop-next")[1].get("decision")  # новая сессия, строка STOP не закоммичена
+    pg = open(f"{repo}/docs/PROGRESS.md", encoding="utf-8").read()
+    first = GATE_STOP.split("\n")[0]  # короче 60 знаков: «снят» в конце строки и пункт списка перед ней — та же строка
+    variants = {"дописан «снят»": first + " — снят: ключ выдан.", "запись «- STOP: … — снят»": "- " + first + " — снят"}
+    edited = {}
+    for name, line in variants.items():
+        open(f"{repo}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg.replace(first, line))
+        edited[name] = gate_run(repo, tr, "probe-stop-edited")[1].get("decision")
+    open(f"{repo}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg)
+    say(S, "OK" if again == other == "block" and set(edited.values()) == {"block"} else "FAIL", "stop",
+        f"строка STOP отпускает ход один раз: та же сессия ещё раз — {again or 'тишина'}; новая сессия — {other or 'тишина'}; "
+        + "; ".join(f"{k} — {v or 'тишина'}" for k, v in edited.items()))
     repo_b, tr_b = gate_fixture(src, launch)
     open(f"{repo_b}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + GATE_STOP.replace("STOP-INPUT", "STOP-PAY"))
     rc, res, _, log, _ = gate_run(repo_b, tr_b, "probe-stop-bad")
@@ -574,13 +596,34 @@ def gate_probes(src, launch, lenv, args):
         for i in range(12):
             f.write(json.dumps({"ts": "", "session": sess, "decision": "block", "missing": [f"x{i}"]}) + "\n")
     rc, res, _, log, _ = gate_run(repo_o, tr_o, "probe-cap")
-    old = f"{os.path.dirname(tr_o)}/old.jsonl"
+    repo_t, tr_t = gate_fixture(src, launch)  # без строк STOP: кап времени смягчает блок неполного комплекта
+    old = f"{os.path.dirname(tr_t)}/old.jsonl"
     open(old, "w").write(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 4 * 3600))}) + "\n")
-    rc2, res2, _, log2, _ = gate_run(repo_o, old, "probe-time")
+    rc2, res2, _, log2, _ = gate_run(repo_t, old, "probe-time")
     say(S, "OK" if log[-1]["decision"] == "pass" and log[-1]["reason"].startswith("cap-blocks") and log2[-1]["decision"] == "pass"
         and log2[-1]["reason"].startswith("cap-time") and "decision" not in res and "decision" not in res2 else "FAIL", "caps",
         f"12 блоков в сессии → {log[-1]['decision']} ({log[-1]['reason']}); сессия старше 3 ч → {log2[-1]['decision']} ({log2[-1]['reason']})")
     full, trf = gate_fixture(src, launch, full=True)
+    oldf = f"{os.path.dirname(trf)}/old.jsonl"
+    open(oldf, "w").write(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 4 * 3600))}) + "\n")
+    res3 = gate_run(full, oldf, "probe-full-old")[1]
+    say(S, "OK" if res3.get("systemMessage", "").startswith("SPEC_GATE_OK") else "FAIL", "caps",
+        f"полный комплект в сессии старше 3 ч — «{short(res3)}»: кап только смягчает блок, комплект не теряется")
+    stale, trs = gate_fixture(src, launch, full=True, fresh_head=False)
+    open(f"{stale}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n## Notes\n- строка заметок.\n")
+    res4 = gate_run(stale, trs, "probe-stale-head")[1]
+    say(S, "OK" if res4.get("decision") == "block" and "head of docs/PROGRESS.md" in res4.get("reason", "") else "FAIL", "head",
+        f"полный комплект, но голова PROGRESS как до сессии (дописана только строка заметок): решение {res4.get('decision') or 'нет'}, причина называет голову — "
+        f"{'да' if 'head of docs/PROGRESS.md' in res4.get('reason', '') else 'нет'}")
+    moved, trm = gate_fixture(src, launch, full=True)  # после вердикта код уехал в evidence: git mv — тоже правка кода
+    gm = lambda *a: subprocess.run(["git", *a], cwd=moved, env=GIT_ENV, capture_output=True, text=True, check=True)
+    gm("mv", "CLAUDE.md", "docs/evidence/CLAUDE-moved.md")
+    gm("commit", "-qm", "move")
+    gm("push", "-q", "origin", "phase")
+    res6 = gate_run(moved, trm, "probe-verdict-rename")[1]
+    say(S, "OK" if res6.get("decision") == "block" and "no VERDICT" in res6.get("reason", "") else "FAIL", "verdict",
+        f"после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение {res6.get('decision') or 'нет'}, "
+        f"вердикт не в счёт — {'да' if 'no VERDICT' in res6.get('reason', '') else 'нет'}")
     rc, res, _, log, _ = gate_run(full, trf, "probe-full")
     jev = log[-1].get("jev") or {}
     say(S, "OK" if rc == 0 and res.get("systemMessage", "").startswith("SPEC_GATE_OK") and log[-1]["decision"] == "ok" else "FAIL", "full",
@@ -607,23 +650,28 @@ def gate_probes(src, launch, lenv, args):
         and res2.get("systemMessage", "").startswith("SPEC_GATE_OK") and "rc 4" in dead and sec2 <= 20 else "FAIL", "fail-open",
         f"без ключа: «{short(res)}» за {sec:.1f} с, Jev — {nokey or 'без ошибки'}; адрес молчит: «{short(res2)}» за {sec2:.1f} с, Jev — {dead or 'без ошибки'}")
     n = len(gate_run(repo, tr, "probe-off")[3])
-    rc, res, raw, log, _ = gate_run(repo, tr, "probe-off", env_over={"SPEC_GATE": "off"})
+    rc, res, raw, log, _ = gate_run(repo, tr, "probe-off", env_over={"SPEC_GATE": "OFF"})  # регистр не важен
     rc2, res2, raw2, log2, _ = gate_run(repo_o, tr_o, "probe-shadow", env_over={"SPEC_GATE": "shadow"})
     say(S, "OK" if rc == 0 and not raw.strip() and len(log) == n and not raw2.strip() and log2[-1]["decision"] == "block" and log2[-1]["mode"] == "shadow" else "FAIL", "modes",
-        f"off: stdout {'пуст' if not raw.strip() else 'не пуст'}, строк журнала +{len(log) - n}; shadow: stdout {'пуст' if not raw2.strip() else 'не пуст'}, в журнале {log2[-1]['decision']} ({log2[-1]['mode']})")
+        f"OFF: stdout {'пуст' if not raw.strip() else 'не пуст'}, строк журнала +{len(log) - n}; shadow: stdout {'пуст' if not raw2.strip() else 'не пуст'}, в журнале {log2[-1]['decision']} ({log2[-1]['mode']})")
+    broken, trb = gate_fixture(src, launch)
+    open(f"{broken}/.claude/spec-gate.json", "w").write('{"mode": "active",}')
+    res5 = gate_run(broken, trb, "probe-broken-config")[1]
+    say(S, "OK" if "decision" not in res5 and "not readable JSON" in res5.get("systemMessage", "") else "FAIL", "config",
+        f".claude/spec-gate.json с ошибкой JSON: «{short(res5)}» — хук пропускает, а не блокирует без вопросов")
     open(f"{repo_o}/AGENT_STOP", "w").close()
     rc, res, _, log, _ = gate_run(repo_o, tr_o, "probe-agent-stop")
     os.remove(f"{repo_o}/AGENT_STOP")
     rc2, res2, raw2, log2, _ = gate_run(repo_o, tr_o, "probe-bg", extra={"background_tasks": [{"id": "t1", "type": "workflow", "status": "running", "name": "x"}]})
     say(S, "OK" if log[-1]["reason"] == "agent-stop" and "decision" not in res and log2[-1]["reason"].startswith("background") and not raw2.strip() else "FAIL", "pass",
         f"AGENT_STOP → {log[-1]['decision']} ({log[-1]['reason']}); фоновый воркфлоу → {log2[-1]['decision']} ({log2[-1]['reason']}), stdout {'пуст' if not raw2.strip() else 'не пуст'}")
-    lines = [json.loads(x) for p in (repo, repo_b, repo_o, full) for x in open(f"{p}/docs/evidence/spec-gate.jsonl", encoding="utf-8")]
+    lines = [json.loads(x) for p in (repo, repo_b, repo_o, full, stale) for x in open(f"{p}/docs/evidence/spec-gate.jsonl", encoding="utf-8")]
     lines = [l for l in lines if l.get("ts")]  # без строк, подложенных пробой капа
     fields = all({"ts", "session", "mode", "decision", "reason", "missing", "jev", "ms"} <= set(l) for l in lines)
     home = sum(os.path.expanduser("~") in json.dumps(l) for l in lines)
     say(S, "OK" if fields and not home else "FAIL", "log", f"docs/evidence/spec-gate.jsonl фикстур: строк {len(lines)}, поля решения — {'все' if fields else 'не все'}, с путём домашнего каталога — {home}")
     # live: the hook in a real `claude -p` session, the same launch line, SPEC_GATE=active
-    for name, fx, prompt in (("live-block", gate_fixture(src, launch), PROMPT_GATE_BLOCK), ("live-ok", gate_fixture(src, launch, full=True), PROMPT_GATE_OK)):
+    for name, fx, prompt in (("live-block", gate_fixture(src, launch), PROMPT_GATE_BLOCK), ("live-ok", gate_fixture(src, launch, full=True, fresh_head=False), PROMPT_GATE_OK)):
         lrepo, _ = fx
         init, res, uses, _, ev = control(lrepo, lenv, args, name, prompt, env_over={"SPEC_GATE": "active"}, turns=8)
         sid = hashlib.sha256(str(init.get("session_id", "")).encode()).hexdigest()[:8]
@@ -639,9 +687,10 @@ def gate_probes(src, launch, lenv, args):
                 f"первый блок называет F2 — {'да' if blocks and any(m.startswith('F2:') for m in blocks[0]['missing']) else 'нет'}; ответов модели {len(texts)} — ход не кончился на первом; "
                 f"ходов {res.get('num_turns')}, tool_use {len(uses)}")
         else:
-            ok = [l["decision"] for l in mine] == ["ok"] and len(texts) <= 2 and any("Гейт фикстуры" in json.dumps(u.get("input", {}), ensure_ascii=False) for u in uses)
+            headed = "гейт фикстуры пройден" in open(f"{lrepo}/docs/PROGRESS.md", encoding="utf-8").read()
+            ok = [l["decision"] for l in mine] == ["ok"] and len(texts) <= 2 and headed
             say(S, "OK" if ok else "FAIL", name, f"полный комплект: решений хука {len(mine)} ({', '.join(l['decision'] for l in mine) or 'нет'}), "
-                f"«{mine[-1]['reason'] if mine else '—'}»; голова PROGRESS тронута в сессии; ответов модели {len(texts)}, ходов {res.get('num_turns')}")
+                f"«{mine[-1]['reason'] if mine else '—'}»; голову PROGRESS модель переписала в сессии — {'да' if headed else 'нет'}; ответов модели {len(texts)}, ходов {res.get('num_turns')}")
 
 
 def abide_fixture(src, launch, stale=False):
@@ -649,7 +698,9 @@ def abide_fixture(src, launch, stale=False):
     stale — CLAUDE.md изменён после компиляции."""
     d = tempfile.mkdtemp(prefix="abide-", dir=TMP)
     shutil.copytree(f"{src}/.claude", f"{d}/.claude", symlinks=True)
-    shutil.copy(launch, f"{d}/.claude/launch.settings.json")
+    ls = json.load(open(launch, encoding="utf-8"))
+    ls.pop("hooks", None)  # хуки launch settings (в корне этого репо — своя проводка Abide тимлида) задвоили бы проверки: судят только хуки кита
+    json.dump(ls, open(f"{d}/.claude/launch.settings.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     shutil.copytree(f"{src}/bin", f"{d}/bin")
     md = CLAUDE_MD + "\n## Rules for every edit\n" + "".join(f"- {text}\n" for _, text, _ in ABIDE_RULES)
     rubric = {"version": 1, "compiledAt": "2026-10-09T00:00:00.000Z", "compiledBy": "bin/check-harness fixture",
@@ -677,6 +728,20 @@ def abide_probes(src, launch, lenv, args):
         f"просьба компилировать до Claude — {'дошла' if 'hookSpecificOutput' in o else 'нет'}")
     r = hook(stale, "session-start", {"hook_event_name": "SessionStart", "session_id": "abide-probe-nopath", "cwd": stale}, env={"PATH": "/usr/bin:/bin"})
     say(S, "OK" if r.returncode == 0 and not r.stdout.strip() else "FAIL", "no-abide", f"Abide нет в PATH: rc {r.returncode}, stdout {'пуст' if not r.stdout.strip() else 'не пуст'}")
+    stub = tempfile.mkdtemp(prefix="abide-stub-", dir=TMP)  # заглушка Abide: блок на Stop; что дошло до неё — в in.json
+    open(f"{stub}/abide", "w").write("#!/bin/sh\nexit 0\n")
+    os.chmod(f"{stub}/abide", 0o755)
+    open(f"{stub}/abide-hook.js", "w").write("const fs = process.getBuiltinModule('node:fs')\nfs.writeFileSync(process.env.STUB_IN, fs.readFileSync(0, 'utf8'))\n"
+                                            "process.stdout.write(JSON.stringify({ decision: 'block', reason: 'stub: a rule is broken' }))\n")
+    r = hook(stale, "stop", {"hook_event_name": "Stop", "session_id": "abide-probe-stop", "cwd": stale, "stop_hook_active": False, "prompt": "PROMPT-MARK",
+                             "transcript_path": f"{stale}/none.jsonl", "last_assistant_message": "done"}, env={"PATH": f"{stub}:{os.environ['PATH']}", "STUB_IN": f"{stub}/in.json"})
+    o = json.loads(r.stdout) if r.stdout.strip() else {}
+    got = json.load(open(f"{stub}/in.json", encoding="utf-8")) if os.path.isfile(f"{stub}/in.json") else None
+    note = o.get("systemMessage", "").startswith("Abide (a note")
+    clean = got is not None and "prompt" not in got and "transcript_path" not in got
+    say(S, "OK" if r.returncode == 0 and "decision" not in o and note and clean else "FAIL", "stop-note",
+        f"заглушка Abide блокирует Stop: решение {o.get('decision') or 'нет'}, заметка оператору — {'да' if note else 'нет'}; "
+        f"prompt и transcript_path до Abide — {'не дошли' if clean else 'дошли' if got is not None else 'вход не снят'}")
     d = abide_fixture(src, launch)
     r = hook(d, "session-start", {"hook_event_name": "SessionStart", "session_id": "abide-probe-fresh", "cwd": d})
     say(S, "OK" if r.returncode == 0 and not r.stdout.strip() else "FAIL", "session-start", f"рубрика-фикстура свежая: rc {r.returncode}, stdout {'пуст' if not r.stdout.strip() else r.stdout.strip()[:120]}")
@@ -736,31 +801,38 @@ def toolgate_probes(src, launch, lenv, args, dst):
         r = subprocess.run([node, f"{src}/.claude/hooks/toolgate-deny.mjs"], input=json.dumps(inp), capture_output=True, text=True, timeout=60,
                            env=(env or os.environ) | {"CLAUDE_PROJECT_DIR": root})
         return r, time.monotonic() - t
-    runs = [run("ls", f"tg-probe-ls{i}") for i in range(5)]
+    tag = f"tg-probe-{os.urandom(3).hex()}-"  # метка прогона: аудит кита копит строки прошлых прогонов
+    runs = [run("ls", f"{tag}ls{i}") for i in range(5)]
     times = sorted(s for _, s in runs)
     quiet = all(r.returncode == 0 and not r.stdout.strip() for r, _ in runs)
     say(S, "OK" if quiet and times[-1] <= 2 else "FAIL", "allow", f"безобидное `ls` ×5: stdout {'пуст' if quiet else 'не пуст'}; задержка хука p95 {times[-1]:.2f} с, медиана {times[2]:.2f} с (≤ 2 с)")
-    r, sec = run("git push --force origin main", "tg-probe-push")
+    r, sec = run("git push --force origin main", f"{tag}push")
     o = (json.loads(r.stdout) if r.stdout.strip() else {}).get("hookSpecificOutput", {})
     say(S, "OK" if o.get("permissionDecision") == "deny" and o.get("permissionDecisionReason", "").startswith("[toolgate] ") else "FAIL", "deny",
         f"`git push --force origin main`: решение {o.get('permissionDecision') or 'нет'}, причина «{o.get('permissionDecisionReason', '')[:90]}», {sec:.2f} с")
-    home = tempfile.mkdtemp(prefix="toolgate-home-", dir=TMP)
-    nokey = {k: v for k, v in os.environ.items() if k not in ("TYPESAFE_API_KEY", "OPENROUTER_API_KEY", "AI_GATEWAY_API_KEY")} | {"HOME": home}
+    # настоящий HOME: хук сам даёт `decide` свой HOME во /tmp/two-tier-v3 — ключ из ~/.toolgate/env не читается (SPEC-v3.2 C6)
+    nokey = {k: v for k, v in os.environ.items() if k not in ("TYPESAFE_API_KEY", "OPENROUTER_API_KEY", "AI_GATEWAY_API_KEY")}
     model_only = "rm -rf docs/archive"  # судит модель: статическое правило force-push отказывает и без ключа
-    r1, s1 = run(model_only, "tg-probe-nokey", env=nokey)
+    r1, s1 = run(model_only, f"{tag}nokey", env=nokey)
     stub = tempfile.mkdtemp(prefix="toolgate-stub-", dir=TMP)
     open(f"{stub}/toolgate", "w").write("#!/bin/sh\nsleep 30\n")
     os.chmod(f"{stub}/toolgate", 0o755)
-    r2, s2 = run("git push --force origin main", "tg-probe-hang", env=os.environ | {"PATH": f"{stub}:{os.environ['PATH']}"})
-    r3, s3 = run("git push --force origin main", "tg-probe-nopolicy", root=tempfile.mkdtemp(prefix="toolgate-nopolicy-", dir=TMP))
+    r2, s2 = run("git push --force origin main", f"{tag}hang", env=os.environ | {"PATH": f"{stub}:{os.environ['PATH']}"})
+    r3, s3 = run("git push --force origin main", f"{tag}nopolicy", root=tempfile.mkdtemp(prefix="toolgate-nopolicy-", dir=TMP))
     say(S, "OK" if all(r.returncode == 0 and not r.stdout.strip() for r in (r1, r2, r3)) and s2 < 10 else "FAIL", "fail-open",
         f"без ключа `{model_only}` — {'тишина' if not r1.stdout.strip() else 'вывод'} ({s1:.1f} с); `git push --force`: `decide` завис — "
         f"{'тишина' if not r2.stdout.strip() else 'вывод'} за {s2:.1f} с (срок хука 8 с, таймаут настроек 10 с); нет политики — {'тишина' if not r3.stdout.strip() else 'вывод'}")
+    ask = tempfile.mkdtemp(prefix="toolgate-ask-", dir=TMP)
+    open(f"{ask}/toolgate", "w").write("#!/bin/sh\ncat >/dev/null\necho '{\"verdict\":\"ask\",\"reason\":\"stub ask\"}'\n")
+    os.chmod(f"{ask}/toolgate", 0o755)
+    r4, _ = run("git push --force origin main", f"{tag}ask", env=os.environ | {"PATH": f"{ask}:{os.environ['PATH']}"})
+    say(S, "OK" if r4.returncode == 0 and not r4.stdout.strip() else "FAIL", "ask",
+        f"`decide` ответил ask (заглушка): {'тишина' if not r4.stdout.strip() else 'вывод'} — хук печатает только deny")
     lines = [json.loads(l) for l in open(TOOLGATE_AUDIT, encoding="utf-8")] if os.path.isfile(TOOLGATE_AUDIT) else []
-    mine = [l for l in lines if str(l.get("session_id", "")).startswith("tg-probe-")]
+    mine = [l for l in lines if str(l.get("session_id", "")).startswith(tag)]
     user = os.path.expanduser("~/.toolgate/audit.jsonl")
-    leaked = sum(1 for l in open(user, encoding="utf-8") if '"session_id":"tg-probe-' in l.replace(" ", "")) if os.path.isfile(user) else 0
-    say(S, "OK" if len(mine) >= 6 and not leaked and not any("input" in l for l in mine) else "FAIL", "audit",
+    leaked = sum(1 for l in open(user, encoding="utf-8") if f'"session_id":"{tag}' in l.replace(" ", "")) if os.path.isfile(user) else 0
+    say(S, "OK" if len(mine) >= 7 and not leaked and not any("input" in l for l in mine) else "FAIL", "audit",
         f"строк проб в {TOOLGATE_AUDIT}: {len(mine)} (решений deny {sum(l.get('verdict') == 'deny' for l in mine)}), вход инструмента в них — "
         f"{'нет' if not any('input' in l for l in mine) else 'есть'}; в ~/.toolgate/audit.jsonl строк проб — {leaked}")
     init, res, uses, results, _ = control(dst, lenv, args, "toolgate", PROMPT_TOOLGATE)
@@ -859,6 +931,7 @@ def main():
     src, proc, launch = paths()
     print(f"источник харнеса: {src}; строка запуска: {proc}; launch settings: {launch}")
     line = static(src, proc, launch)
+    ran = False
     if line:
         dst, init = pair(src, proc, launch, *line)
         if init:
@@ -866,7 +939,11 @@ def main():
             gate_probes(src, launch, *line)
             abide_probes(src, launch, *line)
             toolgate_probes(src, launch, *line, dst)
+            ran = True
         doctor(dst)
+    if not ran:  # маркер раздела — только после его проб: статики и self-test мало
+        for sec in ("ENV", "HOOKS", "GATE_HOOK", "ABIDE", "TOOLGATE"):
+            say(sec, "FAIL", "probes", "пробы раздела не шли: нет строки запуска или вложенный claude -p не состоялся")
     for sec, ss in out.items():
         print(f"{sec}_FAIL" if "FAIL" in ss else f"{sec}_OK")
     return 1 if any("FAIL" in ss for ss in out.values()) else 0
