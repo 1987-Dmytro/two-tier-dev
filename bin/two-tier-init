@@ -6,7 +6,7 @@
 # Содержимое kit/ ложится в КОРЕНЬ цели: kit/CLAUDE.md → <target>/CLAUDE.md,
 # kit/.claude/ → <target>/.claude/, kit/bin/ → <target>/bin/; вложенного kit/ в цели нет.
 # Существующий файл не перезаписывается — печатается «skip (exists)».
-# Режимы сохраняются (cp -p): хуки должны остаться исполняемыми.
+# Режимы сохраняются (cp -p): хуки должны остаться исполняемыми. Кэш Python (__pycache__) не копируется.
 # Цель должна существовать; git init скрипт не делает и не требует.
 set -euo pipefail
 
@@ -23,7 +23,7 @@ KIT="$HERE/kit"
 
 echo "two-tier-dev kit → $TARGET"
 cd "$KIT"
-find . -type f -print | LC_ALL=C sort | while IFS= read -r src; do
+find . -name __pycache__ -prune -o -type f -print | LC_ALL=C sort | while IFS= read -r src; do
   rel="${src#./}"
   dst="$TARGET/$rel"
   if [ -e "$dst" ]; then

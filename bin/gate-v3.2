@@ -13,7 +13,9 @@ mkdir -p /tmp/two-tier-v3/skills/.claude/skills
 T3=$(mktemp -d /tmp/two-tier-v3/t32-XXXXXX)
 LOGS=$(mktemp -d /tmp/two-tier-v3/gate32-XXXXXX)
 git init -q "$T3"
-echo "F10: bin/two-tier-init t3 — файлов кита $("$REPO/bin/two-tier-init" "$T3" | grep -c 'wrote:'); логи — ${LOGS}"
+n=$("$REPO/bin/two-tier-init" "$T3" | grep -c 'wrote:')
+m=$(git -C "$REPO" ls-files kit | wc -l | tr -d ' ')  # в проект ложится ровно кит из git: ни кэша, ни чужих файлов
+echo "F10: bin/two-tier-init t3 — файлов кита $n (в git $m); логи — ${LOGS}"
 
 run() {  # run <имя> <каталог> <команда…>: лог и код выхода в $LOGS
   local name=$1 dir=$2; shift 2
@@ -63,4 +65,5 @@ mark v3.1 HOOKS_OK harness-t3 harness-repo
 mark v3.1 VERIFY_OK verify
 mark v3.1 KIT_OK kit-t3 kit-repo
 mark v3.1 OWNER_OK owner
+[ "$n" = "$m" ] || { echo "F10 FAIL: two-tier-init положил файлов $n, в git кита $m"; fails=$((fails + 1)); }
 [ "$fails" -eq 0 ] && echo "F10 GATE_OK" && echo GATE_OK || { echo "GATE_FAIL: $fails"; exit 1; }
