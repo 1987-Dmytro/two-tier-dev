@@ -80,7 +80,11 @@ def main(argv):
     print(f"verify-phase: HEAD {sha[:7]} ветки {branch}; свежий клон {'origin' if url else 'локального репо'} → {clone}; лимит {limit} с")
     start = next((p for p in ("docs/PROMPT.txt", "docs/GOAL.txt") if os.path.isfile(f"{clone}/{p}")), None)  # v3.2: стартовый запрос
     text = open(f"{clone}/{start}", encoding="utf-8").read() if start else ""
-    gate = (re.findall(r"(?<![\w/])(bin/gate[\w.-]*)", text) or [None])[0]
+    done = re.split(r"END STATE|Done means", text, maxsplit=1)  # гейт — из «сделано» запроса (у прежнего GOAL — из END STATE)
+    gate = (re.findall(r"(?<![\w/])(bin/gate[\w.-]*)", done[-1]) or [None])[0]
+    if gate and not os.path.isfile(f"{clone}/{gate}"):
+        print(f"verify-phase: гейт {gate} из стартового запроса не найден в клоне — чеки гоняют проверяющие")
+        gate = None
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     env.update(ENABLE_CLAUDEAI_MCP_SERVERS="false", CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="0", CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS="16",
                SPEC_GATE="off")  # v3.2: приёмочная сессия не держится spec-gate (SPEC-v3.2 §1)
