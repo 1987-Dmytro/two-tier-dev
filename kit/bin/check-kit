@@ -83,14 +83,11 @@ if root == "kit" and os.path.isdir("mods/handoff"):  # v3.2, F6: мод handoff 
     row = next((l for l in read("kit/docs/PROCESS.template.md").splitlines() if "`handoff@two-tier-mods`" in l), "")
     hsay(row and "| да |" in row and "70 %" in row and "/clear" in row, "handoff", f"строка шаблона Environment: {'да, 70 %, /clear' if row else 'нет'}")
     ls = json.loads(read("kit/.claude/launch.settings.json"))
-    uc = json.loads(read("mods/handoff/.claude-plugin/plugin.json")).get("userConfig", {})
-    opts = ls.get("pluginConfigs", {}).get("handoff@two-tier-mods", {}).get("options")
-    src = "pluginConfigs"
-    if opts is None:  # нет записи — действуют userConfig мода по умолчанию (PLAN-v3.2, отклонение 12)
-        opts, src = {k: v.get("default") for k, v in uc.items()}, "userConfig мода по умолчанию"
+    opts = ls.get("pluginConfigs", {}).get("handoff@two-tier-mods", {}).get("options")  # SPEC-v3.2 F6: 70 % и /clear — в pluginConfigs, не умолчания мода
     on = ls.get("enabledPlugins", {}).get("handoff@two-tier-mods") is True
-    hsay(on and opts.get("threshold") == 70 and opts.get("autoClear") is True, "handoff",
-         f"launch settings кита: включён — {on}; {src}: threshold {opts.get('threshold')}, autoClear {opts.get('autoClear')}, handoffDir {opts.get('handoffDir')}")
+    hsay(on and opts and opts.get("threshold") == 70 and opts.get("autoClear") is True, "handoff",
+         f"launch settings кита: включён — {on}; pluginConfigs: " + (f"threshold {opts.get('threshold')}, autoClear {opts.get('autoClear')}, handoffDir {opts.get('handoffDir')}"
+                                                                     if opts else "записи handoff@two-tier-mods нет"))
     hsay("handoffs/" in read(".gitignore").splitlines(), "handoff", f".gitignore: handoffs/ — {'есть' if 'handoffs/' in read('.gitignore').splitlines() else 'нет'}")
     os.makedirs("/tmp/two-tier-v3", exist_ok=True)
     t = tempfile.mkdtemp(prefix="check-kit-init-", dir="/tmp/two-tier-v3")

@@ -510,6 +510,14 @@ def templates():
             continue
         hits += [f"{os.path.relpath(path, root)}: {n}"] if n else []
     out.append(("FAIL" if hits else "OK", "no-goal", f"упоминаний команды {slash.pattern[:5]} в {root}/ — {'; '.join(hits) or 'нет'}"))
+    if root == "kit":  # v3.2, F7: кит, который получает новый проект, — без схемы GOAL (в проекте прежнее имя — WARN, см. rule_prompt)
+        kd = json.loads(read("kit/budgets.json"))["defaults"]
+        own = kd.get("owner", [])
+        old = (["нет prompt_chars"] if "prompt_chars" not in kd else []) + (["goal_chars"] if "goal_chars" in kd else []) \
+            + (["нет docs/PROMPT.txt в owner"] if "docs/PROMPT.txt" not in own else []) + (["docs/GOAL.txt в owner"] if "docs/GOAL.txt" in own else []) \
+            + [f"kit/CLAUDE.md:{i}" for i, l in enumerate(read("kit/CLAUDE.md").splitlines(), 1) if re.search(r"GOAL|\bgoal\b", l)]
+        out.append(("FAIL" if old else "OK", "kit-prompt", f"kit/budgets.json и kit/CLAUDE.md — стартовый запрос v3.2: "
+                    + ("; ".join(old) if old else "prompt_chars, docs/PROMPT.txt в owner, схемы GOAL нет")))
     pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
     subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),
             ("<первые 12 знаков git hash-object>", pin)]

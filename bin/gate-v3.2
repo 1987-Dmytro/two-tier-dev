@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # gate-v3.2 — гейт кита v3.2 (SPEC-v3.2 F10): кит на пустом репо (свой t3 во /tmp/two-tier-v3), маркеры F1–F9 фазы с номером
 # фичи, уцелевшие маркеры v3.1 (HARNESS_OK, HOOKS_OK, VERIFY_OK, KIT_OK, OWNER_OK), затем «F10 GATE_OK».
-# t3: bin/jev, check-harness, check-budget (шаблоны, владение), check-kit; корень ветки: check-harness, check-kit (мод handoff),
-# check-verify, check-spend, check-docs, two-tier-upgrade --self-test. Долгие чеки идут параллельно. Подготовка строки запуска
+# t3: bin/jev, check-harness, check-budget (шаблоны, владение), check-kit; корень ветки: check-harness, check-budget --templates
+# (кит без схемы GOAL), check-kit (мод handoff), check-verify, check-spend, check-docs, two-tier-upgrade --self-test. Долгие чеки идут параллельно. Подготовка строки запуска
 # шаблона — скилл graphify для --add-dir /tmp/two-tier-v3/skills (так её делает оператор перед запуском).
 # В репо ничего не пишет, кроме журнала расхода bin/jev и check-ui: полные логи — свой каталог /tmp/two-tier-v3/gate32-*, в вывод —
 # команда, итог и строки FAIL/WARN/BAD.
@@ -27,6 +27,7 @@ run verify "$REPO" bin/check-verify &
 run init "$T3" bin/check-budget
 run jev "$T3" bin/jev --self-test
 run templates "$T3" bin/check-budget --templates
+run templates-repo "$REPO" bin/check-budget --templates
 run owner "$T3" bin/check-budget --self-test intent owner
 run kit-t3 "$T3" bin/check-kit
 run kit-repo "$REPO" bin/check-kit
@@ -51,7 +52,7 @@ mark F3 ABIDE_OK harness-t3 harness-repo
 mark F4 ENV_OK harness-t3 harness-repo
 mark F5 TOOLGATE_OK harness-t3 harness-repo
 mark F6 HANDOFF_OK kit-repo
-mark F7 BUDGET_OK templates
+mark F7 BUDGET_OK templates templates-repo
 mark F7 UPGRADE_OK upgrade
 mark F8 SPEND_OK spend
 mark F9 DOCS_OK docs

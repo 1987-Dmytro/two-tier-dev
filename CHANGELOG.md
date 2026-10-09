@@ -15,14 +15,15 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
 ## v3.2 — 2026-10-09 — the spec drives the phase without `/goal`: a Stop hook holds the end of a turn by evidence files, the Jev layer comes through the kit
 - **Launch without `/goal`** (D5): the phase starts from the start prompt `docs/PROMPT.txt` (template `kit/docs/PROMPT.template.txt`),
   passed as the last argument of the launch line; the GOAL template moved to `docs/archive/GOAL.template-v3.1.txt`; `check-budget` reads
-  `Read first:` from the start prompt (the older `docs/GOAL.txt` until it is moved) under the budget `prompt_chars` and fails on any
-  `/goal` left in the kit; `bin/two-tier-upgrade` moves a project's `docs/GOAL.txt` to `docs/PROMPT.txt` in its own «Тимлид:» commit.
+  `Read first:` from the start prompt (the older `docs/GOAL.txt` until it is moved) under the budget `prompt_chars` (a project's older
+  `goal_chars` — WARN; in the kit, `--templates` fails `kit-prompt` until `kit/budgets.json` and `kit/CLAUDE.md` drop the GOAL scheme)
+  and fails on any `/goal` left in the kit; `bin/two-tier-upgrade` moves a project's `docs/GOAL.txt` to `docs/PROMPT.txt` in its own «Тимлид:» commit.
   Taught by: the operator, 09.10 — «`/goal` мешает разработке, нужна только правильная спека».
 - **`spec-gate`** — the kit's Stop hook: by code, every feature of the phase SPEC has its evidence file with the marker, the branch is
-  pushed, the PROGRESS head was touched in the session, `/verify-phase` gave PASS for HEAD — then `SPEC_GATE_OK`; otherwise the end of
-  the turn is blocked with the list of what is missing. Jev answers only the fuzzy part (a STOP line with a question and a resume
-  line, a complete PROGRESS head, evidence that contradicts «done») in one `bin/jev` call; caps of 12 blocks and 3 h, `no-progress`
-  after the same list three times, background tasks and `AGENT_STOP` pass; on its own error it lets the turn end.
+  pushed, the PROGRESS head differs from the one committed before the session, `/verify-phase` gave PASS for HEAD — then
+  `SPEC_GATE_OK`; a new `STOP: <id>` line of §4 ends a turn once; otherwise the end of the turn is blocked with the list of what is missing. Jev answers only the fuzzy part (a STOP line with a question and a resume
+  line, a complete PROGRESS head, evidence that contradicts «done») in one `bin/jev` call; caps of 12 blocks and 3 h and `no-progress`
+  after the same list three times only soften a block, background tasks and `AGENT_STOP` pass; on its own error it lets the turn end.
 - **The Jev layer through the kit** (D6): Abide (rules of the project's CLAUDE.md on every edit, a note — the end of the turn is not
   held), Toolgate «deny only», Belay and Steer-or-Queue in shadow, Compact Adviser `hint`, the `handoff` mod at 70 %; Quicksilver, Jev
   SEO and Jev Browser by task, proven by probes; the Environment table drives all of it and `bin/check-harness` compares it with
