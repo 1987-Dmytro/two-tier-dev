@@ -6,7 +6,8 @@
 // and ABIDE_HOME_DIR under /tmp/two-tier-v3: its session state never lands in ~/.abide and the operator's global rubric is not
 // read. Mode — a note: a fix demand on an edit (PostToolUse) reaches Claude as Abide prints it; a block at Stop becomes a
 // message to the operator, so the end of the turn is never held; a request to compile the rubric becomes a message to the
-// operator too (the rubric is the team lead's file). No Abide, an error or a timeout — silence and exit 0.
+// operator too (the rubric is the team lead's file). The hook input loses `prompt` and `transcript_path` on the way: Abide
+// would send the operator's last prompt to Jev as `task` (SPEC-v3.2 C6). No Abide, an error or a timeout — silence and exit 0.
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -29,7 +30,10 @@ function main() {
   if (!js) return
   let input = ''
   try {
-    input = fs.readFileSync(0, 'utf8')
+    const hook = JSON.parse(fs.readFileSync(0, 'utf8'))
+    delete hook.prompt
+    delete hook.transcript_path
+    input = JSON.stringify(hook)
   } catch {}
   const env = { ...process.env, ABIDE_HOME_DIR: process.env.ABIDE_HOME_DIR || '/tmp/two-tier-v3/abide-home' }
   if (!env.TYPESAFE_AI_API_KEY && env.TYPESAFE_API_KEY) env.TYPESAFE_AI_API_KEY = env.TYPESAFE_API_KEY

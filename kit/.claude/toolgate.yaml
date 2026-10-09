@@ -5,10 +5,11 @@ backend:
   model: jev-1.13.0          # pinned: `auto` would be the floating jev-latest
   timeout_ms: 5000
 fail_mode: passthrough       # no answer — the permission flow of Claude Code decides
-rules:                       # static, before the model and its «authorized» softening: an executor never force-pushes
+rules:                       # static, before the model and its «authorized» softening: an executor never force-pushes;
+                             # anchored to a command position like Toolgate's own rules — text that merely mentions it passes
   - match:
       tool: Bash
-      input_regex: 'git\s+push\b.*(--force|--force-with-lease|\s-f\b)'
+      input_regex: '(^|[;&|(\n]\s*)git(\s+(-C|-c)\s+\S+|\s+--[\w-]+(=\S+)?)*\s+push\b[^;&|]*\s(--force(-with-lease)?\b|-[a-zA-Z]*f[a-zA-Z]*\b|\+\S)'
     action: deny
     reason: a force-push is forbidden in an executor's phase (kit policy)
 thresholds:
