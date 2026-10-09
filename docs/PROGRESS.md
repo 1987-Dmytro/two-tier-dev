@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3.2 «Jev-слой, без /goal» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
 ## Голова — 09.10.2026, 14:15 — фаза v3.2 идёт
-**Сделано:** шаги 0a, 0; F1 `bin/jev`, F2 `spec-gate`, F3 Abide, F5 Toolgate, F4 окружение слоя, F6 handoff, F7 запуск без `/goal` — с чеками и evidence. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** плечо — 09.10, ~14:00 (v3.1: 98 мин на 9 фич, здесь 10), затем `/verify-phase` ~10–20 мин; сдвинуть может стоп по Toolgate или Abide (SPEC §4).
+**Сделано:** шаги 0a, 0; F1 `bin/jev`, F2 `spec-gate`, F3 Abide, F5 Toolgate, F4 окружение слоя, F6 handoff, F7 запуск без `/goal`, F8 расход — с чеками и evidence. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** плечо — 09.10, ~14:00 (v3.1: 98 мин на 9 фич, здесь 10), затем `/verify-phase` ~10–20 мин; сдвинуть может стоп по Toolgate или Abide (SPEC §4).
 
 ## Done
 - Шаг 0a (`5a1913f`): архив v3.1 — `git mv` PROGRESS → `docs/archive/PROGRESS-v3.1.md`, evidence v3.1 → `docs/archive/evidence-v3.1/`, `accept-*.txt` → `docs/archive/evidence-v3/`.
@@ -13,9 +13,10 @@
 - **F4 Окружение слоя**: `bin/check-harness` → `ENV_OK` на корне репо и на t3 (шаблон кита: плагинов 6 и `@builtin`, MCP context7, скилл graphify через `--add-dir`; режимы против `pluginConfigs`, живая тень Belay — `shadow`, Steer-or-Queue — `shadow`; пробы «по задаче»: `qs status`, `jevseo doctor`, `bin/check-ui` → `UI_OK`); на t3 все шесть маркеров против «до» `ENV_FAIL · HARNESS_FAIL · HOOKS_FAIL` — `docs/evidence/F4-harness-result.txt`.
 - **F6 handoff**: `bin/check-kit` → `HANDOFF_OK` (строка шаблона 70 %, `/clear`; включён в launch settings кита, режим — `userConfig` мода по умолчанию; `handoffs/` в `.gitignore`; команда установки в выводе `bin/two-tier-init`; `claude plugin validate` — hooks и 18 calls, `claude plugin test` — 8 из 8) — `docs/evidence/F6-kit-result.txt`.
 - **F7 Запуск без `/goal`**: `bin/check-budget --templates` → `BUDGET_OK` (шаблон `docs/PROMPT.template.txt`, шаблон GOAL — в архиве, `/goal` в ките — 0; до правок — `BUDGET_FAIL`); апгрейд переносит `docs/GOAL.txt` → `docs/PROMPT.txt` коммитом «Тимлид: …» — `UPGRADE_OK`; t3 — пара стартует из `docs/PROMPT.txt`, шесть маркеров; `bin/check-verify` → `VERIFY_OK` — `docs/evidence/F7-templates-result.txt`.
+- **F8 Расход Jev**: `bin/check-spend` → `SPEND_OK` (фикстура журналов — сумма сходится до токена; плечо: вызовов 1617, ~4,2 млн входных токенов, $0,18 ≈ €0,15, без планки; Toolgate — оценка, у остальных — токены журналов) — `docs/evidence/F8-spend-result.txt`.
 
 ## Next — один айтем
-1. **F8 Расход Jev**: `bin/check-spend` → `SPEND_OK`.
+1. **F9 Документы**: `bin/check-docs` → `DOCS_OK`.
 
 ## Open stop — NONE
 

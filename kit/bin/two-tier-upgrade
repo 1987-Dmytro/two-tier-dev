@@ -20,7 +20,7 @@ KIT_FILES = [".claude/settings.json", ".claude/hooks/kill-switch.sh", ".claude/h
              ".claude/skills/accept/SKILL.md", ".claude/skills/plan-phase/SKILL.md",
              "docs/INTENT.template.md", "docs/SPEC.template.md", "docs/PROMPT.template.txt", "docs/PLAN.template.md",
              "docs/PROGRESS.template.md", "docs/STATUS.template.md", "docs/PROCESS.template.md", "docs/LAUNCH.md",
-             "REVIEW.md", "bin/check-budget", "bin/check-ci", "bin/check-harness", "bin/check-kit", "bin/check-ui", "bin/jev",
+             "REVIEW.md", "bin/check-budget", "bin/check-ci", "bin/check-harness", "bin/check-kit", "bin/check-spend", "bin/check-ui", "bin/jev",
              "bin/two-tier-upgrade", ".github/workflows/two-tier.yml", ".claude/workflows/verify-phase.js", "bin/verify-phase"]
 IF_ABSENT = ["CLAUDE.md", "budgets.json"]          # файлы с фактами проекта: ставятся, только если их нет
 TL_IN_KIT = [".claude/launch.settings.json", ".claude/spec-gate.json", ".claude/toolgate.yaml"]  # файлы тимлида: апгрейд их не пишет

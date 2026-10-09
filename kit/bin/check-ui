@@ -6,7 +6,8 @@ its flow. With <flow.json> — the phase's scenario, a Jev Browser flow: {name, 
 Run: `npx -y -p jev-browser@0.1.2 jev-browser run <flow> --json` with the model pinned (JEV_MODEL, default jev-1.13.0), npm's
 cache and TMPDIR under /tmp/two-tier-v3, a limit of 180 s. UI_OK only when the run exits 0, every step passed (done or
 likely_done) and every `assert` returned true — the CLI's own exit code ignores assert. Output — counts only (steps,
-passed, Jev calls, tokens, ms): page text and candidates stay out of the evidence.
+passed, Jev calls, tokens, ms): page text and candidates stay out of the evidence. Each run is a line of the spend log of
+bin/jev (JEV_LOG, else docs/evidence/jev.jsonl under the git root): caller check-ui, Jev calls and input tokens (SPEC-v3.2 F8).
 """
 import json, os, subprocess, sys, tempfile, time
 
@@ -67,6 +68,15 @@ def main(argv):
           f"Jev calls {res.get('calls')}, tokens {res.get('tokens')}, {res.get('total_ms')} ms in the run, {time.monotonic() - t0:.1f} s in all")
     if not res:
         print("     no JSON result: " + ((r.stderr or r.stdout).strip().splitlines() or ["(empty)"])[-1][:200])
+    try:  # the spend log never fails the check
+        root = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip() or os.getcwd()
+        log = os.environ.get("JEV_LOG") or f"{root}/docs/evidence/jev.jsonl"
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "caller": "check-ui", "model": env["JEV_MODEL"],
+                                "status": 200 if r.returncode == 0 else r.returncode, "calls": res.get("calls") or 0, "input_tokens": res.get("tokens") or 0}) + "\n")
+    except OSError:
+        pass
     print("UI_OK" if ok else "UI_FAIL")
     return 0 if ok else 1
 
