@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3.2 «Jev-слой, без /goal» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — 09.10.2026, 14:15 — фаза v3.2 идёт
-**Сделано:** шаги 0a, 0; F1 `bin/jev`, F2 `spec-gate`, F3 Abide, F5 Toolgate, F4 окружение слоя, F6 handoff, F7 запуск без `/goal`, F8 расход, F9 документы — с чеками и evidence. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** плечо — 09.10, ~14:00 (v3.1: 98 мин на 9 фич, здесь 10), затем `/verify-phase` ~10–20 мин; сдвинуть может стоп по Toolgate или Abide (SPEC §4).
+## Голова — 09.10.2026, 14:40 — фаза v3.2 идёт
+**Сделано:** шаги 0a, 0; F1 `bin/jev`, F2 `spec-gate`, F3 Abide, F5 Toolgate, F4 окружение слоя, F6 handoff, F7 запуск без `/goal`, F8 расход, F9 документы, F10 гейт — все десять фич с чеками и evidence. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** плечо — 09.10, ~14:00 (v3.1: 98 мин на 9 фич, здесь 10), затем `/verify-phase` ~10–20 мин; сдвинуть может стоп по Toolgate или Abide (SPEC §4).
 
 ## Done
 - Шаг 0a (`5a1913f`): архив v3.1 — `git mv` PROGRESS → `docs/archive/PROGRESS-v3.1.md`, evidence v3.1 → `docs/archive/evidence-v3.1/`, `accept-*.txt` → `docs/archive/evidence-v3/`.
@@ -15,9 +15,10 @@
 - **F7 Запуск без `/goal`**: `bin/check-budget --templates` → `BUDGET_OK` (шаблон `docs/PROMPT.template.txt`, шаблон GOAL — в архиве, `/goal` в ките — 0; до правок — `BUDGET_FAIL`); апгрейд переносит `docs/GOAL.txt` → `docs/PROMPT.txt` коммитом «Тимлид: …» — `UPGRADE_OK`; t3 — пара стартует из `docs/PROMPT.txt`, шесть маркеров; `bin/check-verify` → `VERIFY_OK` — `docs/evidence/F7-templates-result.txt`.
 - **F8 Расход Jev**: `bin/check-spend` → `SPEND_OK` (фикстура журналов — сумма сходится до токена; плечо: вызовов 1617, ~4,2 млн входных токенов, $0,18 ≈ €0,15, без планки; Toolgate — оценка, у остальных — токены журналов) — `docs/evidence/F8-spend-result.txt`.
 - **F9 Документы**: `bin/check-docs` → `DOCS_OK` (CHANGELOG v3.2 — 12 строк полей с источником и до/после, `hooks:` и `calls:` модов handoff и compact-adviser; LAUNCH — флаги, стартовый запрос, режимы `spec-gate`, ключ в окружении; README и dev-system — цикл без `/goal`, слой Jev, три судьи) — `docs/evidence/F9-docs-result.txt`.
+- **F10 Гейт v3.2**: `bin/gate-v3.2` → `F1 JEV_OK` … `F9 DOCS_OK`, уцелевшие v3.1 `HARNESS_OK`, `HOOKS_OK`, `VERIFY_OK`, `KIT_OK`, `OWNER_OK`, `F10 GATE_OK` (3 мин 47 с); `bin/gate-v3`, `bin/gate-v3.1` — `git mv` в `docs/archive/` — `docs/evidence/F10-gate-result.txt`.
 
 ## Next — один айтем
-1. **F10 Гейт v3.2**: `bin/gate-v3.2` → `GATE_OK`.
+1. **Приёмка фазы**: CI `v3.2` → `CI_OK`; ревью-воркфлоу — блокирующие чинятся; `bin/verify-phase` из свежего клона → `VERDICT: PASS`; финальный `bin/gate-v3.2` после последнего push.
 
 ## Open stop — NONE
 
