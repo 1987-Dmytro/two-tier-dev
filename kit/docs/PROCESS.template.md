@@ -45,10 +45,10 @@
 `mkdir -p /tmp/two-tier-v3/skills/.claude/skills && for s in graphify; do ln -sfn ~/.claude/skills/$s /tmp/two-tier-v3/skills/.claude/skills/$s; done`
 
 ```sh
-ENABLE_CLAUDEAI_MCP_SERVERS=false CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3/skills "$(cat docs/PROMPT.txt)"
+ENABLE_CLAUDEAI_MCP_SERVERS=false CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3/skills -- "$(cat docs/PROMPT.txt)"
 ```
 
-Фаза стартует без ручного набора: последний аргумент строки — стартовый запрос `docs/PROMPT.txt` (шаблон `docs/PROMPT.template.txt`, пишет тимлид). Конец хода держит Stop-хук `spec-gate` кита — режимы и ключ в окружении — `docs/LAUNCH.md`.
+Фаза стартует без ручного набора: последний аргумент строки — стартовый запрос `docs/PROMPT.txt` после `--` (шаблон `docs/PROMPT.template.txt`, пишет тимлид). Конец хода держит Stop-хук `spec-gate` кита — режимы и ключ в окружении — `docs/LAUNCH.md`.
 
 ## Деньги
 1. **Потолок проекта:** <€> — слово оператора и константа предохранителя.

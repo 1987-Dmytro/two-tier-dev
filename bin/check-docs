@@ -62,7 +62,8 @@ need = ["ultracode", "/verify-phase", "bin/verify-phase", "bin/check-verify", "E
 say(all(n in rd for n in need), "README.md", f"v3.1: нет — {', '.join(n for n in need if n not in rd) or 'ничего'}")
 # v3.1: каждый флаг строки запуска шаблона PROCESS объяснён в LAUNCH.md
 line = next(l for l in re.findall(r"```sh\n(.*?)```", read("kit/docs/PROCESS.template.md"), re.S)[0].splitlines() if " claude " in f" {l} ")
-flags = sorted(set(re.findall(r"(?<!\S)(--[a-z-]+)", line)) | set(re.findall(r"^([A-Z_]+)=", line)))
+flags = sorted(set(re.findall(r"(?<!\S)(--[a-z-]+)", line)) | set(re.findall(r"(?<!\S)([A-Z_]+)=", line.split(" claude ", 1)[0]))
+               | ({"`--`"} if " -- " in line else set()))
 lm = read("kit/docs/LAUNCH.md")
 say(all(f in lm for f in flags), "LAUNCH.md", f"флагов строки запуска шаблона PROCESS {len(flags)}; без объяснения — {', '.join(f for f in flags if f not in lm) or 'нет'}")
 # v3.2: поля фазы — каждое строкой таблицы записи v3.2 с источником и столбцами до/после

@@ -481,7 +481,7 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
                                  "spec-gate", "`STOP: <id>`", "launch-line argument"],
     "docs/PROCESS.template.md": ["| инструмент | форма | id | вкл | фича или чек | установка | удаление |",
                                  "claude --permission-mode auto --model claude-opus-5-5 --effort ultracode",
-                                 "--setting-sources project,local", '"$(cat docs/PROMPT.txt)"', "--strict-mcp-config", "% недели"],
+                                 "--setting-sources project,local", '-- "$(cat docs/PROMPT.txt)"', "--strict-mcp-config", "% недели"],
     "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase",
                   "## Rules for every edit", "Abide", ".abide/rubric.json"],
 }

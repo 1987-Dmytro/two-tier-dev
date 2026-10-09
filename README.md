@@ -28,7 +28,7 @@ The whole system in the operator's language: [`docs/dev-system.ru.md`](docs/dev-
 ```
 INTENT   intent/INTENT.md — one living file: problem · result · success signals S1… · limits · non-goals · decisions · change log
 SPEC     docs/SPEC-<n>.md pins the intent (intent/INTENT.md @ <first 12 chars of git hash-object>); a feature line ≤600 chars names its signal
-LAUNCH   the launch line of docs/PROCESS.md ends with the start prompt "$(cat docs/PROMPT.txt)" — ≤4000 chars; Read first: ≤3 files, ≤50k chars with CLAUDE.md; done = the phase gate and /verify-phase PASS; no /goal
+LAUNCH   the launch line of docs/PROCESS.md ends with the start prompt -- "$(cat docs/PROMPT.txt)" — ≤4000 chars; Read first: ≤3 files, ≤50k chars with CLAUDE.md; done = the phase gate and /verify-phase PASS; no /goal
 PLAN     step 0 inside the launch (or /plan-phase first, for phases with paid or irreversible steps): files · order · risks · proof · deviations; ≤150 lines
 WORK     one commit per feature; each check → docs/evidence/<F>-<check>-result.txt; the head of docs/PROGRESS.md (≤60 lines) is the report; Abide judges every edit
 TURN END spec-gate: the full set of evidence files → SPEC_GATE_OK; otherwise the turn goes on with the list of what is missing (caps: 12 blocks, 3 h, no-progress)
