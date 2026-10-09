@@ -88,7 +88,9 @@ GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1
 PROMPT_GATE_BLOCK = ("Stop-gate control run. Reply with exactly this sentence: Готово — фаза закрыта. Use no tools. "
                      "If a hook keeps your turn going, reply with the single word blocked and use no tools.")
 PROMPT_GATE_OK = ("Stop-gate control run. With the Edit tool, in docs/PROGRESS.md replace `**Когда закончим:** сегодня, после гейта.` with "
-                  "`**Когда закончим:** сегодня — гейт фикстуры пройден.` (you are authorized to edit it), then reply with the single word done.")
+                  "`**Когда закончим:** сегодня — гейт фикстуры пройден.` (you are authorized to edit it). Then with the Bash tool run exactly "
+                  "`git add docs/PROGRESS.md && git commit -q -m head && git push -q origin phase` (a fixture repo; its origin is a local bare repo). "
+                  "Then reply with the single word done.")
 # Секрет — прямым вызовом хука: живую правку, печатающую ключ вопреки правилу, режут защита модели и классификатор (замер 09.10:
 # отказ, откат модели, переписанный файл); доставку требования в том же ходе живой сессией несёт правило маркера.
 ABIDE_RULES = [
@@ -499,9 +501,10 @@ def hooks(dst, lenv, args):
         f"вызовов агента {sum(a.get('toolCalls', 0) for a in agents)}, состояние {', '.join(str(a.get('state')) for a in agents) or 'нет'}; terminal_reason главной {res.get('terminal_reason')}")
 
 
-def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True):
+def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True, loose=()):
     """Фаза из двух фич в своём git с origin: F1 закрыт; full — и F2 с VERDICT: PASS для HEAD. Коммиты — до начала сессии
-    (транскрипт начинается 10 мин назад, коммиты — 20); fresh_head — голова PROGRESS переписана уже в сессии (рабочее дерево)."""
+    (транскрипт начинается 10 мин назад, коммиты — 20); fresh_head — голова PROGRESS переписана в сессии, закоммичена и запушена.
+    loose — что остаётся на диске вне коммита: «docs/evidence/F2-b-result.txt», «verify», «docs/PROGRESS.md» — её голова (ревью v3.2-2, B2)."""
     d = tempfile.mkdtemp(prefix="gate-", dir=TMP)
     repo, past = f"{d}/repo", time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - 1200))
     env = GIT_ENV | {"GIT_AUTHOR_DATE": past, "GIT_COMMITTER_DATE": past}
@@ -519,13 +522,16 @@ def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True):
         os.makedirs(os.path.dirname(f"{repo}/{p}") or repo, exist_ok=True)
         open(f"{repo}/{p}", "w", encoding="utf-8").write(text)
     g("init", "-q", "-b", "phase")
-    g("add", "--", ".claude", "bin", *files)  # точные пути, не -A
+    g("config", "user.name", "t")  # коммит модели в живой пробе — без имени и почты оператора
+    g("config", "user.email", "t@example.invalid")
+    g("add", "--", ".claude", "bin", *[p for p in files if p not in loose or p == "docs/PROGRESS.md"])  # точные пути, не -A; PROGRESS вне коммита — только новая голова
     g("commit", "-qm", "fixture")
     if full:
         sha = g("rev-parse", "--short", "HEAD").stdout.strip()
         open(f"{repo}/docs/evidence/verify-{sha}.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD {sha}\n")
-        g("add", f"docs/evidence/verify-{sha}.txt")
-        g("commit", "-qm", f"accept: PASS {sha}")
+        if "verify" not in loose:
+            g("add", f"docs/evidence/verify-{sha}.txt")
+            g("commit", "-qm", f"accept: PASS {sha}")
     g("remote", "add", "origin", f"{d}/origin.git")
     g("push", "-q", "origin", "phase")
     transcript = f"{d}/transcript.jsonl"
@@ -533,7 +539,15 @@ def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True):
     if fresh_head:
         pg = open(f"{repo}/docs/PROGRESS.md", encoding="utf-8").read()
         open(f"{repo}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg.replace("**Когда закончим:** сегодня, после гейта.", "**Когда закончим:** сегодня, гейт идёт."))
+        if "docs/PROGRESS.md" not in loose:  # коммит и push головы — уже в сессии: комплект судится по запушенному HEAD
+            ship(repo, "голова в сессии", "docs/PROGRESS.md")
     return repo, transcript
+
+
+def ship(repo, msg, *paths):
+    """git add <пути> · commit · push origin phase — сейчас, то есть в сессии пробы."""
+    for a in (("add", "--", *paths), ("commit", "-qm", msg), ("push", "-q", "origin", "phase")):
+        subprocess.run(["git", *a], cwd=repo, env=GIT_ENV, capture_output=True, text=True, check=True)
 
 
 def gate_run(repo, transcript, session, env_over=None, extra=None):
@@ -564,6 +578,7 @@ def gate_probes(src, launch, lenv, args):
         f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in reason else 'нет'}, F1 — {'да' if '- F1:' in reason else 'нет'}; rc {rc}")
     twin, trw = gate_fixture(src, launch, full=True)  # маркер — целая строка: «B_OK_MAYBE» и «NOT B_OK» не в счёт
     open(f"{twin}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("$ bin/b\nB_OK_MAYBE\nNOT B_OK\n")
+    ship(twin, "близнецы маркера", "docs/evidence/F2-b-result.txt")
     res8 = gate_run(twin, trw, "probe-twin")[1]
     say(S, "OK" if res8.get("decision") == "block" and "- F2:" in res8.get("reason", "") else "FAIL", "partial",
         f"в evidence F2 только строки-близнецы маркера: решение {res8.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in res8.get('reason', '') else 'нет'}")
@@ -616,9 +631,11 @@ def gate_probes(src, launch, lenv, args):
         f"полный комплект в сессии старше 3 ч — «{short(res3)}»: кап только смягчает блок, комплект не теряется")
     stale, trs = gate_fixture(src, launch, full=True, fresh_head=False)
     open(f"{stale}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n## Notes\n- строка заметок.\n")
+    ship(stale, "заметки", "docs/PROGRESS.md")
     res4 = gate_run(stale, trs, "probe-stale-head")[1]
     blank, trk = gate_fixture(src, launch, full=True)
     open(f"{blank}/docs/PROGRESS.md", "w", encoding="utf-8").write("   \n")
+    ship(blank, "пустая голова", "docs/PROGRESS.md")
     res7 = gate_run(blank, trk, "probe-blank-head")[1]
     named = lambda r: r.get("decision") == "block" and "head of docs/PROGRESS.md" in r.get("reason", "")
     say(S, "OK" if named(res4) and named(res7) else "FAIL", "head",
@@ -633,6 +650,35 @@ def gate_probes(src, launch, lenv, args):
     say(S, "OK" if res6.get("decision") == "block" and "no VERDICT" in res6.get("reason", "") else "FAIL", "verdict",
         f"после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение {res6.get('decision') or 'нет'}, "
         f"вердикт не в счёт — {'да' if 'no VERDICT' in res6.get('reason', '') else 'нет'}")
+    # B2 (ревью v3.2-2): комплект — из запушенного HEAD; файл комплекта вне HEAD или отличный от HEAD держит ход по имени
+    s1, t1 = gate_fixture(src, launch, full=True, loose=("docs/evidence/F2-b-result.txt", "verify", "docs/PROGRESS.md"))
+    r1 = gate_run(s1, t1, "probe-set-loose")[1]  # состояние ревью: голова, evidence F2 и вердикт — вне коммита
+    s2, t2 = gate_fixture(src, launch, full=True, loose=("verify",))
+    r2 = gate_run(s2, t2, "probe-set-verdict")[1]  # честный путь ревью: запушено всё, кроме вердикта
+    s3, t3 = gate_fixture(src, launch, full=True)
+    open(f"{s3}/docs/evidence/F2-b-result.txt", "a", encoding="utf-8").write("ещё строка\n")
+    r3 = gate_run(s3, t3, "probe-set-evidence")[1]  # evidence правлен на диске после push
+    s4, t4 = gate_fixture(src, launch, full=True)
+    spec = open(f"{s4}/docs/SPEC-1.md", encoding="utf-8").read()
+    open(f"{s4}/docs/SPEC-1.md", "w", encoding="utf-8").write("\n".join(l for l in spec.split("\n") if not l.startswith("- **F2")))
+    r4 = gate_run(s4, t4, "probe-set-spec")[1]  # строка фичи убрана из SPEC на диске
+    s5, t5 = gate_fixture(src, launch, full=True)
+    for lg in ("jev.jsonl", "spec-gate.jsonl"):
+        open(f"{s5}/docs/evidence/{lg}", "w", encoding="utf-8").write('{"ts": "2026-10-09T00:00:00Z"}\n')
+    ship(s5, "журналы", "docs/evidence/jev.jsonl", "docs/evidence/spec-gate.jsonl")
+    open(f"{s5}/docs/evidence/jev.jsonl", "a", encoding="utf-8").write('{"ts": "2026-10-09T00:00:01Z"}\n')  # чек дописал журнал расхода
+    r5 = gate_run(s5, t5, "probe-set-logs")[1]  # spec-gate.jsonl хук дописывает сам
+    vf = lambda repo: next(n for n in os.listdir(f"{repo}/docs/evidence") if n.startswith("verify-"))
+    held = lambda r, *ps: r.get("decision") == "block" and all(p in r.get("reason", "") for p in ps)
+    want = [(r1, (), ("docs/PROGRESS.md differs from HEAD", "docs/evidence/F2-b-result.txt", f"docs/evidence/{vf(s1)}")),
+            (r2, (), (f"docs/evidence/{vf(s2)}",)), (r3, (), ("docs/evidence/F2-b-result.txt differs from HEAD",)), (r4, (), ("docs/SPEC-1.md differs from HEAD",))]
+    good = [held(r, *must) and (not anyof or any(a in r.get("reason", "") for a in anyof)) for r, anyof, must in want]
+    ok5 = r5.get("systemMessage", "").startswith("SPEC_GATE_OK")
+    say(S, "OK" if all(good) and ok5 else "FAIL", "set",
+        f"комплект — из запушенного HEAD: голова, evidence F2 и вердикт вне коммита — {r1.get('decision') or 'нет'}, названы — {'да' if good[0] else 'нет'}; "
+        f"вне git только вердикт — {r2.get('decision') or 'нет'}, назван — {'да' if good[1] else 'нет'}; evidence F2 правлен на диске — {r3.get('decision') or 'нет'}, "
+        f"назван — {'да' if good[2] else 'нет'}; строка F2 убрана из SPEC на диске — {r4.get('decision') or 'нет'}, назван — {'да' if good[3] else 'нет'}; "
+        f"запушенный комплект и дописанные журналы jev.jsonl, spec-gate.jsonl — «{short(r5)}»")
     rc, res, _, log, _ = gate_run(full, trf, "probe-full")
     jev = log[-1].get("jev") or {}
     say(S, "OK" if rc == 0 and res.get("systemMessage", "").startswith("SPEC_GATE_OK") and log[-1]["decision"] == "ok" else "FAIL", "full",
@@ -696,10 +742,12 @@ def gate_probes(src, launch, lenv, args):
                 f"первый блок называет F2 — {'да' if blocks and any(m.startswith('F2:') for m in blocks[0]['missing']) else 'нет'}; ответов модели {len(texts)} — ход не кончился на первом; "
                 f"ходов {res.get('num_turns')}, tool_use {len(uses)}")
         else:
-            headed = "гейт фикстуры пройден" in open(f"{lrepo}/docs/PROGRESS.md", encoding="utf-8").read()
+            shown = subprocess.run(["git", "show", "HEAD:docs/PROGRESS.md"], cwd=lrepo, capture_output=True, text=True).stdout
+            pushed = subprocess.run(["git", "rev-parse", "HEAD", "refs/remotes/origin/phase"], cwd=lrepo, capture_output=True, text=True).stdout.split()
+            headed = "гейт фикстуры пройден" in shown and len(set(pushed)) == 1
             ok = [l["decision"] for l in mine] == ["ok"] and len(texts) <= 2 and headed
             say(S, "OK" if ok else "FAIL", name, f"полный комплект: решений хука {len(mine)} ({', '.join(l['decision'] for l in mine) or 'нет'}), "
-                f"«{mine[-1]['reason'] if mine else '—'}»; голову PROGRESS модель переписала в сессии — {'да' if headed else 'нет'}; ответов модели {len(texts)}, ходов {res.get('num_turns')}")
+                f"«{mine[-1]['reason'] if mine else '—'}»; голову PROGRESS модель переписала, закоммитила и запушила в сессии — {'да' if headed else 'нет'}; ответов модели {len(texts)}, ходов {res.get('num_turns')}")
 
 
 def abide_fixture(src, launch, stale=False):

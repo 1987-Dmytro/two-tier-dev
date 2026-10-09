@@ -20,7 +20,8 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
   and fails on any `/goal` left in the kit; `bin/two-tier-upgrade` moves a project's `docs/GOAL.txt` to `docs/PROMPT.txt` in its own «Тимлид:» commit.
   Taught by: the operator, 09.10 — «`/goal` мешает разработке, нужна только правильная спека».
 - **`spec-gate`** — the kit's Stop hook: by code, every feature of the phase SPEC has its evidence file with the marker, the branch is
-  pushed, the PROGRESS head differs from the one committed before the session, `/verify-phase` gave PASS for HEAD — then
+  pushed, the PROGRESS head differs from the one committed before the session, `/verify-phase` gave PASS for HEAD, all judged from the
+  pushed HEAD (a set file missing from HEAD or differing from it holds the turn by name) — then
   `SPEC_GATE_OK`; a new `STOP: <id>` line of §4 ends a turn once; otherwise the end of the turn is blocked with the list of what is missing. Jev answers only the fuzzy part (a STOP line with a question and a resume
   line, a complete PROGRESS head, evidence that contradicts «done») in one `bin/jev` call; caps of 12 blocks and 3 h and `no-progress`
   after the same list three times only soften a block, background tasks and `AGENT_STOP` pass; on its own error it lets the turn end.
