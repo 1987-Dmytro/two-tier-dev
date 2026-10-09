@@ -14,9 +14,10 @@
   Compact Adviser — его compact-adviser-requests-*.jsonl (строка request; оценка по длине тела запроса);
   Quicksilver — его stats.json (накопительно с since: вне окна, отдельной строкой).
 В вывод — только имена инструментов, счётчики и суммы: ни путей домашнего каталога, ни текста из журналов.
---self-test — фикстура журналов во /tmp/two-tier-v3 с известной суммой: итог сходится до цента.
+--self-test — фикстура журналов во /tmp/two-tier-v3 с известной суммой: итог сходится до цента; каталог фикстуры удаляется,
+а сбор расхода каталоги check-spend-* не читает.
 """
-import glob, json, os, subprocess, sys, tempfile, time
+import glob, json, os, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 
 TMP = "/tmp/two-tier-v3"
@@ -64,13 +65,14 @@ def collect(since, roots):
         rows[tool] = (calls, int(round(tokens)), exact, n, bad)
     inwin = lambda e, key: (when(e.get(key)) or 0) >= since
     repo, tmp, home = roots
-    jev, bad = lines(glob.glob(f"{repo}/docs/evidence/jev.jsonl") + glob.glob(f"{tmp}/**/docs/evidence/jev.jsonl", recursive=True))
+    own = lambda paths: [p for p in paths if not p.startswith(f"{tmp}/check-spend-")]  # фикстуры self-test — не расход плеча
+    jev, bad = lines(own(glob.glob(f"{repo}/docs/evidence/jev.jsonl") + glob.glob(f"{tmp}/**/docs/evidence/jev.jsonl", recursive=True)))
     jev = [e for e in jev if inwin(e, "ts")]
     ui = [e for e in jev if e.get("caller") == "check-ui"]
     api = [e for e in jev if e.get("caller") != "check-ui"]
     put("bin/jev и spec-gate", sum(1 for e in api if e.get("status") == 200), sum(e.get("input_tokens") or 0 for e in api), True, len(api), bad)
     put("Jev Browser (check-ui)", sum(e.get("calls") or 0 for e in ui), sum(e.get("input_tokens") or 0 for e in ui), True, len(ui), 0)
-    ab, bad = lines(glob.glob(f"{repo}/.abide/events.jsonl") + glob.glob(f"{tmp}/**/.abide/events.jsonl", recursive=True))
+    ab, bad = lines(own(glob.glob(f"{repo}/.abide/events.jsonl") + glob.glob(f"{tmp}/**/.abide/events.jsonl", recursive=True)))
     ab = [e for e in ab if e.get("kind") == "check" and inwin(e, "at") and ((e.get("usage") or {}).get("inputTokens") or 0) > 0]
     put("Abide", len(ab), sum(e["usage"]["inputTokens"] for e in ab), True, len(ab), bad)
     be, bad = lines(glob.glob(f"{home}/.claude/belay/decisions.jsonl*"))
@@ -127,6 +129,7 @@ def self_test():
             {"ts": new, "caller": "cli", "status": 0, "error": "timeout"}, {"ts": old, "caller": "cli", "status": 200, "input_tokens": 999999},
             {"ts": new, "caller": "check-ui", "status": 200, "calls": 2, "input_tokens": 2200}],
         f"{tmp}/gate-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "spec-gate", "status": 200, "input_tokens": 300}],
+        f"{tmp}/check-spend-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "cli", "status": 200, "input_tokens": 777}],
         f"{repo}/.abide/events.jsonl": [{"kind": "check", "at": new, "usage": {"inputTokens": 400, "outputTokens": 25}},
                                         {"kind": "check", "at": new, "usage": {"inputTokens": 0}}, {"kind": "compile-needed", "at": new}],
         f"{home}/.claude/belay/decisions.jsonl": [{"ts": new, "verdict": "shadow", "usage": {"input_tokens": 700}},
@@ -142,7 +145,10 @@ def self_test():
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "w", encoding="utf-8") as f:
             f.write("".join(json.dumps(r) + "\n" for r in rows) + ("not json\n" if p.endswith("belay/decisions.jsonl") else ""))
-    got = collect(when(t0), (repo, tmp, home))
+    try:
+        got = collect(when(t0), (repo, tmp, home))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)  # фикстура не переживает self-test
     tg = round(FIXED + (TG_Q_NOTASK + 340) / BYTES_PER_TOKEN) + round(FIXED + TG_Q_TASK / BYTES_PER_TOKEN)
     body = len(json.dumps({"x": "a" * 3390}, separators=(",", ":")))
     want = {"bin/jev и spec-gate": (3, 1800), "Jev Browser (check-ui)": (2, 2200), "Abide": (1, 400), "Jev Belay": (1, 700),
@@ -161,6 +167,9 @@ def self_test():
     ok &= good
     good = got["Jev Belay"][4] == 1
     print(f"{'ok ' if good else 'BAD'} фикстура · битая строка журнала посчитана, а не уронила подсчёт ({got['Jev Belay'][4]})")
+    ok &= good
+    good = not os.path.exists(d)
+    print(f"{'ok ' if good else 'BAD'} фикстура · чужой check-spend-* не в сумме, свой каталог фикстуры удалён")
     return ok & good
 
 
