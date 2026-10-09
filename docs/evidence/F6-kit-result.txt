@@ -1,0 +1,24 @@
+$ bin/check-kit
+OK   skills: kit/.claude/skills: accept, plan-phase (ждём accept, plan-phase)
+OK   accept: frontmatter: name accept, description есть, disable-model-invocation true
+OK   accept: знаков 1999/4000, `$` с цифрой — 0
+OK   accept: контракт (9 слов): нет — ничего
+OK   plan-phase: frontmatter: name plan-phase, description есть, disable-model-invocation true
+OK   plan-phase: знаков 1356/4000, `$` с цифрой — 0
+OK   plan-phase: контракт (6 слов): нет — ничего
+OK   accept: STATUS не пишет: пути docs/STATUS.md в скилле нет
+OK   evaluator: tools Read, Glob, Grep, Bash; формат REVIEW.md есть
+OK   workflows: kit/.claude/workflows: verify-phase.js (ждём verify-phase.js)
+OK   verify-phase: kit/bin/verify-phase: исполняемый, ALLOW с Workflow(verify-phase) — да, лимит по умолчанию 1800 с, VERIFY_TIMEOUT
+OK   archive: скиллы v2 в docs/archive/kit-v2/claude-config/skills/: team-lead, grilling
+OK   workflow: .github/workflows/two-tier.yml = kit/.github/workflows/two-tier.yml
+OK   workflows: .claude/workflows/verify-phase.js = kit/.claude/workflows/verify-phase.js
+OK   budgets: defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: abide_rules, .abide/rubric.json, .claude/spec-gate.json, .claude/toolgate.yaml
+KIT_OK
+OK   handoff: строка шаблона Environment: да, 70 %, /clear
+OK   handoff: launch settings кита: включён — True; userConfig мода по умолчанию: threshold 70, autoClear True, handoffDir handoffs
+OK   handoff: .gitignore: handoffs/ — есть
+OK   handoff: bin/two-tier-init печатает команду установки мода — да
+OK   handoff: claude plugin validate mods/handoff: rc 0; hooks: session.start, turn.complete, command.run{command=handoff}, ui.render{component=AbovePrompt}; calls: 18
+OK   handoff: claude plugin test mods/handoff: rc 0, pass 8, fail 0
+HANDOFF_OK

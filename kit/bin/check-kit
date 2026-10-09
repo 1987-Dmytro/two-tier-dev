@@ -4,8 +4,11 @@
 
 Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
 копии workflow CI и verify-phase совпадают, defaults бюджета в kit/budgets.json и budgets.json совпадают. KIT_OK или exit 1.
+Мод handoff (SPEC-v3.2 F6, только репо кита): строка шаблона Environment (70 %, /clear), включение и режим в launch settings кита
+(pluginConfigs, иначе userConfig мода по умолчанию), handoffs/ в .gitignore, команда установки в выводе bin/two-tier-init,
+`claude plugin validate` и `claude plugin test` мода — HANDOFF_OK; без claude в PATH (CI) validate и test не гоняются, маркера нет.
 """
-import json, os, re, sys
+import json, os, re, shutil, subprocess, sys, tempfile
 
 out = []
 V32_KEYS, V32_OWNER = {"prompt_chars", "abide_rules"}, {"docs/PROMPT.txt", ".abide/rubric.json", ".claude/spec-gate.json", ".claude/toolgate.yaml"}
@@ -65,5 +68,44 @@ if root == "kit":
     delta = sorted(set(kd) - set(rd)) + sorted(ko - ro) + [f"−{x}" for x in sorted(set(rd) - set(kd))] + [f"−{x}" for x in sorted(ro - ko)]
     say(same and set(kd) - set(rd) <= V32_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED, "budgets",
         f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: {', '.join(delta) or 'нет'}")
-print("KIT_OK" if all(out) else "KIT_FAIL")
-sys.exit(0 if all(out) else 1)
+kit_ok = all(out)
+print("KIT_OK" if kit_ok else "KIT_FAIL")
+hand = []
+if root == "kit" and os.path.isdir("mods/handoff"):  # v3.2, F6: мод handoff — в репо кита
+    def hsay(ok, item, msg):
+        hand.append(bool(ok))
+        print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}")
+    row = next((l for l in read("kit/docs/PROCESS.template.md").splitlines() if "`handoff@two-tier-mods`" in l), "")
+    hsay(row and "| да |" in row and "70 %" in row and "/clear" in row, "handoff", f"строка шаблона Environment: {'да, 70 %, /clear' if row else 'нет'}")
+    ls = json.loads(read("kit/.claude/launch.settings.json"))
+    uc = json.loads(read("mods/handoff/.claude-plugin/plugin.json")).get("userConfig", {})
+    opts = ls.get("pluginConfigs", {}).get("handoff@two-tier-mods", {}).get("options")
+    src = "pluginConfigs"
+    if opts is None:  # нет записи — действуют userConfig мода по умолчанию (PLAN-v3.2, отклонение 12)
+        opts, src = {k: v.get("default") for k, v in uc.items()}, "userConfig мода по умолчанию"
+    on = ls.get("enabledPlugins", {}).get("handoff@two-tier-mods") is True
+    hsay(on and opts.get("threshold") == 70 and opts.get("autoClear") is True, "handoff",
+         f"launch settings кита: включён — {on}; {src}: threshold {opts.get('threshold')}, autoClear {opts.get('autoClear')}, handoffDir {opts.get('handoffDir')}")
+    hsay("handoffs/" in read(".gitignore").splitlines(), "handoff", f".gitignore: handoffs/ — {'есть' if 'handoffs/' in read('.gitignore').splitlines() else 'нет'}")
+    os.makedirs("/tmp/two-tier-v3", exist_ok=True)
+    t = tempfile.mkdtemp(prefix="check-kit-init-", dir="/tmp/two-tier-v3")
+    init = subprocess.run(["bin/two-tier-init", t], capture_output=True, text=True).stdout
+    shutil.rmtree(t, ignore_errors=True)
+    hsay("install handoff@two-tier-mods" in init and "marketplace add" in init, "handoff",
+         f"bin/two-tier-init печатает команду установки мода — {'да' if 'install handoff@two-tier-mods' in init else 'нет'}")
+    if shutil.which("claude"):
+        v = subprocess.run(["claude", "plugin", "validate", "mods/handoff"], capture_output=True, text=True, timeout=120)
+        txt = v.stdout + v.stderr
+        hooks = next((m.group(1) for l in txt.splitlines() for m in [re.search(r"\./\S+ hooks: (.+)$", l)] if m), "")  # строка модуля, не «Validating hooks: <путь>»
+        calls = next((m.group(1).count("$.") for l in txt.splitlines() for m in [re.search(r"\./\S+ calls: (.+)$", l)] if m), 0)
+        hsay(v.returncode == 0 and "Validation passed" in txt and hooks, "handoff", f"claude plugin validate mods/handoff: rc {v.returncode}; hooks: {hooks}; calls: {calls}")
+        r = subprocess.run(["claude", "plugin", "test", "mods/handoff"], capture_output=True, text=True, timeout=300)
+        txt = r.stdout + r.stderr
+        npass, nfail = re.search(r"(\d+) pass", txt), re.search(r"(\d+) fail", txt)
+        hsay(r.returncode == 0 and npass and int(npass.group(1)) > 0 and nfail and nfail.group(1) == "0", "handoff",
+             f"claude plugin test mods/handoff: rc {r.returncode}, pass {npass.group(1) if npass else '?'}, fail {nfail.group(1) if nfail else '?'}")
+        print("HANDOFF_OK" if all(hand) else "HANDOFF_FAIL")
+    else:
+        print("--   handoff: claude нет в PATH (CI) — validate и test не гонялись, маркера HANDOFF нет")
+        print("HANDOFF_FAIL" if not all(hand) else "--   handoff: проверки без claude — зелёные")
+sys.exit(0 if kit_ok and all(hand) else 1)

@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3.2 «Jev-слой, без /goal» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
 ## Голова — 09.10.2026, 13:35 — фаза v3.2 идёт
-**Сделано:** шаги 0a, 0; F1 `bin/jev`, F2 `spec-gate`, F3 Abide, F5 Toolgate, F4 окружение слоя — с чеками и evidence. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** плечо — 09.10, ~14:00 (v3.1: 98 мин на 9 фич, здесь 10), затем `/verify-phase` ~10–20 мин; сдвинуть может стоп по Toolgate или Abide (SPEC §4).
+**Сделано:** шаги 0a, 0; F1 `bin/jev`, F2 `spec-gate`, F3 Abide, F5 Toolgate, F4 окружение слоя, F6 handoff — с чеками и evidence. **Следующий шаг оператора:** нет — фаза идёт. **Когда закончим:** плечо — 09.10, ~14:00 (v3.1: 98 мин на 9 фич, здесь 10), затем `/verify-phase` ~10–20 мин; сдвинуть может стоп по Toolgate или Abide (SPEC §4).
 
 ## Done
 - Шаг 0a (`5a1913f`): архив v3.1 — `git mv` PROGRESS → `docs/archive/PROGRESS-v3.1.md`, evidence v3.1 → `docs/archive/evidence-v3.1/`, `accept-*.txt` → `docs/archive/evidence-v3/`.
@@ -11,9 +11,10 @@
 - **F3 Abide**: `bin/check-harness` → `ABIDE_OK` (рубрика-фикстура: правка, печатающая секрет фикстуры, — блок act и требование починки в том же ходе, файл починен; чистая — тишина; заметки вместо просьбы компилировать и блока Stop) — `docs/evidence/F3-harness-result.txt`; `abide_rules` ≤ 15 в `check-budget`.
 - **F5 Toolgate «только отказ»**: `bin/check-harness` → `TOOLGATE_OK` (политика кита: `jev-1.13.0`, аудит во `/tmp/two-tier-v3`, ledger выкл., без контекста задачи, порог 0,9, force-push — статическое правило; p95 0,56 с; без ключа, без политики и на сроке — тишина; живой force-push — отказ; пары allow и агенты — с хуком) — `docs/evidence/F5-harness-result.txt`; там же все шесть маркеров харнеса.
 - **F4 Окружение слоя**: `bin/check-harness` → `ENV_OK` на корне репо и на t3 (шаблон кита: плагинов 6 и `@builtin`, MCP context7, скилл graphify через `--add-dir`; режимы против `pluginConfigs`, живая тень Belay — `shadow`, Steer-or-Queue — `shadow`; пробы «по задаче»: `qs status`, `jevseo doctor`, `bin/check-ui` → `UI_OK`); на t3 все шесть маркеров против «до» `ENV_FAIL · HARNESS_FAIL · HOOKS_FAIL` — `docs/evidence/F4-harness-result.txt`.
+- **F6 handoff**: `bin/check-kit` → `HANDOFF_OK` (строка шаблона 70 %, `/clear`; включён в launch settings кита, режим — `userConfig` мода по умолчанию; `handoffs/` в `.gitignore`; команда установки в выводе `bin/two-tier-init`; `claude plugin validate` — hooks и 18 calls, `claude plugin test` — 8 из 8) — `docs/evidence/F6-kit-result.txt`.
 
 ## Next — один айтем
-1. **F6 handoff**: `bin/check-kit` → `HANDOFF_OK`.
+1. **F7 Запуск без `/goal`**: `bin/check-budget --templates` → `BUDGET_OK`.
 
 ## Open stop — NONE
 

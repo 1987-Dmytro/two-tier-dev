@@ -44,3 +44,5 @@ cat <<'EOF'
   3. bin/check-budget → BUDGET_OK; запуск исполнителя и контрольный прогон — docs/LAUNCH.md.
   Остановить исполнителя: touch AGENT_STOP (снять — rm AGENT_STOP); подсказать — строка в STEER.md.
 EOF
+echo "  4. Мод handoff (строка таблицы Environment) — оператор ставит его один раз на машину:"
+echo "     claude plugin marketplace add $HERE/mods && claude plugin install handoff@two-tier-mods"
