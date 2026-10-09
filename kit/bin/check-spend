@@ -22,7 +22,10 @@ from datetime import datetime, timezone
 
 TMP = "/tmp/two-tier-v3"
 USD_PER_MTOK = 0.042
-EUR_PER_USD = float(os.environ.get("EUR_PER_USD", "0.86"))  # ponytail: курс — константа; уточнять по счёту вендора
+try:
+    EUR_PER_USD = float(os.environ.get("EUR_PER_USD", "0.86"))  # ponytail: курс — константа; уточнять по счёту вендора
+except ValueError:
+    sys.exit("check-spend: EUR_PER_USD must be a number")
 HOME = os.path.expanduser("~")
 FIXED, BYTES_PER_TOKEN = 240, 3.4      # замер 09.10 (4 живых вызова jev-1.13.0): постоянная часть и байт на токен
 TG_Q_TASK, TG_Q_NOTASK = 8314, 4155    # байт вопросов Toolgate 0.16.0 с контекстом задачи и без
@@ -30,22 +33,36 @@ STEER_TOKENS = 1100                    # ponytail: Steer-or-Queue токенов
 
 
 def lines(paths):
-    """JSON-строки журналов; битые строки — счётчиком, не падением."""
+    """JSON-объекты журналов; битые строки и не объекты — счётчиком, не падением; BOM в начале файла — не помеха."""
     out, bad = [], 0
     for p in paths:
         try:
-            with open(p, encoding="utf-8", errors="replace") as f:
+            with open(p, encoding="utf-8-sig", errors="replace") as f:
                 for l in f:
                     l = l.strip()
                     if not l:
                         continue
                     try:
-                        out.append(json.loads(l))
+                        e = json.loads(l)
                     except ValueError:
+                        e = None
+                    if isinstance(e, dict):
+                        out.append(e)
+                    else:
                         bad += 1
         except OSError:
             continue
     return out, bad
+
+
+def tok(v):
+    """Число из журнала; строка, NaN, бесконечность, bool, нет поля — 0."""
+    return v if type(v) in (int, float) and v == v and abs(v) != float("inf") else 0
+
+
+def sub(e, k):
+    """Вложенный объект строки журнала; не объект — {}."""
+    return e.get(k) if isinstance(e.get(k), dict) else {}
 
 
 def when(v):
@@ -70,18 +87,18 @@ def collect(since, roots):
     jev = [e for e in jev if inwin(e, "ts")]
     ui = [e for e in jev if e.get("caller") == "check-ui"]
     api = [e for e in jev if e.get("caller") != "check-ui"]
-    put("bin/jev и spec-gate", sum(1 for e in api if e.get("status") == 200), sum(e.get("input_tokens") or 0 for e in api), True, len(api), bad)
-    put("Jev Browser (check-ui)", sum(e.get("calls") or 0 for e in ui), sum(e.get("input_tokens") or 0 for e in ui), True, len(ui), 0)
+    put("bin/jev и spec-gate", sum(1 for e in api if e.get("status") == 200), sum(tok(e.get("input_tokens")) for e in api), True, len(api), bad)
+    put("Jev Browser (check-ui)", sum(tok(e.get("calls")) for e in ui), sum(tok(e.get("input_tokens")) for e in ui), True, len(ui), 0)
     ab, bad = lines(own(glob.glob(f"{repo}/.abide/events.jsonl") + glob.glob(f"{tmp}/**/.abide/events.jsonl", recursive=True)))
-    ab = [e for e in ab if e.get("kind") == "check" and inwin(e, "at") and ((e.get("usage") or {}).get("inputTokens") or 0) > 0]
-    put("Abide", len(ab), sum(e["usage"]["inputTokens"] for e in ab), True, len(ab), bad)
+    ab = [e for e in ab if e.get("kind") == "check" and inwin(e, "at") and tok(sub(e, "usage").get("inputTokens")) > 0]
+    put("Abide", len(ab), sum(tok(sub(e, "usage").get("inputTokens")) for e in ab), True, len(ab), bad)
     be, bad = lines(glob.glob(f"{home}/.claude/belay/decisions.jsonl*"))
     be = [e for e in be if e.get("verdict") in ("allowed", "blocked", "shadow") and inwin(e, "ts")]
-    put("Jev Belay", len(be), sum((e.get("usage") or {}).get("input_tokens") or 0 for e in be), True, len(be), bad)
+    put("Jev Belay", len(be), sum(tok(sub(e, "usage").get("input_tokens")) for e in be), True, len(be), bad)
     tg, bad = lines(glob.glob(f"{tmp}/toolgate/audit.jsonl") + glob.glob(f"{home}/.toolgate/audit.jsonl"))
     tg = [e for e in tg if e.get("source") == "model" and inwin(e, "ts")]
-    est = lambda e: FIXED + ((TG_Q_TASK if (e.get("task") or {}).get("present") else TG_Q_NOTASK) + (e.get("input_chars") or 0)
-                             + ((e.get("task") or {}).get("chars") or 0)) / BYTES_PER_TOKEN
+    est = lambda e: FIXED + ((TG_Q_TASK if sub(e, "task").get("present") else TG_Q_NOTASK) + tok(e.get("input_chars"))
+                             + tok(sub(e, "task").get("chars"))) / BYTES_PER_TOKEN
     put("Toolgate", len(tg), sum(est(e) for e in tg), False, len(tg), bad)
     st, bad = lines(glob.glob(f"{home}/.claude/plugins/data/jev-steer-or-queue-jev-steer-or-queue/log.jsonl"))
     st = [e for e in st if isinstance(e.get("jev"), dict) and not e["jev"].get("error") and inwin(e, "ts")]
@@ -127,7 +144,8 @@ def self_test():
         f"{repo}/docs/evidence/jev.jsonl": [
             {"ts": new, "caller": "spec-gate", "status": 200, "input_tokens": 1000}, {"ts": new, "caller": "cli", "status": 200, "input_tokens": 500},
             {"ts": new, "caller": "cli", "status": 0, "error": "timeout"}, {"ts": old, "caller": "cli", "status": 200, "input_tokens": 999999},
-            {"ts": new, "caller": "check-ui", "status": 200, "calls": 2, "input_tokens": 2200}],
+            {"ts": new, "caller": "check-ui", "status": 200, "calls": 2, "input_tokens": 2200},
+            {"ts": new, "caller": "cli", "status": 200, "input_tokens": "abc"}, "[1, 2]"],
         f"{tmp}/gate-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "spec-gate", "status": 200, "input_tokens": 300}],
         f"{tmp}/check-spend-x/repo/docs/evidence/jev.jsonl": [{"ts": new, "caller": "cli", "status": 200, "input_tokens": 777}],
         f"{repo}/.abide/events.jsonl": [{"kind": "check", "at": new, "usage": {"inputTokens": 400, "outputTokens": 25}},
@@ -144,14 +162,15 @@ def self_test():
     for p, rows in files.items():
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "w", encoding="utf-8") as f:
-            f.write("".join(json.dumps(r) + "\n" for r in rows) + ("not json\n" if p.endswith("belay/decisions.jsonl") else ""))
+            f.write(("\ufeff" if p.endswith(".abide/events.jsonl") else "") + "".join((r if isinstance(r, str) else json.dumps(r)) + "\n" for r in rows)
+                    + ("not json\n" if p.endswith("belay/decisions.jsonl") else ""))
     try:
         got = collect(when(t0), (repo, tmp, home))
     finally:
         shutil.rmtree(d, ignore_errors=True)  # фикстура не переживает self-test
     tg = round(FIXED + (TG_Q_NOTASK + 340) / BYTES_PER_TOKEN) + round(FIXED + TG_Q_TASK / BYTES_PER_TOKEN)
     body = len(json.dumps({"x": "a" * 3390}, separators=(",", ":")))
-    want = {"bin/jev и spec-gate": (3, 1800), "Jev Browser (check-ui)": (2, 2200), "Abide": (1, 400), "Jev Belay": (1, 700),
+    want = {"bin/jev и spec-gate": (4, 1800), "Jev Browser (check-ui)": (2, 2200), "Abide": (1, 400), "Jev Belay": (1, 700),
             "Toolgate": (2, tg), "Steer-or-Queue": (1, STEER_TOKENS), "Compact Adviser": (1, round(FIXED + body / BYTES_PER_TOKEN))}
     ok = True
     for tool, (calls, tokens) in want.items():
@@ -165,8 +184,9 @@ def self_test():
     good = tc == sum(c for c, _ in want.values()) and abs(tt - total) <= 2 and abs(usd - total * USD_PER_MTOK / 1e6) < 0.005
     print(f"{'ok ' if good else 'BAD'} фикстура · итог: вызовов {tc}, токенов {tt} (ждали {total}), ${usd:.4f}; строка вне окна и битая строка не в сумме")
     ok &= good
-    good = got["Jev Belay"][4] == 1
-    print(f"{'ok ' if good else 'BAD'} фикстура · битая строка журнала посчитана, а не уронила подсчёт ({got['Jev Belay'][4]})")
+    good = got["Jev Belay"][4] == 1 and got["bin/jev и spec-gate"][4] == 1
+    print(f"{'ok ' if good else 'BAD'} фикстура · битая строка и строка-не-объект посчитаны, а не уронили подсчёт ({got['Jev Belay'][4]}, {got['bin/jev и spec-gate'][4]}); "
+          "токены строкой — 0; BOM в начале журнала Abide — не помеха")
     ok &= good
     good = not os.path.exists(d)
     print(f"{'ok ' if good else 'BAD'} фикстура · чужой check-spend-* не в сумме, свой каталог фикстуры удалён")

@@ -47,7 +47,7 @@ function main() {
     return
   }
   if (event === 'stop' && out.decision === 'block') {
-    const note = `Abide (a note; the end of the turn is not held): ${out.reason}`
+    const note = `Abide (a note; the end of the turn is not held)${out.reason ? `: ${out.reason}` : ''}`
     process.stdout.write(JSON.stringify({ systemMessage: out.systemMessage ? `${note}\n${out.systemMessage}` : note }) + '\n')
     return
   }

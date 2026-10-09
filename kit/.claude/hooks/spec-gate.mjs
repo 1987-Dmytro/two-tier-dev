@@ -163,7 +163,7 @@ function decide(input, root, cfg, log) {
   const progress = read(path.join(root, 'docs', 'PROGRESS.md')) || ''
   const baseSha = git(root, 'log', '-1', '--format=%H', `--before=${new Date(start).toISOString()}`)
   const base = (baseSha && git(root, 'show', `${baseSha}:docs/PROGRESS.md`)) || ''
-  if (!progress || (base && head(progress) === head(base))) missing.push('the head of docs/PROGRESS.md was not updated in this session')
+  if (!head(progress) || (base && head(progress) === head(base))) missing.push('the head of docs/PROGRESS.md was not updated in this session')
   const pass = sha && verdict(root, sha)
   if (!pass) missing.push(`no VERDICT: PASS of /verify-phase for HEAD ${(sha || '?').slice(0, 7)} (docs/evidence/verify-<sha>.txt; after it only evidence and PROGRESS change)`)
 

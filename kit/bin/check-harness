@@ -612,9 +612,13 @@ def gate_probes(src, launch, lenv, args):
     stale, trs = gate_fixture(src, launch, full=True, fresh_head=False)
     open(f"{stale}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n## Notes\n- строка заметок.\n")
     res4 = gate_run(stale, trs, "probe-stale-head")[1]
-    say(S, "OK" if res4.get("decision") == "block" and "head of docs/PROGRESS.md" in res4.get("reason", "") else "FAIL", "head",
+    blank, trk = gate_fixture(src, launch, full=True)
+    open(f"{blank}/docs/PROGRESS.md", "w", encoding="utf-8").write("   \n")
+    res7 = gate_run(blank, trk, "probe-blank-head")[1]
+    named = lambda r: r.get("decision") == "block" and "head of docs/PROGRESS.md" in r.get("reason", "")
+    say(S, "OK" if named(res4) and named(res7) else "FAIL", "head",
         f"полный комплект, но голова PROGRESS как до сессии (дописана только строка заметок): решение {res4.get('decision') or 'нет'}, причина называет голову — "
-        f"{'да' if 'head of docs/PROGRESS.md' in res4.get('reason', '') else 'нет'}")
+        f"{'да' if named(res4) else 'нет'}; PROGRESS из пробелов — {res7.get('decision') or 'нет'}, голова названа — {'да' if named(res7) else 'нет'}")
     moved, trm = gate_fixture(src, launch, full=True)  # после вердикта код уехал в evidence: git mv — тоже правка кода
     gm = lambda *a: subprocess.run(["git", *a], cwd=moved, env=GIT_ENV, capture_output=True, text=True, check=True)
     gm("mv", "CLAUDE.md", "docs/evidence/CLAUDE-moved.md")

@@ -67,10 +67,11 @@ function stateOf(text) {
 async function ask(questions, state) {
   const key = process.env.TYPESAFE_API_KEY
   if (!key) die(2, 'TYPESAFE_API_KEY is not set — the key comes from the environment only')
+  if (!/^[\x21-\x7e]+$/.test(key)) die(2, 'TYPESAFE_API_KEY has spaces or control characters — check the environment')
   const model = process.env.JEV_MODEL || PIN
   if (!PINNED.test(model)) die(2, `model ${model} is not a pinned version (jev-X.Y.Z); aliases such as jev-latest float`)
   const ms = process.env.JEV_TIMEOUT_MS === undefined ? 15000 : Number(process.env.JEV_TIMEOUT_MS)
-  if (!Number.isInteger(ms) || ms <= 0) die(2, 'JEV_TIMEOUT_MS must be a positive whole number of milliseconds')
+  if (!Number.isInteger(ms) || ms <= 0 || ms > 600000) die(2, 'JEV_TIMEOUT_MS must be a whole number of milliseconds from 1 to 600000')
   const url = (process.env.TYPESAFE_BASE_URL || 'https://api.typesafe.ai').replace(/\/+$/, '') + '/v1/systemone'
   const caller = process.env.JEV_CALLER || 'cli'
   const t0 = Date.now()
@@ -97,7 +98,8 @@ async function ask(questions, state) {
   const usage = json?.usage || {}
   spend({ ...line, status: res.status, version: json?.model, ms: Date.now() - t0, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens })
   // a body that echoes the request must not carry the key to stderr
-  if (res.status !== 200) die(3, `HTTP ${res.status}: ${String(json?.detail || json?.error || body).split(key).join('<key>').replace(/\s+/g, ' ').slice(0, 200)}`)
+  const why = json?.detail || json?.error || body
+  if (res.status !== 200) die(3, `HTTP ${res.status}: ${(typeof why === 'string' ? why : JSON.stringify(why)).split(key).join('<key>').replace(/\s+/g, ' ').slice(0, 200)}`)
   const missing = Object.keys(questions).filter(k => !json?.answers?.[k])
   if (missing.length) die(3, `HTTP 200 without answers for: ${missing.join(', ')}`)
   if (json.model !== model) die(3, `HTTP 200 from model ${json.model ?? 'none'}, not the pinned ${model}`)
@@ -127,6 +129,7 @@ async function selfTest() {
       if (req.headers.authorization !== `Bearer ${key}`) return send(401, { detail: 'invalid API key' })
       if (route === 'e500') return send(500, { detail: 'internal' })
       if (route === 'echo') return send(400, { detail: `bad request; authorization: ${req.headers.authorization}` })
+      if (route === 'e422') return send(422, { detail: [{ loc: ['body', 'questions'], msg: 'field required' }] })
       if (route === 'empty') return send(200, { model: PIN, answers: {}, usage: { input_tokens: 5, output_tokens: 0 } })
       const answers = {}
       for (const [k, q] of Object.entries(b.questions || {})) {
@@ -209,8 +212,15 @@ async function selfTest() {
   r = await run({ TYPESAFE_BASE_URL: `${base}/echo` })
   check(r.code === 3 && /HTTP 400/.test(r.err) && /<key>/.test(r.err), `an error body that echoes the key: rc ${r.code}, the key masked on stderr`)
   leak(r)
-  r = await run({ JEV_TIMEOUT_MS: '1.5' })
-  check(r.code === 2 && /JEV_TIMEOUT_MS/.test(r.err), `JEV_TIMEOUT_MS=1.5: rc ${r.code}, refused before the network`)
+  r = await run({ TYPESAFE_BASE_URL: `${base}/e422` })
+  check(r.code === 3 && /HTTP 422: \[\{"loc":\["body","questions"\]/.test(r.err), `HTTP 422 with a structured detail: rc ${r.code}, «${r.err.trim().slice(0, 60)}»`)
+  const n1 = seen.length
+  for (const [name, over] of [['JEV_TIMEOUT_MS=1.5', { JEV_TIMEOUT_MS: '1.5' }], ['JEV_TIMEOUT_MS=1e12', { JEV_TIMEOUT_MS: '1e12' }],
+    ['a key with a newline', { TYPESAFE_API_KEY: `${key}\n` }], ['a key of spaces', { TYPESAFE_API_KEY: '   ' }]]) {
+    r = await run(over)
+    check(r.code === 2 && seen.length === n1, `${name}: rc ${r.code}, refused before the network`)
+    leak(r)
+  }
   r = await run({ TYPESAFE_BASE_URL: `${base}/hang`, JEV_TIMEOUT_MS: '500' })
   check(r.code === 4 && /timeout after 500 ms/.test(r.err) && r.ms < 5000, `timeout: rc ${r.code} after ${r.ms} ms`)
   leak(r)
