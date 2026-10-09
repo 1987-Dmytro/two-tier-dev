@@ -94,7 +94,7 @@ OK   allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` �
 OK   run1: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
 OK   run2: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
-OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.61 с, медиана 0.53 с (≤ 2 с)
+OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.51 с, медиана 0.50 с (≤ 2 с)
 OK   pairs: с хуком кита: allow — OK; agent — OK; kill — OK (dontAsk: команда вне allow — отказ прав; агенты воркфлоу не остановлены)
 ENV_OK
 HARNESS_OK
