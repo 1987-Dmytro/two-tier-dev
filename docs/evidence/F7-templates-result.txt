@@ -43,7 +43,7 @@ rc 1
 $ bin/two-tier-upgrade --self-test
 OK   список апгрейда = файлы кита (35)
 OK   фикстура: тестовый клон без origin (`git remote` пуст)
-  прогон 1: ветка: kit-v3 | коммит 20c305c: поставлено 31, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
+  прогон 1: ветка: kit-v3 | коммит f481f4b: поставлено 31, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
 OK   ветка kit-v3
 OK   main не тронут
 OK   механика v3: 30 файлов кита на месте
@@ -58,20 +58,20 @@ OK   в проекте после апгрейда bin/check-budget → BUDGET_O
   прогон 2: ветка: kit-v3 | изменений нет
 OK   повторный прогон: тот же HEAD, `git status` пуст
 OK   remotes не тронуты, push некуда и не было
-  прогон v3.1: ветка: kit-v3 | стартовый запрос: docs/GOAL.txt → docs/PROMPT.txt, коммит «Тимлид: …» | коммит 30c553d: поставлено 30, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
+  прогон v3.1: ветка: kit-v3 | стартовый запрос: docs/GOAL.txt → docs/PROMPT.txt, коммит «Тимлид: …» | коммит e993dca: поставлено 30, в архив 11, конфликтов 0, тимлиду 4; отчёт docs/upgrade-v3.md
 OK   v3.1 → v3.2: docs/GOAL.txt → docs/PROMPT.txt (git mv, байт в байт) отдельным коммитом «Тимлид: …», история файла цела
 OK   в проекте v3.1 после апгрейда bin/check-budget → BUDGET_OK (lint владения: коммит переноса — «Тимлид:»)
 OK   повторный прогон проекта v3.1: тот же HEAD
 OK   отчёт апгрейда называет тимлиду записи owner и ключи кита, которых нет в budgets.json проекта
-  сбой (а) `bin/` в .gitignore: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-budget: в .gitignore — git add его не возьмёт |   - bin/check-ci: в .gitignore — git add его не возьмёт |   - bin/check-harness: в .gitignore — git add его не возьмёт |   - bin/check-kit: в .gitignore — git add его не возьмёт |   - bin/check-spend: в .gitignore — git add его не возьмёт |   - bin/check-ui: в .gitignore — git add его не возьмёт |   - bin/jev: в .gitignore — git add его не возьмёт |   - bin/two-tier-upgrade: в .gitignore — git add его не возьмёт |   - bin/verify-phase: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ 2f91a62, индекс пуст
+  сбой (а) `bin/` в .gitignore: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-budget: в .gitignore — git add его не возьмёт |   - bin/check-ci: в .gitignore — git add его не возьмёт |   - bin/check-harness: в .gitignore — git add его не возьмёт |   - bin/check-kit: в .gitignore — git add его не возьмёт |   - bin/check-spend: в .gitignore — git add его не возьмёт |   - bin/check-ui: в .gitignore — git add его не возьмёт |   - bin/jev: в .gitignore — git add его не возьмёт |   - bin/two-tier-upgrade: в .gitignore — git add его не возьмёт |   - bin/verify-phase: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ 988891e, индекс пуст
 OK   сбой (а): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
-  сбой (б) свой неотслеживаемый bin/check-ci: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-ci: файл вне git — git mv его не возьмёт |   проект как до запуска: ветка main @ 4ff0965, индекс пуст
+  сбой (б) свой неотслеживаемый bin/check-ci: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - bin/check-ci: файл вне git — git mv его не возьмёт |   проект как до запуска: ветка main @ cffb380, индекс пуст
 OK   сбой (б): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (29 путей)
-  сбой (в) свой budgets.json другой формы: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - budgets.json — не форма кита (нужны defaults.progress_lines и defaults.plan_lines): KeyError('defaults') |   проект как до запуска: ветка main @ 792f0b5, индекс пуст
+  сбой (в) свой budgets.json другой формы: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - budgets.json — не форма кита (нужны defaults.progress_lines и defaults.plan_lines): KeyError('defaults') |   проект как до запуска: ветка main @ 0da1963, индекс пуст
 OK   сбой (в): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
-  сбой (г) игнорируемый .claude/settings.json: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - .claude/settings.json: файл вне git — git mv его не возьмёт |   - .claude/settings.json: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ 9b9c491, индекс пуст
+  сбой (г) игнорируемый .claude/settings.json: rc 1 | two-tier-upgrade: проект не готов, апгрейд не начат: |   - .claude/settings.json: файл вне git — git mv его не возьмёт |   - .claude/settings.json: в .gitignore — git add его не возьмёт |   проект как до запуска: ветка main @ 63e5530, индекс пуст
 OK   сбой (г): выход ≠0 с причиной, без трассировки, отказ до старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (28 путей)
-  сбой (д) сбой после старта — pre-commit отказал: rc 1 | ветка: kit-v3 | two-tier-upgrade: git commit: pre-commit: отказ (фикстура) |   проект как до запуска: ветка main @ 4ff0965, индекс пуст
+  сбой (д) сбой после старта — pre-commit отказал: rc 1 | ветка: kit-v3 | two-tier-upgrade: git commit: pre-commit: отказ (фикстура) |   проект как до запуска: ветка main @ cffb380, индекс пуст
 OK   сбой (д): выход ≠0 с причиной, без трассировки, откат после старта; как до запуска — ветка main, HEAD, ветки, пустой индекс, дерево (27 путей)
 UPGRADE_OK
 rc 0
@@ -94,7 +94,7 @@ OK   allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` �
 OK   run1: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
 OK   run2: system/init = таблица ./docs/PROCESS.template.md: плагинов 7, MCP 1 (context7 connected), скиллов 31; строк таблицы 33
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
-OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.51 с, медиана 0.48 с (≤ 2 с)
+OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.61 с, медиана 0.53 с (≤ 2 с)
 OK   pairs: с хуком кита: allow — OK; agent — OK; kill — OK (dontAsk: команда вне allow — отказ прав; агенты воркфлоу не остановлены)
 ENV_OK
 HARNESS_OK

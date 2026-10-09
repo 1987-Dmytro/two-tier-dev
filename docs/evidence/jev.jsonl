@@ -65,3 +65,8 @@
 {"ts":"2026-10-09T12:00:34.451Z","caller":"cli","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":348,"input_tokens":320,"output_tokens":20}
 {"ts": "2026-10-09T12:01:02Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
 {"ts":"2026-10-09T12:08:28.527Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":354,"input_tokens":300,"output_tokens":20}
+{"ts": "2026-10-09T12:12:36Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2192}
+{"ts":"2026-10-09T12:30:51.937Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":356,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-10-09T12:31:58.800Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":347,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-10-09T12:31:59.255Z","caller":"cli","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":314,"input_tokens":320,"output_tokens":20}
+{"ts": "2026-10-09T12:32:46Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
