@@ -46,6 +46,14 @@
 | [Quality postmortem](https://www.anthropic.com/engineering/april-23-postmortem) (23.04.2026) | Одна строка системного промпта стоила −3 %. Абляция по строкам — до выкатки. |
 | [Managed Agents: outcomes](https://claude.com/blog/new-in-claude-managed-agents) (19.05.2026) | Рубрика и отдельный грейдер в своём контексте. |
 
+## Сторонний вендор слоя Jev (поле харнеса по C2; не критерий самоулучшения)
+Сверено 09.10.2026; сводка и остальные ссылки — `claude/research-2026-10-09-jev-integration.md`, §1.
+| Источник | Что берём |
+|---|---|
+| [docs.typesafe.ai — quickstart](https://docs.typesafe.ai/introduction/quickstart) | `POST https://api.typesafe.ai/v1/systemone`, `Authorization: Bearer`; запрос — `state` и словарь `questions`. Алиас `jev-latest` плавает, ответ называет версию — закреплять полным именем (`jev-1.13.0`; замер 09.10: на `jev-1.13` API отвечает 400 «Unknown model»). |
+| [docs.typesafe.ai — agent skill](https://docs.typesafe.ai/agent-skill) | Официальный скилл `typesafe@typesafe-ai`: три типа вопросов (`choice`, `score`, `noul`), батч вопросов по одному state. |
+| [vals.ai — independent evaluation of Jev](https://vals.ai/blogs/independent-evaluation-of-jev) | Проверка утверждений по документу — на уровне фронтира; на связках суждений модель слаба. Гейт тестировать на своих размеченных случаях: порог ставить на части данных, ошибку мерить на остатке. Отсюда — пороги `spec-gate` и Abide по журналу первого плеча telefon (SPEC-v3.2 §6). |
+
 ## Практики (вторичный источник — не критерий сам по себе)
 - Борис Черный: главное — проверка (качество в 2–3 раза выше); пересказывать путь — частая ошибка; «раз в полгода удалить CLAUDE.md, скиллы и хуки и посмотреть, что сделает модель».
 - Андрей Карпатый: «give it success criteria and watch it go»; autoresearch — одна метрика, фиксированный бюджет, keep/discard, человек правит только program.md. С мая 2026 Карпатый работает в Anthropic.
