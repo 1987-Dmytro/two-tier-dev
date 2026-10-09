@@ -8,7 +8,10 @@
 - `--settings .claude/launch.settings.json` — файл тимлида: `autoMode.environment` (доверенная инфраструктура: из настроек проекта `autoMode` не читается, из `--settings` — читается, auto-mode-config), `enabledPlugins` и `skillOverrides` по таблице Environment;
 - `--strict-mcp-config --mcp-config '<json>'` — MCP ровно из строки: срезаются MCP пользователя и плагинов (замер тимлида 07.10);
 - `ENABLE_CLAUDEAI_MCP_SERVERS=false` — коннекторы claude.ai не грузятся; кит выключает их и сам (`disableClaudeAiConnectors`), auto memory — тоже (`autoMemoryEnabled: false`);
-- `--add-dir <каталог>` — только если фаза работает вне репо.
+- `--setting-sources project,local` (v3.2) — настройки, хуки, плагины и скиллы пользователя в сессию исполнителя не входят: его инструменты — из репо, launch settings и таблицы Environment (Agent SDK settingSources, cli-reference);
+- `--no-chrome` — встроенный MCP `claude-in-chrome` (настоящий Chrome оператора) в сессии исполнителя выключен (cli-reference);
+- `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` — Claude Code с 2.1.287 её не читает, а мод Compact Adviser 0.1.12 без неё молчит (`register.ts:147-159`);
+- `--add-dir /tmp/two-tier-v3/skills` — скиллы пользователя со строкой «да»: из каталога `--add-dir` скиллы грузятся источником `project` (skills, permissions); ещё — если фаза работает вне репо.
 
 Харнес кита — `.claude/settings.json`: `worktree.baseRef: "head"` (worktree агента воркфлоу ветвится от HEAD, а не от ветки по умолчанию), `workflowSizeGuideline: "medium"` (<10 агентов — совет модели, не потолок), узкие `permissions.allow` на `bin/check-*`, `bin/gate-*`, `make ci`.
 

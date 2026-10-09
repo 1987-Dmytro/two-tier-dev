@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""check-ui [<flow.json>] — a UI check by a Jev Browser scenario (SPEC-v3.2 F4, template): UI_OK or exit 1.
+
+Without an argument — the kit's own probe: a local page under /tmp/two-tier-v3 (file://, a button that shows «Done») and
+its flow. With <flow.json> — the phase's scenario, a Jev Browser flow: {name, url, steps: [{goal, values?, assert?, …}]}.
+Run: `npx -y -p jev-browser@0.1.2 jev-browser run <flow> --json` with the model pinned (JEV_MODEL, default jev-1.13.0), npm's
+cache and TMPDIR under /tmp/two-tier-v3, a limit of 180 s. UI_OK only when the run exits 0, every step passed (done or
+likely_done) and every `assert` returned true — the CLI's own exit code ignores assert. Output — counts only (steps,
+passed, Jev calls, tokens, ms): page text and candidates stay out of the evidence.
+"""
+import json, os, subprocess, sys, tempfile, time
+
+TMP = "/tmp/two-tier-v3"
+PKG = "jev-browser@0.1.2"
+PAGE = """<!doctype html><meta charset="utf-8"><title>check-ui probe</title>
+<button id="show" onclick="const r=document.getElementById('result');r.textContent='Done';r.hidden=false">Show result</button>
+<p id="result" hidden></p>
+"""
+
+
+def probe_flow():
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="check-ui-", dir=TMP)
+    open(f"{d}/index.html", "w").write(PAGE)
+    flow = {"name": "kit probe: reveal Done", "url": f"file://{d}/index.html",
+            "steps": [{"goal": "Click the Show result button so that the text Done is shown", "maxActions": 4,
+                       "assert": "() => { const r = document.getElementById('result'); return !!r && !r.hidden && r.textContent.trim() === 'Done'; }"}]}
+    json.dump(flow, open(f"{d}/flow.json", "w"))
+    return f"{d}/flow.json"
+
+
+def main(argv):
+    if len(argv) > 1 or (argv and argv[0].startswith("-")):
+        print(__doc__)
+        return 2
+    flow = argv[0] if argv else probe_flow()
+    if not os.environ.get("TYPESAFE_API_KEY"):
+        print("FAIL check-ui: TYPESAFE_API_KEY is not set (Jev Browser reads the key from the environment)")
+        print("UI_FAIL")
+        return 1
+    os.makedirs(f"{TMP}/npm-cache", exist_ok=True)
+    os.makedirs(f"{TMP}/check-ui-tmp", exist_ok=True)
+    env = dict(os.environ, JEV_MODEL=os.environ.get("JEV_MODEL") or "jev-1.13.0", npm_config_cache=f"{TMP}/npm-cache",
+               npm_config_update_notifier="false", npm_config_fund="false", npm_config_audit="false", TMPDIR=f"{TMP}/check-ui-tmp")
+    cmd = ["npx", "-y", "-p", PKG, "jev-browser", "run", flow, "--json"]
+    print(f"run: JEV_MODEL={env['JEV_MODEL']} npm_config_cache={TMP}/npm-cache npx -y -p {PKG} jev-browser run "
+          f"{flow if argv else '<probe flow under /tmp/two-tier-v3>'} --json")
+    t0 = time.monotonic()
+    try:
+        r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=180, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        print("FAIL check-ui: no result in 180 s")
+        print("UI_FAIL")
+        return 1
+    lines = r.stdout.splitlines()
+    start = next((i for i, l in enumerate(lines) if l.strip() == "{"), None)
+    try:
+        res = json.loads("\n".join(lines[start:])) if start is not None else {}
+    except ValueError:
+        res = {}
+    steps = res.get("results", [])
+    passed = [s for s in steps if s.get("ok") and s.get("status") in ("done", "likely_done")]
+    truths = [s.get("truth") for s in steps]
+    ok = r.returncode == 0 and steps and len(steps) == res.get("steps") == res.get("passed") == len(passed) and all(t is not False for t in truths)
+    print(f"{'OK  ' if ok else 'FAIL'} check-ui: rc {r.returncode}; steps {res.get('steps')}, passed {res.get('passed')}, "
+          f"statuses {', '.join(str(s.get('status')) for s in steps) or 'none'}, assert {', '.join(str(t).lower() for t in truths) or '—'}; "
+          f"Jev calls {res.get('calls')}, tokens {res.get('tokens')}, {res.get('total_ms')} ms in the run, {time.monotonic() - t0:.1f} s in all")
+    if not res:
+        print("     no JSON result: " + ((r.stderr or r.stdout).strip().splitlines() or ["(empty)"])[-1][:200])
+    print("UI_OK" if ok else "UI_FAIL")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

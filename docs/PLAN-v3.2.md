@@ -22,7 +22,7 @@
   - `kit/.claude/launch.settings.json` — `enabledPlugins`, `pluginConfigs` по таблице;
   - `kit/bin/check-harness` — режимы `pluginConfigs` против таблицы (обе стороны фикстурами в `--self-test`), живая проба тени Belay, пробы «по задаче» (`qs status`, `jevseo doctor`, `bin/check-ui`);
   - `kit/bin/check-ui` — шаблон: сценарий Jev Browser на `file://`-странице → `UI_OK`.
-- **F6:** строка `handoff@two-tier-mods` и `pluginConfigs` (70 %, `/clear`) — шаблон PROCESS и launch settings кита; `handoffs/` — в `.gitignore`; `bin/two-tier-init` печатает команду установки; `kit/bin/check-kit` — раздел `HANDOFF` (`claude plugin validate` и `test` мода).
+- **F6:** строка `handoff@two-tier-mods` (70 %, `/clear`) — шаблон PROCESS; в launch settings кита — включение, режим — `userConfig` мода по умолчанию (отклонение 12); `handoffs/` — в `.gitignore`; `bin/two-tier-init` печатает команду установки; `kit/bin/check-kit` — раздел `HANDOFF` (`claude plugin validate` и `test` мода).
 - **F7:**
   - `kit/docs/PROMPT.template.txt` — стартовый запрос; `git mv kit/docs/GOAL.template.txt docs/archive/GOAL.template-v3.1.txt`;
   - `kit/budgets.json` — `prompt_chars` вместо `goal_chars`, `docs/PROMPT.txt` вместо `docs/GOAL.txt` в owner; deny кита — так же;
@@ -85,6 +85,7 @@
 9. Проверка END STATE — код, не файл: «в архив» = уходит из `check-budget`, прежняя версия — в истории git и в архиве шаблона GOAL. Апгрейд переносит `docs/GOAL.txt` отдельным коммитом «Тимлид: …»: это файл тимлида, перенос велит SPEC.
 10. Toolgate кита — без контекста задачи и с порогом отказа модели 0,9 (по умолчанию — с контекстом и 0,85). Замеры 09.10: без контекста и с 0,85 — запись hex-маркера пробы «secret exposure 87 %», deny; с контекстом — прямая просьба force-push «authorized» (deny → ask), а оси задачи на пробах «попробуй вопреки правилу» дали deny безобидного `cat` агента воркфлоу (0,85). Force-push исполнителю запрещён всегда — статическое правило политики, отказ без модели и без ключа; маркеры проб харнеса — слово и число.
 11. «Правка, печатающая секрет»: живую такую правку режут защита модели и классификатор auto mode (замер 09.10: отказ, откат модели, переписанный файл) — секрет проверяется прямым вызовом хука PostToolUse, а доставка требования в том же ходе — живой правкой, ломающей правило маркера.
+12. `pluginConfigs` мода handoff в `kit/.claude/launch.settings.json` не записан: правку шаблона кита Toolgate тимлида (`.claude/launch.settings.json`, контекст задачи, порог 0,85) отказал дважды — «violates constraint» 0,88–0,89, путает шаблон кита с файлом тимлида (откат включения — тоже). По правилу «после блока не повторять» — другой путь: без записи действуют `userConfig` мода по умолчанию (threshold 70, autoClear true — ровно SPEC); `check-harness` (режимы) и `check-kit` (HANDOFF) читают их из manifest мода (путь — из `system/init`). Строки `pluginConfigs` вносит тимлид — PROGRESS, Notes.
 
 ## Журнал прогонов (стохастика)
 | # | проба | итог | keep/discard |
@@ -101,3 +102,5 @@
 | 10 | `bin/check-harness` целиком (F5, контекст задачи) | красный только живой force-push: просьба в промпте — «authorized», Toolgate смягчил deny до ask | discard — статическое правило force-push в политике |
 | 11 | `bin/check-harness` целиком (F5, контекст задачи, правило force-push) | красные: прямой секрет Abide — троттлинг Abide помнит сессию пробы между прогонами; «без ключа» — правило force-push отказывает и без ключа (верно); HOOKS `agent` — Toolgate кита отказал `cat` агента (оси задачи, 0,85) | discard — свой `ABIDE_HOME_DIR` на прогон, «без ключа» — команда для модели, политика без контекста задачи и с порогом 0,9 |
 | 12 | `bin/check-harness` целиком (F5, финальная политика) | шесть маркеров, 3 мин 20 с | keep |
+| 13 | F4: корень и t3 | красный — Belay `allowed`: задача пробы (note.txt) — не код, `verification_applies` низкий | discard — задача пробы — функция в calc.py |
+| 14 | F4: корень и свежий t3 | по шесть маркеров; Belay — `shadow`: `pluginConfigs` из `--settings` доходят (риск 1 снят) | keep |

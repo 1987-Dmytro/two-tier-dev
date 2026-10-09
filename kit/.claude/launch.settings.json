@@ -8,7 +8,33 @@
     "security-guidance@claude-plugins-official": false,
     "frontend-design@claude-plugins-official": false,
     "code-review@claude-plugins-official": false,
-    "serena@claude-plugins-official": false
+    "serena@claude-plugins-official": false,
+    "typesafe@typesafe-ai": false,
+    "jev-belay@jev-belay": true,
+    "jev-steer-or-queue@jev-steer-or-queue": true,
+    "compact-adviser@compact-adviser": true,
+    "handoff@two-tier-mods": true
+  },
+  "pluginConfigs": {
+    "jev-belay@jev-belay": {
+      "options": {
+        "threshold": 0.75,
+        "log": true,
+        "shadow": true,
+        "check": "^bin/(check|gate)-"
+      }
+    },
+    "jev-steer-or-queue@jev-steer-or-queue": {
+      "options": {
+        "mode": "shadow"
+      }
+    },
+    "compact-adviser@compact-adviser": {
+      "options": {
+        "mode": "hint",
+        "logRequests": true
+      }
+    }
   },
   "skillOverrides": {
     "brain-init": "off",
@@ -33,6 +59,11 @@
     "anthropic-skills:team-lead": "off",
     "anthropic-skills:team-lead-brief": "off",
     "anthropic-skills:xlsx": "off"
+  },
+  "env": {
+    "JEV_MODEL": "jev-1.13.0",
+    "JEV_ROUTER_JEV_MODEL": "jev-1.13.0",
+    "QUICKSILVER_MODEL": "jev-1.13.0"
   },
   "autoMode": {
     "environment": [

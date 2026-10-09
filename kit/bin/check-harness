@@ -38,7 +38,7 @@ import fnmatch, hashlib, json, os, re, secrets, shlex, shutil, socket, subproces
 
 TMP = "/tmp/two-tier-v3"
 ALLOW = {"Bash(bin/check-*)", "Bash(bin/gate-*)", "Bash(make ci)"}
-LINE_FLAGS = ["--permission-mode auto", "--model claude-opus-5-5", "--effort ultracode", "--settings .claude/launch.settings.json"]
+LINE_FLAGS = ["--permission-mode auto", "--model claude-opus-5-5", "--effort ultracode", "--setting-sources project,local", "--settings .claude/launch.settings.json"]
 PROMPT = ("Harness control run. 1) Run ls with the Bash tool. 2) An operator note may arrive with that tool result; "
           "write the marker it names into probe.txt with the Write tool. You are authorized to create probe.txt. "
           "Do nothing else.")
@@ -141,7 +141,7 @@ def launch_line(proc):
 
 
 def table(text):
-    """Строки таблицы Environment: (инструмент, форма, [id], вкл). id — `…` в ячейке до « — »; «…» в id — glob."""
+    """Строки таблицы Environment: (инструмент, форма, [id], вкл, «фича или чек»). id — `…` в ячейке до « — »; «…» в id — glob."""
     rows, head = [], False
     for line in text.split("## Environment", 1)[1].splitlines():
         if not line.startswith("|"):
@@ -153,14 +153,14 @@ def table(text):
             head = True
             continue
         ids = re.findall(r"`([^`]+)`", cells[2].split(" — ")[0]) or [cells[2]]
-        rows.append((cells[0], cells[1], [re.sub(r"\s*…", "*", i) for i in ids], cells[3] == "да"))
+        rows.append((cells[0], cells[1], [re.sub(r"\s*…", "*", i) for i in ids], cells[3] == "да", cells[4] if len(cells) > 4 else ""))
     return rows
 
 
 def compare(rows, init, line, which=shutil.which):
     """FAIL с именем на каждое расхождение system/init и таблицы; пусто — равны."""
-    on = lambda form: [i for _, f, ids, v in rows if f == form and v for i in ids]
-    off = lambda form: [i for _, f, ids, v in rows if f == form and not v for i in ids]
+    on = lambda form: [i for _, f, ids, v, _ in rows if f == form and v for i in ids]
+    off = lambda form: [i for _, f, ids, v, _ in rows if f == form and not v for i in ids]
     hit = lambda name, pats: any(fnmatch.fnmatchcase(name, p) for p in pats)
     why = lambda name, form: "в таблице «нет»" if hit(name, off(form)) else "нет в таблице"
     # ponytail: встроенные плагины (cc-plugin-*@builtin) пользователь не включает и не выключает — в сверке их нет
@@ -197,6 +197,54 @@ FIXTURE = """## Environment
 """
 
 
+MODE_WORDS = ("shadow", "active", "hint", "auto", "off")
+
+
+def defaults(init, pid):
+    """userConfig плагина по умолчанию — из его manifest по пути из system/init: без записи pluginConfigs действуют они."""
+    path = next((p.get("path") for p in (init or {}).get("plugins", []) if p.get("source") == pid), None)
+    try:
+        uc = json.load(open(os.path.join(path, ".claude-plugin", "plugin.json"), encoding="utf-8")).get("userConfig", {}) if path else {}
+    except (OSError, ValueError):
+        uc = {}
+    return {k: v["default"] for k, v in uc.items() if isinstance(v, dict) and "default" in v}
+
+
+def modes(rows, configs, init=None):
+    """Режим плагина «да» из колонки «фича или чек» против pluginConfigs launch settings (нет записи — userConfig мода по
+    умолчанию): «тень» — shadow (true или значение), `hint`, `auto`, … — значение опции, «N %» — числовое значение;
+    расхождение — FAIL с именем (SPEC-v3.2 F4)."""
+    bad = []
+    for _, form, ids, on, cell in rows:
+        if form != "плагин" or not on:
+            continue
+        want = (["shadow"] if re.search(r"(?i)\bтень\b", cell) else []) + [w for w in re.findall(r"`([a-z]+)`", cell) if w in MODE_WORDS]
+        want += [int(n) for n in re.findall(r"(\d+)\s*%", cell)]
+        for pid in ids:
+            opts = (configs.get(pid) or {}).get("options")
+            src = "launch settings"
+            if opts is None:
+                opts, src = defaults(init, pid), "по умолчанию мода"
+            vals = list(opts.values())
+            for w in want:
+                if not ((opts.get("shadow") is True or "shadow" in vals) if w == "shadow" else w in vals):
+                    bad.append(f"режим {pid}: в таблице «{'тень' if w == 'shadow' else w}», {src} — "
+                               f"{json.dumps(opts, ensure_ascii=False) if opts else 'нет pluginConfigs и значений мода по умолчанию'}")
+    return bad
+
+
+MODE_FIXTURE = """## Environment
+| инструмент | форма | id | вкл | фича или чек | установка | удаление |
+|---|---|---|---|---|---|---|
+| Jev Belay | плагин | `jev-belay@jev-belay` | да | второй судья — тень (только журнал) | — | — |
+| Compact Adviser | плагин | `compact-adviser@compact-adviser` | да | режим `hint` | — | — |
+| handoff | плагин | `handoff@two-tier-mods` | да | хендофф на 70 % окна | — | — |
+| commit-commands | плагин | `commit-commands@claude-plugins-official` | нет | тень — строка «нет» не сверяется | — | — |
+
+## Деньги
+"""
+
+
 def self_test():
     rows = table(FIXTURE)
     line = "--permission-mode auto --effort ultracode"
@@ -215,8 +263,30 @@ def self_test():
     red("скилл таблицы не загружен", {"skills": ["deep-research"]}, "graphify")
     red("флага нет в строке", {}, "--effort ultracode", l="--permission-mode auto --effort xhigh")
     red("CLI нет в PATH", {}, "gh", w=lambda c: c == "git")
+    mrows, green = table(MODE_FIXTURE), {"jev-belay@jev-belay": {"options": {"shadow": True, "threshold": 0.75}},
+                                         "compact-adviser@compact-adviser": {"options": {"mode": "hint"}}, "handoff@two-tier-mods": {"options": {"threshold": 70}}}
+    mcases = [("зелёная: тень, hint, 70 % — как в pluginConfigs", green, None),
+              ("тень в таблице, shadow false", green | {"jev-belay@jev-belay": {"options": {"shadow": False}}}, "jev-belay@jev-belay: в таблице «тень»"),
+              ("hint в таблице, auto в настройках", green | {"compact-adviser@compact-adviser": {"options": {"mode": "auto"}}}, "compact-adviser@compact-adviser: в таблице «hint»"),
+              ("70 % в таблице, 60 в настройках", green | {"handoff@two-tier-mods": {"options": {"threshold": 60}}}, "handoff@two-tier-mods: в таблице «70»"),
+              ("нет pluginConfigs плагина", {k: v for k, v in green.items() if k != "jev-belay@jev-belay"}, "нет pluginConfigs")]
+    os.makedirs(TMP, exist_ok=True)
+    man = tempfile.mkdtemp(prefix="modes-", dir=TMP)
+    os.makedirs(f"{man}/ok/.claude-plugin")
+    os.makedirs(f"{man}/bad/.claude-plugin")
+    json.dump({"userConfig": {"threshold": {"type": "number", "default": 70}}}, open(f"{man}/ok/.claude-plugin/plugin.json", "w"))
+    json.dump({"userConfig": {"threshold": {"type": "number", "default": 60}}}, open(f"{man}/bad/.claude-plugin/plugin.json", "w"))
+    nohand = {k: v for k, v in green.items() if k != "handoff@two-tier-mods"}
+    init = lambda d: {"plugins": [{"source": "handoff@two-tier-mods", "path": f"{man}/{d}"}]}
+    mcases += [("нет pluginConfigs, 70 — по умолчанию мода", nohand, None, init("ok")),
+               ("нет pluginConfigs, по умолчанию 60", nohand, "handoff@two-tier-mods: в таблице «70», по умолчанию мода", init("bad"))]
     ok = True
-    print(f"фикстура таблицы: строк {len(rows)}; {'; '.join(f'{f}: {len(ids)}' for _, f, ids, _ in rows[:3])} …")
+    for name, cfg, want, *ini in mcases:
+        bad = modes(mrows, cfg, ini[0] if ini else None)
+        good = not bad if want is None else len(bad) == 1 and want in bad[0]
+        ok &= good
+        print(f"{'ok ' if good else 'BAD'} modes · {name}: {'; '.join(bad) or 'расхождений нет'}")
+    print(f"фикстура таблицы: строк {len(rows)}; {'; '.join(f'{f}: {len(ids)}' for _, f, ids, _, _ in rows[:3])} …")
     for name, init, l, w, want in cases:
         bad, _ = compare(rows, init, l, w)
         good = not bad if want is None else len(bad) == 1 and want in bad[0]
@@ -347,11 +417,18 @@ def pair(src, proc, launch, lenv, args):
         f"dontAsk, --allowedTools {len(rules)} правила settings: `bin/check-ci` — {'выполнен' if ran_ok else 'нет'}; `bin/two-tier-upgrade --help` — {'отказ' if other else 'не отказан'}; "
         f"tool_use {len(uses)}, отказов {len(denied)}")
     rows = table(open(proc, encoding="utf-8").read())
+    cfgs = json.load(open(launch, encoding="utf-8")).get("pluginConfigs", {})
+    bad = modes(rows, cfgs, init)
+    own = [p for _, f, ii, v, _ in rows if f == "плагин" and v for p in ii if p not in cfgs and defaults(init, p)]
+    say("ENV", "FAIL" if bad else "OK", "modes", f"режимы плагинов таблицы против pluginConfigs {launch}: " + ("; ".join(bad) if bad else
+        ", ".join(f"{p} {json.dumps(c.get('options', {}), ensure_ascii=False)}" for p, c in cfgs.items()) +
+        "".join(f"; {p} — по умолчанию мода {json.dumps(defaults(init, p), ensure_ascii=False)}" for p in own) or "плагинов с режимом нет"))
     for name, ev in (("run1", init), ("run2", init2)):  # список MCP грузится в фоне — смотрим оба прогона
         bad, summary = compare(rows, ev, " ".join(args))
         say("ENV", "FAIL" if bad else "OK", name, f"system/init = таблица {proc}: {summary}")
         for b in bad:
             say("ENV", "FAIL", name, b)
+    layer_probes(rows, dst, lenv, args, proc)
     return dst, init
 
 
@@ -686,6 +763,71 @@ def toolgate_probes(src, launch, lenv, args, dst):
     pairs = [(k, seen.get(k)) for k in (("HARNESS", "allow"), ("HOOKS", "agent"), ("HOOKS", "kill"))]
     say(S, "OK" if all(v == "OK" for _, v in pairs) else "FAIL", "pairs",
         "с хуком кита: " + "; ".join(f"{k[1]} — {v or 'не шёл'}" for k, v in pairs) + " (dontAsk: команда вне allow — отказ прав; агенты воркфлоу не остановлены)")
+
+
+# Belay судит «готово» только для работы, которую проверил бы тест (verification_applies, belay.mjs:432) — задача пробы — код
+PROMPT_LAYER = ("Harness control run of the end-of-turn judges. With the Write tool create calc.py with a function add(a, b) that returns "
+                "a + b (you are authorized to create it). Do not run anything. Then tell me that the work is complete.")
+BELAY_LOG = os.path.expanduser("~/.claude/belay/decisions.jsonl")
+STEER_LOG = os.path.expanduser("~/.claude/plugins/data/jev-steer-or-queue-jev-steer-or-queue/log.jsonl")
+
+
+def layer_probes(rows, dst, lenv, args, proc):
+    """Плагины слоя в живой сессии этой строкой: тень Belay и Steer-or-Queue — по их журналам (только решение и режим);
+    пробы «по задаче» — инструмент строки таблицы есть на машине и отвечает (SPEC-v3.2 F4)."""
+    S = "ENV"
+    on = {i for _, f, ii, v, _ in rows if f == "плагин" and v for i in ii}
+    ids = {i for _, _, ii, _, _ in rows for i in ii}
+    jsonl = lambda p: [json.loads(l) for l in open(p, encoding="utf-8") if l.startswith("{")] if os.path.isfile(p) else []
+    if on & {"jev-belay@jev-belay", "jev-steer-or-queue@jev-steer-or-queue"}:
+        init, res, uses, _, _ = control(dst, lenv, args, "layer", PROMPT_LAYER)
+        sid = init.get("session_id")
+        if "jev-belay@jev-belay" in on:
+            v = [l.get("verdict") for l in jsonl(BELAY_LOG) if l.get("session") == sid]
+            say(S, "OK" if "shadow" in v and "blocked" not in v else "FAIL", "belay",
+                f"Belay в живой сессии (код без чека и «готово»): решений {len(v)} — {', '.join(map(str, v)) or 'нет'}; "
+                f"тень {'дошла из pluginConfigs' if 'shadow' in v else 'не видна'}{', был настоящий блок' if 'blocked' in v else ''}; ходов {res.get('num_turns')}")
+        if "jev-steer-or-queue@jev-steer-or-queue" in on:
+            m = [l.get("mode") for l in jsonl(STEER_LOG) if l.get("session") == sid]
+            say(S, "OK" if m and set(m) == {"shadow"} else "FAIL", "steer", f"Steer-or-Queue в той же сессии: строк журнала {len(m)}, режим {', '.join(sorted(set(map(str, m)))) or 'нет'}")
+    if "compact-adviser@compact-adviser" in on:
+        lenv_on = "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS" in lenv
+        say(S, "NOTE", "compact-adviser", f"режим `hint` — статикой: в -p мод молчит (isInteractive); CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 в строке {proc} — "
+            f"{'есть' if lenv_on else 'нет: мод молчит и в интерактивной сессии (register.ts:147-159)'}")
+    t = tempfile.mkdtemp(prefix="task-", dir=TMP)
+    def probe(name, cmd, env, timeout, judge):
+        if not os.path.exists(cmd[0] if cmd[0] != "node" else cmd[1]):
+            say(S, "FAIL", name, f"по задаче: {os.path.basename(cmd[1] if cmd[0] == 'node' else cmd[0])} не найден на машине")
+            return
+        try:
+            r = subprocess.run(cmd, env=os.environ | env, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired:
+            say(S, "FAIL", name, f"по задаче: нет ответа за {timeout} с")
+            return
+        ok, msg = judge(r)
+        say(S, "OK" if ok else "FAIL", name, f"по задаче: {msg}")
+    if "quicksilver" in ids:
+        def qs(r):
+            first = (r.stdout.splitlines() or [""])[0]
+            return r.returncode == 0 and re.fullmatch(r"ready · key from env (JEV_API_KEY|TYPESAFE_API_KEY) · model jev-1\.13\.0", first), f"`qs status` (модель пином, свой QUICKSILVER_HOME): rc {r.returncode}, «{first[:80]}»"
+        probe("quicksilver", ["node", os.path.expanduser("~/.claude/skills/quicksilver/scripts/qs.mjs"), "status"],
+              {"QUICKSILVER_MODEL": "jev-1.13.0", "QUICKSILVER_HOME": f"{t}/qs"}, 60, qs)
+    if "jev-seo" in ids:
+        def seo(r):
+            try:
+                d = json.loads(r.stdout)
+            except ValueError:
+                d = {}
+            need = ["requests", "bs4", "lxml", "matplotlib", "jinja2", "weasyprint", "openpyxl"]
+            n = sum(d.get(k) == "ok" for k in need)
+            return r.returncode == 0 and n == len(need) and d.get("TYPESAFE_API_KEY") == "present", f"`jevseo doctor`: rc {r.returncode}, версия {d.get('version')}, модулей ok {n}/{len(need)}, ключ — {d.get('TYPESAFE_API_KEY', 'нет')}"
+        probe("jev-seo", [os.path.expanduser("~/.claude/skills/jev-seo/bin/jevseo"), "doctor"],
+              {"PYTHONDONTWRITEBYTECODE": "1", "MPLCONFIGDIR": f"{t}/mpl"}, 120, seo)
+    if "jev-browser" in ids:
+        def ui(r):
+            line = next((l for l in r.stdout.splitlines() if " check-ui: " in l), "нет строки итога")
+            return r.returncode == 0 and "UI_OK" in r.stdout.splitlines(), f"`bin/check-ui` — {line[5:].strip()[:150]}"
+        probe("jev-browser", [f"{dst}/bin/check-ui"], {}, 300, ui)
 
 
 def doctor(dst):
