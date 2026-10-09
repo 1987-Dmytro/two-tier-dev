@@ -1,0 +1,247 @@
+#!/usr/bin/env node
+// bin/jev — typed questions to Jev (TypeSafe System One) in one command, for both tiers (SPEC-v3.2 F1).
+//
+//   bin/jev <questions.json> < state   the API answer as JSON on stdout: {model, answers, usage}; a one-line summary on stderr
+//   bin/jev --self-test                every side of the contract against a fake server on 127.0.0.1; with a key, one live call; JEV_OK
+//
+// Questions — the `questions` map of the API (docs.typesafe.ai/api): id → {type: noul|choice|score, instructions, criteria}.
+// State — stdin: JSON (object, array, string) or plain text as is. Key — TYPESAFE_API_KEY from the environment, never printed.
+// Model — pinned: JEV_MODEL or jev-1.13.0; an alias (jev-latest, jev-preview) is refused. Timeout — JEV_TIMEOUT_MS (15000).
+// Address — TYPESAFE_BASE_URL (https://api.typesafe.ai). Exit: 0 an answer; 2 bad input (no key, file, pin); 3 the API
+// answered not 200 or without the answers; 4 network or timeout. Every call that reaches the network is one line of the spend
+// log JEV_LOG (default docs/evidence/jev.jsonl under the git root): time, caller (JEV_CALLER), model, HTTP, ms, tokens — no
+// state, no key.
+'use strict'
+const fs = require('node:fs')
+const path = require('node:path')
+const { execFileSync, spawn } = require('node:child_process')
+
+const PIN = 'jev-1.13.0'
+const PINNED = /^jev-\d+\.\d+\.\d+$/
+
+function die(code, msg) {
+  process.stderr.write(`jev: ${msg}\n`)
+  process.exit(code)
+}
+
+function logPath() {
+  if (process.env.JEV_LOG) return process.env.JEV_LOG
+  let root = process.cwd()
+  try {
+    root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || root
+  } catch {} // ponytail: outside git the log lands under the current directory
+  return path.join(root, 'docs', 'evidence', 'jev.jsonl')
+}
+
+function spend(line) {
+  try {
+    const p = logPath()
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.appendFileSync(p, JSON.stringify(line) + '\n')
+  } catch {} // the log never fails the call
+}
+
+function questionsOf(file) {
+  let q
+  try {
+    q = JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch (e) {
+    die(2, `questions file ${file}: ${e.code || e.name}`)
+  }
+  const bad = q && typeof q === 'object' && !Array.isArray(q) && Object.keys(q).length
+    ? Object.entries(q).filter(([, v]) => !v || !['noul', 'choice', 'score'].includes(v.type) || v.instructions === undefined).map(([k]) => k)
+    : ['(not a non-empty object)']
+  if (bad.length) die(2, `questions file ${file}: bad questions — ${bad.join(', ')} (type noul|choice|score and instructions are required)`)
+  return q
+}
+
+function stateOf(text) {
+  if (!text.trim()) die(2, 'no state on stdin')
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+
+async function ask(questions, state) {
+  const key = process.env.TYPESAFE_API_KEY
+  if (!key) die(2, 'TYPESAFE_API_KEY is not set — the key comes from the environment only')
+  const model = process.env.JEV_MODEL || PIN
+  if (!PINNED.test(model)) die(2, `model ${model} is not a pinned version (jev-X.Y.Z); aliases such as jev-latest float`)
+  const ms = Number(process.env.JEV_TIMEOUT_MS) || 15000
+  const url = (process.env.TYPESAFE_BASE_URL || 'https://api.typesafe.ai').replace(/\/+$/, '') + '/v1/systemone'
+  const caller = process.env.JEV_CALLER || 'cli'
+  const t0 = Date.now()
+  const line = { ts: new Date().toISOString(), caller, model, questions: Object.keys(questions).length }
+  let res, body
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model, state, questions }),
+      signal: AbortSignal.timeout(ms),
+    })
+    body = await res.text()
+  } catch (e) {
+    const why = e.cause?.code || e.cause?.errors?.[0]?.code || e.cause?.message || e.name
+    const what = e.name === 'TimeoutError' || e.name === 'AbortError' ? `timeout after ${ms} ms` : `network: ${why}`
+    spend({ ...line, status: 0, error: what, ms: Date.now() - t0 })
+    die(4, what)
+  }
+  let json = null
+  try {
+    json = JSON.parse(body)
+  } catch {}
+  const usage = json?.usage || {}
+  spend({ ...line, status: res.status, version: json?.model, ms: Date.now() - t0, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens })
+  if (res.status !== 200) die(3, `HTTP ${res.status}: ${String(json?.detail || json?.error || body).replace(/\s+/g, ' ').slice(0, 200)}`)
+  const missing = Object.keys(questions).filter(k => !json?.answers?.[k])
+  if (missing.length) die(3, `HTTP 200 without answers for: ${missing.join(', ')}`)
+  process.stdout.write(JSON.stringify(json) + '\n')
+  process.stderr.write(`jev: HTTP 200 · model ${json.model} · ${Date.now() - t0} ms · tokens in ${usage.input_tokens ?? '?'} out ${usage.output_tokens ?? '?'}\n`)
+}
+
+// ---------- self-test: a fake server on 127.0.0.1, this very script as the client ----------
+async function selfTest() {
+  const http = require('node:http')
+  const crypto = require('node:crypto')
+  fs.mkdirSync('/tmp/two-tier-v3', { recursive: true })
+  const dir = fs.mkdtempSync('/tmp/two-tier-v3/jev-')
+  const key = `sk-test-${crypto.randomBytes(6).toString('hex')}`
+  const seen = []
+  const server = http.createServer((req, res) => {
+    let raw = ''
+    req.on('data', d => (raw += d)).on('end', () => {
+      const route = req.url.split('/')[1]
+      let b = {}
+      try {
+        b = JSON.parse(raw)
+      } catch {}
+      seen.push({ route, auth: req.headers.authorization === `Bearer ${key}`, path: req.url, model: b.model, state: b.state, qs: Object.keys(b.questions || {}) })
+      if (route === 'hang') return // never answers: the client's timeout must fire
+      const send = (code, obj) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(obj))
+      if (req.headers.authorization !== `Bearer ${key}`) return send(401, { detail: 'invalid API key' })
+      if (route === 'e500') return send(500, { detail: 'internal' })
+      if (route === 'empty') return send(200, { model: PIN, answers: {}, usage: { input_tokens: 5, output_tokens: 0 } })
+      const answers = {}
+      for (const [k, q] of Object.entries(b.questions || {})) {
+        if (q.type === 'noul') answers[k] = { type: 'noul', noul: 0.91 }
+        if (q.type === 'choice') answers[k] = { type: 'choice', choice: Object.keys(q.criteria)[0], probabilities: { [Object.keys(q.criteria)[0]]: 1 }, confidence: 0.9 }
+        if (q.type === 'score') answers[k] = { type: 'score', score: 1, legend: { 0: q.criteria[0], 1: q.criteria[1] }, probabilities: { 0: 0, 1: 1 }, confidence: 0.8 }
+      }
+      send(200, { model: PIN, answers, usage: { input_tokens: 120, output_tokens: 0 } })
+    })
+  })
+  await new Promise(r => server.listen(0, '127.0.0.1', r))
+  const base = `http://127.0.0.1:${server.address().port}`
+  const qfile = path.join(dir, 'q.json')
+  fs.writeFileSync(qfile, JSON.stringify({
+    done: { type: 'noul', instructions: 'Does the message claim the work is done?', criteria: { true: 'it says done', false: 'it says not done' } },
+    kind: { type: 'choice', instructions: 'What kind of message is it?', criteria: { report: 'a report', question: 'a question' } },
+    detail: { type: 'score', instructions: 'How detailed is it?', criteria: ['one word', 'several sentences'] },
+  }))
+  const log = path.join(dir, 'jev.jsonl')
+  const env = { ...process.env, TYPESAFE_API_KEY: key, TYPESAFE_BASE_URL: `${base}/ok`, JEV_LOG: log, JEV_CALLER: 'self-test' }
+  delete env.JEV_MODEL
+  const run = (over, args = [qfile], input = '{"message":"done"}') => new Promise(resolve => {
+    const t0 = Date.now()
+    const e = { ...env, ...over }
+    for (const k of Object.keys(e)) if (e[k] === undefined) delete e[k]
+    const p = spawn(process.execPath, [__filename, ...args], { env: e })
+    let out = '', err = ''
+    p.stdout.on('data', d => (out += d))
+    p.stderr.on('data', d => (err += d))
+    p.on('close', code => resolve({ code, out, err, ms: Date.now() - t0 }))
+    p.stdin.end(input)
+  })
+  const lines = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) : [])
+  let ok = true
+  const check = (cond, msg) => {
+    ok = ok && !!cond
+    console.log(`${cond ? 'ok ' : 'BAD'} ${msg}`)
+  }
+  const leaks = []
+  const leak = r => (r.out + r.err).includes(key) && leaks.push(1)
+
+  let r = await run({})
+  let a = {}
+  try {
+    a = JSON.parse(r.out)
+  } catch {}
+  const req = seen.at(-1) || {}
+  check(r.code === 0 && a.model === PIN && ['done', 'kind', 'detail'].every(k => a.answers?.[k]?.type), `answer: rc ${r.code}, model ${a.model}, answers ${Object.keys(a.answers || {}).join(', ') || 'none'}`)
+  check(req.auth && req.path === '/ok/v1/systemone' && req.model === PIN && req.state?.message === 'done' && req.qs?.length === 3,
+    `request: POST ${req.path}, Bearer key ${req.auth ? 'sent' : 'missing'}, model ${req.model}, state as JSON, questions ${req.qs?.length}`)
+  check(/HTTP 200 · model jev-1\.13\.0 · \d+ ms · tokens in 120 out 0/.test(r.err), `summary on stderr: «${r.err.trim()}»`)
+  leak(r)
+  r = await run({}, [qfile], 'plain text state')
+  check(r.code === 0 && seen.at(-1).state === 'plain text state', `text state goes as a string: rc ${r.code}`)
+  r = await run({ JEV_MODEL: 'jev-1.13.0' })
+  check(r.code === 0, `JEV_MODEL with a pinned version: rc ${r.code}`)
+  const n0 = seen.length
+  r = await run({ TYPESAFE_API_KEY: undefined })
+  check(r.code === 2 && /TYPESAFE_API_KEY is not set/.test(r.err) && seen.length === n0, `no key: rc ${r.code}, no request, «${r.err.trim()}»`)
+  for (const alias of ['jev-latest', 'jev-preview', 'jev-1.13']) {
+    r = await run({ JEV_MODEL: alias })
+    check(r.code === 2 && /not a pinned version/.test(r.err) && seen.length === n0, `model ${alias}: rc ${r.code}, refused before the network`)
+  }
+  r = await run({}, [path.join(dir, 'nope.json')])
+  check(r.code === 2 && seen.length === n0, `missing questions file: rc ${r.code}`)
+  fs.writeFileSync(path.join(dir, 'bad.json'), JSON.stringify({ x: { type: 'yesno', instructions: 'q' } }))
+  r = await run({}, [path.join(dir, 'bad.json')])
+  check(r.code === 2 && /bad questions — x/.test(r.err), `unknown question type: rc ${r.code}`)
+  r = await run({}, [qfile], '   ')
+  check(r.code === 2 && /no state/.test(r.err), `empty state: rc ${r.code}`)
+  r = await run({ TYPESAFE_API_KEY: 'sk-wrong' })
+  check(r.code === 3 && /HTTP 401/.test(r.err) && !r.err.includes('sk-wrong'), `wrong key: rc ${r.code}, «${r.err.trim()}»`)
+  r = await run({ TYPESAFE_BASE_URL: `${base}/e500` })
+  check(r.code === 3 && /HTTP 500/.test(r.err), `HTTP 500: rc ${r.code}`)
+  leak(r)
+  r = await run({ TYPESAFE_BASE_URL: `${base}/empty` })
+  check(r.code === 3 && /without answers for: done, kind, detail/.test(r.err), `200 without the answers: rc ${r.code}`)
+  r = await run({ TYPESAFE_BASE_URL: `${base}/hang`, JEV_TIMEOUT_MS: '500' })
+  check(r.code === 4 && /timeout after 500 ms/.test(r.err) && r.ms < 5000, `timeout: rc ${r.code} after ${r.ms} ms`)
+  leak(r)
+  const closed = http.createServer()
+  await new Promise(res => closed.listen(0, '127.0.0.1', res))
+  const dead = `http://127.0.0.1:${closed.address().port}`
+  await new Promise(res => closed.close(res)) // the port is free again: nobody listens there
+  r = await run({ TYPESAFE_BASE_URL: dead })
+  check(r.code === 4 && /network: ECONNREFUSED/.test(r.err), `dead address: rc ${r.code}, «${r.err.trim()}»`)
+  const L = lines()
+  const net = seen.length + 1 // + the dead address: tried, never reached the server
+  check(L.length === net && L.every(l => l.ts && l.caller === 'self-test' && 'status' in l && l.ms >= 0) && L[0].input_tokens === 120 && L[0].version === PIN,
+    `spend log: ${L.length} lines for ${net} calls that reached the network; first — HTTP ${L[0]?.status}, tokens ${L[0]?.input_tokens}, version ${L[0]?.version}`)
+  check(!fs.readFileSync(log, 'utf8').includes(key) && !fs.readFileSync(log, 'utf8').includes('done') && !leaks.length,
+    `the key appears in no output and no log line; the log carries no state (${leaks.length} leaks)`)
+  server.close()
+  fs.rmSync(dir, { recursive: true, force: true })
+
+  if (process.env.TYPESAFE_API_KEY) {
+    const live = path.join(fs.mkdtempSync('/tmp/two-tier-v3/jev-live-'), 'q.json')
+    fs.writeFileSync(live, JSON.stringify({ ping: { type: 'noul', instructions: 'Is this message a greeting?', criteria: { true: 'a greeting', false: 'anything else' } } }))
+    r = await run({ TYPESAFE_API_KEY: process.env.TYPESAFE_API_KEY, TYPESAFE_BASE_URL: process.env.TYPESAFE_BASE_URL, JEV_LOG: undefined, JEV_CALLER: 'self-test-live', JEV_MODEL: process.env.JEV_MODEL }, [live], '{"message":"hello there"}')
+    let la = {}
+    try {
+      la = JSON.parse(r.out)
+    } catch {}
+    check(r.code === 0 && PINNED.test(la.model || '') && typeof la.answers?.ping?.noul === 'number' && !(r.out + r.err).includes(process.env.TYPESAFE_API_KEY),
+      `live call: rc ${r.code}, ${r.err.trim() || 'no summary'}, noul ${la.answers?.ping?.noul}`)
+    fs.rmSync(path.dirname(live), { recursive: true, force: true })
+  } else {
+    console.log('--  live call: skipped — TYPESAFE_API_KEY is not set (CI)')
+  }
+  console.log(ok ? 'JEV_OK' : 'JEV_FAIL')
+  return ok ? 0 : 1
+}
+
+async function main(argv) {
+  if (argv[0] === '--self-test' && argv.length === 1) process.exit(await selfTest())
+  if (argv.length !== 1 || argv[0].startsWith('-')) die(2, 'usage: bin/jev <questions.json> < state  |  bin/jev --self-test')
+  const questions = questionsOf(argv[0])
+  const state = stateOf(fs.readFileSync(0, 'utf8'))
+  await ask(questions, state)
+}
+
+main(process.argv.slice(2)).catch(e => die(4, `unexpected: ${e.name}`))

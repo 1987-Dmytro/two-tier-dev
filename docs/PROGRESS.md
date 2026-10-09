@@ -6,9 +6,10 @@
 ## Done
 - Шаг 0a (`5a1913f`): архив v3.1 — `git mv` PROGRESS → `docs/archive/PROGRESS-v3.1.md`, evidence v3.1 → `docs/archive/evidence-v3.1/`, `accept-*.txt` → `docs/archive/evidence-v3/`.
 - Шаг 0: `docs/PLAN-v3.2.md`; «до» — `bin/check-harness` на ките v3.1: корень репо `ENV_OK · HARNESS_OK · HOOKS_OK`, t3 `ENV_FAIL · HARNESS_FAIL · HOOKS_FAIL` — `F4-harness-v3.1-baseline.txt`.
+- **F1 `bin/jev`**: `bin/jev --self-test` → `JEV_OK` (фейковый сервер: 19 сторон контракта; живой вызов — HTTP 200, `jev-1.13.0`) — `docs/evidence/F1-jev-result.txt`; журнал расхода — `docs/evidence/jev.jsonl`.
 
 ## Next — один айтем
-1. **F1 `bin/jev`**: `bin/jev --self-test` → `JEV_OK`.
+1. **F2 `spec-gate`**: `bin/check-harness` → `GATE_HOOK_OK`.
 
 ## Open stop — NONE
 
