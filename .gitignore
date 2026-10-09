@@ -3,3 +3,7 @@
 __pycache__/
 *.pyc
 .venv/
+.env
+.env.*
+# engine-written type declarations of mods (laid at every load; regenerate, never edit)
+mods/*/.claude-plugin/types/
