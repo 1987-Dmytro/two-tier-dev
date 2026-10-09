@@ -1,0 +1,48 @@
+VERDICT: PASS
+/verify-phase · docs/SPEC-v3.2.md · HEAD 7f271b9 · проверяющие claude-sonnet-5-5 (фич 10, опровергателей 0) · судья claude-opus-5-5
+
+Блокирующих замечаний нет. Каждая фича F1–F10 подтверждена зелёным чеком с маркером (свежий прогон или gate.log свежего клона: от F1 JEV_OK до F10 GATE_OK). Мутации либо покраснели (F1, F3, F4, F5, F8, F9, F10), либо выжили в F2, F6 и F7, но там исходное поведение проверено вручную и совпадает с «готово». Опровергатели не оставили ни одного кандидата в блокирующие. Нарушений инвариантов §3 и утечек секретов не найдено: в журнале расхода только счётчики, совпадений `sk-` — 0. Всё найденное относится к покрытию чеков, нестандартным входам и косметике и записано в named_not_built.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F1: вопрос с `instructions: null` проходит локальную проверку и уходит в API (отсекается только undefined)
+- F1: вызовы, отказанные до сети (rc 2), не пишутся в журнал расхода — узкое, но документированное прочтение «каждый вызов»
+- F1/F4: живой `--self-test` и `bin/check-ui` дописывают отслеживаемый docs/evidence/jev.jsonl и пачкают дерево (по замыслу F8; на HEAD рабочая копия так и осталась с ` M docs/evidence/jev.jsonl`; ключей в нём нет, совпадений sk- — 0)
+- F2: условие «ветка запушена» (HEAD == origin/<ветка>) без пробы в check-harness — мутация `remote !== sha` → `!remote` выжила, исходный хук блокирует верно
+- F2: новая строка STOP, совпадающая по первым 60 символам с прежней короткой, считается старой (так задумано по заголовку хука)
+- F2: мягкий разбор входа — опечатка в mode ведёт себя как shadow, `STOP:STOP-INPUT` без пробела и STOP внутри code fence засчитываются, пустой SPEC даёт неточную причину
+- F3: в корневом budgets.json нет ключа abide_rules — предел 15 берётся из kit/budgets.json с WARN (13/15, BUDGET_OK)
+- F3: мутации кода abide.mjs не прогнаны (Toolgate отказал в правке); покраснела только мутация matcher в settings.json
+- F4: compare() сверяет флаги подстрокой (`--effort ultracode2` проходит как `ultracode`)
+- F4: modes() ищет слово режима среди любых значений опций, а не по своему ключу
+- F4: кривая таблица Environment роняет check-harness с IndexError/AttributeError вместо FAIL с именем строки; `Да` с заглавной читается как «нет»
+- F4: пробы «по задаче» идут и для строк с «нет»; режим hint Compact Adviser проверяется только статикой (NOTE)
+- F5: force-push через refspec `HEAD:+main` не ловится статическим правилом — хук молчит
+- F5: без ключа статическое правило всё равно отказывает force-push — формулировка «без ключа — тишина» верна только для модельных вердиктов
+- F6: тесты мода handoff не покрывают автоматический handoff на 70 % — мутация порога на +30 выжила, исходный код срабатывает верно
+- F6: handoffDir не ограничен корнем проекта (`../..` пишет вне репо; значение из доверенных launch settings)
+- F6: two-tier-init не кладёт `handoffs/` в .gitignore целевого проекта (в ките нет .gitignore)
+- F7: check-budget сверяет фразу `--setting-sources project,local` подстрокой по всему файлу — правка самой строки запуска шаблона PROCESS проходит с BUDGET_OK
+- F7: two-tier-upgrade молча оставляет docs/GOAL.txt, если рядом уже есть docs/PROMPT.txt
+- F7: разбор `Read first:` строгий — ведущий пробел или пустое значение дают FAIL
+- F8: `--since 1970-01-01T00:00:00Z` подменяется началом плеча (0.0 считается пустым)
+- F8: отрицательные токены суммируются как есть; дедуп сливает одинаковые строки за одну секунду
+- F9: bin/check-docs падает с трейсбеком, если запущен не из корня репо
+- F9: «ссылки живые» проверяются только для префиксов bin/kit/intent/claude/docs/{archive,drafts,evidence}
+- F9: строки hooks:/calls: мода compact-adviser не сверены со свежим `claude plugin validate`
+- F10: справка bin/two-tier-init печатает лишнюю строку `set -euo pipefail` (sed -n '2,11p' на сдвинутом заголовке)
+- F10: прогон мутации гейта не дошёл до финального GATE_FAIL — прерван по нагрузке после красных строк
+
+## По фичам
+- F1: чек `bin/jev --self-test` rc 0, маркер есть (own_run); мутация kit/bin/jev (bin/jev is a symlink to it): error-body key masking disabled: split(key).join('<key>') changed to split(key).join(key) → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F2: чек `bin/check-harness (gate.log line `F2 GATE_HOOK_OK`; F2-harness-result.txt line 89 `GATE_HOOK_OK`; own run with one mutation also ended GATE_HOOK_OK, rc 0)` rc 0, маркер есть (gate_log); мутация kit/.claude/hooks/spec-gate.mjs: push check `remote !== sha` replaced by `!remote`, so any existing origin/<branch> counts as pushed even when HEAD is ahead of it → green; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F3: чек `grep F3 line in gate.log + docs/evidence/F3-harness-result.txt (check bin/check-harness takes about 3m40, not rerun unmutated)` rc 0, маркер есть (gate_log); мутация kit/.claude/settings.json: PostToolUse matcher for the Abide hook changed from Edit|Write|MultiEdit to Edit|Write (MultiEdit edits no longer judged) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F4: чек `bin/check-harness (gate.log line `F4 ENV_OK` from harness-t3 and harness-repo; evidence docs/evidence/F4-harness-result.txt has ENV_OK at lines 86 and 180). Own run: bin/check-harness --self-test` rc 0, маркер есть (gate_log); мутация bin/check-harness: Mutated on a scratch copy, because the toolgate hook refused in-place edits of the worktree file; the worktree file is untouched. Run 1: compare() no longer reports a table plugin missing from system/init (`and False`). Run 2: modes() accepts any value (`else w in vals` replaced by `else True`). Also checked kit/.claude/launch.settings.json defects by loading the kit table, with compact-adviser mode set to auto and steer-or-queue set to active. → red; находок 5, блокирующих-кандидатов 0, опровергнуто 0
+- F5: чек `bin/check-harness (F5 marker TOOLGATE_OK); gate.log line 20 'F5 TOOLGATE_OK', GATE_OK at the end; evidence docs/evidence/F5-harness-result.txt line 91 TOOLGATE_OK, rc 0 (3:39 run time)` rc 0, маркер есть (gate_log); мутация kit/.claude/hooks/toolgate-deny.mjs: if (d.verdict === 'deny') -> if (d.verdict === 'deny' || d.verdict === 'ask'), so the hook also refuses the ask verdict → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F6: чек `bin/check-kit` rc 0, маркер есть (own_run); мутация mods/handoff/hooks/register.tsx: auto-handoff gate `percent < st.s.threshold` changed to `percent < st.s.threshold + 30` (handoff would fire only at 100%, not 70%) → green; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `bin/check-budget --templates` rc 0, маркер есть (own_run); мутация kit/docs/PROCESS.template.md: line 48 (launch line): --setting-sources project,local -> --setting-sources project → green; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F8: чек `bin/check-spend` rc 0, маркер есть (own_run); мутация kit/bin/check-spend (bin/check-spend is a symlink to it): Belay verdict filter ('allowed','blocked','shadow') changed to ('allowed','blocked'), dropping shadow decisions from the sum → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F9: чек `bin/check-docs` rc 0, маркер есть (own_run); мутация CHANGELOG.md: In a scratch copy under /tmp/two-tier-v3/mut-f9 (the worktree edit was refused by the Toolgate hook), renamed the handoff mod line `./register.tsx hooks: session.start` to `hook:`. → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F10: чек `bin/gate-v3.2 (fresh-clone log /tmp/two-tier-v3/verify-7f271b9-i9ge0tu0/gate.log; own run skipped, check takes about 3.5 min)` rc 0, маркер есть (gate_log); мутация bin/two-tier-init: added `| tail -n +2` after `LC_ALL=C sort`, so the init skips the first kit file → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0

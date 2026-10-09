@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3.2 «Jev-слой, без /goal» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — 09.10.2026, 15:50 — фаза v3.2: стоп снят, приёмка
-**Сделано:** шаги 0a, 0; F1–F9 закрыты — чеки зелёные в этой сессии, evidence на `f02dede`: после правок кита тимлидом (`6c50b67`) F6 — `HANDOFF_OK`, F7 — `BUDGET_OK`. **Следующий шаг оператора:** нет — идут CI, гейт и `/verify-phase` из свежего клона. **Когда закончим:** ~25 мин — CI ~2 мин, гейт ~4 мин, `/verify-phase` ~15 мин, финальный гейт.
+## Голова — 09.10.2026, 16:15 — фаза v3.2 закрыта: `VERDICT: PASS`
+**Сделано:** все десять фич SPEC-v3.2 закрыты, их чеки прогнаны в этой сессии, evidence — `docs/evidence/F<n>-*-result.txt`; ветка `v3.2` запушена; CI на `b53dda5` — `CI_OK`; гейт на `b53dda5` — все маркеры фазы и `F10 GATE_OK`; `/verify-phase` из свежего клона `7f271b9` — `VERDICT: PASS`, блокирующих нет (`docs/evidence/verify-7f271b9.txt`). Финальные `bin/gate-v3.2` и `bin/check-ci v3.2` — после этого push. **Следующий шаг оператора:** финальная приёмка тимлида — ревью `v3.2-2` по `docs/evidence/verify-7f271b9.txt`, затем PR `v3.2` → `main` (merge — оператор). **Когда закончим:** со стороны исполнителя — сейчас, 09.10, 16:15; приёмка и merge — по готовности тимлида и оператора.
 
 ## Done
 - Шаг 0a (`5a1913f`): архив v3.1 — `git mv` PROGRESS → `docs/archive/PROGRESS-v3.1.md`, evidence v3.1 → `docs/archive/evidence-v3.1/`, `accept-*.txt` → `docs/archive/evidence-v3/`.
@@ -17,9 +17,8 @@
 - **F10 Гейт v3.2**: `bin/gate-v3.2` на `b53dda5` → `F1 JEV_OK` … `F9 DOCS_OK`, уцелевшие v3.1 `HARNESS_OK`, `HOOKS_OK`, `VERIFY_OK`, `KIT_OK`, `OWNER_OK`, `F10 GATE_OK`, rc 0 (3 мин 27 с); `two-tier-init` кладёт ровно кит из git — 35 из 35, без кэша Python (ревью v3.2-1); CI `b53dda5` — `CI_OK` — `docs/evidence/F10-gate-result.txt`.
 - **F9 Документы**: `bin/check-docs` → `DOCS_OK` (CHANGELOG v3.2 — 12 строк полей; LAUNCH — каждый флаг строки и `--` перед запросом, режимы `spec-gate`, ключ в окружении) — `docs/evidence/F9-docs-result.txt`.
 
-
 ## Next — один айтем
-1. **Приёмка**: `bin/verify-phase` из свежего клона запушенного HEAD → `VERDICT: PASS`; финальный `bin/gate-v3.2` после последнего push; голова PROGRESS.
+1. **Тимлид**: ревью `v3.2-2` по вердикту `7f271b9` и небазовым его находкам; оператор — PR `v3.2` → `main`.
 
 ## Open stop — NONE
 
@@ -33,4 +32,5 @@
 ## Named, not built
 - Апгрейд проекта, уже переведённого `two-tier-upgrade` на v3.x: путь архива `docs/archive/kit-v2/` занят — конфликт в отчёте, rc 0; путь v2 → v3.2 проверен self-test.
 - `spec-gate`: строка STOP внутри блока кода считается строкой; новая строка STOP с теми же первыми 60 знаками, что у отпущенной, — уже не новая.
+- Небазовые находки финальной приёмки — 27 пунктов, `docs/evidence/verify-7f271b9.txt`, Named (покрытие чеков, нестандартные входы, косметика).
 - Небазовые находки приёмки (`docs/evidence/verify-8cbfc5c.txt`, Named): «[toolgate] undefined» у отказа без reason, контракт шаблона не держит `--setting-sources` именно в строке запуска, `stats.json` неверной формы роняет `check-spend`, граница порога handoff в тестах мода; метка правила `goal` в выводе `check-budget`.
