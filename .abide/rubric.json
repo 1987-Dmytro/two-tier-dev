@@ -1,0 +1,471 @@
+{
+  "version": 1,
+  "compiledAt": "2026-10-09T09:20:00.000Z",
+  "compiledBy": "team-lead",
+  "sources": [
+    {
+      "path": "CLAUDE.md",
+      "sha": "924778b31f893569f358fd987946cc5a24fd64c12202349dba3e98fad9cf333c",
+      "scope": "**/*"
+    }
+  ],
+  "rules": [
+    {
+      "id": "no-secret-values",
+      "text": "No secret, API key, token or password value appears in any file, log line, evidence file or commit message; credentials are read from the environment only.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 12
+      },
+      "scope": [
+        "**/*"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change put a literal secret value (API key, token, password) into a file, log line, evidence file or commit message, instead of reading it from the environment?",
+          "criteria": {
+            "true": "API_KEY = \"sk-live-9f3a…\"",
+            "false": "key = process.env.TYPESAFE_API_KEY"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 20,
+        "median": 0.02,
+        "min": 0.02,
+        "max": 0.03,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "no-print-credential",
+      "text": "Code never prints or logs the value of TYPESAFE_API_KEY or of any other credential; reporting its presence or length is fine.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 13
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**",
+        "kit/.claude/**",
+        "mods/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change print, echo or log the value of a credential such as TYPESAFE_API_KEY? Reporting only its presence or length is not a violation.",
+          "criteria": {
+            "true": "console.log('key', process.env.TYPESAFE_API_KEY)",
+            "false": "console.log('key present:', Boolean(process.env.TYPESAFE_API_KEY))"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 10,
+        "median": 0.03,
+        "min": 0.03,
+        "max": 0.05,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "evidence-anonymized",
+      "text": "Files under docs/evidence/ carry counts, exit codes, markers and paths relative to the repo root or under /tmp/two-tier-v3; they never carry emails, account or organization ids, client names or home-directory paths.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 14
+      },
+      "scope": [
+        "docs/evidence/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change add an email address, an account or organization id, a client name or a home-directory path to an evidence file?",
+          "criteria": {
+            "true": "ran in /Users/alex/projects/kit as alex@example.com",
+            "false": "rc=0 · HARNESS_OK · /tmp/two-tier-v3/harness-1/run1.jsonl"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 4,
+        "median": 0.05,
+        "min": 0.04,
+        "max": 0.06,
+        "fired": 0,
+        "verdict": "skipped"
+      }
+    },
+    {
+      "id": "no-delete-tracked",
+      "text": "No tracked file is deleted from the repo; retired files move to docs/archive/ with git mv.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 15
+      },
+      "scope": [
+        "**/*"
+      ],
+      "when": "turn",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change delete a tracked file outright, rather than moving it under docs/archive/?",
+          "criteria": {
+            "true": "deleted: kit/docs/GOAL.template.txt (no matching file added under docs/archive/)",
+            "false": "renamed: kit/docs/GOAL.template.txt -> docs/archive/GOAL.template-v3.1.txt"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 8,
+        "median": 0.125,
+        "min": 0.07,
+        "max": 0.16,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "jev-hook-no-allow-ask",
+      "text": "A hook of the Jev layer never outputs the permission decision \"allow\" or \"ask\", and on its own error or timeout it exits 0 so the turn passes.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 16
+      },
+      "scope": [
+        "kit/.claude/**",
+        ".claude/**",
+        "mods/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this hook code output the permission decision \"allow\" or \"ask\", or exit non-zero or block the turn when the hook itself fails or times out?",
+          "criteria": {
+            "true": "console.log(JSON.stringify({hookSpecificOutput:{permissionDecision: d.verdict}}))",
+            "false": "if (d.verdict === 'deny') print deny; on any error: process.exit(0)"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 7,
+        "median": 0.14,
+        "min": 0.05,
+        "max": 0.25,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "jev-pin-and-timeout",
+      "text": "A script that calls Jev pins an exact model version and sets a timeout; it never uses the floating alias jev-latest.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 17
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**",
+        "kit/.claude/**",
+        "mods/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this code call Jev with the floating alias jev-latest or with no exact model version, or call it with no timeout?",
+          "criteria": {
+            "true": "fetch(url, {body: JSON.stringify({model: 'jev-latest', ...})})",
+            "false": "model: process.env.JEV_MODEL || 'jev-1.13.0', signal: AbortSignal.timeout(20000)"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 10,
+        "median": 0.09,
+        "min": 0.07,
+        "max": 0.14,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "jev-payload-bounded",
+      "text": "A request to Jev carries only the final message, the PROGRESS head, file names, markers and diff lines of this repo; it never carries file contents from outside the repo or environment variables.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 18
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**",
+        "kit/.claude/**",
+        "mods/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this code send to Jev anything beyond the final message, the PROGRESS head, file names, markers and diff lines of this repo — for example environment variables or contents of files outside the repo?",
+          "criteria": {
+            "true": "state: JSON.stringify(process.env) + fs.readFileSync(os.homedir() + '/.zshrc')",
+            "false": "state: finalMessage + progressHead + missingMarkers.join(',')"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 10,
+        "median": 0.09,
+        "min": 0.07,
+        "max": 0.11,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "tmp-only-fixtures",
+      "text": "Scripts in bin/ and kit/bin/ create temporary files and fixtures only under /tmp/two-tier-v3.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 19
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this script create temporary files or fixtures outside the repo anywhere other than under /tmp/two-tier-v3?",
+          "criteria": {
+            "true": "tempfile.mkdtemp(dir=os.path.expanduser('~/scratch'))",
+            "false": "tempfile.mkdtemp(dir='/tmp/two-tier-v3')"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 4,
+        "median": 0.21000000000000002,
+        "min": 0.1,
+        "max": 0.26,
+        "fired": 0,
+        "verdict": "skipped"
+      }
+    },
+    {
+      "id": "no-user-level-edits",
+      "text": "No script or hook edits user-level settings or installs under the home directory (~/.claude, ~/.toolgate, ~/.abide, ~/.config).",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 20
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**",
+        "kit/.claude/**",
+        "mods/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this script or hook write to, edit or install into user-level locations under the home directory such as ~/.claude, ~/.toolgate, ~/.abide or ~/.config? Reading them is not a violation.",
+          "criteria": {
+            "true": "json.dump(s, open(os.path.expanduser('~/.claude/settings.json'), 'w'))",
+            "false": "json.load(open(os.path.expanduser('~/.claude/settings.json')))"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 10,
+        "median": 0.08499999999999999,
+        "min": 0.05,
+        "max": 0.47,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "marker-after-assertions",
+      "text": "A check prints its OK marker only after its assertions have run; no marker is printed unconditionally.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 21
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this check print its OK marker unconditionally, without its assertions deciding whether the marker is printed?",
+          "criteria": {
+            "true": "run_checks(); print('HARNESS_OK')",
+            "false": "print('HARNESS_OK' if not failures else 'HARNESS_FAIL')"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 4,
+        "median": 0.135,
+        "min": 0.1,
+        "max": 0.2,
+        "fired": 0,
+        "verdict": "skipped"
+      }
+    },
+    {
+      "id": "nested-claude-subscription",
+      "text": "Nested claude -p control runs unset ANTHROPIC_API_KEY so they run on the subscription only.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 22
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**",
+        "kit/.claude/**",
+        "mods/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change start a nested claude -p control run without unsetting ANTHROPIC_API_KEY?",
+          "criteria": {
+            "true": "subprocess.run(['claude', '-p', prompt])",
+            "false": "subprocess.run(['env', '-u', 'ANTHROPIC_API_KEY', 'claude', '-p', prompt])"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 10,
+        "median": 0.14500000000000002,
+        "min": 0.05,
+        "max": 0.25,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "full-model-ids",
+      "text": "Model names in scripts and settings are full ids such as claude-opus-5-5, never aliases such as opus or sonnet.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 23
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**",
+        "kit/.claude/**",
+        "mods/**",
+        ".claude/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change name a Claude model by an alias such as opus, sonnet or haiku instead of a full model id?",
+          "criteria": {
+            "true": "\"model\": \"opus\"",
+            "false": "\"model\": \"claude-opus-5-5\""
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 11,
+        "median": 0.04,
+        "min": 0.03,
+        "max": 0.25,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    },
+    {
+      "id": "no-sweeping-git",
+      "text": "Scripts and documented commands never use `git add -A`, `git add .`, a force-push or an amend of a pushed commit.",
+      "source": {
+        "path": "CLAUDE.md",
+        "line": 24
+      },
+      "scope": [
+        "bin/**",
+        "kit/bin/**",
+        "kit/.claude/**",
+        "mods/**",
+        "docs/**",
+        "README.md"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change run or instruct the reader to run git add -A, git add ., a force-push or an amend of a pushed commit? Text that forbids these commands is not a violation.",
+          "criteria": {
+            "true": "git add -A && git commit -m wip && git push --force",
+            "false": "git add bin/jev kit/bin/jev && git commit -m 'F1: bin/jev'"
+          }
+        }
+      },
+      "status": "active",
+      "calibration": {
+        "at": "2026-10-09T09:00:40.508Z",
+        "hunks": 17,
+        "median": 0.02,
+        "min": 0.02,
+        "max": 0.3,
+        "fired": 0,
+        "verdict": "decisive"
+      }
+    }
+  ]
+}

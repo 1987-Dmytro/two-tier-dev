@@ -73,8 +73,7 @@
     "anthropic-skills:skill-creator": "off",
     "anthropic-skills:team-lead": "off",
     "anthropic-skills:team-lead-brief": "off",
-    "anthropic-skills:xlsx": "off",
-    "jev-seo": "off"
+    "anthropic-skills:xlsx": "off"
   },
   "permissions": {
     "deny": [
@@ -89,7 +88,9 @@
       "Edit(./.claude/launch.settings.json)",
       "Edit(./docs/OFFICIAL-SOURCES.md)",
       "Edit(./docs/archive/team-lead-*.md)",
-      "Edit(./budgets.json)"
+      "Edit(./budgets.json)",
+      "Edit(./CLAUDE.md)",
+      "Edit(./.abide/rubric.json)"
     ]
   },
   "autoMode": {
@@ -100,6 +101,65 @@
       "Trusted domains: github.com, code.claude.com, registry.npmjs.org, context7.com, api.typesafe.ai, docs.typesafe.ai.",
       "Key services: GitHub Actions CI of this repo; scratch repos and fixtures under /tmp/two-tier-v3; nested claude -p control runs on the subscription.",
       "Decision-model vendor: TypeSafe (Jev) at api.typesafe.ai — paid calls from hooks and bin/ scripts with the key from the environment are routine inside the phase ceiling; the key is never printed or written into the repo."
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" turn-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "toolgate decide 2>/dev/null | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{const d=JSON.parse(s);if(d.verdict===\"deny\")console.log(JSON.stringify({hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"deny\",permissionDecisionReason:\"[toolgate] \"+d.reason}}))}catch(e){}})'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" post-tool-use",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" stop",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   }
 }

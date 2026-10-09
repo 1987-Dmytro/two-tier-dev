@@ -12,7 +12,7 @@
 | источник настроек | флаг | `--setting-sources project,local` | да | Q3: настройки и хуки пользователя в сессию исполнителя не входят | строка запуска | — |
 | Ponytail | плагин | `ponytail@ponytail` | да | база | `/plugin install ponytail@ponytail` | строка таблицы |
 | Context7 | MCP | `context7` | да | база: доки библиотек | `--mcp-config` строки запуска, stdio `npx -y @upstash/context7-mcp` | из строки запуска |
-| Graphify | скилл | `graphify` | нет | на этом плече — нет: корпус репо grep-удобный, а скиллы пользователя срезаны вместе с его настройками (замер 09.10); доставку скиллов в проект строит F4 | F4 | — |
+| Graphify | скилл | `graphify` | да | база; скиллы пользователя приходят через `--add-dir /tmp/two-tier-v3` (подготовка — в разделе запуска); доставку в кит строит F4 | подготовка запуска | — |
 | pr-review-toolkit | плагин | `pr-review-toolkit@claude-plugins-official` | да | база: ревью диффа ветки | `claude plugin install pr-review-toolkit@claude-plugins-official` | строка таблицы |
 | pyright-lsp | плагин | `pyright-lsp@claude-plugins-official` | да | Python: `bin/check-*` | — | когда в фазе нет Python |
 | typesafe | плагин | `typesafe@typesafe-ai` | да | F1, F2: исполнитель пишет вызовы Jev | `claude plugin install typesafe@typesafe-ai` | фаза без вызовов Jev |
@@ -20,11 +20,12 @@
 | Steer-or-Queue | плагин | `jev-steer-or-queue@jev-steer-or-queue` | да | F4: тень (только журнал) | `claude plugin install jev-steer-or-queue@jev-steer-or-queue` | по ретро |
 | Compact Adviser | плагин | `compact-adviser@compact-adviser` | да | F4: режим `hint` | `claude plugin install compact-adviser@compact-adviser` | по ретро |
 | handoff | плагин | `handoff@two-tier-mods` | да | F6: хендофф и свежий контекст на 70 % окна | `claude plugin install handoff@two-tier-mods` | строка таблицы |
-| Quicksilver | скилл | `quicksilver` | нет | на этом плече — нет (та же причина, что у Graphify); по задаче: корпус больше grep-удобного; доставка и проба — F4 | F4 | — |
-| Abide | CLI | `abide` | нет | на этом плече — нет: хуки пользователя срезаны; проводку в кит строит F3 | F3 | — |
-| Toolgate | CLI | `toolgate` | нет | на этом плече — нет: хук пользователя срезан; режим «только отказ» строит F5 | F5 | — |
-| Jev SEO | скилл | `jev-seo` | нет | по задаче: фаза WEB; проба — F4 | — | — |
-| Jev Browser, jev-mcp | MCP | `jev-browser`, `jev` | нет | Jev Browser — по задаче: фаза с UI, проба — F4; jev-mcp — тимлид | — | — |
+| Quicksilver | скилл | `quicksilver` | да | по задаче: корпус больше grep-удобного; доставка — как у Graphify; проба — F4 | подготовка запуска | — |
+| Abide | CLI | `abide` | да | F3: четыре хука Abide — в `.claude/launch.settings.json` (заметка, конец хода не блокирует); рубрика — шаг 0 фазы; в кит переносит F3 | `npm i -g @coldtea/abide`, `abide login` | по ретро |
+| Toolgate | CLI | `toolgate` | да | F5: «только отказ» — PreToolUse-хук в `.claude/launch.settings.json` поверх `toolgate decide`, печатает только `deny`; в кит переносит F5 | `npm i -g @riskaverse/toolgate`, `toolgate init` | по ретро |
+| Jev SEO | скилл | `jev-seo` | да | по задаче: фаза WEB; на этом плече — проба F4 | подготовка запуска | — |
+| Jev Browser | MCP | `jev-browser` | да | F4: шаблон `bin/check-ui`; по задаче — фазы с UI | `--mcp-config` строки запуска, stdio `npx -y -p jev-browser@0.1.2 jev-browser-mcp`; `npx playwright install chromium` | из строки запуска |
+| jev-mcp | MCP | `jev` | нет | инструмент тимлида в Claude Desktop | — | — |
 | Context7 (плагин) | плагин | `context7@claude-plugins-official` | нет | удалённый MCP требует OAuth; вместо него — stdio-сервер выше | — | — |
 | commit-commands | плагин | `commit-commands@claude-plugins-official` | нет | коммиты и PR мимо дисциплины | — | — |
 | security-guidance | плагин | `security-guidance@claude-plugins-official` | нет | по задаче: сеть и ввод пользователя | — | — |
@@ -41,10 +42,12 @@
 | computer-use | MCP | `computer-use` | нет | встроенный MCP: экран и приложения Mac оператора; по умолчанию выключен | — | — |
 
 ## Строка запуска исполнителя — фаза v3.2
-Из корня репо, на ветке `v3.2`, после `mkdir -p /tmp/two-tier-v3`. В терминале, где задан `TYPESAFE_API_KEY` (ключ — только в окружении, не в репо).
+Из корня репо, на ветке `v3.2`, в терминале, где задан `TYPESAFE_API_KEY` (ключ — только в окружении, не в репо). Подготовка — каталог фикстур и ссылки на скиллы пользователя (`/tmp` чистится при перезагрузке):
+
+`mkdir -p /tmp/two-tier-v3/.claude/skills && for s in graphify quicksilver jev-seo; do ln -sfn ~/.claude/skills/$s /tmp/two-tier-v3/.claude/skills/$s; done`
 
 ```sh
-ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3
+ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]},"jev-browser":{"command":"npx","args":["-y","-p","jev-browser@0.1.2","jev-browser-mcp"]}}}' --add-dir /tmp/two-tier-v3
 ```
 
 Фаза стартует без `/goal` (D5): в конец строки добавляется стартовый запрос аргументом — `"$(cat docs/GOAL.txt)"`. На этом плече файл стартового запроса ещё носит имя v3.1 (`docs/GOAL.txt` — по нему `bin/check-budget` находит SPEC фазы); имя и шаблон меняет F7. Зачем каждый флаг — `docs/LAUNCH.md`.

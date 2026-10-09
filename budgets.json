@@ -33,7 +33,9 @@
   "project": {
     "owner_add": [
       "docs/OFFICIAL-SOURCES.md",
-      "docs/archive/team-lead-*.md"
+      "docs/archive/team-lead-*.md",
+      "CLAUDE.md",
+      ".abide/rubric.json"
     ]
   }
 }
