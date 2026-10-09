@@ -68,6 +68,11 @@ if root == "kit":
     delta = sorted(set(kd) - set(rd)) + sorted(ko - ro) + [f"−{x}" for x in sorted(set(rd) - set(kd))] + [f"−{x}" for x in sorted(ro - ko)]
     say(same and set(kd) - set(rd) <= V32_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED, "budgets",
         f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: {', '.join(delta) or 'нет'}")
+    lim = kd.get("prompt_chars", kd.get("goal_chars"))
+    owned = {"docs/PROMPT.txt", "docs/GOAL.txt"} & ko
+    say(kd.get("abide_rules", 0) <= 15 and lim is not None and lim <= 4000 and owned and {".claude/spec-gate.json", ".abide/rubric.json", ".claude/toolgate.yaml"} <= ko,
+        "budgets", f"kit/budgets.json: abide_rules {kd.get('abide_rules')} (≤ 15, SPEC-v3.2 F3), стартовый запрос {lim} знаков (≤ 4000), "
+                   f"во владении — {', '.join(sorted(owned)) or 'нет'} и файлы тимлида слоя (spec-gate.json, rubric.json, toolgate.yaml)")
 kit_ok = all(out)
 print("KIT_OK" if kit_ok else "KIT_FAIL")
 hand = []

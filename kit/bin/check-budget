@@ -66,6 +66,11 @@ def is_tl(path, owner):
     return any(path.startswith(e) if e.endswith("/") else fnmatch.fnmatchcase(path, e) for e in owner)
 
 
+def with_prompt(owner):
+    """v3.2: стартовый запрос наследует владение прежнего имени — docs/GOAL.txt в списке тимлида значит и docs/PROMPT.txt."""
+    return owner + ["docs/PROMPT.txt"] if "docs/GOAL.txt" in owner and "docs/PROMPT.txt" not in owner else owner
+
+
 def load_budgets(path="budgets.json"):
     try:
         raw = json.loads(read(path))
@@ -76,8 +81,7 @@ def load_budgets(path="budgets.json"):
     if out:
         return None, out
     b = dict(d)
-    if "docs/GOAL.txt" in d["owner"] and "docs/PROMPT.txt" not in d["owner"]:  # v3.2: стартовый запрос наследует владение прежнего имени
-        b["owner"] = d["owner"] + ["docs/PROMPT.txt"]
+    b["owner"] = with_prompt(d["owner"])
     for k, v in p.items():
         if k == "owner_add" and isinstance(v, list) and all(isinstance(x, str) for x in v):
             b["owner"] = b["owner"] + v
@@ -227,7 +231,7 @@ def owner_at(rev, fallback):
         return []
     try:
         raw = json.loads(r.stdout)
-        return raw["defaults"]["owner"] + ((raw.get("project") or {}).get("owner_add") or [])
+        return with_prompt(raw["defaults"]["owner"] + ((raw.get("project") or {}).get("owner_add") or []))
     except (ValueError, KeyError, TypeError, AttributeError):
         return fallback
 
@@ -354,8 +358,14 @@ def fixtures(b, defaults):
         fs.update(extra or {})
         return fs
     pl = b.get("prompt_chars", b.get("goal_chars"))
-    add("prompt", "prompt_chars", "OK", prompt(total=pl), rule_prompt)
-    add("prompt", "prompt_chars+1", "FAIL", prompt(total=pl + 1), rule_prompt)
+    kit_form = lambda _b: rule_prompt({k: v for k, v in _b.items() if k != "goal_chars"} | {"prompt_chars": pl})  # ключ кита v3.2
+    legacy = lambda _b: rule_prompt({k: v for k, v in _b.items() if k != "prompt_chars"} | {"goal_chars": pl})  # budgets.json проекта v3.1
+    add("prompt", "prompt_chars", "OK", prompt(total=pl), kit_form)
+    add("prompt", "prompt_chars+1", "FAIL", prompt(total=pl + 1), kit_form)
+    add("prompt", "прежний ключ goal_chars проекта v3.1", "OK", prompt(total=pl), legacy)
+    add("prompt", "прежний ключ goal_chars+1", "FAIL", prompt(total=pl + 1), legacy)
+    add("prompt", "в budgets.json нет ни prompt_chars, ни goal_chars", "FAIL", prompt(),
+        lambda _b: rule_prompt({k: v for k, v in _b.items() if k not in ("prompt_chars", "goal_chars")}))
     three = ("docs/SPEC-1.md", "docs/PROGRESS.md", "docs/reviews/r.md")
     add("prompt", "read_first_files", "OK", prompt(rf=three), rule_prompt)
     add("prompt", "read_first_files+1", "FAIL", prompt(rf=three + ("docs/x.md",)), rule_prompt)
@@ -376,8 +386,11 @@ def fixtures(b, defaults):
     add("plan", "plan_lines", "OK", dict(spec1(feat(80)), **{"docs/PLAN-1.md": "x\n" * b["plan_lines"]}), rule_plan)
     add("plan", "plan_lines+1", "FAIL", dict(spec1(feat(80)), **{"docs/PLAN-1.md": "x\n" * (b["plan_lines"] + 1)}), rule_plan)
     rub = lambda n: {".abide/rubric.json": json.dumps({"version": 1, "rules": [{"id": f"r{i}"} for i in range(n)]})}
-    add("rubric", "abide_rules", "OK", rub(b["abide_rules"]), rule_abide)
-    add("rubric", "abide_rules+1", "FAIL", rub(b["abide_rules"] + 1), rule_abide)
+    if "abide_rules" in b:
+        add("rubric", "abide_rules", "OK", rub(b["abide_rules"]), rule_abide)
+        add("rubric", "abide_rules+1", "FAIL", rub(b["abide_rules"] + 1), rule_abide)
+    else:  # budgets.json проекта до v3.2: правило предупреждает, а не падает
+        add("rubric", "нет abide_rules в budgets.json — WARN", "WARN", rub(3), rule_abide)
     add("rubric", "нет рубрики", "OK", {}, rule_abide)
     add("rubric", "рубрика не JSON", "FAIL", {".abide/rubric.json": "{"}, rule_abide)
     rv = lambda n: {"docs/reviews/r.md": "## Блокирующие\n" + "- f\n" * n + "## Named, not built\n- a\n- b\n- c\n"}
@@ -408,6 +421,9 @@ def fixtures(b, defaults):
     add("owner", "файл тимлида коммитом без «Тимлид:»", "FAIL", {}, rule_owner, [("F1: x", {"docs/STATUS.md": "x\n"}, [])])
     add("owner", "файл тимлида коммитом «Тимлид:»", "OK", {}, rule_owner, [("Тимлид: x", {"docs/STATUS.md": "x\n"}, [])])
     add("owner", "коммит без файлов тимлида", "OK", {}, rule_owner, [("F1: x", {"src/x.py": "x\n"}, [])])
+    add("owner", "docs/PROMPT.txt коммитом без «Тимлид:» при docs/GOAL.txt в owner родителя", "FAIL",
+        {"budgets.json": json.dumps({"defaults": dict(defaults, owner=[e for e in defaults["owner"] if e != "docs/PROMPT.txt"] + ["docs/GOAL.txt"]), "project": {}})},
+        rule_owner, [("F1: x", {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n"}, [])])
     add("owner", "git mv файла тимлида без «Тимлид:»", "FAIL", {}, rule_owner, [("F1: mv", {"docs/old.md": "s\n"}, ["docs/STATUS.md"])])
     add("owner", "не-ASCII пути тимлида (core.quotePath=true, умолчание git) коммитом без «Тимлид:»", "FAIL", {}, rule_owner,
         [("F1: x", {"intent/Gesprächsleitfaden.md": "x\n", "docs/reviews/ревью-1.md": "x\n"}, [])])
@@ -485,13 +501,14 @@ def templates():
         out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words)}, нет — {'; '.join(miss) or 'ничего'}"))
     slash = re.compile("/" + "goal" + r"\b")  # v3.2: фазу запускает стартовый запрос — команды в ките не остаётся (строка не ловит сама себя)
     hits = []
-    for d, _, fs in os.walk(root):
-        for f in fs:
-            try:
-                n = len(slash.findall(read(os.path.join(d, f))))
-            except (UnicodeDecodeError, OSError):
-                continue
-            hits += [f"{os.path.relpath(os.path.join(d, f), root)}: {n}"] if n else []
+    kit_paths = [os.path.join(d, f) for top in (".claude", "bin") for d, _, fs in os.walk(f"{root}/{top}") for f in fs]
+    kit_paths += [f"{root}/{t}" for t in list(TEMPLATES) + ["docs/LAUNCH.md"] if os.path.isfile(f"{root}/{t}")]
+    for path in sorted(set(kit_paths)):  # только файлы кита: архив и история проекта (C1) не в счёт
+        try:
+            n = len(slash.findall(read(path)))
+        except (UnicodeDecodeError, OSError):
+            continue
+        hits += [f"{os.path.relpath(path, root)}: {n}"] if n else []
     out.append(("FAIL" if hits else "OK", "no-goal", f"упоминаний команды {slash.pattern[:5]} в {root}/ — {'; '.join(hits) or 'нет'}"))
     pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
     subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),

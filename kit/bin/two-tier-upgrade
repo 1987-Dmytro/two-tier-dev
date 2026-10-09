@@ -83,6 +83,16 @@ def upgrade(target):
         for rel in TL_IN_KIT:
             if not os.path.isfile(T(rel)):
                 tl_todo.append(f"`{rel}` — из кита two-tier-dev (`kit/{rel}`): файл тимлида, коммитом «Тимлид: …»")
+        try:  # budgets.json проекта апгрейд не пишет: новые записи owner и ключи кита — тимлиду
+            pb = json.loads(read(T("budgets.json")))["defaults"] if os.path.isfile(T("budgets.json")) else None
+        except (ValueError, KeyError, TypeError):
+            pb = None
+        if pb is not None:
+            kd = json.loads(read(os.path.join(KIT, "budgets.json")))["defaults"]
+            gone = sorted(set(kd["owner"]) - set(pb.get("owner", [])) - {"docs/GOAL.txt"})
+            keys = sorted(k for k in kd if k not in pb and k != "owner")
+            if gone or keys:
+                tl_todo.append(f"`budgets.json` проекта — внести из кита: в `owner` — {', '.join(f'`{g}`' for g in gone) or 'нечего'}; ключи — {', '.join(f'`{k}`' for k in keys) or 'нет'}")
         why = []  # предусловия — по этому же плану: всё, что уронило бы апгрейд посередине
         try:
             b = json.loads(read(T("budgets.json") if os.path.isfile(T("budgets.json")) else os.path.join(KIT, "budgets.json")))["defaults"]
@@ -256,7 +266,7 @@ def self_test():
     for rel, text in {"budgets.json": read(os.path.join(KIT, "budgets.json")), "intent/INTENT.md": intent, "docs/GOAL.txt": goal,
                       "docs/SPEC-1.md": f"# SPEC-1\n\n**intent:** `intent/INTENT.md @ {pin}`\n\n- **F1 x** · оператор получает x · готово: x · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n"}.items():
         write(f"{v31}/{rel}", text)
-    g(v31, "add", "-A")
+    g(v31, "add", "--", "budgets.json", "intent/INTENT.md", "docs/GOAL.txt", "docs/SPEC-1.md")
     g(v31, "commit", "-qm", "Тимлид: фаза 1 кита v3.1 — SPEC и стартовый запрос")
     r3 = run(v31)
     print("  прогон v3.1: " + " | ".join(r3.stdout.splitlines()))
@@ -271,6 +281,9 @@ def self_test():
     head3 = g(v31, "rev-parse", "HEAD").stdout.strip()
     r4 = run(v31)
     check(r4.returncode == 0 and g(v31, "rev-parse", "HEAD").stdout.strip() == head3, "повторный прогон проекта v3.1: тот же HEAD")
+    rep31 = read(f"{v31}/docs/upgrade-v3.md") if os.path.isfile(f"{v31}/docs/upgrade-v3.md") else ""
+    check("`budgets.json` проекта — внести из кита" in rep31 or set(json.loads(read(f"{v31}/budgets.json"))["defaults"]["owner"]) >= set(json.loads(read(os.path.join(KIT, "budgets.json")))["defaults"]["owner"]),
+          "отчёт апгрейда называет тимлиду записи owner и ключи кита, которых нет в budgets.json проекта")
 
     # сбои: формы проекта из приёмки (accept-fe2f33f, стр. 11–14) и (д) сбой после старта — выход ≠0 с причиной, проект как был
     def state(d):  # ветка, HEAD, ветки, индекс; файлы (с неотслеживаемыми и игнорируемыми) и каталоги дерева без .git

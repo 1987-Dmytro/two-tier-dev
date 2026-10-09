@@ -28,4 +28,5 @@
 - Toolgate тимлида (`.claude/launch.settings.json`: политика пользователя, контекст задачи, порог 0,85) в этой сессии отказывает правки шаблона кита `kit/.claude/launch.settings.json` — «violates constraint» 0,88–0,90, хотя `kit/.claude/**` разрешён. Тимлиду: внести в `kit/.claude/launch.settings.json` → `pluginConfigs` строку `"handoff@two-tier-mods": {"options": {"threshold": 70, "handoffDir": "handoffs", "autoClear": true, "minTurns": 2, "language": "ru"}}` (сейчас действуют те же значения мода по умолчанию; PLAN, отклонение 12).
 
 ## Named, not built
+- Апгрейд проекта, уже переведённого `two-tier-upgrade` на v3.x: архив прежних файлов кита — тот же `docs/archive/kit-v2/`, путь занят — файл не тронут (конфликт в отчёте, rc 0); telefon — v2, путь v2 → v3.2 проверен self-test.
 - Тимлиду (файлы кита, которые в этой сессии не правятся — PLAN, отклонение 13): `kit/budgets.json` — `goal_chars` → `prompt_chars`, в `owner` — `docs/PROMPT.txt`; `kit/CLAUDE.md` строка 3 — «фаза — `docs/SPEC-<n>.md` и стартовый запрос `docs/PROMPT.txt`», строка 11 — без «выполненный goal». Сузить deny `Edit(./budgets.json)`, `Edit(./CLAUDE.md)` до корня (сейчас накрывают и `kit/`).
