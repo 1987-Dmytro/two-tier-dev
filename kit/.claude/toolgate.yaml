@@ -1,0 +1,29 @@
+# Toolgate policy of the executor — two-tier kit, SPEC-v3.2 F5. The team lead's file (owner and deny of the kit).
+# The hook .claude/hooks/toolgate-deny.mjs runs `toolgate decide --policy` on it and prints only a deny.
+backend:
+  provider: typesafe
+  model: jev-1.13.0          # pinned: `auto` would be the floating jev-latest
+  timeout_ms: 5000
+fail_mode: passthrough       # no answer — the permission flow of Claude Code decides
+rules:                       # static, before the model and its «authorized» softening: an executor never force-pushes
+  - match:
+      tool: Bash
+      input_regex: 'git\s+push\b.*(--force|--force-with-lease|\s-f\b)'
+    action: deny
+    reason: a force-push is forbidden in an executor's phase (kit policy)
+thresholds:
+  deny: 0.9                  # the model's deny; 0.85 cut ordinary writes and a workflow agent's `cat` (measured 09.10)
+  ask: 0.55
+  authorized: 0.8
+include_task_context: false  # no prompts to Jev (SPEC-v3.2 C6); the task-based axes (violates_constraint, off_task, authorized)
+                             # turned harness probes into denies of harmless calls at 0.85–0.86 (measured 09.10)
+limits:
+  input_chars: 8000
+unattended:
+  ask: ask                   # under dontAsk an ask stays an ask: the permission rules decide, not Toolgate
+audit:
+  enabled: true
+  path: /tmp/two-tier-v3/toolgate/audit.jsonl   # never ~/.toolgate; a dedicated directory (Toolgate chmods it 0700)
+  log_input: false
+ledger:
+  enabled: false             # no ~/.toolgate/ledger; without `toolgate post` it would raise write-then-run to ask

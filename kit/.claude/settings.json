@@ -18,6 +18,7 @@
       "Edit(/.claude/launch.settings.json)",
       "Edit(/.claude/spec-gate.json)",
       "Edit(/.abide/rubric.json)",
+      "Edit(/.claude/toolgate.yaml)",
       "Edit(/budgets.json)"
     ]
   },
@@ -43,6 +44,12 @@
         "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/refuse_sweeping_commands.py"], "timeout": 30 }
+        ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/toolgate-deny.mjs"], "timeout": 10 }
         ]
       }
     ],
