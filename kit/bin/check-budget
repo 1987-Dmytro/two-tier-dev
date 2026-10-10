@@ -307,11 +307,13 @@ def rule_abide(b):
         return [("FAIL", "abide_rules", f"нет {p} — abide check в хуке коммита пропускает суд модели: база рубрики — из кита "
                  "(bin/two-tier-init, two-tier-upgrade), коммитом «Тимлид: …»")]
     try:
-        n = len(json.loads(read(p)).get("rules", []))
+        rules = json.loads(read(p)).get("rules")
     except (ValueError, AttributeError):
         return [("FAIL", "abide_rules", f"{p}: не JSON-объект")]
-    if not n:  # v3.3, F7.3: пустая рубрика — тот же тихий пропуск суда модели
-        return [("FAIL", "abide_rules", f"{p}: правил 0 — abide check в хуке коммита пропускает суд модели")]
+    if not isinstance(rules, list) or not rules:  # v3.3, F7.3: пустая рубрика или rules не список — тот же тихий пропуск суда модели
+        return [("FAIL", "abide_rules", f"{p}: rules — {'0 правил' if rules == [] else 'не список' if rules is not None else 'нет'} — "
+                 "abide check в хуке коммита пропускает суд модели")]
+    n = len(rules)
     if "abide_rules" not in b:
         return [("WARN", "abide_rules", f"{p}: правил {n}; в budgets.json нет abide_rules — ключ вносит тимлид")]
     return [check("abide_rules", n, b["abide_rules"], f"{p}, правил")]
@@ -449,6 +451,8 @@ def fixtures(b, defaults):
     add("rubric", "нет рубрики, в budgets.json нет abide_rules — FAIL (F7.3)", "FAIL", {},
         lambda _b: rule_abide({k: v for k, v in _b.items() if k != "abide_rules"}))
     add("rubric", "рубрика без правил — FAIL (F7.3)", "FAIL", rub(0), rule_abide)
+    for bad in ("null", '"abc"', "3"):  # приёмка 4b78d3a: null и число — traceback, строка — «правил 3»
+        add("rubric", f"rules: {bad} — FAIL (F7.3)", "FAIL", {".abide/rubric.json": '{"version": 1, "rules": %s}' % bad}, rule_abide)
     add("rubric", "рубрика не JSON", "FAIL", {".abide/rubric.json": "{"}, rule_abide)
     rv = lambda n: {"docs/reviews/r.md": "## Блокирующие\n" + "- f\n" * n + "## Named, not built\n- a\n- b\n- c\n"}
     add("review", "review_blocking", "OK", rv(b["review_blocking"]), rule_review)
