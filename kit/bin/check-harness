@@ -489,11 +489,13 @@ def commit_probes(src):
     stat = {}
     for cmd in ("git push --force origin v", "git -C . push origin +v", "git commit --no-verify -m x", "env git commit --no-verify -m x", 'bash -c "git push -f origin v"',
                 "git -c core.hooksPath=/dev/null commit -m x", "(git push --no-verify -f origin v)", 'bash -lc "git push --no-verify -f origin v"',
-                "timeout 30 git push --no-verify -f origin v", 'eval "git push --no-verify -f origin v"', "git push origin v", 'echo "git push --force"'):
+                "timeout 30 git push --no-verify -f origin v", 'eval "git push --no-verify -f origin v"', "git push --no-verif --force-with-l origin v",
+                "git commit --no-verif -m x", "git push --forc origin v", "git push --follow-tags origin v", "git push origin v", 'echo "git push --force"'):
         stat[cmd] = subprocess.run(["python3", hook], input=json.dumps({"tool_input": {"command": cmd}}), capture_output=True, text=True).returncode
     want = {"git push --force origin v": 2, "git -C . push origin +v": 2, "git commit --no-verify -m x": 2, "env git commit --no-verify -m x": 2, 'bash -c "git push -f origin v"': 2,
             "git -c core.hooksPath=/dev/null commit -m x": 2, "(git push --no-verify -f origin v)": 2, 'bash -lc "git push --no-verify -f origin v"': 2,
-            "timeout 30 git push --no-verify -f origin v": 2, 'eval "git push --no-verify -f origin v"': 2, "git push origin v": 0, 'echo "git push --force"': 0}
+            "timeout 30 git push --no-verify -f origin v": 2, 'eval "git push --no-verify -f origin v"': 2, "git push --no-verif --force-with-l origin v": 2,
+            "git commit --no-verif -m x": 2, "git push --forc origin v": 2, "git push --follow-tags origin v": 0, "git push origin v": 0, 'echo "git push --force"': 0}
     ok = ff[0] == 0 and all(rc == 1 and "no-force-push" in e for rc, e in forced.values()) and stat == want
     item(S, "F2.3", ok, f"обычный push — rc {ff[0]}; " + "; ".join(f"{k} — rc {v[0]}" for k, v in forced.items())
          + f" («{forced['--force'][1][:80]}»); хук Bash кита: " + ", ".join(f"`{k}` → {v}" for k, v in stat.items()))
