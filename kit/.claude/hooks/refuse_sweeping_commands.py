@@ -54,6 +54,12 @@ def check_segment(segment: str) -> None:
             args = rest[1:]
             if not args or any(a in STAGE_SWEEPS or a.startswith(":/") for a in args):
                 refuse("stage BY PATH (git add <file>...), never the whole tree: a commit carries the exact paths it changes")
+        # v3.3, F2.3: force-push по написанию (поведение держит .githooks/pre-push); --no-verify обошёл бы хуки git кита
+        if rest and rest[0] == "push" and any(a in ("-f", "--force", "--mirror") or a.startswith(("--force-with-lease", "--force-if-includes"))
+                                              or (a.startswith("+") and len(a) > 1) or (re.fullmatch(r"-[a-zA-Z]*f[a-zA-Z]*", a) is not None) for a in rest[1:]):
+            refuse("no force-push: fix-ups are new commits on top (SPEC §3)")
+        if rest and rest[0] in ("commit", "push", "merge") and any(a == "--no-verify" or (rest[0] == "commit" and re.fullmatch(r"-[a-zA-Z]*n[a-zA-Z]*", a)) for a in rest[1:]):
+            refuse("no --no-verify: the kit's git hooks judge every commit and push (SPEC-v3.3 F2)")
     elif head == "make":
         if "fmt" in toks[1:]:
             refuse("repo-wide format is forbidden (producer pins) — ruff format <the one file you touched>")

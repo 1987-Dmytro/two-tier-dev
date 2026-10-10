@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""commit-msg — the kit's judge of a commit (SPEC-v3.3 F2): code first, then `abide check`. A git hook, so a commit made from a
+subprocess is judged too (F2.6). Wired by `git config core.hooksPath .githooks` (bin/two-tier-init and bin/two-tier-upgrade).
+
+Code rules — closed on refusal: exit 1 with the rule and the file, never the matched text (F2.1, F2.2):
+  no-secret-values     a credential value from the environment (a variable named …KEY, …TOKEN, …SECRET, …PASSWORD; 12+ chars)
+                       or a key-shaped literal in an added line of any staged file or in the message;
+  evidence-anonymized  an email (noreply@… of a co-author passes) or an absolute home path (/Users/<name>, /home/<name>) in an added
+                       line under docs/evidence/ or in the message;
+  team-lead-files      a staged path of the owner list (budgets.json at HEAD: defaults.owner and project.owner_add) in a commit whose
+                       message does not start with «Тимлид:»;
+  no-delete            a staged deletion — a file is retired with `git mv` into docs/archive/.
+  A merge commit is judged by the first two only: its other side carries commits judged where they were made.
+Model (F2.4) — `abide check --json` on the staged paths against the team lead's rubric .abide/rubric.json, at most 30 s: a rule at
+0.8 or above refuses once, with the rule and the file; the same staged diff once more passes as «rejected» (the executor has the
+last word); 0.5–0.8 passes with a note; an error, a timeout, no key or no abide — a skip, the commit passes.
+Every judgment is a line of docs/evidence/commit-judge.jsonl: decision, judge, rule, files, score, a hash of the staged diff — no
+message and no content. The phase report counts them (F2.6).
+"""
+import fnmatch, hashlib, json, os, re, subprocess, sys, tempfile, time
+
+TMP = "/tmp/two-tier-v3"
+ABIDE_TIMEOUT = int(os.environ.get("ABIDE_CHECK_TIMEOUT_S") or 30)  # SPEC §4: дольше 30 с — пропуск; меньше — только пробам
+REFUSE, NOTE = 0.8, 0.5
+CRED_NAME = re.compile(r"(?i)(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)$")
+KEY_SHAPES = [re.compile(p) for p in (
+    r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----", r"\bsk-[A-Za-z0-9_-]{20,}", r"\bgh[pousr]_[A-Za-z0-9]{30,}", r"\bgithub_pat_[A-Za-z0-9_]{30,}",
+    r"\bAKIA[0-9A-Z]{16}\b", r"\bxox[abposr]-[A-Za-z0-9-]{10,}", r"\bAIza[0-9A-Za-z_-]{35}\b")]
+ASSIGN = re.compile(r"(?i)[\w.-]*(?:api[_-]?key|secret|token|passw(?:or)?d)[\w.-]*[\"']?\s*[:=]\s*[\"']([A-Za-z0-9_\-+/=.]{16,})[\"']")
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+HOME = re.compile(r"(?:/Users|/home)/(?!Shared\b)[A-Za-z0-9._-]+")
+
+
+def git(*args, check=False):
+    r = subprocess.run(["git", *args], capture_output=True, text=True, errors="replace")
+    if check and r.returncode:
+        raise RuntimeError(f"git {args[0]} rc {r.returncode}")
+    return r.stdout
+
+
+def added_lines(diff):
+    """{path: [added lines]} from `git diff --cached -U0`; binary files carry none."""
+    out, cur = {}, None
+    for line in diff.splitlines():
+        if line.startswith("+++ "):
+            cur = line[6:] if line.startswith("+++ b/") else None
+            if cur:
+                out.setdefault(cur, [])
+        elif cur and line.startswith("+") and not line.startswith("+++"):
+            out[cur].append(line[1:])
+    return out
+
+
+def secret_in(text, values):
+    return any(v in text for v in values) or any(p.search(text) for p in KEY_SHAPES) or any(
+        re.search(r"[A-Za-z]", m.group(1)) and re.search(r"\d", m.group(1)) for m in ASSIGN.finditer(text))
+
+
+def private_in(text):
+    mails = [m.group(0) for m in EMAIL.finditer(text) if not m.group(0).lower().startswith("noreply@") and ".noreply." not in m.group(0).lower()]
+    return bool(mails) or bool(HOME.search(text))
+
+
+def owner():
+    try:
+        raw = json.loads(git("show", "HEAD:budgets.json") or "{}")
+        own = raw["defaults"]["owner"] + ((raw.get("project") or {}).get("owner_add") or [])
+    except (ValueError, KeyError, TypeError):
+        return []
+    return own + ["docs/PROMPT.txt"] if "docs/GOAL.txt" in own and "docs/PROMPT.txt" not in own else own
+
+
+def is_tl(path, own):
+    return any(path.startswith(e) if e.endswith("/") else fnmatch.fnmatchcase(path, e) for e in own)
+
+
+def code_rules(msg, merging):
+    """(rule, file) of the first refusal or None."""
+    values = [v for k, v in os.environ.items() if CRED_NAME.search(k) and len(v) >= 12 and not v.startswith("/")]
+    body = "\n".join(l for l in msg.splitlines() if not l.startswith("#"))
+    if secret_in(body, values):
+        return "no-secret-values", "the commit message"
+    if private_in(body):
+        return "evidence-anonymized", "the commit message"
+    added = added_lines(git("diff", "--cached", "--no-color", "--no-ext-diff", "-U0"))
+    for p, lines in added.items():
+        if secret_in("\n".join(lines), values):
+            return "no-secret-values", p
+    for p, lines in added.items():
+        if p.startswith("docs/evidence/") and private_in("\n".join(lines)):
+            return "evidence-anonymized", p
+    if merging:
+        return None
+    parts = git("diff", "--cached", "--name-status", "-z", "-M").split("\0")
+    own, i = owner(), 0
+    tl = not msg.startswith("Тимлид:")
+    while i < len(parts) - 1:
+        st = parts[i]
+        paths = parts[i + 1:i + 3] if st[:1] in "RC" else parts[i + 1:i + 2]
+        i += 1 + len(paths)
+        if st == "D":
+            return "no-delete", paths[0]
+        hit = next((p for p in paths if is_tl(p, own)), None)
+        if tl and hit:
+            return "team-lead-files", hit
+    return None
+
+
+def abide(paths):
+    """(decision, rule, file, score) of `abide check` on the staged patch: refuse ≥ 0.8, note ≥ 0.5, pass, or skip with a reason.
+    The staged patch goes in by --diff: without it abide judges the working tree and untracked files too."""
+    env = dict(os.environ, ABIDE_HOME_DIR=os.environ.get("ABIDE_HOME_DIR", f"{TMP}/abide-home"))  # never ~/.abide: no user key, no global rubric
+    if not env.get("TYPESAFE_AI_API_KEY") and env.get("TYPESAFE_API_KEY"):
+        env["TYPESAFE_AI_API_KEY"] = env["TYPESAFE_API_KEY"]
+    if not os.path.isfile(".abide/rubric.json") or not paths:
+        return "skip", "no rubric or no staged file", None, None
+    os.makedirs(env["ABIDE_HOME_DIR"], mode=0o700, exist_ok=True)
+    os.makedirs(TMP, exist_ok=True)
+    fd, patch = tempfile.mkstemp(prefix="commit-", suffix=".patch", dir=TMP)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", errors="surrogateescape") as f:
+            f.write(git("diff", "--cached", "--no-color", "--no-ext-diff", "--unified=3"))
+        r = subprocess.run(["abide", "check", "--json", "--phase", "edit", "--diff", patch], env=env, capture_output=True, text=True, timeout=ABIDE_TIMEOUT)
+        data = json.loads(r.stdout)
+    except FileNotFoundError:
+        return "skip", "no abide on PATH", None, None
+    except subprocess.TimeoutExpired:
+        return "skip", f"abide check over {ABIDE_TIMEOUT} s", None, None
+    except ValueError:  # an error is an ink box on stdout, not JSON: NO_API_KEY, CHECK_FAILED, CHECK_TIMEOUT, RUBRIC_MISSING
+        code = next((w for w in re.findall(r"[A-Z][A-Z_]{4,}", r.stdout) if "_" in w), f"rc {r.returncode}")
+        return "skip", f"abide check error {code}", None, None
+    finally:
+        os.remove(patch)
+    vs = [(v.get("ruleId") or "?", v.get("file") or "?", float(v["probability"])) for sec in data.get("sections", [])
+          for v in sec.get("verdicts", []) if isinstance(v.get("probability"), (int, float))]
+    if not vs:
+        return "pass", None, None, None
+    rule, file, p = max(vs, key=lambda v: v[2])  # the worst rule decides, no averaging
+    return ("refuse" if p >= REFUSE else "note" if p >= NOTE else "pass"), rule, file, p
+
+
+def main():
+    t0 = time.monotonic()
+    root = git("rev-parse", "--show-toplevel").strip()
+    os.chdir(root)
+    msg = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+    merging = os.path.exists(git("rev-parse", "--git-path", "MERGE_HEAD").strip())
+    diff = git("diff", "--cached", "--binary", "--no-color", "--no-ext-diff")
+    digest = hashlib.sha256(diff.encode("utf-8", "surrogateescape")).hexdigest()[:16]
+    files = [p for p in git("diff", "--cached", "--name-only", "-z", "--diff-filter=d").split("\0") if p]
+    logp = "docs/evidence/commit-judge.jsonl"
+    log = []
+    try:
+        log = [json.loads(l) for l in open(logp, encoding="utf-8") if l.strip()]
+    except (OSError, ValueError):
+        pass
+    hit = code_rules(msg, merging)
+    if hit:
+        rec = {"decision": "refuse", "judge": "code", "rule": hit[0], "files": [hit[1]]}
+    elif merging:
+        rec = {"decision": "pass", "judge": "code", "rule": None, "files": files[:20], "note": "merge: code rules only"}
+    else:
+        dec, rule, file, p = abide(files)
+        rec = {"decision": dec, "judge": "abide", "rule": rule, "files": [file] if file else files[:20], "score": p}
+        if dec == "skip":
+            rec |= {"rule": None, "note": rule}
+        if dec == "refuse" and any(l.get("diff") == digest and l.get("decision") == "refuse" and l.get("judge") == "abide" and l.get("rule") == rule for l in log):
+            rec["decision"] = "rejected"  # the same diff once more: the executor's last word, the team lead reads it
+    rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **rec, "diff": digest, "ms": int((time.monotonic() - t0) * 1000)}
+    try:
+        os.makedirs(os.path.dirname(logp), exist_ok=True)
+        with open(logp, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+    d, rule, f = rec["decision"], rec.get("rule"), (rec["files"] or ["?"])[0]
+    if d == "refuse" and rec["judge"] == "code":
+        print(f"commit refused by the kit — rule {rule}: {f}. Fix the change; the matched text is not printed.", file=sys.stderr)
+        return 1
+    if d == "refuse":
+        print(f"commit refused once by abide check — rule {rule} ({rec['score']:.2f}): {f}. Fix it, or commit the same diff again "
+              "to keep it: the second time passes as «rejected» for the team lead to read.", file=sys.stderr)
+        return 1
+    if d in ("note", "rejected"):
+        print(f"abide check — {d}: rule {rule} ({rec['score']:.2f}): {f}", file=sys.stderr)
+    elif d == "skip":
+        print(f"abide check — skip: {rec.get('note')}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:  # the hook's own error lets the commit pass: the rules of code above are what is closed on refusal
+        print(f"commit-msg hook error ({e.__class__.__name__}) — the commit passes", file=sys.stderr)
+        sys.exit(0)
