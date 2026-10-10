@@ -25,9 +25,10 @@ bin/check-ci "$(git branch --show-current)"
 ## 2. Вердикт — `/verify-phase`
 ```bash
 bin/verify-phase   # свежий клон, гейт фазы, claude -p с allow Workflow(verify-phase), лимит 30 мин (1800 с)
+bin/verify-phase F2 F4   # точечный повтор после починки — только эти фичи
 ```
 
-Лаунчер пишет отчёт в `docs/evidence/verify-<SHA>.txt`. Первая строка — `VERDICT: PASS` или `VERDICT: NEEDS_WORK`; блокирующих не больше пяти по `REVIEW.md`, остальное — `Named, not built`. Лимит истёк — `VERIFY_TIMEOUT`, вердикта нет: это находка «приёмка не уложилась в 30 мин». Воркфлоу недоступен — свежий субагент `evaluator` по `REVIEW.md`, вердикт — в `docs/evidence/accept-<SHA>.txt`.
+Лаунчер пишет отчёт в `docs/evidence/verify-<SHA>.txt`, точечный — в `verify-<SHA>-F2-F4.txt`. Первая строка — `VERDICT: PASS` или `VERDICT: NEEDS_WORK`, вторая — `FEATURES:` с фичами вердикта; блокирующих судьи не больше пяти по `REVIEW.md`, остальное — `Named, not built`. Код блокирует сам: выжившая мутация, красный чек, пункт без своей команды проверяющего и её сырого вывода. Лимит истёк — `VERIFY_TIMEOUT`, вердикта нет: это находка «приёмка не уложилась в 30 мин». Воркфлоу недоступен — свежий субагент `evaluator` по `REVIEW.md`, вердикт — в `docs/evidence/accept-<SHA>.txt`.
 
 ## 3. Коммит
 `git add docs/evidence/verify-<SHA>.txt && git commit -m "accept: <вердикт> <SHA>"`, затем push ветки. На `NEEDS_WORK` в этой сессии ничего не чинить: блокирующие находки — вход следующего запуска фазы.

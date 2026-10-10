@@ -7,12 +7,16 @@
 Мод handoff (SPEC-v3.2 F6, только репо кита): строка шаблона Environment (70 %, /clear), включение и режим в launch settings кита
 (pluginConfigs, иначе userConfig мода по умолчанию), handoffs/ в .gitignore, команда установки в выводе bin/two-tier-init,
 `claude plugin validate` и `claude plugin test` мода — HANDOFF_OK; без claude в PATH (CI) validate и test не гоняются, маркера нет.
+Окна (SPEC-v3.3 F5, кит и проект): bin/check-window на подставленных событиях и строка запуска шаблона с заглушкой claude —
+строки F5.1–F5.4 и WINDOW_OK; при claude в PATH ещё живой ход справкой.
 """
-import json, os, re, shutil, subprocess, sys, tempfile
+import json, os, re, shutil, subprocess, sys, tempfile, time
 
 out = []
-V32_KEYS, V32_OWNER = {"prompt_chars", "abide_rules"}, {"docs/PROMPT.txt", ".abide/rubric.json", ".claude/spec-gate.json", ".claude/toolgate.yaml"}
+V32_KEYS, V32_OWNER = {"prompt_chars", "abide_rules"}, {"docs/PROMPT.txt", ".abide/rubric.json", ".claude/spec-gate.json"}
 V32_RETIRED = {"goal_chars", "docs/GOAL.txt"}
+# v3.3: новые ключи кита (блок фичи F1.3, пороги окна F5.4) и планка рубрики 8 (D7, F2.5) — тимлид вносит в budgets.json на приёмке
+V33_KEYS, V33_CHANGED = {"spec_block_chars", "window_five_hour_pct", "window_seven_day_pct", "window_repair_pct"}, {"abide_rules"}
 
 
 def say(ok, item, msg):
@@ -64,15 +68,16 @@ if root == "kit":
     # v3.2: корневой budgets.json — файл тимлида; ключи и записи owner, новые в ките, он вносит на приёмке (PLAN-v3.2, отклонение 8)
     rd, kd = json.loads(read("budgets.json"))["defaults"], json.loads(read("kit/budgets.json"))["defaults"]
     ro, ko = set(rd.get("owner", [])), set(kd.get("owner", []))
-    same = all(rd[k] == kd[k] for k in set(rd) & set(kd) - {"owner"})
+    same = all(rd[k] == kd[k] for k in set(rd) & set(kd) - {"owner"} - V33_CHANGED)
     delta = sorted(set(kd) - set(rd)) + sorted(ko - ro) + [f"−{x}" for x in sorted(set(rd) - set(kd))] + [f"−{x}" for x in sorted(ro - ko)]
-    say(same and set(kd) - set(rd) <= V32_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED, "budgets",
-        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: {', '.join(delta) or 'нет'}")
+    delta += [f"{k} {rd[k]}→{kd[k]}" for k in sorted(V33_CHANGED & set(rd) & set(kd)) if rd[k] != kd[k]]
+    say(same and set(kd) - set(rd) <= V32_KEYS | V33_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED | {".claude/toolgate.yaml"}, "budgets",
+        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 и v3.3 для тимлида: {', '.join(delta) or 'нет'}")
     lim = kd.get("prompt_chars", kd.get("goal_chars"))
     owned = {"docs/PROMPT.txt", "docs/GOAL.txt"} & ko
-    say(kd.get("abide_rules", 0) <= 15 and lim is not None and lim <= 4000 and owned and {".claude/spec-gate.json", ".abide/rubric.json", ".claude/toolgate.yaml"} <= ko,
-        "budgets", f"kit/budgets.json: abide_rules {kd.get('abide_rules')} (≤ 15, SPEC-v3.2 F3), стартовый запрос {lim} знаков (≤ 4000), "
-                   f"во владении — {', '.join(sorted(owned)) or 'нет'} и файлы тимлида слоя (spec-gate.json, rubric.json, toolgate.yaml)")
+    say(kd.get("abide_rules", 0) <= 8 and lim is not None and lim <= 4000 and owned and {".claude/spec-gate.json", ".abide/rubric.json"} <= ko and ".claude/toolgate.yaml" not in ko,
+        "budgets", f"kit/budgets.json: abide_rules {kd.get('abide_rules')} (≤ 8, D7), стартовый запрос {lim} знаков (≤ 4000), "
+                   f"во владении — {', '.join(sorted(owned)) or 'нет'} и файлы тимлида слоя (spec-gate.json, rubric.json; toolgate.yaml ушёл, SPEC-v3.3 F3.1)")
 kit_ok = all(out)
 print("KIT_OK" if kit_ok else "KIT_FAIL")
 hand = []
@@ -110,4 +115,99 @@ if root == "kit" and os.path.isdir("mods/handoff"):  # v3.2, F6: мод handoff 
     else:
         print("--   handoff: claude нет в PATH (CI) — validate и test не гонялись, маркера HANDOFF нет")
         print("HANDOFF_FAIL" if not all(hand) else "--   handoff: проверки без claude — зелёные")
-sys.exit(0 if kit_ok and all(hand) else 1)
+# v3.3, F5: предохранитель окна — bin/check-window на подставленных событиях (CHECK_WINDOW_EVENTS), строка запуска шаблона
+# в фикстуре с заглушкой claude; при claude в PATH — ещё живой ход, справкой (FAIL — только событие не разобрано при входе)
+win = []
+
+
+def wsay(ok, item, msg):  # строка пробы «F5.k <сырой вывод обеих сторон>»; провал — FAIL сразу после id
+    win.append(bool(ok))
+    print(f"{item} {msg}" if ok else f"{item} FAIL: {msg}")
+
+
+os.makedirs("/tmp/two-tier-v3", exist_ok=True)
+fx = tempfile.mkdtemp(prefix="check-kit-window-", dir="/tmp/two-tier-v3")
+for d in ("bin", "docs", "stub"):
+    os.makedirs(f"{fx}/{d}")
+shutil.copy2(f"{root}/bin/check-window", f"{fx}/bin/check-window")
+subprocess.run(["git", "init", "-q", fx])
+open(f"{fx}/docs/PROMPT.txt", "w").write("Read first: docs/SPEC-1.md\n")
+open(f"{fx}/stub/claude", "w").write('#!/bin/sh\necho "$#" > claude-called\n')  # заглушка: сессия «стартовала»
+os.chmod(f"{fx}/stub/claude", 0o755)
+kd = json.loads(read(f"{root}/budgets.json"))["defaults"]
+now = int(time.time())
+
+
+def events(p5=0, p7=0, event=True, windows=True, error=None):
+    ls = [{"type": "system", "subtype": "init"}]
+    if not error:
+        info = {"status": "allowed", "rateLimitType": "five_hour"}
+        if windows:
+            info["unifiedWindows"] = {"five_hour": {"utilization": p5 / 100, "resetsAt": now + 7200},
+                                      "seven_day": {"utilization": p7 / 100, "resetsAt": now + 3 * 86400}}
+        ls += [{"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}]}}] + ([{"type": "rate_limit_event", "rate_limit_info": info}] if event else [])
+    ls.append({"type": "result", "subtype": "success", "is_error": bool(error), "result": error or "ok"})
+    return "\n".join(map(json.dumps, ls)) + "\n"
+
+
+def wrun(cmd, ev, project=None, rc=0, n=2):  # → (rc, сырой вывод: последние n строк через « | », заглушка вызвана)
+    json.dump({"defaults": kd, "project": project or {}}, open(f"{fx}/budgets.json", "w"))
+    open(f"{fx}/events.jsonl", "w").write(ev)
+    if os.path.exists(f"{fx}/claude-called"):
+        os.remove(f"{fx}/claude-called")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CHECK_WINDOW_")}
+    env.update(CHECK_WINDOW_EVENTS=f"{fx}/events.jsonl", CHECK_WINDOW_RC=str(rc), PATH=f"{fx}/stub:{env.get('PATH', '')}")
+    r = subprocess.run(["bash", "-c", cmd], cwd=fx, env=env, capture_output=True, text=True, timeout=60)
+    return r.returncode, " | ".join((r.stdout + r.stderr).strip().splitlines()[-n:]), os.path.exists(f"{fx}/claude-called")
+
+
+side = lambda name, r: f"{name}: rc {r[0]}, claude {'вызван' if r[2] else 'не вызван'} «{r[1]}»"
+tpl = f"{root}/docs/PROCESS.template.md"
+m = re.search(r"^```sh\n(.+)$", read(tpl), re.M) if os.path.isfile(tpl) else None
+line = m.group(1) if m else ""
+pre = line.startswith("bin/check-window && ")
+run_line = line if pre else "bin/check-window && " + line  # без префикса — F5.1 красный, механизм всё равно меряется
+a, b, c = wrun(run_line, events(41, 64)), wrun(run_line, events(39, 86)), wrun(run_line, events(39, 84))
+e = wrun(run_line, events(40, 85))  # ровно на порогах — «выше» не наступило: старт
+wsay(pre and a[0] != 0 and not a[2] and "41 %" in a[1] and "64 %" in a[1] and re.search(r"сброс \d", a[1]) and "WINDOW: refuse" in a[1]
+     and b[0] != 0 and not b[2] and "неделя 86 % > 85 %" in b[1] and c[0] == 0 and c[2] and "WINDOW: start" in c[1]
+     and e[0] == 0 and e[2] and "WINDOW: start" in e[1], "F5.1",
+     ("" if pre else f"строка запуска {tpl} не начинается с «bin/check-window && » — проба на копии с префиксом · ")
+     + " · ".join([side("41 %/64 %", a), side("39 %/86 %", b), side("39 %/84 %", c), side("40 %/85 % (ровно пороги)", e)]))
+a, b = wrun("bin/check-window --repair", events(70, 64)), wrun("bin/check-window --repair", events(71, 64))  # 70 — ровно порог: старт
+shutil.copy2(f"{root}/bin/verify-phase", f"{fx}/bin/verify-phase")  # приёмка: check-window --repair рядом с лаунчером — до клона
+va, vb = wrun("bin/verify-phase", events(69, 64), n=3), wrun("bin/verify-phase", events(71, 64), n=3)
+wsay(a[0] == 0 and "порог 70 %" in a[1] and "WINDOW: start" in a[1] and b[0] == 1 and "окно 5 ч 71 % > 70 %" in b[1]
+     and "WINDOW: start" in va[1] and "отказ до клона" not in va[1] and vb[0] == 1 and "отказ до клона" in vb[1] and "свежий клон" not in vb[1], "F5.2",
+     f"--repair 70 % (ровно порог): rc {a[0]} «{a[1]}» · --repair 71 %: rc {b[0]} «{b[1]}» · bin/verify-phase 69 %: «{va[1]}» · bin/verify-phase 71 %: rc {vb[0]} «{vb[1]}»")
+a, b = wrun("bin/check-window", events(event=False)), wrun("bin/check-window", events(windows=False))
+c = wrun("bin/check-window", events(error="Not logged in · Please run /login"), rc=1)
+o = wrun(run_line.replace("bin/check-window && ", "bin/check-window --override && ", 1), events(90, 64))
+wsay(a[0] == 1 and "окна не сняты: нет события rate_limit_event" in a[1] and b[0] == 1 and "окна не сняты: нет поля unifiedWindows" in b[1]
+     and c[0] == 1 and "окна не сняты: ошибка claude (rc 1): Not logged in" in c[1] and o[0] == 0 and o[2]
+     and "WINDOW: обход флагом --override — был бы отказ: окно 5 ч 90 % > 40 %" in o[1], "F5.3",
+     f"без события: rc {a[0]} «{a[1].split(' | ')[-1]}» · без unifiedWindows: rc {b[0]} «{b[1].split(' | ')[-1]}» · "
+     f"вход: rc {c[0]} «{c[1].split(' | ')[-1]}» · " + side("строка с --override, 90 %", o))
+k = {x: kd.get(x) for x in ("window_five_hour_pct", "window_seven_day_pct", "window_repair_pct")}
+a = wrun("bin/check-window", events(35, 64), n=3)
+b = wrun("bin/check-window", events(35, 64), {"window_five_hour_pct": 30}, n=3)
+c = wrun("bin/check-window", events(45, 64), {"window_five_hour_pct": 50}, n=3)
+wsay(list(k.values()) == [40, 85, 70] and a[0] == 0 and "40 % (window_five_hour_pct, budgets.json defaults)" in a[1]
+     and b[0] == 1 and "30 % (window_five_hour_pct, budgets.json project)" in b[1] and "окно 5 ч 35 % > 30 %" in b[1]
+     and c[0] == 1 and "project.window_five_hour_pct=50 ослабляет — взят 40" in c[1] and "окно 5 ч 45 % > 40 %" in c[1], "F5.4",
+     f"defaults {root}/budgets.json: {', '.join(f'{x} {v}' for x, v in k.items())} · 35 %, project {{}}: rc {a[0]} «{a[1]}» · "
+     f"35 %, project 30: rc {b[0]} «{b[1]}» · 45 %, project 50: rc {c[0]} «{c[1]}»")
+shutil.rmtree(fx, ignore_errors=True)
+if shutil.which("claude"):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CHECK_WINDOW_")}
+    r = subprocess.run([f"{root}/bin/check-window"], env=env, capture_output=True, text=True, timeout=180)
+    live = " | ".join((r.stdout + r.stderr).strip().splitlines()[-2:])
+    if "окна не сняты: нет " in live:  # claude ответил, а поле не разобрано — сломан сам предохранитель
+        win.append(False)
+        print(f"FAIL window: живой ход — событие не разобрано: rc {r.returncode} «{live}»")
+    else:
+        print(f"--   window: живой ход, справка: rc {r.returncode} «{live}»")
+else:
+    print("--   window: claude нет в PATH (CI) — живого хода нет")
+print("WINDOW_OK" if all(win) else "WINDOW_FAIL")
+sys.exit(0 if kit_ok and all(hand) and all(win) else 1)

@@ -1,0 +1,19 @@
+VERDICT: NEEDS_WORK
+FEATURES: F2
+/verify-phase · docs/SPEC-v3.3.md · HEAD d12c3ad · проверяющие claude-sonnet-5-5 (фич 1 из 7, опровергателей 2) · судья claude-opus-5-5
+
+Свежий прогон bin/check-harness commit дал rc 0 и COMMIT_OK, а собственные пробы проверяющего подтвердили F2.1–F2.3, F2.5 и F2.6. Пункт F2.4 рушится на обычном пути: журнал docs/evidence/commit-judge.jsonl отслеживается и коммитится вместе с evidence, а дайджест его включает. Повтор отказанного abide диффа с журналом в индексе отказывается 3 раза из 3 и никогда не проходит как «rejected», а это нарушает инвариант §3 об отказе судьи один раз.
+
+## Блокирующие
+- **F2: мутация выжила — kit/.githooks/commit-msg: is_tl(): replaced fnmatch.fnmatchcase(path, e) with path == e, so owner-list glob entries such as docs/SPEC-*.md stop protecting team-lead files** · чек `bin/check-harness commit` остался зелёным
+- **F2: F2.4 «повтор того же диффа проходит» не выполняется, если отслеживаемый журнал docs/evidence/commit-judge.jsonl попадает в коммит вместе с правкой (git add <пути> docs/evidence/commit-judge.jsonl или git commit -a). Хук дописывает журнал при каждой попытке, а дайджест в kit/.githooks/commit-msg:164-165 считается по всему staged diff, включая журнал. Поэтому дайджест каждый раз новый: abide отказывает при каждой попытке, до «rejected» дело не доходит, и последнее слово исполнителя теряется.** · доказательство: Журнал отслеживается (git ls-files) и регулярно коммитится вместе с evidence: 20f5fcc, 0518fa7, 8acbe86, … — «журналы судей». Заглушка abide с 0.95 на scratch/f24b.sh: 'try 1 (re-add both paths): rc=1 commit refused once', 'try 2: rc=1 …', 'try 3: rc=1 …'. С git commit -a — тоже 3 отказа из 3. Если журнал заново не добавлять: 'try B (re-add only code): rc=0 abide check — rejected'. · критерий: (c) пункт F2.4 на пути, который запускает заказчик; (b) инвариант §3 «Отказ судьи-модели — один раз: последнее слово за исполнителем» · чек приёмки: bash /tmp/two-tier-v3/verify-d12c3ad-7lwdy9zj/scratch/f24b.sh — после починки (журнал исключён из дайджеста, например `git diff --cached -- . ':!docs/evidence/commit-judge.jsonl'`) вторая попытка с журналом в индексе должна дать rc=0 и «rejected».
+
+## Named, not built
+- F2.1: кодовый слой no-secret-values пропускает секреты из одних букв, JWT, заголовки Bearer и учётные данные в URL; ложно срабатывает на заглушке API_KEY=<значение скрыто>
+- F2.1: evidence-anonymized отказывает GitHub-форме соавтора <почта скрыта>; пропускает /home/shared-user/, C:\Users\… и /root/
+- F2.2: no-delete видит только статус D: удаление вместе с добавлением файла того же содержимого (git считает это rename) и git mv мимо docs/archive/ проходят
+- F2.3: pre-push отказывает любому удалению удалённой ветки, в том числе слитой; Bash-хук судит по написанию и пропускает $g push -f и $(echo -f) — pre-push их ловит
+- F2: шапка docs/evidence/F2-harness-result.txt записывает HEAD c73004c при HEAD d12c3ad — маркер есть, свежий прогон зелёный, устарела только строка происхождения
+
+## По фичам
+- F2: чек `bin/check-harness commit` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/.githooks/commit-msg: is_tl(): replaced fnmatch.fnmatchcase(path, e) with path == e, so owner-list glob entries such as docs/SPEC-*.md stop protecting team-lead files → green; находок 7, блокирующих-кандидатов 2, опровергнуто 0
