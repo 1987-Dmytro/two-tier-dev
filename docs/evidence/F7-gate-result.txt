@@ -1,5 +1,5 @@
-$ bin/gate-v3.3  # корень репо кита; проект t3 — bin/two-tier-init во /tmp/two-tier-v3 · 10.10.2026 12:02 · HEAD d26d67a + рабочее дерево
-F7: bin/two-tier-init t3 — файлов кита 36 (в git 36), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate33-nIRIGD
+$ bin/gate-v3.3  # корень репо кита; проект t3 — bin/two-tier-init во /tmp/two-tier-v3 · 10.10.2026 12:38 · HEAD b0a2ec7 + рабочее дерево
+F7: bin/two-tier-init t3 — файлов кита 36 (в git 36), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate33-FFgZDZ
 init: (t3) bin/check-budget — rc 0
 jev: (t3) bin/jev --self-test — rc 0
 templates: (t3) bin/check-budget --templates — rc 0
@@ -12,8 +12,8 @@ upgrade: (корень ветки) bin/two-tier-upgrade --self-test — rc 0
 spend: (корень ветки) bin/check-spend — rc 0
 docs: (корень ветки) bin/check-docs — rc 0
 items-t3: (t3) bin/check-harness items — rc 0
-verify: (корень ветки) bin/check-verify — rc 0
 env-t3: (t3) bin/check-harness env — rc 0
+verify: (корень ветки) bin/check-verify — rc 0
 F7-init BUDGET_OK
 F1 ITEMS_OK
 F2 COMMIT_OK
@@ -37,4 +37,4 @@ F7.1 проект t3 от bin/two-tier-init: файлов кита 36 из 36, c
 F7.2 уцелевшие маркеры v3.2 — 10, красных 0; bin/gate-v3.2 — в docs/archive/gate-v3.2/
 F7 GATE_OK
 GATE_OK
-rc 0 · 122 с
+rc 0 · 146 с
