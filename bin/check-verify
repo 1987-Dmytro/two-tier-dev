@@ -262,6 +262,7 @@ STUB = {
     "own": scen(verify_F1=ver("F1")),
     "own_fixture": scen(verify_F1=ver("F1", command="bash /tmp/two-tier-v3/fx/run.sh  # своя фикстура: пишет и проверяет docs/evidence/F1-x-result.txt")),
     "own_commented": scen(verify_F1=ver("F1", command="bin/slug '  Hello,  World!  '  # не `grep F1.2 docs/evidence/F1-slug-result.txt`, а свой прогон")),
+    "own_report": scen(verify_F1=ver("F1", command="bash mkrep.sh rep; cd rep; bin/phase-report --no-jev; cat docs/evidence/phase-report.md")),
 }
 
 
@@ -393,14 +394,14 @@ def main():
 
     bad = {k: s.get(k, {}) for k in ("no_own", "evidence", "check_cmd", "holds_false", "gate_log")}
     f43 = all(v.get("verdict") == "NEEDS_WORK" and "**F1.2: не подтверждён своим прогоном**" in v.get("report", "") for v in bad.values()) \
-        and s.get("own", {}).get("verdict") == "PASS" and s.get("own_fixture", {}).get("verdict") == "PASS" and s.get("own_commented", {}).get("verdict") == "PASS"
+        and s.get("own", {}).get("verdict") == "PASS" and s.get("own_fixture", {}).get("verdict") == "PASS" and s.get("own_commented", {}).get("verdict") == "PASS" and s.get("own_report", {}).get("verdict") == "PASS"
     product = subprocess.run(["bin/slug", "  Hello,  World!  "], cwd=rd, capture_output=True, text=True).stdout.strip()
     evl = line(open(f"{rd}/docs/evidence/F1-slug-result.txt", encoding="utf-8").read(), r"^F1\.2 ")
     f43_live = rrep.startswith("VERDICT: NEEDS_WORK") and "F1.2: не подтверждён своим прогоном" in rrep \
         and "пунктов своим прогоном 3/3" in crep and "пунктов своим прогоном 2/2" in crep
     probe("F4.3", f43 and f43_live,
           "стаб: " + "; ".join(f"{k} → {v.get('verdict')} «{line(v.get('report', ''), 'F1.2: не подтверждён').split(' · ')[-1]}»" for k, v in bad.items())
-          + f"; свой прогон → {s.get('own', {}).get('verdict')}, своя фикстура с docs/evidence/ → {s.get('own_fixture', {}).get('verdict')}, свой прогон с комментарием про evidence → {s.get('own_commented', {}).get('verdict')} · живой red: evidence «{evl}», гейт «{line(rtext, 'гейт bin/gate-1')}», "
+          + f"; свой прогон → {s.get('own', {}).get('verdict')}, своя фикстура с docs/evidence/ → {s.get('own_fixture', {}).get('verdict')}, свой прогон с комментарием про evidence → {s.get('own_commented', {}).get('verdict')}, свой прогон и чтение его отчёта в docs/evidence/ → {s.get('own_report', {}).get('verdict')} · живой red: evidence «{evl}», гейт «{line(rtext, 'гейт bin/gate-1')}», "
           f"продукт bin/slug '  Hello,  World!  ' → «{product}»; «{first(rrep)}», «{line(rrep, 'F1.2: не подтверждён')[:200]}» · "
           f"живой clean: {counts(crep)}")
     f44()
@@ -441,12 +442,18 @@ def f44():
     open(f"{nw}/docs/evidence/{v}", "w").write("VERDICT: NEEDS_WORK\nFEATURES: F1, F2\n\n## Блокирующие\n- **F2: мутация выжила — bin/b: B → b** · чек `bin/b` остался зелёным\n")
     h.ship(nw, "вердикт полного круга", f"docs/evidence/{v}")
     nw_none = h.gate_run(nw, tn, "f44-nw-none")[1]
+    nwb = next(n for n in os.listdir(f"{nw}/docs/evidence") if re.fullmatch(r"verify-[0-9a-f]+\.txt", n))[7:-4]
+    open(f"{nw}/docs/evidence/verify-{nwb}-F2.txt", "w").write("VERDICT: PASS\nFEATURES: F2\n")  # точечный PASS до починки
+    h.ship(nw, "точечный PASS по F2 до починки", f"docs/evidence/verify-{nwb}-F2.txt")
     open(f"{nw}/bin/b-fix", "w").write("echo B\n")
     h.ship(nw, "F2.2: убить выжившую мутацию", "bin/b-fix")
     fx2 = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=nw, capture_output=True, text=True).stdout.strip()
     open(f"{nw}/docs/evidence/verify-{fx2}-F2.txt", "w").write(f"VERDICT: PASS\nFEATURES: F2\n")
     h.ship(nw, "точечный PASS по F2", f"docs/evidence/verify-{fx2}-F2.txt")
     nw_ok = h.gate_run(nw, tn, "f44-nw-ok")[1]
+    os.remove(f"{nw}/docs/evidence/verify-{fx2}-F2.txt"); h.ship(nw, "без точечного после починки", f"docs/evidence/verify-{fx2}-F2.txt")
+    nw_stale = h.gate_run(nw, tn, "f44-nw-stale")[1]
+    open(f"{nw}/docs/evidence/verify-{fx2}-F2.txt", "w").write("VERDICT: PASS\nFEATURES: F2\n"); h.ship(nw, "точечный PASS по F2 снова", f"docs/evidence/verify-{fx2}-F2.txt")
     # точечный NEEDS_WORK: фича, которую он назвал и не блокировал, проверена; блокированная — нет
     open(f"{nw}/bin/b-fix2", "w").write("echo B\n"); open(f"{nw}/bin/a-fix", "w").write("echo A\n")
     h.ship(nw, "F1.1, F2.1: починка обеих", "bin/b-fix2", "bin/a-fix")
@@ -461,12 +468,14 @@ def f44():
           and point.get("systemMessage", "").startswith("SPEC_GATE_OK") and f"verify-{fix}-F2.txt" in point["systemMessage"]
           and plan.get("systemMessage", "").startswith("SPEC_GATE_OK") and nw_none.get("decision") == "block" and "F2: blocking in the full" in nw_none.get("reason", "")
           and nw_ok.get("systemMessage", "").startswith("SPEC_GATE_OK")
-          and mixed.get("decision") == "block" and "- F2:" in mixed.get("reason", "") and "- F1:" not in mixed.get("reason", ""))
+          and mixed.get("decision") == "block" and "- F2:" in mixed.get("reason", "") and "- F1:" not in mixed.get("reason", "")
+          and nw_stale.get("decision") == "block" and "F2: changed after the full" in nw_stale.get("reason", ""))
     probe("F4.4", ok, f"полный круг — «{full.get('systemMessage', '')[:70]}»; починка «F2.1:» без точечного — {none.get('decision')}: «{f2(none)[:110]}»; "
           f"точечный PASS по F2 до починки — {early.get('decision')}: «{f2(early)[:50]}»; точечный PASS только по F1 — {other.get('decision')}: «{f2(other)[:60]}»; точечный PASS по F2 — «{point.get('systemMessage', '')[:110]}»; "
           f"потом коммит строки журнала PLAN — «{plan.get('systemMessage', plan.get('reason', ''))[:40]}» · полный круг NEEDS_WORK с блокирующей F2 — {nw_none.get('decision')}: «{f2(nw_none)[:90]}»; "
           f"починка «F2.2:» и точечный PASS по F2 — «{nw_ok.get('systemMessage', nw_ok.get('reason', ''))[:110]}»; починка F1 и F2, точечный NEEDS_WORK, блокирующий только F2 — "
-          f"{mixed.get('decision')}: F1 проверен — {'да' if '- F1:' not in mixed.get('reason', '') else 'нет'}, «{f2(mixed)[:70]}»")
+          f"{mixed.get('decision')}: F1 проверен — {'да' if '- F1:' not in mixed.get('reason', '') else 'нет'}, «{f2(mixed)[:70]}»; после NEEDS_WORK только точечный PASS до починки — "
+          f"{nw_stale.get('decision')}: «{f2(nw_stale)[:60]}»")
 
 
 def finish():
