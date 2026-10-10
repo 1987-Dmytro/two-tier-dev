@@ -431,7 +431,7 @@ def commit_probes(src):
     shapes = {"AKIA": "AKIA" + secrets.token_hex(8).upper(), "ghp_": "ghp" + "_" + secrets.token_hex(18), "github_pat_": "github" + "_pat_" + secrets.token_hex(18),
               "xoxb-": "xox" + "b-" + secrets.token_hex(8), "AIza": "AIza" + secrets.token_hex(18)[:35], "PRIVATE KEY": "-----BEGIN " + "RSA PRIVATE KEY-----",
               "присваивание": "api_key = '" + secrets.token_hex(10) + "'", "KEY=value без кавычек": "API_KEY=" + secrets.token_hex(12),
-              "sk_live_": "sk" + "_live_" + secrets.token_hex(12)}
+              "sk_live_": "sk" + "_live_" + secrets.token_hex(12), "строка с «+» в начале": "+" + secret}
     shaped = {}
     for k, v in shapes.items():
         put(r, "bin/shape.py", v + "\n"); gc(r, "add", "--", "bin/shape.py")
@@ -468,6 +468,11 @@ def commit_probes(src):
     put(r, "docs/PROMPT.txt", "Read first: docs/SPEC-1.md\n"); gc(r, "add", "--", "docs/PROMPT.txt")
     tl_prompt = gc(r, "commit", "-qm", "F2.2: стартовый запрос")  # docs/GOAL.txt в owner — значит и docs/PROMPT.txt (v3.2)
     gc(r, "commit", "-qm", "Тимлид: стартовый запрос")
+    put(r, "notes2.txt", "n\n"); gc(r, "add", "--", "notes2.txt"); gc(r, "commit", "-qm", "F2.2: заметка")
+    os.makedirs(f"{r}/intent", exist_ok=True)
+    gc(r, "mv", "notes2.txt", "intent/notes2.md")
+    tl_into = gc(r, "commit", "-qm", "F2.2: перенос в каталог тимлида")  # git mv в путь тимлида — цель тоже файл тимлида
+    gc(r, "commit", "-qm", "Тимлид: перенос в intent")
     put(r, "intent/INTENT.md", "i\n"); gc(r, "add", "--", "intent/INTENT.md")
     tl_dir = gc(r, "commit", "-qm", "F2.2: intent")  # запись owner каталогом («intent/») — файл в нём тоже тимлида
     gc(r, "commit", "-qm", "Тимлид: intent")
@@ -485,8 +490,9 @@ def commit_probes(src):
     ok = (tl[0] == 1 and "team-lead-files: docs/STATUS.md" in tl[1] and tl_ok[0] == 0 and rm[0] == 1 and "no-delete: a.txt" in rm[1] and mv[0] == 0
           and tl_add[0] == 1 and "team-lead-files: CLAUDE.md" in tl_add[1] and tl_dir[0] == 1 and "team-lead-files: intent/INTENT.md" in tl_dir[1]
           and tl_nocolon[0] == 1 and "team-lead-files: docs/STATUS.md" in tl_nocolon[1] and tl_prompt[0] == 1 and "team-lead-files: docs/PROMPT.txt" in tl_prompt[1]
+          and tl_into[0] == 1 and "team-lead-files: intent/notes2.md" in tl_into[1]
           and mrg[0] == 1 and "no-delete: README.md" in mrg[1] and mok[0] == 0)
-    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; «Тимлид» без двоеточия — rc {tl_nocolon[0]}; с «Тимлид:» — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; файл в каталоге owner (intent/) — rc {tl_dir[0]}; docs/PROMPT.txt при docs/GOAL.txt в owner — rc {tl_prompt[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
+    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; «Тимлид» без двоеточия — rc {tl_nocolon[0]}; с «Тимлид:» — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; файл в каталоге owner (intent/) — rc {tl_dir[0]}; docs/PROMPT.txt при docs/GOAL.txt в owner — rc {tl_prompt[0]}; git mv в путь тимлида — rc {tl_into[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
          f"git mv в docs/archive/ — rc {mv[0]}; слияние со своим удалением — rc {mrg[0]} «{mrg[1][:70]}», то же слияние без него — rc {mok[0]}")
     # F2.3 — force-push в любой записи (bare origin); обычный push проходит; написание в Bash — отказ хука кита
     ff = gc(r, "push", "-q", "origin", "v")
@@ -503,13 +509,13 @@ def commit_probes(src):
     for cmd in ("git push --force origin v", "git -C . push origin +v", "git commit --no-verify -m x", "env git commit --no-verify -m x", 'bash -c "git push -f origin v"',
                 "git -c core.hooksPath=/dev/null commit -m x", "(git push --no-verify -f origin v)", 'bash -lc "git push --no-verify -f origin v"',
                 "timeout 30 git push --no-verify -f origin v", 'eval "git push --no-verify -f origin v"', "git push --no-verif --force-with-l origin v",
-                "git commit --no-verif -m x", "git push --forc origin v", "env git push -f origin v", "git add :/src", "git push --follow-tags origin v", "git push origin v",
+                "git commit --no-verif -m x", "git push --forc origin v", "env git push -f origin v", "git add :/src", 'sh -c "git push -f origin v"', "git push -uf origin v", "git push --follow-tags origin v", "git push origin v",
                 'echo "git push --force"'):
         stat[cmd] = subprocess.run(["python3", hook], input=json.dumps({"tool_input": {"command": cmd}}), capture_output=True, text=True).returncode
     want = {"git push --force origin v": 2, "git -C . push origin +v": 2, "git commit --no-verify -m x": 2, "env git commit --no-verify -m x": 2, 'bash -c "git push -f origin v"': 2,
             "git -c core.hooksPath=/dev/null commit -m x": 2, "(git push --no-verify -f origin v)": 2, 'bash -lc "git push --no-verify -f origin v"': 2,
             "timeout 30 git push --no-verify -f origin v": 2, 'eval "git push --no-verify -f origin v"': 2, "git push --no-verif --force-with-l origin v": 2,
-            "git commit --no-verif -m x": 2, "git push --forc origin v": 2, "env git push -f origin v": 2, "git add :/src": 2, "git push --follow-tags origin v": 0,
+            "git commit --no-verif -m x": 2, "git push --forc origin v": 2, "env git push -f origin v": 2, "git add :/src": 2, 'sh -c "git push -f origin v"': 2, "git push -uf origin v": 2, "git push --follow-tags origin v": 0,
             "git push origin v": 0, 'echo "git push --force"': 0}
     ok = ff[0] == 0 and all(rc == 1 and "no-force-push" in e for rc, e in forced.values()) and stat == want
     item(S, "F2.3", ok, f"обычный push — rc {ff[0]}; " + "; ".join(f"{k} — rc {v[0]}" for k, v in forced.items())
