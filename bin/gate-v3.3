@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # gate-v3.3 — гейт кита v3.3 (SPEC-v3.3 F7): кит на пустом репо (свой t3 во /tmp/two-tier-v3 от bin/two-tier-init), маркеры F1–F6 фазы
 # с номером фичи, уцелевшие маркеры v3.2 (JEV_OK, GATE_HOOK_OK, HARNESS_OK, HOOKS_OK, KIT_OK, HANDOFF_OK, OWNER_OK, BUDGET_OK, SPEND_OK,
-# UPGRADE_OK), строки F7.1 и F7.2, затем «F7 GATE_OK».
+# UPGRADE_OK), строки F7.1–F7.3, затем «F7 GATE_OK». F7.3 — два своих проекта от bin/two-tier-init (f73-*): суд коммита по базе
+# рубрики кита и без неё, сверка базы с рубрикой корня.
 # t3: check-harness items · commit · env, check-kit, bin/jev, check-budget (шаблоны, владение); корень ветки: check-kit (мод handoff),
 # check-verify, check-docs, check-spend, check-budget --templates, two-tier-upgrade --self-test (киты v3.1 и v3.2 — в истории репо).
 # Долгие чеки идут параллельно. Подготовка строки запуска шаблона — скилл graphify для --add-dir /tmp/two-tier-v3/skills (так её
@@ -39,6 +40,41 @@ run kit-t3 "$T3" bin/check-kit
 run kit-repo "$REPO" bin/check-kit
 run spend "$REPO" bin/check-spend
 run docs "$REPO" bin/check-docs
+
+# F7.3: проект от bin/two-tier-init без ручных шагов — коммит скрипта, печатающего ключ, отказан abide check с именем правила; скрипт с
+# присутствием и длиной ключа проходит. Красная сторона — такой же проект без .abide/rubric.json: суда модели нет. База рубрики кита —
+# правила корня без привязки (scope, source); красный образец сверки — копия базы с переписанным вопросом и без правила.
+P73=$(mktemp -d /tmp/two-tier-v3/f73-XXXXXX)
+for p in kit bare; do git init -q "$P73/$p" && "$REPO/bin/two-tier-init" "$P73/$p" >/dev/null; done
+rm -f "$P73/bare/.abide/rubric.json"
+c73() {  # c73 <проект> <файл> <строка скрипта>: коммит одного нового файла хуками кита — rc, строка хука и запись журнала судей;
+  local d=$P73/$1 out rc  # отказан — файл вне индекса
+  mkdir -p "$d/$(dirname "$2")" && printf '#!/usr/bin/env bash\n%s\n' "$3" > "$d/$2"
+  git -C "$d" add -- "$2"
+  out=$(cd "$d" && git -c user.name=gate -c user.email=gate@example.invalid commit -qm "F7.3: $2" 2>&1); rc=$?
+  [ "$rc" = 0 ] || git -C "$d" rm -q --cached -- "$2"
+  echo "rc $rc «$(grep -m1 -E '^(commit refused|abide check|commit-msg hook)' <<<"$out" | cut -c1-100)» журнал: $(python3 -c 'import json, sys
+l = json.loads(open(sys.argv[1]).read().splitlines()[-1]); print(l["decision"], l["judge"], l.get("rule"), l.get("score"))' "$d/docs/evidence/commit-judge.jsonl" 2>&1 | tail -1)"
+}
+cmp73() {  # cmp73 <рубрика>: правила — правила рубрики корня без привязки (scope, source); rc 1 — id расхождений
+  python3 - "$1" "$REPO/.abide/rubric.json" <<'EOF'
+import json, sys
+kit, root = ({r["id"]: {k: v for k, v in r.items() if k not in ("scope", "source")} for r in json.load(open(p, encoding="utf-8"))["rules"]} for p in sys.argv[1:])
+bad = [i for i in root if kit.get(i) != root[i]] + [i for i in kit if i not in root]
+print(f"правил {len(kit)} из {len(root)} корня; " + (f"не как в корне — {', '.join(bad)}" if bad else "id, тексты, вопросы и образцы — как в корне"))
+sys.exit(1 if bad else 0)
+EOF
+}
+leak='echo "key: $TYPESAFE_API_KEY"'
+k_leak=$(c73 kit tools/show-key.sh "$leak")
+k_safe=$(c73 kit tools/key-set.sh '[ -n "$TYPESAFE_API_KEY" ] && echo "key set, length ${#TYPESAFE_API_KEY}"')
+b_leak=$(c73 bare tools/show-key.sh "$leak")
+python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); r["rules"] = [x for x in r["rules"] if x["id"] != "evidence-anonymized"]
+[x["check"]["question"].update(instructions=x["check"]["question"]["instructions"] + " Logging it is fine.") for x in r["rules"] if x["id"] == "no-print-credential"]
+json.dump(r, open(sys.argv[2], "w"))' "$P73/kit/.abide/rubric.json" "$P73/reworded.json"
+same=$(cmp73 "$P73/kit/.abide/rubric.json"); same_rc=$?
+diff73=$(cmp73 "$P73/reworded.json"); diff_rc=$?
+scopes=$(python3 -c 'import json, sys; print(", ".join("%s %s" % (r["id"], " ".join(r["scope"])) for r in json.load(open(sys.argv[1]))["rules"]))' "$P73/kit/.abide/rubric.json")
 wait
 
 fails=0
@@ -83,4 +119,12 @@ echo "F7.1 $([ -n "$f71" ] || echo 'FAIL: ')проект t3 от bin/two-tier-in
 [ -n "$f71" ] || fails=$((fails + 1))
 echo "F7.2 $([ "$f72" -eq 0 ] && [ "$arch" != "НЕ в архиве" ] || echo 'FAIL: ')уцелевшие маркеры v3.2 — 10, красных $f72; bin/gate-v3.2 — $arch"
 [ "$f72" -eq 0 ] && [ "$arch" != "НЕ в архиве" ] || fails=$((fails + 1))
+f73=$([[ $k_leak == "rc 1 «commit refused once by abide check — rule no-print-credential "* ]] \
+  && [[ $k_safe =~ ^rc\ 0\ .*журнал:\ (pass|note)\ abide\ no- ]] \
+  && [[ $b_leak == "rc 0 «abide check — skip: no rubric"* ]] && [ "$same_rc" = 0 ] && [ "$diff_rc" = 1 ] \
+  && [[ $diff73 == *no-print-credential* && $diff73 == *evidence-anonymized* ]] && echo ok)
+echo "F7.3 $([ -n "$f73" ] || echo 'FAIL: ')проект от bin/two-tier-init ($P73/kit), без ручных шагов: печать ключа tools/show-key.sh — $k_leak;" \
+  "присутствие и длина ключа tools/key-set.sh — $k_safe ‖ без .abide/rubric.json ($P73/bare): печать ключа — $b_leak ‖ база кита — $same;" \
+  "scope — $scopes ‖ копия базы с переписанным вопросом и без правила — $diff73"
+[ -n "$f73" ] || fails=$((fails + 1))
 [ "$fails" -eq 0 ] && echo "F7 GATE_OK" && echo GATE_OK || { echo "GATE_FAIL: $fails"; exit 1; }
