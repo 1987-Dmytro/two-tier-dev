@@ -333,7 +333,7 @@ def cfix(src, rubric=None):
     subprocess.run(["git", "init", "-q", "--bare", f"{d}/origin.git"], env=GIT_ENV, check=True)
     os.makedirs(f"{repo}/docs/evidence")
     shutil.copytree(f"{src}/.githooks", f"{repo}/.githooks")
-    files = {"budgets.json": json.dumps({"defaults": {"owner": ["docs/STATUS.md", "intent/", "budgets.json"]}, "project": {"owner_add": ["CLAUDE.md"]}}), "CLAUDE.md": "c\n",
+    files = {"budgets.json": json.dumps({"defaults": {"owner": ["docs/STATUS.md", "intent/", "budgets.json", "docs/SPEC-*.md"]}, "project": {"owner_add": ["CLAUDE.md"]}}), "CLAUDE.md": "c\n",
              "docs/STATUS.md": "s\n", "a.txt": "a\n", "README.md": "r\n"}
     if rubric is not None:
         files[".abide/rubric.json"] = json.dumps(rubric_doc(rubric))
@@ -463,7 +463,10 @@ def commit_probes(src):
     put(r, "CLAUDE.md", "d\n"); gc(r, "add", "--", "CLAUDE.md")
     tl_add = gc(r, "commit", "-qm", "F2.2: CLAUDE.md")  # файл из project.owner_add — тоже файл тимлида
     gc(r, "commit", "-qm", "Тимлид: CLAUDE.md")
-    put(r, "budgets.json", json.dumps({"defaults": {"owner": ["docs/STATUS.md", "intent/", "budgets.json", "docs/GOAL.txt"]}, "project": {"owner_add": ["CLAUDE.md"]}}))
+    put(r, "docs/SPEC-1.md", "s\n"); gc(r, "add", "--", "docs/SPEC-1.md")
+    tl_glob = gc(r, "commit", "-qm", "F2.2: SPEC")  # запись owner шаблоном («docs/SPEC-*.md»)
+    gc(r, "commit", "-qm", "Тимлид: SPEC")
+    put(r, "budgets.json", json.dumps({"defaults": {"owner": ["docs/STATUS.md", "intent/", "budgets.json", "docs/SPEC-*.md", "docs/GOAL.txt"]}, "project": {"owner_add": ["CLAUDE.md"]}}))
     gc(r, "add", "--", "budgets.json"); gc(r, "commit", "-qm", "Тимлид: владение прежним именем GOAL")
     put(r, "docs/PROMPT.txt", "Read first: docs/SPEC-1.md\n"); gc(r, "add", "--", "docs/PROMPT.txt")
     tl_prompt = gc(r, "commit", "-qm", "F2.2: стартовый запрос")  # docs/GOAL.txt в owner — значит и docs/PROMPT.txt (v3.2)
@@ -490,9 +493,9 @@ def commit_probes(src):
     ok = (tl[0] == 1 and "team-lead-files: docs/STATUS.md" in tl[1] and tl_ok[0] == 0 and rm[0] == 1 and "no-delete: a.txt" in rm[1] and mv[0] == 0
           and tl_add[0] == 1 and "team-lead-files: CLAUDE.md" in tl_add[1] and tl_dir[0] == 1 and "team-lead-files: intent/INTENT.md" in tl_dir[1]
           and tl_nocolon[0] == 1 and "team-lead-files: docs/STATUS.md" in tl_nocolon[1] and tl_prompt[0] == 1 and "team-lead-files: docs/PROMPT.txt" in tl_prompt[1]
-          and tl_into[0] == 1 and "team-lead-files: intent/notes2.md" in tl_into[1]
+          and tl_into[0] == 1 and "team-lead-files: intent/notes2.md" in tl_into[1] and tl_glob[0] == 1 and "team-lead-files: docs/SPEC-1.md" in tl_glob[1]
           and mrg[0] == 1 and "no-delete: README.md" in mrg[1] and mok[0] == 0)
-    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; «Тимлид» без двоеточия — rc {tl_nocolon[0]}; «Тимлид:» без пробела — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; файл в каталоге owner (intent/) — rc {tl_dir[0]}; docs/PROMPT.txt при docs/GOAL.txt в owner — rc {tl_prompt[0]}; git mv в путь тимлида — rc {tl_into[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
+    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; «Тимлид» без двоеточия — rc {tl_nocolon[0]}; «Тимлид:» без пробела — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; файл в каталоге owner (intent/) — rc {tl_dir[0]}; docs/PROMPT.txt при docs/GOAL.txt в owner — rc {tl_prompt[0]}; git mv в путь тимлида — rc {tl_into[0]}; файл по шаблону owner (docs/SPEC-*.md) — rc {tl_glob[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
          f"git mv в docs/archive/ — rc {mv[0]}; слияние со своим удалением — rc {mrg[0]} «{mrg[1][:70]}», то же слияние без него — rc {mok[0]}")
     # F2.3 — force-push в любой записи (bare origin); обычный push проходит; написание в Bash — отказ хука кита
     ff = gc(r, "push", "-q", "origin", "v")
@@ -528,6 +531,7 @@ def commit_probes(src):
         a = cfix(src, rubric=RUBRIC_FIXTURE)
         put(a, "bin/p.py", "import os\nprint(os.environ['FIXTURE_SECRET'])\n"); gc(a, "add", "--", "bin/p.py")
         first = gc(a, "commit", "-qm", "F2.4: печать")
+        gc(a, "add", "--", "docs/evidence/commit-judge.jsonl")  # журнал судей в индексе — как в обычном коммите evidence
         again = gc(a, "commit", "-qm", "F2.4: печать — повтор")
         notes = []
         for i, line in enumerate(['import os\npw = os.environ.get("DB_PASSWORD", "changeme123")\n', 'log.debug("auth header set: %s", headers)\n'] * 2):
@@ -592,11 +596,18 @@ def commit_probes(src):
     sub2 = subprocess.run(["bash", "-c", "git commit -qm 'F2.6: статус из bash'"], cwd=s, env=GIT_ENV, capture_output=True, text=True, timeout=60)
     gc(s, "reset", "-q", "--", "docs/STATUS.md"); gc(s, "checkout", "-q", "--", "docs/STATUS.md")
     put(s, "b.txt", "b\n"); gc(s, "add", "--", "b.txt"); gc(s, "commit", "-qm", "F2.6: обычный")
+    with open(f"{s}/docs/evidence/commit-judge.jsonl", "a", encoding="utf-8") as f:  # у каждого вида — свой ненулевой счёт: перестановка счётчиков видна
+        for d, j, rule, k in (("note", "abide", "no-secret-values", 3), ("rejected", "abide", "no-print-credential", 4), ("refuse", "abide", "no-print-credential", 5),
+                              ("refuse", "code", "no-force-push", 6), ("skip", "abide", None, 2)):
+            for _ in range(k):
+                f.write(json.dumps({"ts": "", "decision": d, "judge": j, "rule": rule, "files": ["x"]}) + "\n")
     log = [json.loads(l) for l in open(f"{s}/docs/evidence/commit-judge.jsonl", encoding="utf-8")]
     rc, _, rep = report_of(s, src)
     counts = next((l for l in rep.splitlines() if l.startswith("Коммитов фазы")), "")
     n = lambda d: sum(l["decision"] == d for l in log)
-    want = [f"Суждений в журнале: {len(log)}", f"прошло {n('pass')}", f"отказов {n('refuse')}", f"отклонённых {n('rejected')}", f"заметок {n('note')}", f"пропусков {n('skip')}"]
+    code = sum(l["decision"] == "refuse" and l.get("judge") == "code" and l.get("rule") != "no-force-push" for l in log)
+    want = [f"Суждений в журнале: {len(log)}", f"прошло {n('pass')}", f"отказов {n('refuse')}", f"отклонённых {n('rejected')}", f"заметок {n('note')}", f"пропусков {n('skip')}",
+            f"(код {code}, push {sum(l.get('rule') == 'no-force-push' for l in log)}, abide {sum(l['decision'] == 'refuse' and l.get('judge') == 'abide' for l in log)})"]
     ok = (sub.returncode == 1 and "no-secret-values" in sub.stderr and sub2.returncode == 1 and "team-lead-files" in sub2.stderr
           and rc == 0 and all(w in counts for w in want) and n("skip") > 0)
     item(S, "F2.6", ok, f"секрет коммитом из подпроцесса Python — rc {sub.returncode} «{' '.join(sub.stderr.split())[:70]}»; файл тимлида из bash -c — rc {sub2.returncode}; "
