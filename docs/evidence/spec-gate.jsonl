@@ -12,3 +12,5 @@
 {"ts":"2026-10-10T15:21:35.597Z","session":"235e83a5","mode":"active","decision":"pass","reason":"background: tasks 3, crons 0","missing":[],"stops":[],"stop_hook_active":false,"ms":50}
 {"ts":"2026-10-10T15:22:35.428Z","session":"235e83a5","mode":"active","decision":"pass","reason":"background: tasks 1, crons 0","missing":[],"stops":[],"stop_hook_active":false,"ms":52}
 {"ts":"2026-10-10T15:45:20.002Z","session":"235e83a5","mode":"active","decision":"pass","reason":"background: tasks 1, crons 0","missing":[],"stops":[],"stop_hook_active":false,"ms":146}
+{"ts":"2026-10-10T15:50:05.315Z","session":"235e83a5","mode":"active","decision":"pass","reason":"background: tasks 1, crons 0","missing":[],"stops":[],"stop_hook_active":false,"ms":76}
+{"ts":"2026-10-10T16:10:53.686Z","session":"235e83a5","mode":"active","decision":"pass","reason":"background: tasks 1, crons 0","missing":[],"stops":[],"stop_hook_active":false,"ms":109}

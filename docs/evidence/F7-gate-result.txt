@@ -1,5 +1,5 @@
-$ bin/gate-v3.3  # корень репо кита; проекты t3 и f73 — bin/two-tier-init во /tmp/two-tier-v3 · 10.10.2026 17:45 · HEAD 6a12c17
-F7: bin/two-tier-init t3 — файлов кита 37 (в git 37), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate33-11ZKCz
+$ bin/gate-v3.3  # корень репо кита; проекты t3 и f73 — bin/two-tier-init во /tmp/two-tier-v3 · 10.10.2026 18:10 · HEAD 5b0a178
+F7: bin/two-tier-init t3 — файлов кита 37 (в git 37), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate33-T8OTdl
 init: (t3) bin/check-budget — rc 0
 jev: (t3) bin/jev --self-test — rc 0
 templates: (t3) bin/check-budget --templates — rc 0
@@ -9,9 +9,9 @@ kit-t3: (t3) bin/check-kit — rc 0
 kit-repo: (корень ветки) bin/check-kit — rc 0
 commit-t3: (t3) bin/check-harness commit — rc 0
 upgrade: (корень ветки) bin/two-tier-upgrade --self-test — rc 0
+items-t3: (t3) bin/check-harness items — rc 0
 spend: (корень ветки) bin/check-spend — rc 0
 docs: (корень ветки) bin/check-docs — rc 0
-items-t3: (t3) bin/check-harness items — rc 0
 env-t3: (t3) bin/check-harness env — rc 0
 verify: (корень ветки) bin/check-verify — rc 0
 F7-init BUDGET_OK
@@ -35,7 +35,7 @@ v3.2 SPEND_OK
 v3.2 UPGRADE_OK
 F7.1 проект t3 от bin/two-tier-init: файлов кита 37 из 37, core.hooksPath .githooks; BUDGET_OK проекта и маркеры F1–F6 с номером фичи — красных 0; красный образец разметки (лог без маркера, rc 1) — «F0 FAIL: RED_OK — red-sample: нет RED_OK; red-sample: rc 1»
 F7.2 уцелевшие маркеры v3.2 — 10, красных 0; bin/gate-v3.2 — в docs/archive/gate-v3.2/
-F7.3 проект от bin/two-tier-init (/tmp/two-tier-v3/f73-RiSIY1/kit), без ручных шагов: печать ключа tools/show-key.sh — rc 1 «commit refused once by abide check — rule no-print-credential (0.98): tools/show-key.sh. Fix it, or » журнал: refuse abide no-print-credential 0.98; присутствие и длина ключа tools/key-set.sh — rc 0 «» журнал: pass abide no-print-credential 0.08; bin/check-budget — rc 0 «OK   abide_rules: .abide/rubric.json, правил 4/8» BUDGET_OK ‖ без .abide/rubric.json (/tmp/two-tier-v3/f73-RiSIY1/bare): печать ключа — rc 0 «abide check — skip: no rubric or no staged file» журнал: skip abide None None; bin/check-budget — rc 1 «FAIL abide_rules: нет .abide/rubric.json — abide check в хуке коммита пропускает суд модели: база рубрики — из кита (bin/two-tier-init, two-tier-upgra» BUDGET_FAIL: 1 ‖ база кита — правил 4 из 4 корня; id, тексты, вопросы и образцы — как в корне; scope — no-secret-values **/*, no-print-credential **/*, evidence-anonymized docs/evidence/**, no-writes-outside-repo **/* ‖ копия базы с переписанным вопросом и без правила — правил 3 из 4 корня; не как в корне — no-print-credential, evidence-anonymized
+F7.3 проект от bin/two-tier-init (/tmp/two-tier-v3/f73-dVTzWr/kit), без ручных шагов: печать ключа tools/show-key.sh — rc 1 «commit refused once by abide check — rule no-print-credential (0.98): tools/show-key.sh. Fix it, or » журнал: refuse abide no-print-credential 0.98; присутствие и длина ключа tools/key-set.sh — rc 0 «» журнал: pass abide no-print-credential 0.08; bin/check-budget — rc 0 «OK   abide_rules: .abide/rubric.json, правил 4/8» BUDGET_OK ‖ без .abide/rubric.json (/tmp/two-tier-v3/f73-dVTzWr/bare): печать ключа — rc 0 «abide check — skip: no rubric or no staged file» журнал: skip abide None None; bin/check-budget — rc 1 «FAIL abide_rules: нет .abide/rubric.json — abide check в хуке коммита пропускает суд модели: база рубрики — из кита (bin/two-tier-init, two-tier-upgra» BUDGET_FAIL: 1 ‖ база кита — правил 4 из 4 корня; id, тексты, вопросы и образцы — как в корне; scope — no-secret-values **/*, no-print-credential **/*, evidence-anonymized docs/evidence/**, no-writes-outside-repo **/* ‖ копия базы с переписанным вопросом и без правила — правил 3 из 4 корня; не как в корне — no-print-credential, evidence-anonymized
 F7 GATE_OK
 GATE_OK
-rc 0 · 163 с
+rc 0 · 159 с
