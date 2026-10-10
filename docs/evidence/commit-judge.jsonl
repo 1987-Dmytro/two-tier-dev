@@ -17,3 +17,6 @@
 {"ts": "2026-10-10T11:08:22Z", "decision": "note", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F2-harness-result.txt"], "score": 0.64, "diff": "f0bef36d21cef00d", "ms": 2405}
 {"ts": "2026-10-10T11:09:00Z", "decision": "pass", "judge": "abide", "rule": "no-print-credential", "files": ["kit/bin/check-harness"], "score": 0.22, "diff": "194e6e09c0e16f24", "ms": 1086}
 {"ts": "2026-10-10T11:10:35Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/check-verify"], "score": 0.1, "diff": "03fafcf71273dd63", "ms": 1896}
+{"ts": "2026-10-10T11:10:37Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/verify-c6514e1-F1-F2-F3-F4-F5-F7.txt"], "score": 0.15, "diff": "f0280025d6cb3c36", "ms": 1432}
+{"ts": "2026-10-10T11:30:29Z", "decision": "note", "judge": "abide", "rule": "no-secret-values", "files": ["kit/bin/check-harness"], "score": 0.75, "diff": "60bbcc5e7f0a02a6", "ms": 2017}
+{"ts": "2026-10-10T11:30:31Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/check-verify"], "score": 0.13, "diff": "2232a03ad14083af", "ms": 1834}
