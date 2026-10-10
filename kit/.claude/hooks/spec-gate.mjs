@@ -104,18 +104,21 @@ function sessionStart(transcript) {
   return null
 }
 
-function features(spec) {  // feature lines and, right under each, its item lines `  - `F<n>.<k>` …`
+function features(spec) {  // feature lines and, under each, its item lines `  - `F<n>.<k>` …` and the ids of its «готово:» range
   const out = []
   let open = false
   for (const l of spec.split('\n')) {
     const f = l.match(/^- \*\*(F\d+)\b/)
     if (f) {
-      out.push({ id: f[1], marker: (l.match(/чек:\s*`[^`]*`\s*→\s*`([A-Z0-9_]+)`/) || [])[1] || null, items: [] })
+      const range = ((l.match(/готово:\s*(.*?)\s*·\s*чек:/) || [])[1] || '').match(/^(F\d+)\.(\d+)\s*[–-]\s*\1\.(\d+)$/)
+      const declared = range ? Array.from({ length: Math.max(0, range[3] - range[2] + 1) }, (_, i) => `${range[1]}.${Number(range[2]) + i}`) : []
+      out.push({ id: f[1], marker: (l.match(/чек:\s*`[^`]*`\s*→\s*`([A-Z0-9_]+)`/) || [])[1] || null, items: declared.filter(d => d.startsWith(`${f[1]}.`)) })
       open = true
       continue
     }
+    if (open && !l.trim()) continue  // a blank line inside the list does not end it
     const it = open && l.match(/^\s+- `(F\d+\.\d+)`/)
-    if (it && it[1].startsWith(`${out.at(-1).id}.`)) out.at(-1).items.push(it[1])
+    if (it && it[1].startsWith(`${out.at(-1).id}.`)) { if (!out.at(-1).items.includes(it[1])) out.at(-1).items.push(it[1]) }
     else open = false
   }
   return out
@@ -131,46 +134,59 @@ const STOP_LINE = /^[ \t]*(?:[-*][ \t]*)?STOP:[ \t]*(STOP-[A-Z]+)\b.*$/gm
 const sha12 = s => createHash('sha256').update(s).digest('hex').slice(0, 12)
 const canon = line => line.slice(line.indexOf('STOP:')).trim()
 const stopMark = line => { const c = canon(line).slice(0, 60); return `${c.length}:${sha12(c)}` }  // «n:hash» of its first n ≤ 60 characters
-const marked = (line, marks) => marks.some(k => { const [n, h] = k.includes(':') ? k.split(':') : [60, k]; return sha12(canon(line).slice(0, Number(n))) === h })
+const marked = (line, marks) => marks.some(k => {  // the first n characters match; a mark shorter than 40 also needs the same line or «— снят» after it
+  const [n, h] = k.includes(':') ? k.split(':').map((x, i) => (i ? x : Number(x))) : [60, k]
+  const c = canon(line)
+  return sha12(c.slice(0, n)) === h && (n >= 40 || !c.slice(n).trim() || /^\s*[—–-]+\s*снят/i.test(c.slice(n)))
+})
 
 function head(progress) {
   const m = progress.match(/\n## (?:Голова|Head)[^\n]*\n[\s\S]*?(?=\n## |$)/)
   return (m ? m[0] : progress.split('\n').slice(0, 20).join('\n')).trim().slice(0, 4000)
 }
 
-function verdicts(root, sha) {  // PASS verdict files committed at HEAD for HEAD or an ancestor: {file, sha, scope: null = full round}
+function verdicts(root, sha) {  // verdict files committed at HEAD for HEAD or an ancestor: {file, sha, pass, scope: null = full round, blocking}
   const out = []
   for (const f of headNames(root, 'docs/evidence')) {
     const m = f.match(/^verify-([0-9a-f]{7,40})(?:-[\w.-]+)?\.txt$/)
     const text = m && atHead(root, `docs/evidence/${f}`)
-    if (!text || text.split('\n')[0].trim() !== 'VERDICT: PASS') continue
+    const v = text && text.split('\n')[0].trim()
+    if (v !== 'VERDICT: PASS' && v !== 'VERDICT: NEEDS_WORK') continue
     const full = git(root, 'rev-parse', '--verify', '-q', `${m[1]}^{commit}`)
     if (!full || !isAncestor(root, full, sha)) continue
     const scope = (text.match(/^FEATURES:\s*(.+)$/m) || [])[1]
-    out.push({ file: f, sha: full, scope: scope ? [...new Set(scope.match(/F\d+/g) || [])] : null })
+    const sec = (text.match(/\n## (?:Блокирующие|Blocking)[^\n]*\n([\s\S]*?)(?=\n## |$)/) || [])[1] || ''
+    out.push({ file: f, sha: full, pass: v === 'VERDICT: PASS', scope: scope ? [...new Set(scope.match(/F\d+/g) || [])] : null,
+      blocking: [...new Set([...sec.matchAll(/^- \*\*(F\d+)/gm)].map(x => x[1]))] })
   }
   return out
 }
 
 function coverage(root, sha, ids) {  // what the verdicts leave uncovered — [] when HEAD is covered (SPEC-v3.3 F4.4)
-  const vs = verdicts(root, sha)
+  const all = verdicts(root, sha)
   const isFull = v => !v.scope || ids.every(i => v.scope.includes(i))
   const dist = v => Number(git(root, 'rev-list', '--count', `${v.sha}..${sha}`) ?? 1e9)
-  const full = vs.filter(isFull).sort((a, b) => dist(a) - dist(b))[0]
-  if (!full) return { missing: [`no VERDICT: PASS of a full /verify-phase round for HEAD ${sha.slice(0, 7)} or an ancestor in HEAD (docs/evidence/verify-<sha>.txt)`] }
+  const full = all.filter(isFull).sort((a, b) => dist(a) - dist(b) || b.pass - a.pass)[0]  // the newest full round, PASS or NEEDS_WORK
+  const vs = all.filter(v => v.pass)
+  if (!full) return { missing: [`no full /verify-phase round for HEAD ${sha.slice(0, 7)} or an ancestor in HEAD (docs/evidence/verify-<sha>.txt)`] }
   const missing = [], last = {}
+  // SPEC-v3.3 §5: the blocking findings of the one full round are fixed, then only the touched features are verified again
+  const failed = full.pass ? [] : full.blocking.length ? full.blocking : ids
+  for (const f of failed) last[f] = full.sha
+  const own = p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md' || /^docs\/PLAN-[^/]+\.md$/.test(p)  // the executor's report files
   for (const c of commits(root, `${full.sha}..${sha}`)) {
-    if (c.subj.startsWith('Тимлид:') || c.files.every(p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md')) continue
+    if (c.subj.startsWith('Тимлид:') || c.files.every(own)) continue
     const fs_ = [...new Set(((c.subj.match(/^((?:F\d+\.\d+[,;\s]*)+)/) || [])[1] || '').match(/F\d+(?=\.)/g) || [])]
     if (!fs_.length) missing.push(`commit ${c.sha.slice(0, 7)} «${c.subj.slice(0, 60)}» after the full /verify-phase round ${full.sha.slice(0, 7)} changes ${c.files.slice(0, 3).join(', ')} and names no item: no point verdict can cover it`)
-    for (const f of fs_) last[f] ??= c.sha  // newest first: the first seen is the last change of the feature
+    for (const f of fs_) if (!last[f] || last[f] === full.sha) last[f] = c.sha  // newest first: the first seen is the last change of the feature
   }
   for (const [f, c] of Object.entries(last)) {
-    if (!vs.some(v => v.scope?.includes(f) && isAncestor(root, c, v.sha))) {
-      missing.push(`${f}: changed after the full /verify-phase round ${full.sha.slice(0, 7)} (commit ${c.slice(0, 7)}) — no point VERDICT: PASS that names ${f} at or after it`)
+    if (!vs.some(v => v.scope?.includes(f) && isAncestor(root, c, v.sha) && (v !== full))) {
+      missing.push(c === full.sha ? `${f}: blocking in the full /verify-phase round ${full.sha.slice(0, 7)} (${full.file}) — no point VERDICT: PASS that names ${f} after it`
+        : `${f}: changed after the full /verify-phase round ${full.sha.slice(0, 7)} (commit ${c.slice(0, 7)}) — no point VERDICT: PASS that names ${f} at or after it`)
     }
   }
-  const point = vs.filter(v => v.scope && !isFull(v) && Object.keys(last).some(f => v.scope.includes(f)))
+  const point = vs.filter(v => v !== full && v.scope && !isFull(v) && Object.keys(last).some(f => v.scope.includes(f)))
   return { missing, used: [full.file, ...point.map(v => v.file)].join(', ') }
 }
 

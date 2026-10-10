@@ -56,8 +56,16 @@ def spec_items():
         f, it = FEATURE.match(l), ITEM.match(l)
         if f:
             feat = f.group(1)
+            r = re.search(r"готово:\s*(F\d+)\.(\d+)\s*[–-]\s*\1\.(\d+)\s*·", l)  # пункты диапазона «готово:» — и без своей строки
+            items += [{"id": f"{r.group(1)}.{k}", "text": "(нет строки пункта в SPEC)"} for k in range(int(r.group(2)), int(r.group(3)) + 1)] if r and r.group(1) == feat else []
+        elif feat and not l.strip():
+            continue  # пустая строка внутри списка пунктов его не кончает
         elif it and feat and it.group(1).startswith(feat + "."):
-            items.append({"id": it.group(1), "text": it.group(2).strip()})
+            known = next((x for x in items if x["id"] == it.group(1)), None)
+            if known:
+                known["text"] = it.group(2).strip()
+            else:
+                items.append({"id": it.group(1), "text": it.group(2).strip()})
         else:
             feat = None
     return spec, items
@@ -168,7 +176,7 @@ def main(argv):
             fs = ", ".join(cell(f, 60) for f in (r.get("files") or [])[:3]) or "—"
             L.append(f"- {r.get('ts', '?')} · {r['decision']} · {r.get('judge')} · {r.get('rule') or r.get('note') or '—'}{sc} · {fs}")
     gate = jsonl("docs/evidence/spec-gate.jsonl")
-    passes = [g for g in gate if g.get("decision") == "pass"]
+    passes = [g for g in gate if g.get("decision") == "pass" or (g.get("decision") == "block" and g.get("mode") != "active")]  # блок в тени ход не держал
     L += ["", "## Пропуски spec-gate", "", f"Решений хука: {len(gate)} — блоков {sum(g.get('decision') == 'block' for g in gate)}, "
           f"OK {sum(g.get('decision') == 'ok' for g in gate)}, стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.", ""]
     L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- нет"]

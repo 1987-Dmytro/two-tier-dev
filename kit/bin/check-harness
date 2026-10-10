@@ -146,7 +146,10 @@ class FakeJev:
                        for i, k in enumerate(sorted(body.get("questions", {}), key=lambda k: int(k.split(":")[1])))}
                 data = json.dumps({"model": body.get("model"), "answers": ans, "usage": {"input_tokens": 10, "output_tokens": 0}}).encode()
                 self.send_response(200); self.send_header("content-type", "application/json"); self.end_headers(); self.wfile.write(data)
-        self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        class Quiet(http.server.ThreadingHTTPServer):
+            def handle_error(self, *a):  # клиент bin/jev ушёл по своему таймауту — это и есть проба, не ошибка
+                pass
+        self.srv = Quiet(("127.0.0.1", 0), H)
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
 
@@ -177,12 +180,18 @@ def items_probes(src, launch):
     twin = gate_run(r, tr, "items-twin")[1]
     open(ev, "w", encoding="utf-8").write(EV_ITEMS["docs/evidence/F2-b-result.txt"])
     disk = gate_run(r, tr, "items-disk")[1]
+    gap, tg = gate_fixture(src, launch, full=True, items=True, spec=GATE_SPEC_ITEMS.replace("  - `F2.2`", "\n  - `F2.2`"))
+    open(f"{gap}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write(EV_ITEMS["docs/evidence/F2-b-result.txt"].replace("F2.2 красный", "проба 2 красный"))
+    ship(gap, "evidence без строки F2.2", "docs/evidence/F2-b-result.txt")
+    blank = gate_run(gap, tg, "items-gap")[1]
     rm, rt, rd = miss.get("reason", ""), twin.get("reason", ""), disk.get("reason", "")
     ok = (full.get("systemMessage", "").startswith("SPEC_GATE_OK") and "items 4" in full["systemMessage"]
           and miss.get("decision") == "block" and "- F2.2:" in rm and "- F2.1:" not in rm and "- F1." not in rm
-          and twin.get("decision") == "block" and "- F2.2:" in rt and disk.get("decision") == "block" and "on disk only" in line_of(rd, "F2.2"))
+          and twin.get("decision") == "block" and "- F2.2:" in rt and disk.get("decision") == "block" and "on disk only" in line_of(rd, "F2.2")
+          and blank.get("decision") == "block" and "- F2.2:" in blank.get("reason", ""))
     item(S, "F1.1", ok, f"нет строки F2.2 при маркере B_OK — {miss.get('decision')}: «{line_of(rm, 'F2.2')}»; близнецы F2.20 и xF2.2 — {twin.get('decision')}: "
-         f"«{line_of(rt, 'F2.2')[:60]}»; строка F2.2 только на диске — {disk.get('decision')}: «{line_of(rd, 'F2.2')}»; все строки в HEAD — «{short(full)}»")
+         f"«{line_of(rt, 'F2.2')[:60]}»; строка F2.2 только на диске — {disk.get('decision')}: «{line_of(rd, 'F2.2')}»; пустая строка перед F2.2 в SPEC — "
+         f"{blank.get('decision')}: «{line_of(blank.get('reason', ''), 'F2.2')[:60]}»; все строки в HEAD — «{short(full)}»")
     # F1.2 — полный комплект; новая сессия на закрытой фазе; голова не переписана за фазу; сессия с коммитом без новой головы
     closed = gate_run(g, transcript_now(os.path.dirname(trg), "new-session"), "items-closed-new")[1]
     c1, tc1 = gate_fixture(src, launch, full=True, items=True, fresh_head=False)
@@ -205,16 +214,16 @@ def items_probes(src, launch):
     open(f"{d}/intent/INTENT.md", "w", encoding="utf-8").write("**S1** — фикстура\n")
     open(f"{d}/docs/PROMPT.txt", "w", encoding="utf-8").write("Read first: docs/SPEC-1.md\n")
     pin = subprocess.run(["git", "hash-object", f"{d}/intent/INTENT.md"], capture_output=True, text=True).stdout.strip()[:12]
-    def budget(it="  - `F9.1` `bin/x` печатает X", s3="- C1: из репо ничего не удаляется · судья: код"):
+    def budget(it="  - `F9.1` `bin/x` печатает X", s3="- C1: из репо ничего не удаляется · судья: код", rng=False):
         open(f"{d}/docs/SPEC-1.md", "w", encoding="utf-8").write(
-            f"**intent:** `intent/INTENT.md @ {pin}`\n\n## 2. Фичи\n- **F9 Фикстура** · оператор получает X · готово: F9.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n"
+            f"**intent:** `intent/INTENT.md @ {pin}`\n\n## 2. Фичи\n- **F9 Фикстура** · оператор получает X · готово: {'F9.1–F9.2' if rng else 'F9.1'} · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n"
             f"{it}\n\n## 3. Инварианты и границы\n{s3}\n- Вне объёма: перевод проекта.\n\n## 4. Стопы\n")
         o = subprocess.run(["python3", "bin/check-budget"], cwd=d, capture_output=True, text=True).stdout
         return [l for l in o.splitlines() if re.match(r"(OK|FAIL)\s+spec_(items|judges|block_chars)", l)]
     green = budget()
     reds = {"место": budget(it="  - `F9.1` всё работает быстро и надёжно"), "судья": budget(s3="- C1: из репо ничего не удаляется"),
-            "блок": budget(it="  - `F9.1` `bin/x` печатает X " + "y" * 900)}
-    want = {"место": ("spec_items", "F9.1"), "судья": ("spec_judges", "C1: из репо"), "блок": ("spec_block_chars", "F9:")}
+            "блок": budget(it="  - `F9.1` `bin/x` печатает X " + "y" * 900), "диапазон": budget(rng=True)}
+    want = {"место": ("spec_items", "F9.1"), "судья": ("spec_judges", "C1: из репо"), "блок": ("spec_block_chars", "F9:"), "диапазон": ("spec_items", "без строки пункта — F9.2")}
     hit = {k: next((l for l in ls if l.startswith("FAIL") and want[k][0] in l and want[k][1] in l), None) for k, ls in reds.items()}
     ok = len(green) == 3 and all(l.startswith("OK") for l in green) and all(hit.values())
     sp = lambda l: " ".join((l or "нет FAIL").split())
@@ -226,7 +235,7 @@ def items_probes(src, launch):
         os.makedirs(os.path.dirname(f"{p}/{rel}") or p, exist_ok=True)
         open(f"{p}/{rel}", "w", encoding="utf-8").write(text)
     put("docs/PROMPT.txt", "Read first: docs/SPEC-1.md\n")
-    put("docs/SPEC-1.md", GATE_SPEC_ITEMS.replace("  - `F2.2` на красном образце `bin/b` — отказ\n", ""))
+    put("docs/SPEC-1.md", GATE_SPEC_ITEMS.replace("  - `F2.2` на красном образце `bin/b` — отказ\n", "").replace("готово: F2.1–F2.2", "готово: F2.1"))
     gx("init", "-q", "-b", "main"); gx("add", "--", "docs/PROMPT.txt", "docs/SPEC-1.md"); gx("commit", "-qm", "Тимлид: SPEC-1"); gx("switch", "-qc", "v")
     put("bin/a", "echo A\n"); gx("add", "--", "bin/a"); gx("commit", "-qm", "F1.1: bin/a печатает A")
     put("notes.txt", "x\n"); gx("add", "--", "notes.txt"); gx("commit", "-qm", "разное без пункта")
@@ -246,7 +255,16 @@ def items_probes(src, launch):
     on_disk = gate_run(s1, ts1, "items-stop")[1]
     ship(s1, "стоп", "docs/PROGRESS.md")
     rc1, pushed, _, log1, _ = gate_run(s1, ts1, "items-stop")
+    s3, ts3 = gate_fixture(src, launch, items=True)
+    open(f"{s3}/docs/PROGRESS.md", "a", encoding="utf-8").write("\nSTOP: STOP-INPUT\nВопрос оператору: выдать ключ?\nResume: «продолжай с F2».\n")
+    ship(s3, "короткий стоп", "docs/PROGRESS.md")
+    short1 = gate_run(s3, ts3, "items-short")[3][-1]
+    pg = open(f"{s3}/docs/PROGRESS.md", encoding="utf-8").read().replace("STOP: STOP-INPUT\n", "STOP: STOP-INPUT — снят\n")
+    open(f"{s3}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg + "\nSTOP: STOP-INPUT — отказ вложенного claude -p, нужен вход оператора.\nВопрос оператору: запустить снова?\nResume: «продолжай с приёмки».\n")
+    ship(s3, "второй стоп", "docs/PROGRESS.md")
+    short2 = gate_run(s3, ts3, "items-short")[3][-1]
     s2, ts2 = gate_fixture(src, launch, items=True)
+    gate_run(s2, ts2, "items-shadow", env_over={"SPEC_GATE": "shadow"})
     sess = hashlib.sha256(b"items-cap").hexdigest()[:8]
     with open(f"{s2}/docs/evidence/spec-gate.jsonl", "a", encoding="utf-8") as f:
         for i in range(12):
@@ -254,10 +272,13 @@ def items_probes(src, launch):
     cap = gate_run(s2, ts2, "items-cap")[3][-1]
     rc2, _, rep2 = report_of(s2, src)
     pass_line = next((l for l in rep2.split("## Пропуски spec-gate", 1)[-1].splitlines() if "cap-blocks" in l), "")
+    shadow_line = next((l for l in rep2.split("## Пропуски spec-gate", 1)[-1].splitlines() if "· shadow ·" in l), "")
     ok = (on_disk.get("decision") == "block" and "on disk only" in on_disk.get("reason", "") and rc1 == 0 and "decision" not in pushed
-          and log1[-1]["decision"] == "stop" and cap["decision"] == "pass" and rc2 == 0 and pass_line)
+          and log1[-1]["decision"] == "stop" and cap["decision"] == "pass" and rc2 == 0 and pass_line and shadow_line
+          and short1["decision"] == "stop" and short2["decision"] == "stop")
     item(S, "F1.5", ok, f"STOP только на диске — {on_disk.get('decision')}: «{line_of(on_disk.get('reason', ''), '«STOP')[:110]}»; закоммичен и запушен — "
-         f"{log1[-1]['decision']} ({log1[-1]['reason']}); кап блоков — {cap['decision']} ({cap['reason']}); отчёт фазы: «{pass_line.strip()[:110]}»")
+         f"{log1[-1]['decision']} ({log1[-1]['reason']}); короткая строка «STOP: STOP-INPUT», затем другая того же id — {short1['decision']}, {short2['decision']}; "
+         f"кап блоков — {cap['decision']} ({cap['reason']}); отчёт фазы: «{pass_line.strip()[:110]}», блок в тени: «{shadow_line.strip()[:80]}»")
     # F1.6 — Jev в тени: статусы в отчёте; ошибка и таймаут — статус, rc 0; решение хука с Jev и без — одно
     jv = FakeJev()
     key = {"TYPESAFE_API_KEY": "fixture-key", "JEV_LOG": f"{TMP}/items-jev.jsonl"}
@@ -278,11 +299,14 @@ def items_probes(src, launch):
          f"«{(shown['hang'][1] or ['—'])[0]}»; хук с Jev — «{short(a)[:50]}», без ключа и с мёртвым адресом — «{short(b)[:50]}», оба за {sec:.1f} с")
 
 
-RUBRIC_FIXTURE = [  # F2.4: рубрика-фикстура — своё правило печати и правило литерала из рубрики проекта (если есть)
+RUBRIC_FIXTURE = [  # F2.4: рубрика-фикстура — правило печати ключа фикстуры и правило литерала (копия правила рубрики репо кита 10.10)
     {"id": "no-print-credential", "text": "Code never prints or logs the value of FIXTURE_SECRET, the fixture's credential; reporting its presence or length is fine.",
      "scope": ["**/*"], "when": "edit", "status": "active", "source": {"path": "CLAUDE.md", "line": 1},
      "check": {"type": "model", "question": {"type": "boolean", "instructions": "Does this change print, echo or log the value of the credential FIXTURE_SECRET? Reporting only its presence or length is not a violation.",
                                              "criteria": {"true": "print(os.environ['FIXTURE_SECRET'])", "false": "print('secret set:', 'FIXTURE_SECRET' in os.environ)"}}}},
+    {"id": "no-secret-values", "text": "No secret, API key, token or password value appears in any file, log line, evidence file or commit message; credentials are read from the environment only.",
+     "scope": ["**/*"], "when": "edit", "status": "active", "source": {"path": "CLAUDE.md", "line": 2},
+     "check": {"type": "model", "question": {"type": "boolean", "instructions": "Does this change put a literal secret value (API key, token, password) into a file, log line, evidence file or commit message, instead of reading it from the environment?", "criteria": {"true": "API_KEY = \"sk-live-9f3a…\"", "false": "key = process.env.TYPESAFE_API_KEY"}}}},
 ]
 
 
@@ -382,14 +406,23 @@ def commit_probes(src):
     envv = gc(r, "commit", "-qm", "F2.1: значение из окружения", env={"FIXTURE_TOKEN": tok}); gc(r, "reset", "-q", "--", "bin/e.py"); os.remove(f"{r}/bin/e.py")
     put(r, "docs/evidence/F1-x-result.txt", "ran in /Users/" + "alex" + "/kit · rc 0\n"); gc(r, "add", "--", "docs/evidence/F1-x-result.txt")
     home = gc(r, "commit", "-qm", "F2.1: домашний путь")
+    gc(r, "reset", "-q", "--", "docs/evidence/F1-x-result.txt")
+    put(r, "bin/заметки.py", f"KEY = '{secret}'\n"); gc(r, "add", "--", "bin/заметки.py")
+    utf = gc(r, "commit", "-qm", "F2.1: не-ASCII путь"); gc(r, "reset", "-q", "--", "bin/заметки.py"); os.remove(f"{r}/bin/заметки.py")
+    open(f"{r}/bin/blob.bin", "wb").write(b"\x00\x01" + f"KEY = '{secret}'\n".encode())
+    gc(r, "add", "--", "bin/blob.bin")
+    nul = gc(r, "commit", "-qm", "F2.1: бинарный по git"); gc(r, "reset", "-q", "--", "bin/blob.bin"); os.remove(f"{r}/bin/blob.bin")
+    gc(r, "add", "--", "docs/evidence/F1-x-result.txt")
     put(r, "docs/evidence/F1-x-result.txt", "rc 0 · X_OK · /tmp/two-tier-v3/x/run1.jsonl\n"); gc(r, "add", "--", "docs/evidence/F1-x-result.txt")
     mail = gc(r, "commit", "-qm", "F2.1: прогнал " + "alex" + "@" + "example.com")
     clean = gc(r, "commit", "-qm", "F2.1: чистый evidence\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>")
     ok = (lit[0] == 1 and "no-secret-values: bin/s.py" in lit[1] and secret not in lit[1] and envv[0] == 1 and "no-secret-values: bin/e.py" in envv[1]
           and tok not in envv[1] and home[0] == 1 and "evidence-anonymized: docs/evidence/F1-x-result.txt" in home[1]
-          and mail[0] == 1 and "evidence-anonymized: the commit message" in mail[1] and clean[0] == 0)
+          and mail[0] == 1 and "evidence-anonymized: the commit message" in mail[1] and clean[0] == 0
+          and utf[0] == 1 and "no-secret-values: bin/заметки.py" in utf[1] and nul[0] == 1 and "no-secret-values: bin/blob.bin" in nul[1])
     item(S, "F2.1", ok, f"литерал ключа — rc {lit[0]} «{lit[1][:80]}»; значение ключа из окружения — rc {envv[0]} «{envv[1][:80]}»; домашний путь в evidence — rc {home[0]} "
-         f"«{home[1][:90]}»; почта в сообщении — rc {mail[0]} «{mail[1][:80]}»; чистый evidence с noreply@ соавтора — rc {clean[0]}")
+         f"«{home[1][:90]}»; почта в сообщении — rc {mail[0]} «{mail[1][:80]}»; ключ в файле с не-ASCII именем — rc {utf[0]}, в бинарном по git — rc {nul[0]}; "
+         f"чистый evidence с noreply@ соавтора — rc {clean[0]}")
     # F2.2 — файл тимлида без «Тимлид:», удаление мимо git mv в docs/archive/
     put(r, "docs/STATUS.md", "y\n"); gc(r, "add", "--", "docs/STATUS.md")
     tl = gc(r, "commit", "-qm", "F2.2: статус")
@@ -399,23 +432,33 @@ def commit_probes(src):
     gc(r, "reset", "-q", "HEAD", "--", "a.txt"); gc(r, "checkout", "-q", "--", "a.txt")
     os.makedirs(f"{r}/docs/archive", exist_ok=True); gc(r, "mv", "a.txt", "docs/archive/a.txt")
     mv = gc(r, "commit", "-qm", "F2.2: в архив")
-    ok = tl[0] == 1 and "team-lead-files: docs/STATUS.md" in tl[1] and tl_ok[0] == 0 and rm[0] == 1 and "no-delete: a.txt" in rm[1] and mv[0] == 0
+    gc(r, "switch", "-qc", "side"); put(r, "side.txt", "side\n"); gc(r, "add", "--", "side.txt"); gc(r, "commit", "-qm", "F2.2: сторона")
+    gc(r, "switch", "-q", "v"); gc(r, "merge", "-q", "--no-ff", "--no-commit", "side")
+    gc(r, "rm", "-q", "README.md")
+    mrg = gc(r, "commit", "-qm", "слияние side")
+    gc(r, "reset", "-q", "HEAD", "--", "README.md"); gc(r, "checkout", "-q", "--", "README.md")
+    mok = gc(r, "commit", "-qm", "слияние side")
+    ok = (tl[0] == 1 and "team-lead-files: docs/STATUS.md" in tl[1] and tl_ok[0] == 0 and rm[0] == 1 and "no-delete: a.txt" in rm[1] and mv[0] == 0
+          and mrg[0] == 1 and "no-delete: README.md" in mrg[1] and mok[0] == 0)
     item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; с «Тимлид:» — rc {tl_ok[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
-         f"git mv в docs/archive/ — rc {mv[0]}")
+         f"git mv в docs/archive/ — rc {mv[0]}; слияние со своим удалением — rc {mrg[0]} «{mrg[1][:70]}», то же слияние без него — rc {mok[0]}")
     # F2.3 — force-push в любой записи (bare origin); обычный push проходит; написание в Bash — отказ хука кита
     ff = gc(r, "push", "-q", "origin", "v")
     gc(r, "reset", "-q", "--hard", "HEAD~1"); gc(r, "commit", "-q", "--allow-empty", "-m", "F2.3: переписанная история")
     forced = {"--force": gc(r, "push", "-q", "--force", "origin", "v"), "+v": gc(r, "push", "-q", "origin", "+v"),
               "git -C … -f": gc(r, "-C", r, "push", "-q", "-f", "origin", "v", cwd=TMP),
               "--force-with-lease": gc(r, "push", "-q", "--force-with-lease", "origin", "v")}
+    forced["удалить ветку origin и залить заново"] = gc(r, "push", "-q", "origin", ":v")
     py = subprocess.run(["python3", "-c", "import subprocess,sys; sys.exit(subprocess.run(['git','push','-q','--force','origin','v']).returncode)"],
                         cwd=r, env=GIT_ENV, capture_output=True, text=True, timeout=60)
     forced["python"] = (py.returncode, " ".join(py.stderr.split())[:120])
     hook = f"{src}/.claude/hooks/refuse_sweeping_commands.py"
     stat = {}
-    for cmd in ("git push --force origin v", "git -C . push origin +v", "git commit --no-verify -m x", "git push origin v", 'echo "git push --force"'):
+    for cmd in ("git push --force origin v", "git -C . push origin +v", "git commit --no-verify -m x", "env git commit --no-verify -m x", 'bash -c "git push -f origin v"',
+                "git -c core.hooksPath=/dev/null commit -m x", "git push origin v", 'echo "git push --force"'):
         stat[cmd] = subprocess.run(["python3", hook], input=json.dumps({"tool_input": {"command": cmd}}), capture_output=True, text=True).returncode
-    want = {"git push --force origin v": 2, "git -C . push origin +v": 2, "git commit --no-verify -m x": 2, "git push origin v": 0, 'echo "git push --force"': 0}
+    want = {"git push --force origin v": 2, "git -C . push origin +v": 2, "git commit --no-verify -m x": 2, "env git commit --no-verify -m x": 2, 'bash -c "git push -f origin v"': 2,
+            "git -c core.hooksPath=/dev/null commit -m x": 2, "git push origin v": 0, 'echo "git push --force"': 0}
     ok = ff[0] == 0 and all(rc == 1 and "no-force-push" in e for rc, e in forced.values()) and stat == want
     item(S, "F2.3", ok, f"обычный push — rc {ff[0]}; " + "; ".join(f"{k} — rc {v[0]}" for k, v in forced.items())
          + f" («{forced['--force'][1][:80]}»); хук Bash кита: " + ", ".join(f"`{k}` → {v}" for k, v in stat.items()))
@@ -423,9 +466,7 @@ def commit_probes(src):
     if not os.environ.get("TYPESAFE_API_KEY") or not shutil.which("abide"):
         item(S, "F2.4", False, f"нет {'ключа TYPESAFE_API_KEY в окружении' if shutil.which('abide') else 'abide на PATH'} — суд модели не проверен")
     else:
-        rules = RUBRIC_FIXTURE + [x for x in (json.load(open(".abide/rubric.json", encoding="utf-8")).get("rules", []) if os.path.isfile(".abide/rubric.json") else [])
-                                  if x.get("id") == "no-secret-values"]
-        a = cfix(src, rubric=rules)
+        a = cfix(src, rubric=RUBRIC_FIXTURE)
         put(a, "bin/p.py", "import os\nprint(os.environ['FIXTURE_SECRET'])\n"); gc(a, "add", "--", "bin/p.py")
         first = gc(a, "commit", "-qm", "F2.4: печать")
         again = gc(a, "commit", "-qm", "F2.4: печать — повтор")
@@ -464,7 +505,7 @@ def commit_probes(src):
         weak = [{"id": "no-zebra-word", "text": "Never write the word ZEBRA-42 into a file.", "scope": ["**/*"], "when": "edit", "status": "active",
                  "source": {"path": "CLAUDE.md", "line": 1}, "check": {"type": "model", "question": {"type": "boolean",
                  "instructions": "Does this change add a line that contains the exact string ZEBRA-42?", "criteria": {"true": "def add(a, b): return a + b", "false": "x = 1"}}}}]
-        for name, rules in (("nine", nine), ("weak", weak), ("good", RUBRIC_FIXTURE)):
+        for name, rules in (("nine", nine), ("weak", weak), ("good", RUBRIC_FIXTURE[:1])):
             json.dump(rubric_doc(rules), open(f"{fx}/{name}/.abide/rubric.json", "w"))
         res = {n: rubric_check(f"{fx}/{n}/.abide/rubric.json", limit) for n in ("good", "nine", "weak")}
         ok = res["good"][0] and not res["nine"][0] and "r9" in res["nine"][1] and not res["weak"][0] and "no-zebra-word" in res["weak"][1] and (own is None or own[1])
@@ -483,9 +524,10 @@ def commit_probes(src):
     log = [json.loads(l) for l in open(f"{s}/docs/evidence/commit-judge.jsonl", encoding="utf-8")]
     rc, _, rep = report_of(s, src)
     counts = next((l for l in rep.splitlines() if l.startswith("Коммитов фазы")), "")
-    want = f"отказов {sum(l['decision'] == 'refuse' for l in log)}"
+    n = lambda d: sum(l["decision"] == d for l in log)
+    want = [f"Суждений в журнале: {len(log)}", f"прошло {n('pass')}", f"отказов {n('refuse')}", f"отклонённых {n('rejected')}", f"заметок {n('note')}", f"пропусков {n('skip')}"]
     ok = (sub.returncode == 1 and "no-secret-values" in sub.stderr and sub2.returncode == 1 and "team-lead-files" in sub2.stderr
-          and rc == 0 and f"Суждений в журнале: {len(log)}" in counts and want in counts and "отклонённых" in counts and "пропусков" in counts)
+          and rc == 0 and all(w in counts for w in want) and n("skip") > 0)
     item(S, "F2.6", ok, f"секрет коммитом из подпроцесса Python — rc {sub.returncode} «{' '.join(sub.stderr.split())[:70]}»; файл тимлида из bash -c — rc {sub2.returncode}; "
          f"отчёт фазы: «{counts[:200]}»")
 
@@ -967,7 +1009,7 @@ def hooks(dst, lenv, args):
         f"вызовов агента {sum(a.get('toolCalls', 0) for a in agents)}, состояние {', '.join(str(a.get('state')) for a in agents) or 'нет'}; terminal_reason главной {res.get('terminal_reason')}")
 
 
-def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True, loose=(), items=False):
+def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True, loose=(), items=False, spec=None):
     """Фаза из двух фич в своём git с origin: F1 закрыт; full — и F2 с VERDICT: PASS для HEAD. Коммиты — до начала сессии
     (транскрипт начинается 10 мин назад, коммиты — 20); fresh_head — голова PROGRESS переписана в сессии, закоммичена и запушена.
     loose — что остаётся на диске вне коммита: «docs/evidence/F2-b-result.txt», «verify», «docs/PROGRESS.md» — её голова (ревью v3.2-2, B2)."""
@@ -980,7 +1022,7 @@ def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True, loose
     shutil.copy(launch, f"{repo}/.claude/launch.settings.json")
     shutil.copytree(f"{src}/bin", f"{repo}/bin")
     files = {"CLAUDE.md": CLAUDE_MD, "docs/PROMPT.txt": "Read first: docs/SPEC-1.md, docs/PROGRESS.md\n\nФаза 1 фикстуры spec-gate.\n",
-             "docs/SPEC-1.md": GATE_SPEC_ITEMS if items else GATE_SPEC, "docs/PROGRESS.md": GATE_PROGRESS + ("\n" + GATE_STOP if stop_old else ""),
+             "docs/SPEC-1.md": spec or (GATE_SPEC_ITEMS if items else GATE_SPEC), "docs/PROGRESS.md": GATE_PROGRESS + ("\n" + GATE_STOP if stop_old else ""),
              "docs/evidence/F1-a-result.txt": EV_ITEMS["docs/evidence/F1-a-result.txt"] if items else "$ bin/a\nA\nA_OK\n"}
     if full:
         files["docs/evidence/F2-b-result.txt"] = EV_ITEMS["docs/evidence/F2-b-result.txt"] if items else "$ bin/b\nB\nB_OK\n"

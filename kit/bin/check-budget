@@ -164,6 +164,8 @@ def blocks(lines):
         f, it = FEATURE.match(l), ITEM.match(l)
         if f:
             out.append((f.group(1), [l]))
+        elif out and out[-1][0] and not l.strip():
+            continue  # пустая строка внутри списка пунктов блок не кончает
         elif it and out and len(out[-1][1]) and it.group(1).startswith(out[-1][0] + "."):
             out[-1][1].append(l)
         elif out:
@@ -193,7 +195,11 @@ def rule_spec(b):
     big = [f"{f}: {len(chr(10).join(ls))}" for f, ls in bl if len(chr(10).join(ls)) > lim]
     out.append(("FAIL" if big else "OK", "spec_block_chars", f"{spec}: блоков фич {len(bl)}, длиннее {lim} знаков — {', '.join(big) or 'нет'}"))
     blind = [m.group(1) for m in items if not PLACE.search(m.group(2))]
-    out.append(("FAIL" if blind else "OK", "spec_items", f"{spec}: пунктов {len(items)}, без места чтения — {', '.join(blind) or 'нет'}"))
+    have = {m.group(1) for m in items}
+    rng = [re.search(r"готово:\s*(F\d+)\.(\d+)\s*[–-]\s*\1\.(\d+)\s*·", ls[0]) for _, ls in bl]
+    lost = [f"{r.group(1)}.{k}" for r in rng if r for k in range(int(r.group(2)), int(r.group(3)) + 1) if f"{r.group(1)}.{k}" not in have]
+    out.append(("FAIL" if blind or lost else "OK", "spec_items", f"{spec}: пунктов {len(items)}, без места чтения — {', '.join(blind) or 'нет'}"
+                + (f"; в «готово:» без строки пункта — {', '.join(lost)}" if lost else "")))
     sec = re.search(r"^## 3\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
     rows = [l for l in (sec.group(1).splitlines() if sec else []) if l.startswith("- ") and not l.startswith(SCOPE_NOTE)]
     nojudge = [f"«{l[2:40]}…»" for l in rows if not JUDGE.search(l)]
