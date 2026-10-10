@@ -527,6 +527,15 @@ def action_hooks(sources):
     return bad, seen
 
 
+def plugin_hooks(path):
+    """Хуки плагина: hooks/hooks.json по умолчанию и поле `hooks` в .claude-plugin/plugin.json — путь, список путей или объект."""
+    load = lambda f: json.load(open(f, encoding="utf-8")) if os.path.isfile(f) else {}
+    decl = load(f"{path}/.claude-plugin/plugin.json").get("hooks")
+    refs = ["./hooks/hooks.json"] + ([decl] if isinstance(decl, (str, dict)) else list(decl or []))
+    cfgs = [r if isinstance(r, dict) else load(os.path.join(path, r)) for r in dict.fromkeys(json.dumps(x) for x in refs) for r in [json.loads(r)]]
+    return [c if "hooks" in c else {"hooks": c} for c in cfgs if c]
+
+
 def env_probes(src, proc, launch, init, args):
     S = "ENV"
     st = json.load(open(f"{src}/.claude/settings.json", encoding="utf-8"))
@@ -544,8 +553,7 @@ def env_probes(src, proc, launch, init, args):
     item(S, "F3.1", ok, f"кит: ушедших в настройках и шаблоне — {', '.join(kit) or 'нет'}, файлов в {src}/ — {', '.join(in_kit) or 'нет'}, "
          f"в архиве docs/archive/kit-v3.2/ — {'нет: ' + ', '.join(arch) if arch else ('все 3' if os.path.isdir('docs/archive') else 'не про проект')}; Belay — тень {belay}; "
          f"красная фикстура (хук abide.mjs, compact-adviser true, Toolgate «да») — {', '.join(red)}")
-    plugins = [(json.load(open(f"{p['path']}/hooks/hooks.json", encoding="utf-8")), p["path"], p.get("source", "?"))
-               for p in (init or {}).get("plugins", []) if p.get("path") and os.path.isfile(f"{p['path']}/hooks/hooks.json")]
+    plugins = [(cfg, p["path"], p.get("source", "?")) for p in (init or {}).get("plugins", []) if p.get("path") for cfg in plugin_hooks(p["path"])]
     ls = json.load(open(launch, encoding="utf-8"))
     bad, seen = action_hooks([(st, os.path.abspath(src), None), (ls, os.path.abspath("."), None), *plugins])
     fx = tempfile.mkdtemp(prefix="action-hooks-", dir=TMP)

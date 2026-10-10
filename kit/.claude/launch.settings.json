@@ -11,8 +11,8 @@
     "serena@claude-plugins-official": false,
     "typesafe@typesafe-ai": false,
     "jev-belay@jev-belay": true,
-    "jev-steer-or-queue@jev-steer-or-queue": true,
-    "compact-adviser@compact-adviser": true,
+    "jev-steer-or-queue@jev-steer-or-queue": false,
+    "compact-adviser@compact-adviser": false,
     "handoff@two-tier-mods": true
   },
   "pluginConfigs": {
@@ -22,17 +22,6 @@
         "log": true,
         "shadow": true,
         "check": "^bin/(check|gate)-"
-      }
-    },
-    "jev-steer-or-queue@jev-steer-or-queue": {
-      "options": {
-        "mode": "shadow"
-      }
-    },
-    "compact-adviser@compact-adviser": {
-      "options": {
-        "mode": "hint",
-        "logRequests": true
       }
     },
     "handoff@two-tier-mods": {
