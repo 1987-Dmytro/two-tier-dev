@@ -1,33 +1,40 @@
 #!/usr/bin/env node
-// spec-gate — the kit's Stop hook (SPEC-v3.2 F2): the end of a turn is held by evidence files, not by words.
+// spec-gate — the kit's Stop hook (SPEC-v3.2 F2, SPEC-v3.3 F1): the end of a turn is held by the items of the phase SPEC, not by words.
 //
-// Code, $0: per feature line of the phase SPEC (`- **F<n>` … `чек: `cmd` → `MARKER``) a file docs/evidence/F<n>-*-result.txt
-// with the marker on a line of its own; the branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова»
-// section) differs from the one committed before this session; VERDICT: PASS of /verify-phase for HEAD (docs/evidence/verify-<sha>.txt,
-// after it only evidence and PROGRESS). The set is judged as pushed: the start prompt, the phase SPEC it names, docs/PROGRESS.md,
-// the evidence files of the SPEC's features and the verdict files are read from HEAD, and any of them that `git status` shows as
-// changed, untracked or deleted (eol conversion and filters as git applies them) holds the turn by its name. The logs that checks
-// and this hook append (docs/evidence/jev.jsonl, spec-gate.jsonl) are not part of the set; STOP lines count on disk, before a commit. A STOP line ends a turn once: it is new when its text from «STOP:» on starts neither like
-// a STOP line of the PROGRESS committed before the session nor like a stop already honored (the log keeps their marks): its first
-// 60 characters, or all of a shorter line — an edited tail, «— снят» at the end or a bullet in front keep a line old.
-// The full set → SPEC_GATE_OK and the turn ends; a new line `STOP: <id>` with a reason of SPEC §4 → the turn ends; otherwise
-// the end of the turn is blocked and the reason is the list of what is missing, built by code.
-// Jev — only on the fuzzy part, one call of bin/jev: does the new STOP line carry a question and a resume line; does the
-// PROGRESS head say what is done, the operator's next step and when; does a feature's evidence contradict its done clause.
-// Jev error or timeout → code decides alone.
+// Code only, $0, no network. The phase SPEC (first `Read first:` of the start prompt) has feature lines (`- **F<n>` … `чек: `cmd` →
+// `MARKER``) and under each its items (`  - `F<n>.<k>` …`). The set: per feature a file docs/evidence/F<n>-*-result.txt with the
+// marker on a line of its own and, per item, a line «F<n>.<k> <raw output of its probe>» in one of the feature's evidence files; the
+// branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова» section) names what is done, the operator's
+// next step and when, and was rewritten — in this session when the session committed anything beyond evidence, else in this phase
+// (since the last commit of the start prompt: a fresh context on a closed phase is not held); a VERDICT: PASS of a full
+// /verify-phase round for HEAD or an ancestor, and for every feature changed after it (item ids at the start of the commit
+// message) a point VERDICT: PASS that names it (`FEATURES: F<n>, …`), at or after its last change (SPEC-v3.3 F4.4).
+// The set is judged as pushed: the start prompt, the SPEC, docs/PROGRESS.md, the evidence files of the SPEC's features and the
+// verdict files are read from HEAD, and any of them that `git status` shows as changed, untracked or deleted (eol conversion and
+// filters as git applies them) holds the turn by its name. Logs that checks and hooks append (docs/evidence/*.jsonl) and the phase
+// report are not part of the set.
+// A STOP line counts only from the pushed HEAD (SPEC-v3.3 F1.5): a new line `STOP: <id>` with a reason of SPEC §4 and, within
+// the next three lines, a question (?) and a resume line ends the turn once. It is new when its text from «STOP:» on starts neither
+// like a STOP line of the PROGRESS committed before the session nor like a stop already honored (the log keeps their marks): its
+// first 60 characters, or all of a shorter line — an edited tail, «— снят» at the end or a bullet in front keep a line old.
+// The full set → SPEC_GATE_OK and the turn ends; otherwise the end of the turn is blocked and the reason is the list of what is
+// missing, built by code. Jev is not asked here: its one cell — an item against the raw output of its probe — is in the phase
+// report, in the shadow (SPEC-v3.3 F1.6).
 // Guards: a cap of blocks and of hours per session and the same list blocked `same_list` times in a row turn a block into a pass
 // (`cap-…`, `no-progress`), never an OK; AGENT_STOP is stronger than the hook; background tasks or session crons → pass (the
-// session waits to be woken up); an unreadable .claude/spec-gate.json → pass with the reason.
-// Modes off · shadow · active: SPEC_GATE from the environment, else `mode` of .claude/spec-gate.json (questions and thresholds
-// — the team lead's file). `claude -p` of acceptance and of the control pairs runs with SPEC_GATE=off. Every decision is a
-// line of docs/evidence/spec-gate.jsonl. The hook never prints a permission decision; on its own error it exits 0.
-import { execFileSync, spawnSync } from 'node:child_process'
+// session waits to be woken up); an unreadable .claude/spec-gate.json → pass with the reason. Every decision is a line of
+// docs/evidence/spec-gate.jsonl; a pass there, with its reason, is a line of the phase report (F1.5).
+// Modes off · shadow · active: SPEC_GATE from the environment, else `mode` of .claude/spec-gate.json (the team lead's file).
+// `claude -p` of acceptance and of the control pairs runs with SPEC_GATE=off. The hook never prints a permission decision; on its
+// own error it exits 0.
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const DEFAULTS = { mode: 'active', caps: { blocks: 12, hours: 3, same_list: 3 }, jev: { timeout_ms: 10000, threshold: 0.75 }, questions: {} }
+const DEFAULTS = { mode: 'active', caps: { blocks: 12, hours: 3, same_list: 3 } }
 const STOP_IDS = ['STOP-PAY', 'STOP-SCOPE', 'STOP-INPUT', 'STOP-NP']
+const LABELS = [/Сделано|Done/i, /Следующий шаг|Next step/i, /Когда закончим|When/i]  // the template's three labels of the head
 const t0 = Date.now()
 
 const read = p => {
@@ -40,7 +47,7 @@ const read = p => {
 
 function git(root, ...args) {
   try {
-    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }).trim()
   } catch {
     return null
   }
@@ -55,6 +62,7 @@ function atHead(root, rel) {  // the file as committed at HEAD, byte for byte; n
 }
 
 const headNames = (root, dir) => (git(root, 'ls-tree', '-z', '--name-only', 'HEAD', `${dir}/`) || '').split('\0').filter(Boolean).map(p => p.slice(dir.length + 1))
+const isAncestor = (root, a, b) => a === b || git(root, 'merge-base', '--is-ancestor', a, b) !== null
 
 function changed(root, paths) {  // {path: why} for the paths `git status` names: untracked, staged only, deleted or modified
   const out = {}
@@ -72,6 +80,15 @@ function changed(root, paths) {  // {path: why} for the paths `git status` names
   return out
 }
 
+function commits(root, range, ...opts) {  // [{sha, subj, files}] newest first; files without renames: a move names its source too
+  const raw = git(root, 'log', '-z', '--no-merges', '--no-renames', '--name-only', '--format=%x01%H %s', ...opts, range) || ''
+  return raw.split('\x01').slice(1).map(chunk => {
+    const [head, ...names] = chunk.split('\0')
+    const i = head.indexOf(' ')
+    return { sha: head.slice(0, i), subj: head.slice(i + 1), files: names.map(n => n.replace(/^\n/, '')).filter(Boolean) }
+  })
+}
+
 function sessionStart(transcript) {
   // ponytail: the first timestamp of the transcript is the session start; `--continue` keeps the old clock (fail-open: caps pass sooner)
   try {
@@ -87,12 +104,21 @@ function sessionStart(transcript) {
   return null
 }
 
-function features(spec) {
-  return spec.split('\n').filter(l => /^- \*\*F\d+\b/.test(l)).map(l => ({
-    id: l.match(/^- \*\*(F\d+)/)[1],
-    marker: (l.match(/чек:\s*`[^`]*`\s*→\s*`([A-Z0-9_]+)`/) || [])[1] || null,
-    done: ((l.match(/готово:\s*(.*?)\s*·\s*чек:/) || [])[1] || '').slice(0, 1500),
-  }))
+function features(spec) {  // feature lines and, right under each, its item lines `  - `F<n>.<k>` …`
+  const out = []
+  let open = false
+  for (const l of spec.split('\n')) {
+    const f = l.match(/^- \*\*(F\d+)\b/)
+    if (f) {
+      out.push({ id: f[1], marker: (l.match(/чек:\s*`[^`]*`\s*→\s*`([A-Z0-9_]+)`/) || [])[1] || null, items: [] })
+      open = true
+      continue
+    }
+    const it = open && l.match(/^\s+- `(F\d+\.\d+)`/)
+    if (it && it[1].startsWith(`${out.at(-1).id}.`)) out.at(-1).items.push(it[1])
+    else open = false
+  }
+  return out
 }
 
 function stopReasons(spec) {
@@ -112,48 +138,40 @@ function head(progress) {
   return (m ? m[0] : progress.split('\n').slice(0, 20).join('\n')).trim().slice(0, 4000)
 }
 
-function verdict(root, sha) {  // a verdict file committed at HEAD
-  const allowed = p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md'
+function verdicts(root, sha) {  // PASS verdict files committed at HEAD for HEAD or an ancestor: {file, sha, scope: null = full round}
+  const out = []
   for (const f of headNames(root, 'docs/evidence')) {
-    const m = f.match(/^verify-([0-9a-f]{7,40})\.txt$/)
-    if (!m || (atHead(root, `docs/evidence/${f}`) || '').split('\n')[0].trim() !== 'VERDICT: PASS') continue
+    const m = f.match(/^verify-([0-9a-f]{7,40})(?:-[\w.-]+)?\.txt$/)
+    const text = m && atHead(root, `docs/evidence/${f}`)
+    if (!text || text.split('\n')[0].trim() !== 'VERDICT: PASS') continue
     const full = git(root, 'rev-parse', '--verify', '-q', `${m[1]}^{commit}`)
-    if (!full || (full !== sha && git(root, 'merge-base', '--is-ancestor', full, sha) === null)) continue
-    const after = (git(root, 'diff', '--name-only', '-z', '--no-renames', full, sha) || '').split('\0').filter(Boolean)  // a move into evidence names its source too
-    if (after.every(allowed)) return f
+    if (!full || !isAncestor(root, full, sha)) continue
+    const scope = (text.match(/^FEATURES:\s*(.+)$/m) || [])[1]
+    out.push({ file: f, sha: full, scope: scope ? [...new Set(scope.match(/F\d+/g) || [])] : null })
   }
-  return null
+  return out
 }
 
-function askJev(root, cfg, state, wanted) {
-  const qs = {}
-  for (const [k, n] of Object.entries(wanted)) {
-    const q = cfg.questions[k]
-    if (!q) continue
-    if (n === null) qs[k] = q
-    else for (let i = 0; i < n; i++) qs[`${k}:${i}`] = JSON.parse(JSON.stringify(q).replaceAll('{i}', String(i)))
+function coverage(root, sha, ids) {  // what the verdicts leave uncovered — [] when HEAD is covered (SPEC-v3.3 F4.4)
+  const vs = verdicts(root, sha)
+  const isFull = v => !v.scope || ids.every(i => v.scope.includes(i))
+  const dist = v => Number(git(root, 'rev-list', '--count', `${v.sha}..${sha}`) ?? 1e9)
+  const full = vs.filter(isFull).sort((a, b) => dist(a) - dist(b))[0]
+  if (!full) return { missing: [`no VERDICT: PASS of a full /verify-phase round for HEAD ${sha.slice(0, 7)} or an ancestor in HEAD (docs/evidence/verify-<sha>.txt)`] }
+  const missing = [], last = {}
+  for (const c of commits(root, `${full.sha}..${sha}`)) {
+    if (c.subj.startsWith('Тимлид:') || c.files.every(p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md')) continue
+    const fs_ = [...new Set(((c.subj.match(/^((?:F\d+\.\d+[,;\s]*)+)/) || [])[1] || '').match(/F\d+(?=\.)/g) || [])]
+    if (!fs_.length) missing.push(`commit ${c.sha.slice(0, 7)} «${c.subj.slice(0, 60)}» after the full /verify-phase round ${full.sha.slice(0, 7)} changes ${c.files.slice(0, 3).join(', ')} and names no item: no point verdict can cover it`)
+    for (const f of fs_) last[f] ??= c.sha  // newest first: the first seen is the last change of the feature
   }
-  if (!Object.keys(qs).length) return { error: 'no questions in .claude/spec-gate.json' }
-  const t = Date.now()
-  let dir
-  try {
-    fs.mkdirSync('/tmp/two-tier-v3', { recursive: true })
-    dir = fs.mkdtempSync('/tmp/two-tier-v3/spec-gate-')
-    fs.writeFileSync(path.join(dir, 'q.json'), JSON.stringify(qs))
-    const r = spawnSync(path.join(root, 'bin', 'jev'), [path.join(dir, 'q.json')], {
-      input: JSON.stringify(state), encoding: 'utf8', timeout: cfg.jev.timeout_ms + 3000, cwd: root,
-      env: { ...process.env, JEV_CALLER: 'spec-gate', JEV_TIMEOUT_MS: String(cfg.jev.timeout_ms) },
-    })
-    if (r.status !== 0) return { error: `bin/jev rc ${r.status ?? r.signal ?? r.error?.code}: ${(r.stderr || '').trim().split('\n')[0].slice(0, 160)}`, ms: Date.now() - t }
-    const out = JSON.parse(r.stdout)
-    const p = {}
-    for (const [k, a] of Object.entries(out.answers || {})) p[k] = a.noul
-    return { p, model: out.model, tokens: out.usage?.input_tokens, ms: Date.now() - t }
-  } catch (e) {
-    return { error: e.name, ms: Date.now() - t }
-  } finally {
-    if (dir) fs.rmSync(dir, { recursive: true, force: true })
+  for (const [f, c] of Object.entries(last)) {
+    if (!vs.some(v => v.scope?.includes(f) && isAncestor(root, c, v.sha))) {
+      missing.push(`${f}: changed after the full /verify-phase round ${full.sha.slice(0, 7)} (commit ${c.slice(0, 7)}) — no point VERDICT: PASS that names ${f} at or after it`)
+    }
   }
+  const point = vs.filter(v => v.scope && !isFull(v) && Object.keys(last).some(f => v.scope.includes(f)))
+  return { missing, used: [full.file, ...point.map(v => v.file)].join(', ') }
 }
 
 function decide(input, root, cfg, log) {
@@ -173,81 +191,77 @@ function decide(input, root, cfg, log) {
 
   const feats = features(spec)
   const missing = []
-  const isEvidence = n => !n.includes('/') && (/^verify-[0-9a-f]{7,40}\.txt$/.test(n) || feats.some(f => n.startsWith(`${f.id}-`) && n.endsWith('-result.txt')))
+  const isEvidence = n => !n.includes('/') && (/^verify-[0-9a-f]{7,40}(?:-[\w.-]+)?\.txt$/.test(n) || feats.some(f => n.startsWith(`${f.id}-`) && n.endsWith('-result.txt')))
   const loose = Object.entries(changed(root, [promptFile, specPath, 'docs/PROGRESS.md', 'docs/evidence']))
     .filter(([p]) => [promptFile, specPath, 'docs/PROGRESS.md'].includes(p) || (p.startsWith('docs/evidence/') && isEvidence(p.slice('docs/evidence/'.length))))
   for (const [p, why] of loose) missing.push(`${p} ${why} — the set is judged as pushed: commit and push it`)
   const evDir = path.join(root, 'docs', 'evidence')
   const evHead = headNames(root, 'docs/evidence')
   const evDisk = fs.existsSync(evDir) ? fs.readdirSync(evDir) : []
+  const items = feats.reduce((n, f) => n + f.items.length, 0)
   for (const f of feats) {
     if (!f.marker) { missing.push(`${f.id}: the SPEC line names no check marker (\`чек: \`…\` → \`MARKER\`\`)`); continue }
     const mine = n => n.startsWith(`${f.id}-`) && n.endsWith('-result.txt')
-    const has = text => (text || '').split('\n').some(l => [f.marker, `${f.id} ${f.marker}`].includes(l.trim()))
-    const hit = evHead.filter(mine).find(n => has(atHead(root, `docs/evidence/${n}`)))
-    const onDisk = !hit && evDisk.filter(mine).find(n => has(read(path.join(evDir, n))))
+    const lines = text => (text || '').split('\n').map(l => l.trim())
+    const atH = evHead.filter(mine).map(n => [n, lines(atHead(root, `docs/evidence/${n}`))])
+    const onD = evDisk.filter(mine).map(n => [n, lines(read(path.join(evDir, n)))])
     const names = [...new Set([...evHead, ...evDisk].filter(mine))]
-    if (hit) f.evidence = hit
-    else if (onDisk) missing.push(`${f.id}: the line ${f.marker} is in docs/evidence/${onDisk} on disk only, not in HEAD`)
-    else if (!names.length) missing.push(`${f.id}: no docs/evidence/${f.id}-*-result.txt`)
-    else missing.push(`${f.id}: no line ${f.marker} in docs/evidence/${names.join(', docs/evidence/')}`)
+    const where = test => [atH.find(([, ls]) => ls.some(test))?.[0], onD.find(([, ls]) => ls.some(test))?.[0]]
+    const [hit, disk] = where(l => [f.marker, `${f.id} ${f.marker}`].includes(l))
+    if (!names.length) { missing.push(`${f.id}: no docs/evidence/${f.id}-*-result.txt${f.items.length ? ` — items ${f.items.join(', ')} without a probe line` : ''}`); continue }
+    if (!hit) missing.push(disk ? `${f.id}: the line ${f.marker} is in docs/evidence/${disk} on disk only, not in HEAD` : `${f.id}: no line ${f.marker} in docs/evidence/${names.join(', docs/evidence/')}`)
+    for (const id of f.items) {  // the probe line of an item: its id, a space and the raw output of its probe
+      const [h, d] = where(l => l.startsWith(`${id} `) && l.length > id.length + 1)
+      if (!h) missing.push(d ? `${id}: its probe line is in docs/evidence/${d} on disk only, not in HEAD` : `${id}: no probe line «${id} <raw output>» in docs/evidence/${names.join(', docs/evidence/')} at HEAD`)
+    }
   }
   if (!feats.length) missing.push(`${specPath}: no feature lines «- **F<n> …»`)
   const sha = git(root, 'rev-parse', 'HEAD')
   const branch = git(root, 'branch', '--show-current')
   const remote = branch && git(root, 'rev-parse', '-q', '--verify', `refs/remotes/origin/${branch}`)
-  if (!sha || !branch || remote !== sha) missing.push(`branch ${branch || '(detached)'} is not pushed: HEAD ${(sha || '?').slice(0, 7)}, origin/${branch} ${(remote || 'none').slice(0, 7)}`)
-  const disk = read(path.join(root, 'docs', 'PROGRESS.md')) || ''  // its STOP lines count before a commit
-  const progress = atHead(root, 'docs/PROGRESS.md') || ''  // its head counts as pushed
+  const pushed = !!sha && !!branch && remote === sha
+  if (!pushed) missing.push(`branch ${branch || '(detached)'} is not pushed: HEAD ${(sha || '?').slice(0, 7)}, origin/${branch} ${(remote || 'none').slice(0, 7)}`)
+  const disk = read(path.join(root, 'docs', 'PROGRESS.md')) || ''
+  const progress = atHead(root, 'docs/PROGRESS.md') || ''  // its head and its STOP lines count as pushed
   const baseSha = git(root, 'log', '-1', '--format=%H', `--before=${new Date(start).toISOString()}`)
   const base = (baseSha && git(root, 'show', `${baseSha}:docs/PROGRESS.md`)) || ''
-  if (!loose.some(([p]) => p === 'docs/PROGRESS.md') && (!head(progress) || (base && head(progress) === head(base)))) missing.push('the head of docs/PROGRESS.md was not updated in this session')
-  const pass = sha && verdict(root, sha)
-  if (!pass) missing.push(`no VERDICT: PASS of /verify-phase for HEAD ${(sha || '?').slice(0, 7)} in HEAD (docs/evidence/verify-<sha>.txt; after it only evidence and PROGRESS change)`)
+  const worked = commits(root, 'HEAD', `--since=${new Date(start).toISOString()}`).some(c => c.files.some(p => !p.startsWith('docs/evidence/')))
+  const phaseSha = git(root, 'log', '-1', '--format=%H', '--', promptFile)
+  const ref = worked ? base : (phaseSha && git(root, 'show', `${phaseSha}:docs/PROGRESS.md`)) || ''
+  const hd = head(progress)
+  if (!loose.some(([p]) => p === 'docs/PROGRESS.md')) {
+    if (!hd || (ref && hd === head(ref))) missing.push(`the head of docs/PROGRESS.md was not updated in this ${worked ? 'session' : 'phase'}`)
+    else if (!LABELS.every(r => r.test(hd))) missing.push('the head of docs/PROGRESS.md does not say what is done («Сделано»), the operator\'s next step («Следующий шаг оператора») and when («Когда закончим»)')
+  }
+  const cov = sha ? coverage(root, sha, feats.map(f => f.id)) : { missing: ['no HEAD'] }
+  missing.push(...cov.missing)
 
   const reasons = stopReasons(spec)
   const seen = [...base.matchAll(STOP_LINE)].map(m => stopMark(m[0]))
   for (const l of log) seen.push(...(l.stops || []))  // a stop is honored once, in any session
-  const fresh = [...disk.matchAll(STOP_LINE)].filter(m => !marked(m[0], seen))
-  const valid = fresh.filter(m => reasons.includes(m[1]))
-  for (const m of fresh.filter(m => !reasons.includes(m[1]))) missing.push(`«STOP: ${m[1]}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
-
-  const complete = !missing.length
-  let jev = null
-  const problems = []
-  if (valid.length || complete) {
-    const lines = disk.split('\n')
-    const state = {
-      final_message: String(input.last_assistant_message || '').slice(0, 4000),
-      progress_head: head(disk),
-      stop_lines: valid.map(m => { const i = lines.indexOf(m[0]); return lines.slice(i, i + 4).join('\n') }).join('\n\n').slice(0, 2000),
-      stop_reasons: reasons,
-      features: complete ? feats.map(f => ({ id: f.id, done: f.done, marker: f.marker, evidence_file: `docs/evidence/${f.evidence}`,
-        evidence_tail: (atHead(root, `docs/evidence/${f.evidence}`) || '').trimEnd().split('\n').slice(-40).join('\n').slice(-3000) })) : [],
-    }
-    const wanted = valid.length ? { stop_unfounded: null } : {}
-    if (complete) Object.assign(wanted, { head_incomplete: null, evidence_contradicts: feats.length })
-    jev = askJev(root, cfg, state, wanted)
-    const thr = cfg.jev.threshold
-    if (jev.p) {
-      if (valid.length && jev.p.stop_unfounded >= thr) problems.push(`the new STOP line lacks a §4 reason, a question for the operator or a resume line (Jev ${jev.p.stop_unfounded.toFixed(2)})`)
-      if (complete && !valid.length && jev.p.head_incomplete >= thr) problems.push(`the head of docs/PROGRESS.md does not say what is done, the operator's next step and when (Jev ${jev.p.head_incomplete.toFixed(2)})`)
-      if (complete && !valid.length) feats.forEach((f, i) => jev.p[`evidence_contradicts:${i}`] >= thr && problems.push(`${f.id}: docs/evidence/${f.evidence} contradicts the done clause (Jev ${jev.p[`evidence_contradicts:${i}`].toFixed(2)})`))
-    }
+  const fresh = text => [...text.matchAll(STOP_LINE)].filter(m => !marked(m[0], seen))
+  const atHeadStops = fresh(progress)
+  for (const m of fresh(disk).filter(m => !atHeadStops.some(h => canon(h[0]) === canon(m[0])))) {
+    missing.push(`«${canon(m[0]).slice(0, 60)}» is in docs/PROGRESS.md on disk only: a STOP counts from the pushed HEAD — commit and push it`)
   }
-  if (valid.length && !problems.length) return { decision: 'stop', reason: valid.map(m => m[1]).join(', '), stops: valid.map(m => stopMark(m[0])), jev }
-  if (complete && !problems.length) return { decision: 'ok', reason: `SPEC_GATE_OK: features ${feats.length}, pushed ${sha.slice(0, 7)}, ${pass}`, jev }
-  const list = valid.length ? problems : complete ? problems : missing
+  const plines = progress.split('\n')
+  const formed = m => { const i = plines.indexOf(m[0]); const near = plines.slice(i, i + 4).join('\n'); return i >= 0 && near.includes('?') && /resume|продолж/i.test(near) }
+  for (const m of atHeadStops.filter(m => !reasons.includes(m[1]))) missing.push(`«STOP: ${m[1]}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
+  for (const m of atHeadStops.filter(m => reasons.includes(m[1]) && !formed(m))) missing.push(`«STOP: ${m[1]}» has no question (?) and resume line within the next three lines`)
+  const valid = atHeadStops.filter(m => reasons.includes(m[1]) && formed(m))
+
+  if (valid.length && pushed) return { decision: 'stop', reason: valid.map(m => m[1]).join(', '), stops: valid.map(m => stopMark(m[0])) }
+  if (!missing.length) return { decision: 'ok', reason: `SPEC_GATE_OK: features ${feats.length}, items ${items}, pushed ${sha.slice(0, 7)}, ${cov.used}` }
   // the guards only turn a block into a pass: the set is evaluated first, so a full set or a new STOP is never lost to a cap
   const blocks = prior.filter(l => l.decision === 'block').length
-  if (blocks >= cfg.caps.blocks) return { decision: 'pass', reason: `cap-blocks: ${blocks} blocks in this session`, missing: list, jev }
-  if (t0 - start > cfg.caps.hours * 3600e3) return { decision: 'pass', reason: `cap-time: the session is older than ${cfg.caps.hours} h`, missing: list, jev }
+  if (blocks >= cfg.caps.blocks) return { decision: 'pass', reason: `cap-blocks: ${blocks} blocks in this session`, missing }
+  if (t0 - start > cfg.caps.hours * 3600e3) return { decision: 'pass', reason: `cap-time: the session is older than ${cfg.caps.hours} h`, missing }
   const last = prior.slice(-cfg.caps.same_list)
-  const same = l => JSON.stringify((l || []).map(s => s.replace(/ \(Jev [0-9.]+\)$/, '')))  // Jev's figure wobbles; the list is the same
-  if (last.length === cfg.caps.same_list && last.every(l => l.decision === 'block' && same(l.missing) === same(list))) {
-    return { decision: 'pass', reason: `no-progress: the same list blocked ${cfg.caps.same_list} times in a row`, missing: list, jev }
+  const same = l => JSON.stringify(l || [])
+  if (last.length === cfg.caps.same_list && last.every(l => l.decision === 'block' && same(l.missing) === same(missing))) {
+    return { decision: 'pass', reason: `no-progress: the same list blocked ${cfg.caps.same_list} times in a row`, missing }
   }
-  return { decision: 'block', reason: `${list.length} missing`, missing: list, jev }
+  return { decision: 'block', reason: `${missing.length} missing`, missing }
 }
 
 function main() {
@@ -264,7 +278,7 @@ function main() {
   let broken = null
   try {
     const c = JSON.parse(read(path.join(root, '.claude', 'spec-gate.json')) || '{}')
-    cfg = { ...DEFAULTS, ...c, caps: { ...DEFAULTS.caps, ...c.caps }, jev: { ...DEFAULTS.jev, ...c.jev }, questions: c.questions || {} }
+    cfg = { ...DEFAULTS, ...c, caps: { ...DEFAULTS.caps, ...c.caps } }
   } catch (e) {
     broken = `config: .claude/spec-gate.json is not readable JSON (${e.name}) — the gate passes`
   }
@@ -281,13 +295,13 @@ function main() {
   }
   if (!d) return
   const line = { ts: new Date().toISOString(), session: input.session, mode, decision: d.decision, reason: d.reason, missing: d.missing || [], stops: d.stops || [],
-    stop_hook_active: !!input.stop_hook_active, jev: d.jev ? { model: d.jev.model, tokens: d.jev.tokens, ms: d.jev.ms, error: d.jev.error } : null, ms: Date.now() - t0 }
+    stop_hook_active: !!input.stop_hook_active, ms: Date.now() - t0 }
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
     fs.appendFileSync(logPath, JSON.stringify(line) + '\n')
   } catch {}
   if (d.decision === 'block' && mode === 'active') {
-    const reason = `spec-gate: the phase is not done — the end of the turn is held. Missing:\n${d.missing.map(m => `- ${m}`).join('\n')}\nClose what is missing, or write a new line \`STOP: <id>\` for a stop of SPEC §4 with the question and a resume line.`
+    const reason = `spec-gate: the phase is not done — the end of the turn is held. Missing:\n${d.missing.map(m => `- ${m}`).join('\n')}\nClose what is missing, or commit and push a new line \`STOP: <id>\` for a stop of SPEC §4 with the question and a resume line.`
     process.stdout.write(JSON.stringify({ decision: 'block', reason }) + '\n')
   } else if (d.decision === 'ok' || d.decision === 'stop' || (d.decision === 'pass' && !d.reason.startsWith('background'))) {
     const msg = d.decision === 'ok' ? d.reason : `spec-gate (${mode}): ${d.decision} — ${d.reason}`

@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""phase-report [--no-jev] — отчёт фазы кодом (SPEC-v3.3 F1.4–F1.6, F2.6): docs/evidence/phase-report.md.
+
+  · матрица «пункт × коммиты, проба, наблюдение»: пункты `F<n>.<k>` SPEC фазы (первый `Read first:` docs/PROMPT.txt), коммиты фазы
+    после merge-base с main с id пункта в начале сообщения, строка пробы `F<n>.<k> <сырой вывод>` в docs/evidence/F<n>-*-result.txt;
+  · три списка: пункты без коммитов, коммиты без пункта (кроме «Тимлид:»), пункты без пробы;
+  · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
+    отказы и отклонённые — поимённо, их читает тимлид;
+  · пропуски spec-gate — строки docs/evidence/spec-gate.jsonl с решением pass и причиной (кап, no-progress, ошибка, AGENT_STOP, фон);
+  · ячейка Jev в тени: один вопрос `choice` на пункт — пункт против сырого вывода его пробы (`questions.item_status` в
+    .claude/spec-gate.json): подтверждает / противоречит / молчит; ошибка и таймаут — статус, rc не меняют. Метки копятся
+    строками docs/evidence/jev-labels.jsonl. В Jev уходят только текст пунктов и строки проб.
+Печатает путь и счёт; rc 0, кроме неверных аргументов (2).
+"""
+import glob, json, os, re, subprocess, sys, tempfile, time
+
+TMP = "/tmp/two-tier-v3"
+FEATURE = re.compile(r"^- \*\*(F\d+)\b")
+ITEM = re.compile(r"^\s+- `(F\d+\.\d+)`\s*(.*)$")
+IDS = re.compile(r"^((?:F\d+\.\d+[,;\s]*)+)")
+RU = {"confirms": "подтверждает", "contradicts": "противоречит", "silent": "молчит"}
+
+
+def git(*a):
+    return subprocess.run(["git", *a], capture_output=True, text=True, errors="replace").stdout
+
+
+def read(p):
+    try:
+        with open(p, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def jsonl(p):
+    out = []
+    for l in read(p).splitlines():
+        try:
+            out.append(json.loads(l))
+        except ValueError:
+            pass
+    return out
+
+
+def cell(s, n=160):
+    s = " ".join(str(s).split())
+    return (s[:n] + "…" if len(s) > n else s).replace("|", "\\|")
+
+
+def spec_items():
+    rf = (re.search(r"^Read first:(.*)$", read("docs/PROMPT.txt"), re.M) or [None, ""])[1]
+    spec = next((p.strip() for p in rf.split(",") if re.search(r"(^|/)SPEC-[^/]+\.md$", p.strip())), None)
+    items, feat = [], None
+    for l in read(spec).splitlines() if spec else []:
+        f, it = FEATURE.match(l), ITEM.match(l)
+        if f:
+            feat = f.group(1)
+        elif it and feat and it.group(1).startswith(feat + "."):
+            items.append({"id": it.group(1), "text": it.group(2).strip()})
+        else:
+            feat = None
+    return spec, items
+
+
+def phase_commits():
+    base = next((b for ref in ("main", "origin/main") for b in [git("merge-base", ref, "HEAD").strip()] if b), "")
+    raw = git("log", "--no-merges", "--format=%h%x00%s", f"{base}..HEAD" if base else "HEAD")
+    out = []
+    for line in raw.splitlines():
+        sha, _, subj = line.partition("\0")
+        m = IDS.match(subj)
+        out.append({"sha": sha, "subj": subj, "ids": re.findall(r"F\d+\.\d+", m.group(1)) if m else [], "tl": subj.startswith("Тимлид:")})
+    return base[:7], out
+
+
+def probes():
+    out = {}
+    for p in sorted(glob.glob("docs/evidence/F*-*-result.txt")):
+        for l in read(p).splitlines():
+            m = re.match(r"^(F\d+\.\d+) (.+)$", l.strip())
+            if m and m.group(1) not in out and m.group(1).startswith(os.path.basename(p).split("-")[0] + "."):
+                out[m.group(1)] = (p, m.group(2))
+    return out
+
+
+def jev(items, seen):
+    """{id: статус} — один вызов bin/jev, вопрос на пункт с пробой; ошибка и таймаут — статус всех."""
+    asked = [it for it in items if it["id"] in seen]
+    if not asked:
+        return {}, "нет пунктов с пробой"
+    try:
+        cfg = json.loads(read(".claude/spec-gate.json") or "{}")
+        q = cfg["questions"]["item_status"]
+    except (ValueError, KeyError, TypeError):
+        return {}, "нет вопроса questions.item_status в .claude/spec-gate.json"
+    qs = {f"item_status:{i}": json.loads(json.dumps(q).replace("{i}", str(i))) for i in range(len(asked))}
+    state = {"items": [{"id": it["id"], "text": it["text"], "probe_output": f"{it['id']} {seen[it['id']][1]}"[:600]} for it in asked]}
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="phase-report-", dir=TMP)
+    qf = os.path.join(d, "q.json")
+    with open(qf, "w", encoding="utf-8") as f:
+        json.dump(qs, f, ensure_ascii=False)
+    ms = os.environ.get("JEV_TIMEOUT_MS") or str((cfg.get("jev") or {}).get("timeout_ms", 15000))
+    jev_bin = os.path.join(os.path.dirname(os.path.realpath(__file__)), "jev")
+    try:
+        r = subprocess.run([jev_bin, qf], input=json.dumps(state, ensure_ascii=False), capture_output=True, text=True,
+                           timeout=int(ms) / 1000 + 5, env=dict(os.environ, JEV_CALLER="phase-report", JEV_TIMEOUT_MS=ms))
+    except subprocess.TimeoutExpired:
+        return {it["id"]: "таймаут" for it in asked}, "таймаут"
+    finally:
+        os.remove(qf)
+        os.rmdir(d)
+    if r.returncode:
+        why = (r.stderr.strip().splitlines() or [f"rc {r.returncode}"])[-1]
+        status = "таймаут" if "timeout" in why else f"ошибка: {cell(why, 80)}"
+        return {it["id"]: status for it in asked}, f"bin/jev rc {r.returncode}: {cell(why, 120)}"
+    ans = json.loads(r.stdout).get("answers", {})
+    out = {}
+    for i, it in enumerate(asked):
+        a = ans.get(f"item_status:{i}") or {}
+        out[it["id"]] = f"{RU.get(a.get('choice'), a.get('choice') or '?')} {a.get('confidence', 0):.2f}"
+    with open("docs/evidence/jev-labels.jsonl", "a", encoding="utf-8") as f:  # метки копятся: порог ячейки — по ним (SPEC §6.2)
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        for i, it in enumerate(asked):
+            a = ans.get(f"item_status:{i}") or {}
+            f.write(json.dumps({"ts": ts, "item": it["id"], "choice": a.get("choice"), "confidence": a.get("confidence"),
+                                "probabilities": a.get("probabilities")}, ensure_ascii=False) + "\n")
+    return out, f"bin/jev rc 0, вопросов {len(asked)}"
+
+
+def main(argv):
+    if argv not in ([], ["--no-jev"]):
+        print(__doc__)
+        return 2
+    os.chdir(git("rev-parse", "--show-toplevel").strip() or ".")
+    spec, items = spec_items()
+    base, commits = phase_commits()
+    seen = probes()
+    by_item = {it["id"]: [c["sha"] for c in commits if it["id"] in c["ids"]] for it in items}
+    status, jev_note = ({}, "не спрашивали (--no-jev)") if argv else jev(items, seen)
+    os.makedirs("docs/evidence", exist_ok=True)
+    L = [f"# Отчёт фазы — {spec or 'SPEC не найден'} (код: bin/phase-report, {time.strftime('%d.%m.%Y %H:%M')})", "",
+         f"Коммиты — после merge-base `{base or '—'}`, без слияний; HEAD `{git('rev-parse', '--short', 'HEAD').strip()}`. "
+         "Наблюдение — сырой вывод пробы из строки `F<n>.<k>` evidence. Jev — в тени: его статус ничего не решает.", "",
+         "## Матрица пунктов", "", "| пункт | коммиты | проба | наблюдение | Jev |", "|---|---|---|---|---|"]
+    for it in items:
+        p = seen.get(it["id"])
+        L.append(f"| {it['id']} | {', '.join(f'`{s}`' for s in by_item[it['id']]) or '—'} | {f'`{p[0]}`' if p else '—'} | "
+                 f"{cell(p[1]) if p else '—'} | {status.get(it['id'], '—' if p else 'нет пробы')} |")
+    no_commit = [i for i, cs in by_item.items() if not cs]
+    no_probe = [it["id"] for it in items if it["id"] not in seen]
+    stray = [c for c in commits if not c["ids"] and not c["tl"]]
+    L += ["", "## Списки", "", f"- **Пункты без коммитов** ({len(no_commit)}): {', '.join(no_commit) or 'нет'}",
+          f"- **Коммиты без пункта** ({len(stray)}): " + ("; ".join(f"`{c['sha']}` {cell(c['subj'], 90)}" for c in stray) or "нет"),
+          f"- **Пункты без пробы** ({len(no_probe)}): {', '.join(no_probe) or 'нет'}",
+          f"- Коммиты тимлида в диапазоне: {sum(c['tl'] for c in commits)}"]
+    judged = jsonl("docs/evidence/commit-judge.jsonl")
+    n = lambda d, j=None: sum(1 for r in judged if r.get("decision") == d and (j is None or r.get("judge") == j))
+    L += ["", "## Судьи коммита (хуки git кита: `commit-msg`, `pre-push`)", "",
+          f"Коммитов фазы (git): {len(commits)}. Суждений в журнале: {len(judged)} — прошло {n('pass')}, отказов {n('refuse')} "
+          f"(код {sum(1 for r in judged if r.get('decision') == 'refuse' and r.get('judge') == 'code' and r.get('rule') != 'no-force-push')}, "
+          f"push {sum(1 for r in judged if r.get('rule') == 'no-force-push')}, abide {n('refuse', 'abide')}), отклонённых {n('rejected')}, "
+          f"заметок {n('note')}, пропусков {n('skip')}.", ""]
+    for r in judged:
+        if r.get("decision") in ("refuse", "rejected", "note", "skip"):
+            sc = f" ({r['score']:.2f})" if isinstance(r.get("score"), (int, float)) else ""
+            fs = ", ".join(cell(f, 60) for f in (r.get("files") or [])[:3]) or "—"
+            L.append(f"- {r.get('ts', '?')} · {r['decision']} · {r.get('judge')} · {r.get('rule') or r.get('note') or '—'}{sc} · {fs}")
+    gate = jsonl("docs/evidence/spec-gate.jsonl")
+    passes = [g for g in gate if g.get("decision") == "pass"]
+    L += ["", "## Пропуски spec-gate", "", f"Решений хука: {len(gate)} — блоков {sum(g.get('decision') == 'block' for g in gate)}, "
+          f"OK {sum(g.get('decision') == 'ok' for g in gate)}, стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.", ""]
+    L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- нет"]
+    counts = {}
+    for v in status.values():
+        k = v.split()[0].rstrip(":")
+        counts[k] = counts.get(k, 0) + 1
+    L += ["", "## Jev в тени", "", f"Вызов: {jev_note}. Статусы: " + (", ".join(f"{k} {v}" for k, v in counts.items()) or "нет") + "."]
+    with open("docs/evidence/phase-report.md", "w", encoding="utf-8") as f:
+        f.write("\n".join(L) + "\n")
+    print(f"phase-report: docs/evidence/phase-report.md — пунктов {len(items)}, с пробой {len(items) - len(no_probe)}, без коммитов {len(no_commit)}, "
+          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}; Jev — {jev_note}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

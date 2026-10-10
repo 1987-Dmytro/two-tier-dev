@@ -14,6 +14,11 @@ import fnmatch, glob, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 
 TMP = "/tmp/two-tier-v3"
 FEATURE = re.compile(r"- \*\*(F\d+)")
+ITEM = re.compile(r"^\s+- `(F\d+\.\d+)`(.*)$")  # пункт фичи SPEC-v3.3
+# место чтения пункта (F1.3): команда, файл или маркер в обратных кавычках — или слово места
+PLACE = re.compile(r"`[^`]+`|(?i:блок|отказ|вердикт|отч[её]т|\bчек|печата|CHANGELOG|README|шаблон|строк[аиу] запуска)")
+JUDGE = re.compile(r"судья:\s*\S")
+SCOPE_NOTE = "- Вне объёма"  # строка объёма в §3 — не запрет, судьи не требует
 DOLLAR_DIGIT = re.compile(r"\$\d")
 MARKER = re.compile(r"\[NEEDS CLARIFICATION:[^\]]+\]")
 CODE = re.compile(r"```.*?```|`[^`\n]*`", re.S)  # маркер в обратных кавычках не считается
@@ -152,6 +157,20 @@ def rule_prompt(b):
     return out + [check("read_first_chars", total, b["read_first_chars"], "Read first + CLAUDE.md, знаков")]
 
 
+def blocks(lines):
+    """[(F<n>, строки блока)]: строка фичи и под ней её пункты «  - `F<n>.<k>` …» (SPEC-v3.3)."""
+    out = []
+    for l in lines:
+        f, it = FEATURE.match(l), ITEM.match(l)
+        if f:
+            out.append((f.group(1), [l]))
+        elif it and out and len(out[-1][1]) and it.group(1).startswith(out[-1][0] + "."):
+            out[-1][1].append(l)
+        elif out:
+            out.append((None, []))  # блок кончился
+    return [(f, ls) for f, ls in out if f]
+
+
 def rule_spec(b):
     ph = phase()
     if not ph:
@@ -159,12 +178,28 @@ def rule_spec(b):
     spec = ph[2]
     if not spec or not os.path.isfile(spec):
         return [("FAIL", "spec", f"первый файл Read first — не существующий docs/SPEC-*.md: {(ph[1] or ['нет'])[0]}")]
-    feats = [l for l in read(spec).splitlines() if FEATURE.match(l)]
+    text = read(spec)
+    feats = [l for l in text.splitlines() if FEATURE.match(l)]
     long = [f"{FEATURE.match(l).group(1)}: {len(l)}" for l in feats if len(l) > b["spec_feature_chars"]]
     if not feats:
         return [("FAIL", "spec", f"{spec}: нет строк фич «- **F<n> …»")]
-    return [("FAIL" if long else "OK", "spec_feature_chars",
-             f"{spec}: фич {len(feats)}, длиннее {b['spec_feature_chars']} знаков — {', '.join(long) or 'нет'}")]
+    out = [("FAIL" if long else "OK", "spec_feature_chars",
+            f"{spec}: фич {len(feats)}, длиннее {b['spec_feature_chars']} знаков — {', '.join(long) or 'нет'}")]
+    bl = blocks(text.splitlines())
+    items = [ITEM.match(l) for _, ls in bl for l in ls[1:]]
+    if not items:  # SPEC до v3.3 — без пунктов: правила пунктов и судей не про него
+        return out
+    lim = b.get("spec_block_chars", 900)  # ключ кита v3.3; в budgets.json проекта до v3.3 его нет — предел кита
+    big = [f"{f}: {len(chr(10).join(ls))}" for f, ls in bl if len(chr(10).join(ls)) > lim]
+    out.append(("FAIL" if big else "OK", "spec_block_chars", f"{spec}: блоков фич {len(bl)}, длиннее {lim} знаков — {', '.join(big) or 'нет'}"))
+    blind = [m.group(1) for m in items if not PLACE.search(m.group(2))]
+    out.append(("FAIL" if blind else "OK", "spec_items", f"{spec}: пунктов {len(items)}, без места чтения — {', '.join(blind) or 'нет'}"))
+    sec = re.search(r"^## 3\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    rows = [l for l in (sec.group(1).splitlines() if sec else []) if l.startswith("- ") and not l.startswith(SCOPE_NOTE)]
+    nojudge = [f"«{l[2:40]}…»" for l in rows if not JUDGE.search(l)]
+    out.append(("FAIL" if nojudge or not sec else "OK", "spec_judges",
+                f"{spec}: строк §3 {len(rows)}, без «судья:» — {', '.join(nojudge) or ('нет' if sec else 'нет раздела «## 3.»')}"))
+    return out
 
 
 def rule_plan(b):
@@ -383,6 +418,15 @@ def fixtures(b, defaults):
     add("spec", "spec_feature_chars", "OK", spec1(feat(sf) + "\n"), rule_spec)
     add("spec", "spec_feature_chars+1", "FAIL", spec1(feat(sf + 1) + "\n"), rule_spec)
     add("spec", "первый Read first — не SPEC", "FAIL", {"docs/PROMPT.txt": "Read first: docs/PROGRESS.md\n", "docs/PROGRESS.md": "x"}, rule_spec)
+    # v3.3, F1.3: пункты под строкой фичи — у пункта место чтения, у строки §3 судья, блок фичи ≤ spec_block_chars
+    def v33(item="  - `F1.1` проба печатает A — `bin/a`", s3="- C1: из репо ничего не удаляется · судья: код\n- Вне объёма: перевод проекта\n"):
+        return spec1(f"{feat(80)}\n{item}\n\n## 3. Инварианты\n{s3}\n## 4. Стопы\n")
+    sb = b.get("spec_block_chars", 900)
+    add("spec", "SPEC v3.3: место чтения, судьи §3, блок в пределе", "OK", v33(), rule_spec)
+    add("spec", "SPEC v3.3: блок ровно spec_block_chars", "OK", v33(item="  - `F1.1` отказ " + "y" * (sb - 80 - 1 - len("  - `F1.1` отказ "))), rule_spec)
+    add("spec", "SPEC v3.3: пункт без места чтения", "FAIL", v33(item="  - `F1.1` всё работает быстро и надёжно"), rule_spec)
+    add("spec", "SPEC v3.3: строка §3 без судьи", "FAIL", v33(s3="- C1: из репо ничего не удаляется\n"), rule_spec)
+    add("spec", "SPEC v3.3: блок spec_block_chars+1", "FAIL", v33(item="  - `F1.1` отказ " + "y" * (sb - 80 - len("  - `F1.1` отказ "))), rule_spec)
     add("plan", "plan_lines", "OK", dict(spec1(feat(80)), **{"docs/PLAN-1.md": "x\n" * b["plan_lines"]}), rule_plan)
     add("plan", "plan_lines+1", "FAIL", dict(spec1(feat(80)), **{"docs/PLAN-1.md": "x\n" * (b["plan_lines"] + 1)}), rule_plan)
     rub = lambda n: {".abide/rubric.json": json.dumps({"version": 1, "rules": [{"id": f"r{i}"} for i in range(n)]})}
@@ -483,7 +527,7 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
                                  "claude --permission-mode auto --model claude-opus-5-5 --effort ultracode",
                                  "--setting-sources project,local", '-- "$(cat docs/PROMPT.txt)"', "--strict-mcp-config", "% недели"],
     "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase",
-                  "## Rules for every edit", "Abide", ".abide/rubric.json"],
+                  "## Rules for every commit", "abide check", ".abide/rubric.json"],
 }
 
 

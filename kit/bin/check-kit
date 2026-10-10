@@ -11,8 +11,10 @@
 import json, os, re, shutil, subprocess, sys, tempfile
 
 out = []
-V32_KEYS, V32_OWNER = {"prompt_chars", "abide_rules"}, {"docs/PROMPT.txt", ".abide/rubric.json", ".claude/spec-gate.json", ".claude/toolgate.yaml"}
+V32_KEYS, V32_OWNER = {"prompt_chars", "abide_rules"}, {"docs/PROMPT.txt", ".abide/rubric.json", ".claude/spec-gate.json"}
 V32_RETIRED = {"goal_chars", "docs/GOAL.txt"}
+# v3.3: новые ключи кита (блок фичи F1.3, пороги окна F5.4) и планка рубрики 8 (D7, F2.5) — тимлид вносит в budgets.json на приёмке
+V33_KEYS, V33_CHANGED = {"spec_block_chars", "window_five_hour_pct", "window_seven_day_pct", "window_repair_pct"}, {"abide_rules"}
 
 
 def say(ok, item, msg):
@@ -64,15 +66,16 @@ if root == "kit":
     # v3.2: корневой budgets.json — файл тимлида; ключи и записи owner, новые в ките, он вносит на приёмке (PLAN-v3.2, отклонение 8)
     rd, kd = json.loads(read("budgets.json"))["defaults"], json.loads(read("kit/budgets.json"))["defaults"]
     ro, ko = set(rd.get("owner", [])), set(kd.get("owner", []))
-    same = all(rd[k] == kd[k] for k in set(rd) & set(kd) - {"owner"})
+    same = all(rd[k] == kd[k] for k in set(rd) & set(kd) - {"owner"} - V33_CHANGED)
     delta = sorted(set(kd) - set(rd)) + sorted(ko - ro) + [f"−{x}" for x in sorted(set(rd) - set(kd))] + [f"−{x}" for x in sorted(ro - ko)]
-    say(same and set(kd) - set(rd) <= V32_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED, "budgets",
-        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 для тимлида: {', '.join(delta) or 'нет'}")
+    delta += [f"{k} {rd[k]}→{kd[k]}" for k in sorted(V33_CHANGED & set(rd) & set(kd)) if rd[k] != kd[k]]
+    say(same and set(kd) - set(rd) <= V32_KEYS | V33_KEYS and set(rd) - set(kd) <= V32_RETIRED and ko - ro <= V32_OWNER and ro - ko <= V32_RETIRED | {".claude/toolgate.yaml"}, "budgets",
+        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2 и v3.3 для тимлида: {', '.join(delta) or 'нет'}")
     lim = kd.get("prompt_chars", kd.get("goal_chars"))
     owned = {"docs/PROMPT.txt", "docs/GOAL.txt"} & ko
-    say(kd.get("abide_rules", 0) <= 15 and lim is not None and lim <= 4000 and owned and {".claude/spec-gate.json", ".abide/rubric.json", ".claude/toolgate.yaml"} <= ko,
-        "budgets", f"kit/budgets.json: abide_rules {kd.get('abide_rules')} (≤ 15, SPEC-v3.2 F3), стартовый запрос {lim} знаков (≤ 4000), "
-                   f"во владении — {', '.join(sorted(owned)) or 'нет'} и файлы тимлида слоя (spec-gate.json, rubric.json, toolgate.yaml)")
+    say(kd.get("abide_rules", 0) <= 8 and lim is not None and lim <= 4000 and owned and {".claude/spec-gate.json", ".abide/rubric.json"} <= ko and ".claude/toolgate.yaml" not in ko,
+        "budgets", f"kit/budgets.json: abide_rules {kd.get('abide_rules')} (≤ 8, D7), стартовый запрос {lim} знаков (≤ 4000), "
+                   f"во владении — {', '.join(sorted(owned)) or 'нет'} и файлы тимлида слоя (spec-gate.json, rubric.json; toolgate.yaml ушёл, SPEC-v3.3 F3.1)")
 kit_ok = all(out)
 print("KIT_OK" if kit_ok else "KIT_FAIL")
 hand = []
