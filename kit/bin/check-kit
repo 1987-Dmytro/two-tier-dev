@@ -168,16 +168,18 @@ line = m.group(1) if m else ""
 pre = line.startswith("bin/check-window && ")
 run_line = line if pre else "bin/check-window && " + line  # без префикса — F5.1 красный, механизм всё равно меряется
 a, b, c = wrun(run_line, events(41, 64)), wrun(run_line, events(39, 86)), wrun(run_line, events(39, 84))
+e = wrun(run_line, events(40, 85))  # ровно на порогах — «выше» не наступило: старт
 wsay(pre and a[0] != 0 and not a[2] and "41 %" in a[1] and "64 %" in a[1] and re.search(r"сброс \d", a[1]) and "WINDOW: refuse" in a[1]
-     and b[0] != 0 and not b[2] and "неделя 86 % > 85 %" in b[1] and c[0] == 0 and c[2] and "WINDOW: start" in c[1], "F5.1",
+     and b[0] != 0 and not b[2] and "неделя 86 % > 85 %" in b[1] and c[0] == 0 and c[2] and "WINDOW: start" in c[1]
+     and e[0] == 0 and e[2] and "WINDOW: start" in e[1], "F5.1",
      ("" if pre else f"строка запуска {tpl} не начинается с «bin/check-window && » — проба на копии с префиксом · ")
-     + " · ".join([side("41 %/64 %", a), side("39 %/86 %", b), side("39 %/84 %", c)]))
-a, b = wrun("bin/check-window --repair", events(69, 64)), wrun("bin/check-window --repair", events(71, 64))
+     + " · ".join([side("41 %/64 %", a), side("39 %/86 %", b), side("39 %/84 %", c), side("40 %/85 % (ровно пороги)", e)]))
+a, b = wrun("bin/check-window --repair", events(70, 64)), wrun("bin/check-window --repair", events(71, 64))  # 70 — ровно порог: старт
 shutil.copy2(f"{root}/bin/verify-phase", f"{fx}/bin/verify-phase")  # приёмка: check-window --repair рядом с лаунчером — до клона
 va, vb = wrun("bin/verify-phase", events(69, 64), n=3), wrun("bin/verify-phase", events(71, 64), n=3)
 wsay(a[0] == 0 and "порог 70 %" in a[1] and "WINDOW: start" in a[1] and b[0] == 1 and "окно 5 ч 71 % > 70 %" in b[1]
      and "WINDOW: start" in va[1] and "отказ до клона" not in va[1] and vb[0] == 1 and "отказ до клона" in vb[1] and "свежий клон" not in vb[1], "F5.2",
-     f"--repair 69 %: rc {a[0]} «{a[1]}» · --repair 71 %: rc {b[0]} «{b[1]}» · bin/verify-phase 69 %: «{va[1]}» · bin/verify-phase 71 %: rc {vb[0]} «{vb[1]}»")
+     f"--repair 70 % (ровно порог): rc {a[0]} «{a[1]}» · --repair 71 %: rc {b[0]} «{b[1]}» · bin/verify-phase 69 %: «{va[1]}» · bin/verify-phase 71 %: rc {vb[0]} «{vb[1]}»")
 a, b = wrun("bin/check-window", events(event=False)), wrun("bin/check-window", events(windows=False))
 c = wrun("bin/check-window", events(error="Not logged in · Please run /login"), rc=1)
 o = wrun(run_line.replace("bin/check-window && ", "bin/check-window --override && ", 1), events(90, 64))
