@@ -20,3 +20,5 @@
 {"ts": "2026-10-10T11:10:37Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/verify-c6514e1-F1-F2-F3-F4-F5-F7.txt"], "score": 0.15, "diff": "f0280025d6cb3c36", "ms": 1432}
 {"ts": "2026-10-10T11:30:29Z", "decision": "note", "judge": "abide", "rule": "no-secret-values", "files": ["kit/bin/check-harness"], "score": 0.75, "diff": "60bbcc5e7f0a02a6", "ms": 2017}
 {"ts": "2026-10-10T11:30:31Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/check-verify"], "score": 0.13, "diff": "2232a03ad14083af", "ms": 1834}
+{"ts": "2026-10-10T11:30:33Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["docs/evidence/commit-judge.jsonl"], "score": 0.23, "diff": "d7536c94c9327a29", "ms": 1436}
+{"ts": "2026-10-10T11:47:38Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.1, "diff": "8565dfbcdcd0e3d0", "ms": 1348}
