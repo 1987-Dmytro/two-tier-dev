@@ -38,7 +38,13 @@
 - Коммиты тимлида этой сессии суд модели пропустил (`abide check — skip`): в окружении Desktop Commander нет ключа TypeSafe; хуки-код отработали.
 - В дереве оператора вне коммитов: журналы `docs/evidence/commit-judge.jsonl`, `spec-gate.jsonl` и `.claude/worktrees/`.
 
-**Открыто:** сохранение скиллов; слияние PR #4 и PR скиллов; перевод telefon; настройка сессий оператора (Q12 грилинга v3.3); работает ли мод `handoff` у исполнителя вообще — пока выключен решением 4.
+**Инструменты в сессиях оператора (Q12 грилинга v3.3, шаг 7 плана) — настроены 10.10 в 20:40 после слова оператора «не установил»:** шаг был пропущен и молча перенесён в «Открыто» — дефект тимлида.
+- Toolgate: `fail_mode: ask` (было `passthrough`; копия `toolgate.yaml.bak-2026-10-10` рядом с файлом политики). Проба обеих сторон через `toolgate check`: модель доступна — `allow`, источник `model`; бэкенд без ключа — `ask`, источник `fail-mode`. В bypass-сессиях при сбое Jev действия из списка получат отказ — вариант (а), принятый 09.10.
+- jev-mcp в Claude Desktop: живой вызов `jev_verify` из сессии тимлида — verified 1,00 на верном утверждении, contradicted 1,00 на неверном; модель `jev-1.13.0`.
+- Без правок: Belay и Steer-or-Queue — тень; мод `handoff` 0.3.0 — `jev: auto`; Compact Adviser выключен (влит в `handoff`). Toolgate за последние 500 решений: 397 allow, 96 ask, 7 deny, сбоев модели 0.
+- Не сделано: Quicksilver и `typesafe` стоят скиллами Claude Code (уровень пользователя), скиллами Cowork их нет — тимлиду в Cowork доступны jev-mcp и jev-browser.
+
+**Открыто:** сохранение скиллов; слияние PR #4 и PR #5; перевод telefon; разбор журналов Belay и Steer-or-Queue через неделю тени; работает ли мод `handoff` у исполнителя вообще — пока выключен решением 4.
 **Named, первая правка кита (после принятого плеча telefon):** как в `claude/retro-2026-10-10-v3.3.md` §5, плюс поле §5 шаблона SPEC, бюджет копии `team-lead-spec` в `check-budget`, строка CHANGELOG о v6.1.
 **Ветки:** `v3.3` — фаза (PR #4); `tl/skills-v6.1` — скиллы и INTENT; `v3.2`, `tl/v3.3-vision` — история.
 **Строка следующей сессии тимлида:** «/team-lead — перевод projekt_1_telefon на кит v3.3 силами тимлида и SPEC-1 в форме пунктов; карта — two-tier-dev `docs/STATUS.md`, `claude/handoff-2026-10-10-telefon-translation.md`; проект — `AD_Allianz/projekt_1_telefon`, его `docs/STATUS.md` и голова `docs/PROGRESS.md`».
