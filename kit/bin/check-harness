@@ -459,7 +459,7 @@ def commit_probes(src):
     put(r, "docs/STATUS.md", "y\n"); gc(r, "add", "--", "docs/STATUS.md")
     tl = gc(r, "commit", "-qm", "F2.2: статус")
     tl_nocolon = gc(r, "commit", "-qm", "Тимлид статус")  # префикс — «Тимлид:» с двоеточием
-    tl_ok = gc(r, "commit", "-qm", "Тимлид: статус")
+    tl_ok = gc(r, "commit", "-qm", "Тимлид:статус")  # «Тимлид:» в начале — и без пробела за двоеточием
     put(r, "CLAUDE.md", "d\n"); gc(r, "add", "--", "CLAUDE.md")
     tl_add = gc(r, "commit", "-qm", "F2.2: CLAUDE.md")  # файл из project.owner_add — тоже файл тимлида
     gc(r, "commit", "-qm", "Тимлид: CLAUDE.md")
@@ -492,10 +492,11 @@ def commit_probes(src):
           and tl_nocolon[0] == 1 and "team-lead-files: docs/STATUS.md" in tl_nocolon[1] and tl_prompt[0] == 1 and "team-lead-files: docs/PROMPT.txt" in tl_prompt[1]
           and tl_into[0] == 1 and "team-lead-files: intent/notes2.md" in tl_into[1]
           and mrg[0] == 1 and "no-delete: README.md" in mrg[1] and mok[0] == 0)
-    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; «Тимлид» без двоеточия — rc {tl_nocolon[0]}; с «Тимлид:» — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; файл в каталоге owner (intent/) — rc {tl_dir[0]}; docs/PROMPT.txt при docs/GOAL.txt в owner — rc {tl_prompt[0]}; git mv в путь тимлида — rc {tl_into[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
+    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; «Тимлид» без двоеточия — rc {tl_nocolon[0]}; «Тимлид:» без пробела — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; файл в каталоге owner (intent/) — rc {tl_dir[0]}; docs/PROMPT.txt при docs/GOAL.txt в owner — rc {tl_prompt[0]}; git mv в путь тимлида — rc {tl_into[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
          f"git mv в docs/archive/ — rc {mv[0]}; слияние со своим удалением — rc {mrg[0]} «{mrg[1][:70]}», то же слияние без него — rc {mok[0]}")
     # F2.3 — force-push в любой записи (bare origin); обычный push проходит; написание в Bash — отказ хука кита
     ff = gc(r, "push", "-q", "origin", "v")
+    gc(r, "branch", "nb"); newb = gc(r, "push", "-q", "origin", "nb")  # новая ветка на origin — не переписывает ничего
     gc(r, "reset", "-q", "--hard", "HEAD~1"); gc(r, "commit", "-q", "--allow-empty", "-m", "F2.3: переписанная история")
     forced = {"--force": gc(r, "push", "-q", "--force", "origin", "v"), "+v": gc(r, "push", "-q", "origin", "+v"),
               "git -C … -f": gc(r, "-C", r, "push", "-q", "-f", "origin", "v", cwd=TMP),
@@ -517,8 +518,8 @@ def commit_probes(src):
             "timeout 30 git push --no-verify -f origin v": 2, 'eval "git push --no-verify -f origin v"': 2, "git push --no-verif --force-with-l origin v": 2,
             "git commit --no-verif -m x": 2, "git push --forc origin v": 2, "env git push -f origin v": 2, "git add :/src": 2, 'sh -c "git push -f origin v"': 2, "git push -uf origin v": 2, "git push --follow-tags origin v": 0,
             "git push origin v": 0, 'echo "git push --force"': 0}
-    ok = ff[0] == 0 and all(rc == 1 and "no-force-push" in e for rc, e in forced.values()) and stat == want
-    item(S, "F2.3", ok, f"обычный push — rc {ff[0]}; " + "; ".join(f"{k} — rc {v[0]}" for k, v in forced.items())
+    ok = ff[0] == 0 and newb[0] == 0 and all(rc == 1 and "no-force-push" in e for rc, e in forced.values()) and stat == want
+    item(S, "F2.3", ok, f"обычный push — rc {ff[0]}; новая ветка — rc {newb[0]}; " + "; ".join(f"{k} — rc {v[0]}" for k, v in forced.items())
          + f" («{forced['--force'][1][:80]}»); хук Bash кита: " + ", ".join(f"`{k}` → {v}" for k, v in stat.items()))
     # F2.4 — abide check: от 0,8 отказ один раз; повтор того же диффа проходит; 0,5–0,8 — заметка; ошибка и таймаут — пропуск
     if not os.environ.get("TYPESAFE_API_KEY") or not shutil.which("abide"):
