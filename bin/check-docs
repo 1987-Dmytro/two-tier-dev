@@ -5,13 +5,24 @@
     в README, docs/README, docs/dev-system.ru.md, docs/LAUNCH.md и записи v3 CHANGELOG существуют — в репо или в kit/;
   · записи v3 и v3.1 CHANGELOG называют каждое поле харнеса v2, v3 и v3.1 строкой таблицы со ссылкой на док и столбцами до/после;
   · dev-system.ru.md описывает цикл v3, intent, бюджеты, самоулучшение и v3.1: ultracode, /verify-phase, окружение = таблица;
-  · README называет ultracode, /verify-phase и чеки v3.1; LAUNCH.md объясняет каждый флаг строки запуска шаблона PROCESS;
+  · README называет ultracode, /verify-phase и чеки v3.1; LAUNCH.md объясняет каждый флаг и команду строки запуска шаблона PROCESS;
   · v3.2 (SPEC-v3.2 F9): запись v3.2 CHANGELOG — строка таблицы на каждое поле v3.2 (хуки кита, launch settings, флаги строки,
     стартовый запрос, deny, лаунчер и воркфлоу приёмки) с источником (code.claude.com/docs/en/ или репо инструмента) и столбцами
-    до/после; у каждого мода — строки hooks: и calls: из `claude plugin validate`; LAUNCH.md — новые флаги, стартовый запрос,
-    режимы spec-gate, ключ в окружении; README и dev-system.ru.md — цикл без /goal, слой Jev, три судьи по цене вопроса.
+    до/после; у модов v3.2 — строки hooks: и calls: из `claude plugin validate`; LAUNCH.md — новые флаги, стартовый запрос,
+    режимы spec-gate, ключ в окружении; README и dev-system.ru.md — цикл без /goal, слой Jev, три судьи по цене вопроса
+    (ABIDE_OK и TOOLGATE_OK с v3.3 — в README строкой об ушедших маркерах);
+  · v3.3 (SPEC-v3.3 F6) — строка на пункт «F6.<k> <зелёная сторона> · красный образец: <он же в памяти>»:
+    F6.1 — запись v3.3: строка свипа 09.10 на факт — с «цитатой» и https-адресом; поле харнеса v3.3 — строкой таблицы с источником
+           (https) и столбцами до/после; красное — строка свипа без адреса и запись без строки поля;
+    F6.2 — README, docs/dev-system.ru.md и docs/LAUNCH.md называют судью на заявлении, bin/check-window с --override и приёмку
+           в один круг, их ссылки и пути живые; красное — копия README с мёртвой ссылкой;
+    F6.3 — bin/check-budget --templates → BUDGET_OK; шаблоны и настройки кита — формат пунктов и таблица судей, без ушедших
+           инструментов, строка запуска с предохранителем; красное — PROCESS с Toolgate «да»;
+    F6.4 — строки hooks: и calls: мода limits в записи v3.3, у каждого мода mods/ — свои строки; с claude в PATH —
+           `claude plugin validate` и `claude plugin test` мода зелёные и строки совпадают с CHANGELOG (без claude, в CI, — только
+           CHANGELOG, это сказано в строке); красное — запись v3.3 без строк мода.
 """
-import json, os, re, sys
+import json, os, re, shutil, subprocess, sys
 
 DOCS = ["README.md", "docs/README.md", "docs/dev-system.ru.md", "docs/LAUNCH.md", "CHANGELOG.md"]
 REPO_PATH = re.compile(r"^(bin|kit|intent|claude|docs/(archive|drafts|evidence))/[\w./-]*$")
@@ -21,6 +32,13 @@ out = []
 def say(ok, item, msg):
     out.append(bool(ok))
     print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}")
+
+
+def item(iid, green_ok, green, red_ok, red):
+    """Строка пункта v3.3: зелёная сторона на файлах репо и красный образец, на котором результат обязан не наступить."""
+    ok = bool(green_ok and red_ok)
+    out.append(ok)
+    print(f"{iid} {'' if ok else 'FAIL: '}{green} · красный образец: {red}")
 
 
 def read(p):
@@ -33,17 +51,33 @@ def exists(p):
     return os.path.exists(p) or os.path.exists(os.path.join("kit", p))
 
 
-for doc in DOCS:
-    text = read(doc)
+def links_paths(doc, text):
+    """(ссылки, пути репо, мёртвые) документа doc с текстом text."""
     if doc == "CHANGELOG.md":
         text = text.split("\n## v2.0", 1)[0]  # прежние записи — история со старыми путями
     base = os.path.dirname(doc)
     links = [l.split("#")[0] for l in re.findall(r"\]\(([^)\s]+)\)", text) if not re.match(r"(https?:|mailto:|#)", l)]
     paths = [p for p in re.findall(r"`([^`\s]+)`", text) if REPO_PATH.match(p) and "…" not in p]
     dead = [l for l in links if not os.path.exists(os.path.normpath(os.path.join(base, l)))] + [p for p in paths if not exists(p)]
-    say(not dead, doc, f"ссылок {len(links)}, путей репо {len(paths)}; мёртвых — {', '.join(sorted(set(dead))) or 'нет'}")
+    return links, paths, sorted(set(dead))
 
-v3 = read("CHANGELOG.md").split("\n## v3", 1)[1].split("\n## v2.0", 1)[0]  # записи v3.1 и v3.0
+
+def entry(text, ver, nxt):
+    """Запись CHANGELOG версии ver — до записи nxt."""
+    return text.split(f"\n## {ver}", 1)[1].split(f"\n## {nxt}", 1)[0] if f"\n## {ver}" in text else ""
+
+
+def launch_line(proc):
+    """Первая строка с ` claude ` в блоках ```sh PROCESS."""
+    return next((l for b in re.findall(r"```sh\n(.*?)```", proc, re.S) for l in b.splitlines() if " claude " in f" {l} "), "")
+
+
+for doc in DOCS:
+    links, paths, dead = links_paths(doc, read(doc))
+    say(not dead, doc, f"ссылок {len(links)}, путей репо {len(paths)}; мёртвых — {', '.join(dead) or 'нет'}")
+
+CL = read("CHANGELOG.md")
+v3 = CL.split("\n## v3", 1)[1].split("\n## v2.0", 1)[0]  # записи v3.x
 rows = [r for r in v3.splitlines() if r.startswith("| ") and r.count("|") >= 6]
 fields = set()
 for p in ("kit/.claude/settings.json", "docs/archive/kit-v2/claude-config/settings.json"):
@@ -60,14 +94,16 @@ say(all(n in ds for n in need), "dev-system.ru.md", f"разделы и темы
 rd = read("README.md")
 need = ["ultracode", "/verify-phase", "bin/verify-phase", "bin/check-verify", "ENV_OK", "HOOKS_OK"]
 say(all(n in rd for n in need), "README.md", f"v3.1: нет — {', '.join(n for n in need if n not in rd) or 'ничего'}")
-# v3.1: каждый флаг строки запуска шаблона PROCESS объяснён в LAUNCH.md
-line = next(l for l in re.findall(r"```sh\n(.*?)```", read("kit/docs/PROCESS.template.md"), re.S)[0].splitlines() if " claude " in f" {l} ")
-flags = sorted(set(re.findall(r"(?<!\S)(--[a-z-]+)", line)) | set(re.findall(r"(?<!\S)([A-Z_]+)=", line.split(" claude ", 1)[0]))
-               | ({"`--`"} if " -- " in line else set()))
+# v3.1: каждый флаг строки запуска шаблона PROCESS объяснён в LAUNCH.md; v3.3 — и команда перед claude (bin/check-window)
+proc = read("kit/docs/PROCESS.template.md")
+line = launch_line(proc)
+pre = line.split(" claude ", 1)[0]
+flags = sorted(set(re.findall(r"(?<!\S)(--[a-z-]+)", line)) | set(re.findall(r"(?<!\S)([A-Z_]+)=", pre))
+               | set(re.findall(r"(?<!\S)(bin/[\w-]+)", pre)) | ({"`--`"} if " -- " in line else set()))
 lm = read("kit/docs/LAUNCH.md")
-say(all(f in lm for f in flags), "LAUNCH.md", f"флагов строки запуска шаблона PROCESS {len(flags)}; без объяснения — {', '.join(f for f in flags if f not in lm) or 'нет'}")
+say(all(f in lm for f in flags), "LAUNCH.md", f"флагов и команд строки запуска шаблона PROCESS {len(flags)}; без объяснения — {', '.join(f for f in flags if f not in lm) or 'нет'}")
 # v3.2: поля фазы — каждое строкой таблицы записи v3.2 с источником и столбцами до/после
-v32 = read("CHANGELOG.md").split("\n## v3.2", 1)[1].split("\n## v3.1", 1)[0] if "\n## v3.2" in read("CHANGELOG.md") else ""
+v32 = entry(CL, "v3.2", "v3.1")
 rows32 = [r for r in v32.splitlines() if r.startswith("| ") and r.count("|") >= 6 and re.search(r"code\.claude\.com/docs/en/|github\.com/", r)]
 ks = json.loads(read("kit/.claude/settings.json"))
 hooks32 = {os.path.basename(h["args"][0] if h.get("command") in ("node", "python3") and h.get("args") else h.get("command", ""))
@@ -76,15 +112,144 @@ need32 = sorted({h for h in hooks32 if h.endswith(".mjs")} | {"toolgate.yaml", "
                                                              "--no-chrome", "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "docs/PROMPT.txt", "bin/verify-phase", "verify-phase.js"})
 miss = [f for f in need32 if not any(f in r for r in rows32)]
 say(v32 and not miss, "CHANGELOG v3.2", f"полей v3.2 — {len(need32)}, строк таблицы с источником и до/после — {len(rows32)}; без строки — {', '.join(miss) or 'нет'}")
-mods = sorted(d for d in os.listdir("mods") if os.path.isfile(f"mods/{d}/.claude-plugin/plugin.json"))
-lines32 = {m: [l for l in v32.splitlines() if " hooks: " in l or " calls: " in l] for m in mods}
-bad = [m for m in mods + ["compact-adviser"] if not (re.search(rf"`{re.escape(m)}`[^\n]*\n(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n){{2}}", v32 + "\n"))]
-say(not bad, "CHANGELOG v3.2", f"моды с строками hooks: и calls: из claude plugin validate: {', '.join(m for m in mods + ['compact-adviser'] if m not in bad)}; без них — {', '.join(bad) or 'нет'}")
+MOD_LINES = r"`{m}`[^\n]*\n((?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n){{2}})"
+mods32 = ["handoff", "compact-adviser"]  # моды записи v3.2; мод новее — в своей записи (F6.4)
+bad = [m for m in mods32 if not re.search(MOD_LINES.format(m=re.escape(m)), v32 + "\n")]
+say(not bad, "CHANGELOG v3.2", f"моды с строками hooks: и calls: из claude plugin validate: {', '.join(m for m in mods32 if m not in bad)}; без них — {', '.join(bad) or 'нет'}")
 need = ["SPEC_GATE", "off", "shadow", "active", "TYPESAFE_API_KEY", "docs/PROMPT.txt", "--setting-sources", "spec-gate.jsonl"]
 say(all(n in lm for n in need), "LAUNCH.md v3.2", f"стартовый запрос, режимы spec-gate, ключ в окружении: нет — {', '.join(n for n in need if n not in lm) or 'ничего'}")
-need = ["spec-gate", "GATE_HOOK_OK", "ABIDE_OK", "TOOLGATE_OK", "bin/jev", "bin/check-spend", "docs/PROMPT.txt", "Three judges", "Jev"]
-say(all(n in rd for n in need), "README.md v3.2", f"цикл без /goal, слой Jev, три судьи: нет — {', '.join(n for n in need if n not in rd) or 'ничего'}")
+need = ["spec-gate", "GATE_HOOK_OK", "bin/jev", "bin/check-spend", "docs/PROMPT.txt", "Three judges", "Jev"]
+gone = any(all(w in l for w in ("ABIDE_OK", "TOOLGATE_OK", "retired")) for l in rd.splitlines())  # v3.3: маркеры ушли — строкой истории
+say(gone and all(n in rd for n in need), "README.md v3.2",
+    f"цикл без /goal, слой Jev, три судьи, ABIDE_OK и TOOLGATE_OK — ушедшими: нет — {', '.join([n for n in need if n not in rd] + ([] if gone else ['строки об ушедших ABIDE_OK, TOOLGATE_OK'])) or 'ничего'}")
 need = ["без `/goal`", "spec-gate", "Jev", "Три судьи", "docs/PROMPT.txt"]
 say(all(n in ds for n in need), "dev-system.ru.md v3.2", f"цикл без /goal, слой Jev, три судьи: нет — {', '.join(n for n in need if n not in ds) or 'ничего'}")
+
+# ── v3.3 (SPEC-v3.3 F6) ──────────────────────────────────────────────────────────────────────────────────────────────────────
+v33 = entry(CL, "v3.3", "v3.2")
+ARCH = "docs/archive/kit-v3.2/claude-config/hooks"  # хуки, ушедшие в v3.3 (F3.1)
+FIELDS33 = ["abide.mjs", "toolgate-deny.mjs", "Edit(/.claude/toolgate.yaml)", "jev-steer-or-queue@jev-steer-or-queue",
+            "compact-adviser@compact-adviser", "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "bin/check-window", "unifiedWindows",
+            "core.hooksPath", "spec-gate.mjs", "verify-phase.js", "spec_block_chars", "window_five_hour_pct", "window_seven_day_pct",
+            "window_repair_pct"]
+
+
+def f61(e):
+    """(строк свипа, строки без «цитаты» или https, полей, поля без строки таблицы с источником и до/после)."""
+    sweep, on = [], False
+    for l in e.splitlines():
+        if "Source sweep 09.10" in l:
+            on = True
+        elif on and l.startswith("  - "):
+            sweep.append(l)
+        elif on and l.strip() and not l.startswith("  "):
+            break
+    bad = [l.strip()[2:40] for l in sweep if not (re.search(r"«[^»]+»", l) and re.search(r"https://\S+", l))]
+    cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in e.splitlines() if r.startswith("| ") and r.count("|") >= 6]
+    good = lambda c: "https://" in c[2] and all(x not in ("", "—", "-") for x in c[3:5])
+    fields = sorted(set(FIELDS33) | {f for f in os.listdir(ARCH) if f.endswith(".mjs")})
+    return sweep, bad, fields, [f for f in fields if not any(f in c[0] and good(c) for c in cells)]
+
+
+sweep, bad, f33, miss = f61(v33)
+r_sweep = f61(v33.replace(sweep[0], re.sub(r"\(https://[^)]*\)", "", sweep[0]), 1) if sweep else v33)
+r_field = f61("\n".join(l for l in v33.splitlines() if not (l.startswith("| ") and "unifiedWindows" in l.split("|")[1])))
+item("F6.1", v33 and sweep and not bad and not miss,
+     f"запись v3.3: строк свипа 09.10 — {len(sweep)}, без «цитаты» или https-адреса — {len(bad)}{': ' + '; '.join(bad) if bad else ''}; "
+     f"полей v3.3 — {len(f33)}, без строки таблицы с источником и до/после — {', '.join(miss) or 'нет'}",
+     r_sweep[1] and "unifiedWindows" in r_field[3],
+     f"строка свипа без адреса — без адреса {len(r_sweep[1])}: {(r_sweep[1] or ['?'])[0]}…; запись без строки поля unifiedWindows — "
+     f"без строки: {', '.join(r_field[3]) or 'нет'}")
+
+NEED62 = {"README.md": ["judge on the claim", "bin/check-window", "--override", "one full round"],
+          "docs/dev-system.ru.md": ["судья на заявлении", "bin/check-window", "--override", "один круг"],
+          "docs/LAUNCH.md": ["судья на заявлении", "bin/check-window", "--repair", "--override", "один круг"]}
+g_dead, g_need, n_links = [], [], 0
+for doc, words in NEED62.items():
+    text = read(doc)
+    links, paths, dead = links_paths(doc, text)
+    n_links += len(links) + len(paths)
+    g_dead += [f"{doc}: {d}" for d in dead]
+    g_need += [f"{doc}: {w}" for w in words if w not in text]
+_, _, r_dead = links_paths("README.md", rd + "\n[пропавший файл](docs/no-such-file.md)\n")
+item("F6.2", not g_dead and not g_need,
+     f"README.md, docs/dev-system.ru.md, docs/LAUNCH.md: ссылок и путей {n_links}, мёртвых — {', '.join(g_dead) or 'нет'}; судья на заявлении, "
+     f"bin/check-window с --override, один круг: нет — {', '.join(g_need) or 'ничего'}",
+     "docs/no-such-file.md" in r_dead, f"README.md с [пропавший файл](docs/no-such-file.md) — мёртвых {len(r_dead)}: {', '.join(r_dead)}")
+
+RETIRED = {"Toolgate": "toolgate", "Compact Adviser": "compact-adviser", "Steer-or-Queue": "jev-steer-or-queue"}  # ушли у исполнителя (F3.1)
+
+
+def retired_on(proc, spec, prompt, claude_md, settings, launch, owner):
+    """Что в шаблонах и настройках кита расходится с v3.3: ушедший инструмент включён, строка без предохранителя, нет формата пунктов."""
+    bad = []
+    for row in proc.split("## Environment", 1)[1].split("\n## ", 1)[0].splitlines():
+        c = [x.strip() for x in row.strip().strip("|").split("|")]
+        if len(c) >= 5 and c[0] in RETIRED and c[3] != "нет":
+            bad.append(f"PROCESS: {c[0]} «{c[3]}»")
+        if len(c) >= 5 and c[0] == "Abide" and c[3] == "да" and "коммит" not in c[4]:
+            bad.append("PROCESS: Abide не на коммите")
+    if not launch_line(proc).startswith("bin/check-window && "):
+        bad.append("PROCESS: строка запуска без bin/check-window &&")
+    bad += ["PROCESS: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] if "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS" in proc else []
+    hooks = json.dumps(settings.get("hooks", {})).lower()
+    bad += [f"settings.json: хук {h}" for h in ("abide", "toolgate") if h in hooks]
+    bad += [f"settings.json: deny {d}" for d in settings.get("permissions", {}).get("deny", []) if "toolgate" in d]
+    bad += [f"launch.settings.json: {p} включён" for p, on in launch.get("enabledPlugins", {}).items() if on and any(v in p for v in RETIRED.values())]
+    bad += [f"launch.settings.json: pluginConfigs {p}" for p in launch.get("pluginConfigs", {}) if any(v in p for v in RETIRED.values())]
+    bad += [f"budgets.json: owner {o}" for o in owner if "toolgate" in o]
+    bad += ["PROMPT: toolgate"] if "toolgate" in prompt.lower() else []
+    bad += ["CLAUDE.md: нет ## Rules for every commit или есть правила каждой правки"] if (
+        "## Rules for every commit" not in claude_md or "Rules for every edit" in claude_md) else []
+    bad += ["SPEC: нет строк пунктов `F<n>.<k>`"] if not re.search(r"^  - `F\d+\.\d+` \S", spec, re.M) else []
+    bad += ["SPEC: нет таблицы судей"] if "**Таблица судей**" not in spec else []
+    return bad
+
+
+r = subprocess.run(["bin/check-budget", "--templates"], capture_output=True, text=True, timeout=300)
+b_fail = [l for l in r.stdout.splitlines() if l.startswith("FAIL")]
+b_ok = r.returncode == 0 and "BUDGET_OK" in r.stdout.splitlines()
+kit = dict(proc=proc, spec=read("kit/docs/SPEC.template.md"), prompt=read("kit/docs/PROMPT.template.txt"), claude_md=read("kit/CLAUDE.md"),
+           settings=json.loads(read("kit/.claude/settings.json")), launch=json.loads(read("kit/.claude/launch.settings.json")),
+           owner=json.loads(read("kit/budgets.json"))["defaults"]["owner"])
+g_ret = retired_on(**kit)
+n_items = len(re.findall(r"^  - `F\d+\.\d+` ", kit["spec"], re.M))
+r_ret = retired_on(**dict(kit, proc=re.sub(r"^(\| Toolgate \|[^|\n]*\|[^|\n]*\| )нет( \|)", r"\1да\2", proc, flags=re.M)))
+item("F6.3", b_ok and not g_ret,
+     f"bin/check-budget --templates: rc {r.returncode}, {'BUDGET_OK' if b_ok else 'нет BUDGET_OK'}, FAIL {len(b_fail)}{': ' + '; '.join(b_fail) if b_fail else ''}; "
+     f"шаблоны и настройки кита: пунктов в шаблоне SPEC {n_items}, таблица судей, строка запуска с bin/check-window; расхождений — {', '.join(g_ret) or 'нет'}",
+     "PROCESS: Toolgate «да»" in r_ret, f"PROCESS с Toolgate «да» — {', '.join(r_ret) or 'расхождений нет'}")
+
+
+def f64(e):
+    """Строки hooks: и calls: мода limits в записи v3.3 (без `…` и « - »)."""
+    m = re.search(MOD_LINES.format(m="limits"), e + "\n")
+    return [l.strip().lstrip("- ").strip("`") for l in m.group(1).splitlines()] if m else []
+
+
+cl64 = f64(v33)
+mods = sorted(d for d in os.listdir("mods") if os.path.isfile(f"mods/{d}/.claude-plugin/plugin.json"))
+no_lines = [m for m in mods if not any(re.search(MOD_LINES.format(m=re.escape(m)), e + "\n") for e in (v32, v33))]
+green, ok = f"запись v3.3: строк hooks: и calls: мода limits — {len(cl64)}; моды mods/ без своих строк — {', '.join(no_lines) or 'нет'}", len(cl64) == 2 and not no_lines
+if shutil.which("claude"):
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}  # подписка; модели не зовутся
+    st = lambda: subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "mods/limits"], capture_output=True, text=True).stdout
+    before = st()
+    v = subprocess.run(["claude", "plugin", "validate", "mods/limits"], capture_output=True, text=True, timeout=120, env=env)
+    t = subprocess.run(["claude", "plugin", "test", "mods/limits"], capture_output=True, text=True, timeout=300, env=env)
+    vo, to = v.stdout + v.stderr, t.stdout + t.stderr
+    vl = [re.sub(r"^[^.]*?(\./)", r"\1", l).strip() for l in vo.splitlines() if re.search(r"\./\S+ (?:hooks|calls): ", l)]
+    passed = (re.search(r"Validation passed[^\n]*", vo) or [None])[0]
+    tp, tf = (int(m.group(1)) if m else None for m in (re.search(r"(\d+) pass\b", to), re.search(r"(\d+) fail\b", to)))
+    left = st() != before
+    ok = ok and v.returncode == 0 and passed and sorted(vl) == sorted(cl64) and f"«{passed}»" in v33 and t.returncode == 0 and tp and tf == 0 and not left
+    green += (f"; claude plugin validate mods/limits: rc {v.returncode}, «{passed or 'нет Validation passed'}», строк hooks:/calls: {len(vl)}, "
+              f"{'= CHANGELOG' if sorted(vl) == sorted(cl64) else 'не как в CHANGELOG: ' + '; '.join(vl)}; claude plugin test mods/limits: rc {t.returncode}, "
+              f"{tp} pass, {tf} fail; файлов после — {'остались' if left else 'нет'}")
+else:
+    green += "; claude нет в PATH (CI) — проверены только строки CHANGELOG"
+r64 = f64(re.sub(r"(`limits`[^\n]*\n)(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n)+", r"\1", v33 + "\n"))
+item("F6.4", ok, green, not r64, f"запись v3.3 без строк мода — строк hooks: и calls: limits {len(r64)}")
+
 print("DOCS_OK" if all(out) else "DOCS_FAIL")
 sys.exit(0 if all(out) else 1)
