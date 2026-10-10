@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "compiledAt": "2026-10-10T08:15:00.000Z",
+  "compiledBy": "team-lead",
+  "sources": [
+    {
+      "path": "CLAUDE.md",
+      "scope": "**/*"
+    }
+  ],
+  "rules": [
+    {
+      "id": "no-secret-values",
+      "text": "No secret, API key, token or password value appears in any file, log line, evidence file or commit message; credentials are read from the environment only.",
+      "source": {
+        "path": "CLAUDE.md"
+      },
+      "scope": [
+        "**/*"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change put a literal secret value (API key, token, password) into a file, log line, evidence file or commit message, instead of reading it from the environment?",
+          "criteria": {
+            "true": "API_KEY = \"sk-live-9f3a…\"",
+            "false": "key = process.env.TYPESAFE_API_KEY"
+          }
+        }
+      },
+      "status": "active"
+    },
+    {
+      "id": "no-print-credential",
+      "text": "Code never prints or logs the value of TYPESAFE_API_KEY or of any other credential; reporting its presence or length is fine.",
+      "source": {
+        "path": "CLAUDE.md"
+      },
+      "scope": [
+        "**/*"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change print, echo or log the value of a credential such as TYPESAFE_API_KEY? Reporting only its presence or length is not a violation.",
+          "criteria": {
+            "true": "console.log('key', process.env.TYPESAFE_API_KEY)",
+            "false": "console.log('key present:', Boolean(process.env.TYPESAFE_API_KEY))"
+          }
+        }
+      },
+      "status": "active"
+    },
+    {
+      "id": "evidence-anonymized",
+      "text": "Files under docs/evidence/ carry counts, exit codes, markers and paths relative to the repo root or under /tmp/two-tier-v3; they never carry emails, account or organization ids, client names or home-directory paths.",
+      "source": {
+        "path": "CLAUDE.md"
+      },
+      "scope": [
+        "docs/evidence/**"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this change add an email address, an account or organization id, a client name or a home-directory path to an evidence file?",
+          "criteria": {
+            "true": "ran in /Users/alex/projects/kit as alex@example.com",
+            "false": "rc=0 · HARNESS_OK · /tmp/two-tier-v3/harness-1/run1.jsonl"
+          }
+        }
+      },
+      "status": "active"
+    },
+    {
+      "id": "no-writes-outside-repo",
+      "text": "No script or hook writes to, edits or installs into anything outside this repo and /tmp/two-tier-v3: user-level settings under the home directory (~/.claude, ~/.toolgate, ~/.abide, ~/.config) and other project directories are read-only.",
+      "source": {
+        "path": "CLAUDE.md"
+      },
+      "scope": [
+        "**/*"
+      ],
+      "when": "edit",
+      "check": {
+        "type": "model",
+        "question": {
+          "type": "boolean",
+          "instructions": "Does this script or hook write to, edit, delete or install into a location outside this repository and /tmp/two-tier-v3 — for example user-level settings under the home directory (~/.claude, ~/.toolgate, ~/.abide, ~/.config) or another project's directory? Reading such locations is not a violation; writing inside the repository or under /tmp/two-tier-v3 is not a violation.",
+          "criteria": {
+            "true": "json.dump(s, open(os.path.expanduser('~/.claude/settings.json'), 'w'))",
+            "false": "json.load(open(os.path.expanduser('~/.claude/settings.json'))); open('/tmp/two-tier-v3/out.json','w')"
+          }
+        }
+      },
+      "status": "active"
+    }
+  ]
+}

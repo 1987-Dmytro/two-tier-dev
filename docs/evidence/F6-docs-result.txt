@@ -1,0 +1,21 @@
+$ bin/check-docs  # корень репо кита · 10.10.2026 11:41 · HEAD 28c0113 + рабочее дерево
+OK   README.md: ссылок 14, путей репо 33; мёртвых — нет
+OK   docs/README.md: ссылок 0, путей репо 3; мёртвых — нет
+OK   docs/dev-system.ru.md: ссылок 0, путей репо 32; мёртвых — нет
+OK   docs/LAUNCH.md: ссылок 0, путей репо 15; мёртвых — нет
+OK   CHANGELOG.md: ссылок 0, путей репо 90; мёртвых — нет
+OK   CHANGELOG v3–v3.1: полей харнеса v2, v3 и v3.1 — 20, строк таблицы со ссылкой на док и столбцами до/после — 58; без строки — нет
+OK   dev-system.ru.md: разделы и темы: Цикл v3, intent/INTENT.md, Бюджеты, Самоулучшение, ultracode, /verify-phase, Окружение = таблица; нет — ничего
+OK   README.md: v3.1: нет — ничего
+OK   LAUNCH.md: флагов и команд строки запуска шаблона PROCESS 12; без объяснения — нет
+OK   CHANGELOG v3.2: полей v3.2 — 11, строк таблицы с источником и до/после — 12; без строки — нет
+OK   CHANGELOG v3.2: моды с строками hooks: и calls: из claude plugin validate: handoff, compact-adviser; без них — нет
+OK   LAUNCH.md v3.2: стартовый запрос, режимы spec-gate, ключ в окружении: нет — ничего
+OK   README.md v3.2: цикл без /goal, слой Jev, три судьи, ABIDE_OK и TOOLGATE_OK — ушедшими: нет — ничего
+OK   dev-system.ru.md v3.2: цикл без /goal, слой Jev, три судьи: нет — ничего
+F6.1 запись v3.3: строк свипа 09.10 — 16, без «цитаты» или https-адреса — 0; полей v3.3 — 15, без строки таблицы с источником и до/после — нет · красный образец: строка свипа без адреса — без адреса 1: «Added `onFailure: "block"` for comman…; запись без строки поля unifiedWindows — без строки: unifiedWindows
+F6.2 README.md, docs/dev-system.ru.md, docs/LAUNCH.md: ссылок и путей 94, мёртвых — нет; судья на заявлении, bin/check-window с --override, один круг: нет — ничего · красный образец: README.md с [пропавший файл](docs/no-such-file.md) — мёртвых 1: docs/no-such-file.md
+F6.3 bin/check-budget --templates: rc 0, BUDGET_OK, FAIL 0; шаблоны и настройки кита: пунктов в шаблоне SPEC 2, таблица судей, строка запуска с bin/check-window; расхождений — нет · красный образец: PROCESS с Toolgate «да» — PROCESS: Toolgate «да»
+F6.4 запись v3.3: строк hooks: и calls: мода limits — 2; моды mods/ без своих строк — нет; claude plugin validate mods/limits: rc 0, «Validation passed with warnings», строк hooks:/calls: 2, = CHANGELOG; claude plugin test mods/limits: rc 0, 3 pass, 0 fail; файлов после — нет · красный образец: запись v3.3 без строк мода — строк hooks: и calls: limits 0
+DOCS_OK
+rc 0 · 1 с

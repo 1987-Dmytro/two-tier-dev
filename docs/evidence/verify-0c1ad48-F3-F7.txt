@@ -1,0 +1,18 @@
+VERDICT: PASS
+FEATURES: F3, F7
+/verify-phase · docs/SPEC-v3.3.md · HEAD 0c1ad48 · проверяющие claude-sonnet-5-5 (фич 2 из 7, опровергателей 0) · судья claude-opus-5-5
+
+Блокирующих находок нет. У F3 и F7 есть файлы docs/evidence/F3-harness-result.txt и docs/evidence/F7-gate-result.txt с маркерами ENV_OK и GATE_OK. В логе гейта обе строки зелёные (rc 0). Каждый пункт F3.1–F3.4 и F7.1–F7.3 подтверждён собственной командой проверяющего и её сырым выводом. Для F7.3 rc=1 — ожидаемый отказ `abide check` по правилу no-print-credential. Мутации two-tier-upgrade и two-tier-init свои чеки покраснили. Все остальные находки выходят за буквальную формулировку пунктов: это эвристическое покрытие скана, сверка в одну сторону, предупреждение при зелёном прогоне и непригодная непустая рубрика. Поэтому они не блокирующие.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F3.2: статический скан читает только входной скрипт хука — сеть или модель через импортированный или подключённый модуль, socket.connect, node:net, `claude -p` по абсолютному пути, ssh и хук type mcp_tool не делают чек красным (в ките таких хуков 0)
+- F3.3: скиллы сверяются в одну сторону: скилл, который есть в system/init, но которого нет в таблице Environment, не делает чек красным; флаги сверяются по подстроке (`--no-chrome-x` проходит как `--no-chrome`)
+- F3.4: после апгрейда проект v3.1 получает `WARN abide_rules: в budgets.json нет abide_rules` при зелёном BUDGET_OK, потому что budgets.json v3.1 сохраняется
+- F7.3: bin/check-budget пропускает непригодную непустую рубрику (`{"rules":[{}]}`, `[1,2,3]`, `[null]`, только выключенные правила) с BUDGET_OK, а хук коммита при этом молча пропускает суд модели (RUBRIC_MISSING) — пункт называет только отсутствующую рубрику
+
+## По фичам
+- F3: чек `bin/check-harness (gate log line 19 'F3 ENV_OK'; evidence docs/evidence/F3-harness-result.txt lines 51 and 106 'ENV_OK'); own run not repeated (gate-log line exists)` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация kit/bin/two-tier-upgrade: TL_RETIRED = [".claude/toolgate.yaml"] replaced by TL_RETIRED = [] (upgrade no longer archives the retired toolgate.yaml) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `bin/gate-v3.3 (gate.log, fresh clone, launcher run)` rc 0, маркер есть (gate_log); пунктов своим прогоном 3/3; мутация bin/two-tier-init: find in the copy loop also prunes .abide (-o -name .abide -prune), so the kit rubric base is not laid into the project (36 files instead of 37) → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0

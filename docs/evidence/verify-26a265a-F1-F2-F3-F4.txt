@@ -1,0 +1,31 @@
+VERDICT: NEEDS_WORK
+FEATURES: F1, F2, F3, F4
+/verify-phase · docs/SPEC-v3.3.md · HEAD 26a265a · проверяющие claude-sonnet-5-5 (фич 4 из 7, опровергателей 4) · судья claude-opus-5-5
+
+Блокирующим остаётся F3.2: настоящий прогон bin/check-harness на копии кита назвал только хук с curl и пропустил .mjs-хук, который зовёт модель через spawnSync('claude', ['-p', …]), а это прямо противоречит пункту F3.2. Пробел стража F4.3 я отнёс к небл. находкам: PASS в этой пробе выдал стаб судьи, а в настоящем круге чтение evidence вместо своего прогона ловит судья по критерию (f); выжившую мутацию F2 код блокирует сам, а опровергнутая находка F2.4 вне блокирующих.
+
+## Блокирующие
+- **F2: мутация выжила — kit/.githooks/commit-msg: owner(): dropped project.owner_add (own = raw["defaults"]["owner"]), so CLAUDE.md and .abide/rubric.json of the real budgets.json stop being team-lead files** · чек `bin/check-harness commit` остался зелёным
+- **F3: Скан F3.2 в bin/check-harness не видит хук на Node, который зовёт модель через spawnSync('claude', ['-p', …]): хук на действие зовёт модель, а чек не краснеет и хук не называет** · доказательство: В копии кита стоят хук PostToolUse ask_model.mjs со spawnSync('claude', ['-p', 'judge this edit']) и контрольный ctl_curl.sh с curl. Настоящий прогон bin/check-harness <kitcopy> env напечатал «F3.2 FAIL: … в сеть или к модели — 1 (PostToolUse ctl_curl.sh: «curl»)», а ask_model.mjs не назван. Причина: регулярка NET (kit/bin/check-harness:581–584) ловит 'claude','-p' только как подряд идущие строки в кавычках, а `claude … -p` — только с пробелом перед -p. В JS-форме 'claude', ['-p'] между ними стоит «[». Тот же пробел у execFile/spawn с ['--print'] и с 'claude', ['--model', …, '-p']. Хуки кита — .mjs, так что это основная форма вызова для хука кита. · критерий: (c) пункт F3.2: хук на действие, который ходит в сеть или зовёт модель, делает bin/check-harness красным с именем хука; готово фичи — «у исполнителя нет судей на каждое действие» · чек приёмки: python3 /tmp/two-tier-v3/acc-f3/mkkit.py && bin/check-harness /tmp/two-tier-v3/acc-f3/kitcopy env | grep F3.2 — в строке должен быть назван ask_model.mjs, а не только ctl_curl.sh; python3 /tmp/two-tier-v3/acc-f3/f32.py | grep d_spawn — должно быть RED
+
+## Named, not built
+- F1: bin/phase-report падает (rc 1, traceback, отчёт не пишется) на ответе Jev с confidence: null (bin/phase-report:130); хук Stop не затронут
+- F1: хук принимает docs/evidence/F2-result.txt (без средней части имени) как evidence фичи; glob phase-report F*-*-result.txt такой файл не видит, в отчёте пункт выйдет «без пробы»
+- F2: повторный `git add docs/evidence` меняет дайджест диффа, потому что хук сам дописывает commit-judge.jsonl; повтор «того же диффа» проходит только при add по точным путям. Можно исключить журнал из дайджеста
+- F2: git mv отслеживаемого файла в любой каталог, не только в docs/archive/, проходит (C1 допускает лишь git mv в docs/archive/)
+- F2: детектор секретов F2.1 ищет по форме и пропускает export KEY=<без кавычек>, JWT, Bearer, sk_live_, npm_, голые длинные токены и URL с кредами
+- F2: коммиты без commit-msg (cherry-pick, rebase, am) не судятся; cherry-pick с литералом секрета проходит
+- F2: `git commit -v` в редакторе судит дифф как сообщение коммита — ложный отказ evidence-anonymized на домашнем пути в файле не из evidence
+- F2: проходит путь C:\Users\name в evidence; битый budgets.json на HEAD молча выключает team-lead-files; Bash-страж отказывает на упоминании --no-verify в тексте сообщения и пропускает rm -rf .githooks
+- F3: F3.3 не краснеет на лишнем скилле, которого нет в таблице (плагины и MCP сравниваются в обе стороны)
+- F3: docs/evidence/F3-harness-result.txt снят на f96b40e, а не на 26a265a (маркер есть, свежий прогон зелёный)
+- F3: two-tier-upgrade при невалидном .claude/launch.settings.json не снимает ушедшие плагины, только пишет заметку тимлиду
+- F4: страж unconfirmed() в verify-phase.js — узкая эвристика. Пропускает как свою команду чтение evidence через `grep -r … docs/evidence` (без слеша), `cd docs/evidence && cat`, `git show HEAD:docs/evidence/…`, `bash -c`, `python3 -c`, `xargs cat`, `tr <`. PASS получен со стабом судьи; в настоящем круге такие пункты ловит судья по критерию (f), так что это укрепление кода, а не нарушение F4.3
+- F4: коммит починки без id пункта после полного круга блокирует spec-gate навсегда; закрыть можно только капом или STOP
+- F4: выдуманная команда (echo с нужным выводом) при holds=true проходит код как свой прогон; ловят только опровергатели и судья
+
+## По фичам
+- F1: чек `bin/check-harness items` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/.claude/hooks/spec-gate.mjs: line 272: `if (valid.length && pushed) return { decision: 'stop' ...` changed to `if (valid.length) return ...` (a STOP line counts even when HEAD is not pushed; F1.5 'STOP only from the pushed HEAD') → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F2: чек `bin/check-harness commit` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/.githooks/commit-msg: owner(): dropped project.owner_add (own = raw["defaults"]["owner"]), so CLAUDE.md and .abide/rubric.json of the real budgets.json stop being team-lead files → green; находок 7, блокирующих-кандидатов 2, опровергнуто 1
+- F3: чек `bin/check-harness (full, own run in worktree at 26a265a) + gate.log line for F3` rc 0, маркер есть (own_run); пунктов своим прогоном 4/4; мутация kit/bin/two-tier-upgrade: PLUGINS_OFF: removed compact-adviser@compact-adviser, so the upgrade no longer turns it off (restored with git checkout) → red; находок 4, блокирующих-кандидатов 1, опровергнуто 0
+- F4: чек `bin/check-verify` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация kit/.claude/workflows/verify-phase.js (and its root copy .claude/workflows/verify-phase.js): r.mutation.outcome === 'green' changed to === 'red' in the coded blocking list (surviving mutation no longer blocks; a killed one blocks) - F4.2 → red; находок 3, блокирующих-кандидатов 1, опровергнуто 0
