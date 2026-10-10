@@ -10,7 +10,8 @@ docs/archive/kit-v2/, docs/archive/kit-<дата>/, docs/archive/kit-<дата>-
 запуске (прежний — в архив запуска), один коммит кита. После коммитов каждый файл кита в HEAD сверяется с китом: расхождение — откат и rc 1. Remotes не трогает и не пушит. Файлы тимлида не пишет — они в отчёте; исключения — отдельным
 коммитом «Тимлид: …»: стартовый запрос docs/GOAL.txt → docs/PROMPT.txt (`git mv`, SPEC-v3.2 F7); ушедший Toolgate .claude/toolgate.yaml —
 `git mv` в архив запуска; в .claude/launch.settings.json плагины на действие (Steer-or-Queue, Compact Adviser) — false и без
-pluginConfigs, прежний файл — в архив запуска (SPEC-v3.3 F3.4). Свои коммиты апгрейд делает мимо судей кита (core.hooksPath .githooks
+pluginConfigs, прежний файл — в архив запуска (SPEC-v3.3 F3.4); базы рубрики кита .abide/rubric.json нет — своим коммитом до прочих, есть — не
+трогается (SPEC-v3.3 F7.3). Свои коммиты апгрейд делает мимо судей кита (core.hooksPath .githooks
 проекта — на время коммита /dev/null), после них ставит core.hooksPath .githooks: коммит проекта судят хуки кита (SPEC-v3.3 F2).
 Повторный запуск ничего не меняет. Сначала план и по нему предусловия: на путях апгрейда нет файла вне git
 и пути из .gitignore, budgets.json — в форме кита, путь архива свободен; нарушено — rc 1 и причины, проект не тронут.
@@ -24,10 +25,11 @@ KIT = os.path.join(ROOT, "kit") if os.path.isdir(os.path.join(ROOT, "kit", ".cla
 IF_ABSENT = ["CLAUDE.md", "budgets.json"]          # файлы с фактами проекта: ставятся, только если их нет
 LS = ".claude/launch.settings.json"
 TL_IN_KIT = [LS, ".claude/spec-gate.json"]  # файлы тимлида: апгрейд их не пишет (плагины в LS — коммитом «Тимлид: …»)
+RUBRIC = ".abide/rubric.json"  # v3.3, F7.3: база рубрики кита — файл тимлида: нет в проекте — своим коммитом «Тимлид: …», есть — не трогается
 IN_PROJECT = KIT == ROOT and os.path.exists(os.path.join(ROOT, ".git"))  # копия скрипта в проекте: дерево вокруг — проект, не кит
 KIT_FILES = [] if IN_PROJECT else sorted(r for r in (os.path.relpath(os.path.join(d, f), KIT) for d, _, fs in os.walk(KIT)
                                                      if not {".git", "__pycache__"} & set(os.path.relpath(d, KIT).split(os.sep)) for f in fs)
-                                         if r not in IF_ABSENT + TL_IN_KIT)  # дерево кита, как у bin/two-tier-init
+                                         if r not in IF_ABSENT + TL_IN_KIT + [RUBRIC])  # дерево кита, как у bin/two-tier-init
 ACT = [".claude/hooks/abide.mjs", ".claude/hooks/toolgate-deny.mjs"]  # v3.3, F3.1: судьи на действие ушли из кита
 TL_RETIRED = [".claude/toolgate.yaml"]  # ушедший файл тимлида: в архив коммитом «Тимлид: …»
 RETIRED = [".claude/hooks/verify-gate.sh", ".claude/hooks/track-read.sh", ".claude/hooks/commit-on-stop.sh",
@@ -154,7 +156,8 @@ def upgrade(target):
                 moves.append((rel, arch))
                 texts.append((rel, f"{title}\n\n> Прежний файл ({n} строк) — `{arch}` (two-tier-upgrade, {TODAY}).\n{rest}"))
         prompt_mv = os.path.isfile(T("docs/GOAL.txt")) and not os.path.lexists(T("docs/PROMPT.txt"))  # v3.2, F7
-        if copies or old or texts or prompt_mv or tl_mv or off:  # запуск что-то меняет — отчёт о нём; прежний отчёт — в архив запуска
+        rub = [] if os.path.lexists(T(RUBRIC)) else [RUBRIC]  # v3.3, F7.3
+        if copies or old or texts or prompt_mv or tl_mv or off or rub:  # запуск что-то меняет — отчёт о нём; прежний отчёт — в архив запуска
             old += [REPORT] if os.path.isfile(T(REPORT)) else []
             root = next((r for r in ROOTS if not os.path.lexists(T(r))), None)  # свой каталог на запуск: kit-v2 — только у первого
             if root is None:
@@ -169,11 +172,12 @@ def upgrade(target):
                 [f"- снят хук `{r}` — в `{archived(r, root)}`" for r in old if r in RETIRED and r.startswith(".claude/hooks/")] + \
                 [f"- снят файл тимлида `{a}` — в `{d}` отдельным коммитом «Тимлид: …»" for a, d in tl_moves] + \
                 [f"- выключен плагин `{p}` в `{LS}` (false, без pluginConfigs) отдельным коммитом «Тимлид: …»; прежний файл — `{archived(LS, root)}`" for p in off] + \
+                [f"- база рубрики кита `{RUBRIC}` отдельным коммитом «Тимлид: …»: по ней `abide check` судит коммит (SPEC-v3.3 F7.3)" for _ in rub] + \
                 ([f"- стартовый запрос: `docs/GOAL.txt → docs/PROMPT.txt` отдельным коммитом «Тимлид: …»"] if prompt_mv else []) + \
                 ([f"- `core.hooksPath` → `.githooks`: коммит судят хуки кита (SPEC-v3.3 F2)" + (f", прежнее значение — `{hp0}`" if hp0 else "")
                   + "; в другом клоне проекта — `git config core.hooksPath .githooks`"] if hp0 != ".githooks" else []) + \
                 [f"- архив прежних версий этого запуска — `{root}/`" + (f"; прежний отчёт — `{archived(REPORT, root)}`" if REPORT in old else ""),
-                 "- не тронуто: `CLAUDE.md` и `budgets.json` проекта, если были; файлы тимлида" + (" — кроме коммита «Тимлид: …» выше." if prompt_mv or tl_mv or off else "."), "",
+                 "- не тронуто: `CLAUDE.md` и `budgets.json` проекта, если были; файлы тимлида" + (" — кроме коммитов «Тимлид: …» выше." if prompt_mv or tl_mv or off or rub else "."), "",
                  "## Тимлиду",
                  "- `intent/INTENT.md` по `docs/INTENT.template.md`; SPEC фазы — в формат `docs/SPEC.template.md` (пин, фичи до 600 знаков с полем «служит»); стартовый запрос `docs/PROMPT.txt` по `docs/PROMPT.template.txt` (прежний `docs/GOAL.txt` перенесён отдельным коммитом «Тимлид: …»); в `budgets.json` проекта — `prompt_chars` вместо `goal_chars` и `docs/PROMPT.txt` в `owner`."] + \
                 [f"- {x}" for x in tl_todo] + ["",
@@ -188,14 +192,14 @@ def upgrade(target):
         tracked, puts = set(git("ls-files", "-z").stdout.split("\0")), [rel for rel, _ in copies + texts]
         why += [f"{a}: файл вне git — git mv его не возьмёт" for a, _ in moves + tl_moves if a not in tracked]
         why += [f"{d}: путь архива занят" for _, d in moves + tl_moves if os.path.lexists(T(d))]
-        ignored = git("check-ignore", "-z", "--stdin", "--no-index", input="\0".join(puts + tl_puts)).stdout.split("\0") if puts + tl_puts else []
+        ignored = git("check-ignore", "-z", "--stdin", "--no-index", input="\0".join(puts + tl_puts + rub)).stdout.split("\0") if puts + tl_puts + rub else []
         why += [f"{p}: в .gitignore — git add его не возьмёт" for p in ignored if p]
         why += ["docs/GOAL.txt: файл вне git — git mv его не возьмёт"] if prompt_mv and "docs/GOAL.txt" not in tracked else []
         why += [f"{LS}: файл вне git — коммит «Тимлид: …» его не возьмёт"] if off and LS not in tracked else []
         if why:
             raise RuntimeError("проект не готов, апгрейд не начат:" + "".join(f"\n  - {w}" for w in why))
-        made = [p for p in puts + tl_puts if not os.path.lexists(T(p))]  # файлы и каталоги этого запуска — откат их убирает
-        for p in [d for _, d in moves + tl_moves] + puts + tl_puts:
+        made = [p for p in puts + tl_puts + rub if not os.path.lexists(T(p))]  # файлы и каталоги этого запуска — откат их убирает
+        for p in [d for _, d in moves + tl_moves] + puts + tl_puts + rub:
             d = os.path.dirname(p)
             while d and not os.path.isdir(T(d)):
                 fresh.add(d); d = os.path.dirname(d)
@@ -218,6 +222,12 @@ def upgrade(target):
         kit = bool(git("diff", "--cached", "--quiet").returncode)
         if kit:
             commit("kit-v3: механика two-tier-dev v3 (two-tier-upgrade)")
+        for rel in rub:  # v3.3, F7.3: база рубрики кита — файл тимлида: свой коммит «Тимлид: …», до прочих
+            os.makedirs(os.path.dirname(T(rel)), exist_ok=True)
+            shutil.copy2(os.path.join(KIT, rel), T(rel))
+            run("add", "--", rel)
+            commit(f"Тимлид: {rel} — база рубрики кита: abide check судит коммит проекта (two-tier-upgrade)")
+            print(f"коммит «Тимлид: …»: {rel} — база рубрики кита")
         tl = []  # коммит «Тимлид: …»: перенос запроса, ушедший файл тимлида, плагины на действие
         if prompt_mv:
             run("mv", "docs/GOAL.txt", "docs/PROMPT.txt")
@@ -241,7 +251,7 @@ def upgrade(target):
         if hp0 != ".githooks":  # v3.3, F2: коммит проекта судят хуки кита
             run("config", "core.hooksPath", ".githooks")
             print("core.hooksPath: .githooks")
-        if not kit and not tl:
+        if not kit and not tl and not rub:
             restore()  # повторный запуск ничего не меняет — и ветку тоже
             print("изменений нет"); return 0
     except BaseException as e:  # откат: проект — как до запуска
@@ -322,6 +332,10 @@ def self_test():
     tl = ["docs/SPEC-1.md", "docs/STATUS.md", "intent/intent.template.md", "CLAUDE.md"]
     check(all(read(P(r)) == V2[r] for r in tl) and not os.path.exists(P(".claude/launch.settings.json")),
           "файлы тимлида и CLAUDE.md проекта не тронуты, launch.settings.json не создан")
+    rs = g(proj, "log", "-1", "--format=%H", "--", RUBRIC).stdout.strip()
+    rsh = [l for l in g(proj, "show", "--name-status", "--format=%s", rs).stdout.splitlines() if l] if rs else [""]
+    check(g(proj, "show", f"HEAD:{RUBRIC}").stdout == read(f"{KIT}/{RUBRIC}") and rsh[0].startswith(f"Тимлид: {RUBRIC}") and rsh[1:] == [f"A\t{RUBRIC}"],
+          f"база рубрики кита {RUBRIC} (SPEC-v3.3 F7.3) — в HEAD байт в байт, своим коммитом «Тимлид: …», в нём только она")
     rep = read(P("docs/upgrade-v3.md")) if os.path.isfile(P("docs/upgrade-v3.md")) else ""
     check(all(s in rep for s in ("## Тимлиду", "## Исполнителю", "## Оператору", "launch.settings.json", "intent/intent.template.md")),
           "отчёт docs/upgrade-v3.md: тимлиду, исполнителю, оператору")
@@ -341,13 +355,14 @@ def self_test():
     g(v31, "remote", "remove", "origin")
     intent = "**S1** — оператор получает x\n"
     goal = "Read first: docs/SPEC-1.md, docs/PROGRESS.md\n\nEND STATE (met when one holds):\n(A) F1 is closed.\n"
+    own = '{"version": 1, "rules": [{"id": "own-rule"}]}\n'  # своя рубрика тимлида проекта (F7.3): апгрейд её не трогает
     blob = intent.encode()
     pin = __import__("hashlib").sha1(b"blob %d\0" % len(blob) + blob).hexdigest()[:12]
     spec1 = f"# SPEC-1\n\n**intent:** `intent/INTENT.md @ {pin}`\n\n- **F1 x** · оператор получает x · готово: x · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n"
     for rel, text in {"budgets.json": read(os.path.join(KIT, "budgets.json")), "intent/INTENT.md": intent, "docs/GOAL.txt": goal,
-                      "docs/SPEC-1.md": spec1}.items():
+                      "docs/SPEC-1.md": spec1, RUBRIC: own}.items():
         write(f"{v31}/{rel}", text)
-    g(v31, "add", "--", "budgets.json", "intent/INTENT.md", "docs/GOAL.txt", "docs/SPEC-1.md")
+    g(v31, "add", "--", "budgets.json", "intent/INTENT.md", "docs/GOAL.txt", "docs/SPEC-1.md", RUBRIC)
     g(v31, "commit", "-qm", "Тимлид: фаза 1 кита v3.1 — SPEC и стартовый запрос")
     r3 = run(v31)
     print("  прогон v3.1: " + " | ".join(r3.stdout.splitlines()))
@@ -359,6 +374,8 @@ def self_test():
     cb = subprocess.run([f"{v31}/bin/check-budget"], cwd=v31, env=ENV, capture_output=True, text=True)
     check(cb.stdout.strip().endswith("BUDGET_OK"), f"в проекте v3.1 после апгрейда bin/check-budget → BUDGET_OK (lint владения: коммит переноса — «Тимлид:»)"
           + ("" if cb.stdout.strip().endswith("BUDGET_OK") else " | " + " | ".join(l for l in cb.stdout.splitlines() if l.startswith("FAIL"))))
+    check(g(v31, "show", f"HEAD:{RUBRIC}").stdout == own and not [x for x in g(v31, "log", "--format=%s").stdout.splitlines() if x.startswith(f"Тимлид: {RUBRIC}")],
+          f"своя рубрика проекта {RUBRIC} не тронута, коммита базы кита нет (SPEC-v3.3 F7.3)")
     head3 = g(v31, "rev-parse", "HEAD").stdout.strip()
     r4 = run(v31)
     check(r4.returncode == 0 and g(v31, "rev-parse", "HEAD").stdout.strip() == head3, "повторный прогон проекта v3.1: тот же HEAD")
