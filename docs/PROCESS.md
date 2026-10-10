@@ -17,12 +17,12 @@
 | pyright-lsp | плагин | `pyright-lsp@claude-plugins-official` | да | Python: `bin/check-*` | — | когда в фазе нет Python |
 | typesafe | плагин | `typesafe@typesafe-ai` | да | F1: исполнитель пишет вопросы к Jev | `claude plugin install typesafe@typesafe-ai` | фаза без вызовов Jev |
 | Jev Belay | плагин | `jev-belay@jev-belay` | да | конец хода: второй судья — тень (только журнал); сравнение со `spec-gate` — ретро telefon | `claude plugin install jev-belay@jev-belay` | по ретро |
-| handoff | плагин | `handoff@two-tier-mods` | да | хендофф и свежий контекст на 70 % окна | `claude plugin install handoff@two-tier-mods` | строка таблицы |
+| handoff | плагин | `handoff@two-tier-mods` | да | хендофф и свежий контекст на 70 % окна; ниже — Jev-граница задачи (0.3.0): у оператора `jev: hint`, в строке запуска `jev: off` | `claude plugin install handoff@two-tier-mods` | строка таблицы |
 | Abide | CLI | `abide` | да | коммит: `abide check` по рубрике тимлида (F2.4); хуков на правку и ход нет | `npm i -g @coldtea/abide`, `abide login` | по ретро |
 | без Chrome | флаг | `--no-chrome` | да | выключает встроенный `claude-in-chrome` в сессии исполнителя (cli-reference) | строка запуска | — |
 | limits | плагин | `limits@two-tier-mods` | нет | статус-строка окон подписки: сессии оператора; в фазе — пункт F6.4 | `claude plugin install limits@two-tier-mods` | — |
 | Steer-or-Queue | плагин | `jev-steer-or-queue@jev-steer-or-queue` | нет | событие — сообщение человека посреди хода: только сессии оператора | — | — |
-| Compact Adviser | плагин | `compact-adviser@compact-adviser` | нет | автор: в безнадзорных сессиях выключать; только сессии оператора | — | — |
+| Compact Adviser | плагин | `compact-adviser@compact-adviser` | нет | влит в `handoff` 0.3.0 (Jev-граница); 0.1.12 молчит: ждёт переменную ранних модов, которую Claude Code 2.1.287+ не читает (mods overview); у оператора выключен 10.10 | — | — |
 | Toolgate | CLI | `toolgate` | нет | судья-модель на каждое действие: только сессии оператора; force-push у исполнителя держит код (F2.3) | — | — |
 | Quicksilver | скилл | `quicksilver` | нет | по задаче: корпус больше grep-удобного; на этом плече корпуса нет; тимлиду — журналы на приёмке | — | — |
 | Jev SEO | скилл | `jev-seo` | нет | по задаче: фаза WEB | — | — |
@@ -43,12 +43,12 @@
 | computer-use | MCP | `computer-use` | нет | встроенный MCP: экран и приложения Mac оператора; по умолчанию выключен | — | — |
 
 ## Строка запуска исполнителя — фаза v3.3
-Из корня репо, на ветке `v3.3`, в терминале, где задан `TYPESAFE_API_KEY` (ключ — только в окружении, не в репо). Предохранителя окна в ките ещё нет (его строит F5): перед запуском окна снимает тимлид и пишет в STATUS; запуск — при окне 5 ч не выше 40 % и неделе не выше 85 %. Подготовка — каталог фикстур и ссылка на скилл пользователя (`/tmp` чистится при перезагрузке):
+Из корня репо, на ветке `v3.3`, в терминале, где задан `TYPESAFE_API_KEY` (ключ — только в окружении, не в репо). Строка начинается с предохранителя окна `bin/check-window && ` (F5.1): запуск — при окне 5 ч не выше 40 % и неделе не выше 85 %, иначе отказ с числами и сбросом; обход — `bin/check-window --override && …`, только словом оператора. Подготовка — каталог фикстур и ссылка на скилл пользователя (`/tmp` чистится при перезагрузке):
 
 `mkdir -p /tmp/two-tier-v3/.claude/skills && ln -sfn ~/.claude/skills/graphify /tmp/two-tier-v3/.claude/skills/graphify && rm -f /tmp/two-tier-v3/.claude/skills/quicksilver /tmp/two-tier-v3/.claude/skills/jev-seo`
 
 ```sh
-ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3 -- "$(cat docs/PROMPT.txt)"
+bin/check-window && ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3 -- "$(cat docs/PROMPT.txt)"
 ```
 
 Фаза стартует без `/goal` (D5): строка кончается `--` и стартовым запросом аргументом. Без `--` запрос забирает `--add-dir`, и фаза стартует без запроса. Файл стартового запроса — `docs/PROMPT.txt`; по его `Read first:` `bin/check-budget` находит SPEC фазы. Stop-хук `spec-gate` этого репо — в `.claude/launch.settings.json`: `kit/.claude/hooks/spec-gate.mjs` рабочего дерева, режим `active` (настройки — `kit/.claude/spec-gate.json` по ссылке `.claude/spec-gate.json`). Перевод в тень — словом оператора: `SPEC_GATE=shadow` перед `claude` в строке. Зачем каждый флаг — `docs/LAUNCH.md`.
