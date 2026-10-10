@@ -1,0 +1,105 @@
+$ bin/check-verify  # корень репо кита · 10.10.2026 11:39 · HEAD 13a5a31 + рабочее дерево
+OK   workflow: kit/.claude/workflows/verify-phase.js: meta первым оператором, литералом — да
+OK   workflow: модели: claude-opus-5-5, claude-sonnet-5-5; проверяющие CHECKER, судья JUDGE — полными id
+OK   workflow: часы и случайность в скрипте — нет
+OK   workflow: .claude/workflows/verify-phase.js корня = копия кита
+OK   launcher: kit/bin/verify-phase: лимит по умолчанию 1800 с
+OK   stub: node: скрипт воркфлоу с заглушками — rc 0, сценариев 11 
+--- red: /tmp/two-tier-v3/verify-fx-red-b5zupfsr · rc 0 · verify-f282b9f.txt
+    пороги: 5 ч 70 % (window_repair_pct, budgets.json defaults) · неделя 85 % (window_seven_day_pct, budgets.json defaults)
+    окно 5 ч 5 % (порог 70 %, сброс 12:39) · неделя 50 % (порог 85 %, сброс 11.10 11:39)
+    WINDOW: start
+    verify-phase: HEAD f282b9f ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-f282b9f-8c849r8m/repo; лимит 1800 с; фичи все
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)
+    verify-phase: claude -p rc 0; воркфлоу completed; агентов 6: claude-sonnet-5-5 ×5, claude-opus-5-5 ×1; проверяющие verify:F1; токенов 94297; 103 с
+    verify-phase: docs/evidence/verify-f282b9f.txt
+    VERDICT: NEEDS_WORK
+    | VERDICT: NEEDS_WORK
+    | FEATURES: F1
+    | /verify-phase · docs/SPEC-1.md · HEAD f282b9f · проверяющие claude-sonnet-5-5 (фич 1 из 1, опровергателей 3) · судья claude-opus-5-5
+    | 
+    | Свежий прогон bin/check-slug зелёный, но в его исходнике строки F1.2 и F1.3 зашиты как echo-литералы. При этом сам bin/slug выдаёт `-hello-world-` и `-` с rc 0, так что evidence фичи F1 продукт опровергает. Отдельно блокирую только сфабрикованный чек. Непройденные пункты F1.2/F1.3 и выжившую мутацию код блокирует сам.
+    | 
+    | ## Блокирующие
+    | - **F1: мутация выжила — bin/slug: changed the error message sys.exit("empty slug") to sys.exit("nothing"); product then prints 'nothing' on stderr with rc 1, check stayed green (SLUG_OK). Earlier mutation removing .lower() went red (FAIL: Hello World). File restored with git checkout.** · чек `bin/check-slug` остался зелёным
+    | - **F1.2: не подтверждён своим прогоном** — каждая серия символов вне `a-z0-9` — один `-`, без `-` в начале и в конце: `bin/slug '  Hello,  World!  '` → `hello-world` · свой прогон не подтвердил: `bin/slug '  Hello,  World!  '` rc 0 → «-hello-world-»
+    | - **F1.3: не подтверждён своим прогоном** — пустой слаг (`bin/slug '!!!'`, `bin/slug ''`) — exit 1 и `empty slug` в stderr · свой прогон не подтвердил: `bin/slug '!!!'  (and bin/slug '')` rc 0 → «bin/slug '!!!' -> stdout "-", rc=0 (no stderr; no 'empty slug'). bin/slug '' -> rc=1, stderr "empty slug" (only the empt»
+    | - **F1: bin/check-slug не проверяет F1.2 и F1.3, а печатает их строки evidence как зашитые литералы. Поэтому `SLUG_OK` и docs/evidence/F1-slug-result.txt утверждают то, что продукт опровергает: `bin/slug '  Hello,  World!  '` → `-hello-world-`, а `bin/slug '!!!'` → `-` с rc 0.** · доказательство: bin/check-slug, строки 7–8: `echo "F1.2 '  Hello,  World!  ' → hello-world"` и `echo "F1.3 rc 1 «empty slug»"`. Эти строки не зависят от вывода bin/slug. Тот же текст лежит в docs/evidence/F1-slug-result.txt. Из F1.3 проверяется только `bin/slug ''` и только код возврата, без `'!!!'` и без stderr. · критерий: (a) фича не доказана своим чеком: evidence F1.2/F1.3 сфабрикован чеком, а не получен из сырого вывода продукта · чек приёмки: Заменить echo-литералы на реальный вывод и сравнения: `[ "$(bin/slug '  Hello,  World!  ')" = hello-world ]`; для `bin/slug '!!!'` и `bin/slug ''` проверять rc=1 и `empty slug` в stderr. Печатать `F1.2 <сырой вывод>` и `F1.3 <rc> <stderr>`. На текущем bin/slug чек обязан покраснеть.
+    | 
+    | ## Named, not built
+    | - F1.2: bin/slug не срезает `-` в начале и в конце (нет strip('-')): `bin/slug '  Hello,  World!  '` → `-hello-world-`. Это пункт, не подтверждённый чекером; блокирует код.
+    | - F1.3: проверка пустоты идёт до обрезки, поэтому `bin/slug '!!!'` и `bin/slug '   '` печатают `-` с rc 0 вместо exit 1 и `empty slug`. Это пункт, не подтверждённый чекером; блокирует код.
+    | - Мутация `empty slug`→`nothing` в bin/slug выжила, чек остался зелёным; блокирует код.
+    | - Не-ASCII буквы (например, `Café`) превращаются в разделители. Это соответствует правилу a-z0-9 из SPEC; находка не блокирующая.
+    | 
+    | ## По фичам
+    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); пунктов своим прогоном 1/3; мутация bin/slug: changed the error message sys.exit("empty slug") to sys.exit("nothing"); product then prints 'nothing' on stderr with rc 1, check stayed green (SLUG_OK). Earlier mutation removing .lower() went red (FAIL: Hello World). File restored with git checkout. → green; находок 4, блокирующих-кандидатов 3, опровергнуто 0
+OK   red: модели агентов: {'claude-sonnet-5-5': '5', 'claude-opus-5-5': '1'}
+OK   red: первая строка «VERDICT: NEEDS_WORK»; дефект (дефисы по краям) назван в блокирующих — да
+--- clean: /tmp/two-tier-v3/verify-fx-clean-grz9g9cl · rc 0 · verify-3312cf7.txt
+    пороги: 5 ч 70 % (window_repair_pct, budgets.json defaults) · неделя 85 % (window_seven_day_pct, budgets.json defaults)
+    окно 5 ч 5 % (порог 70 %, сброс 12:39) · неделя 50 % (порог 85 %, сброс 11.10 11:39)
+    WINDOW: start
+    verify-phase: HEAD 3312cf7 ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-3312cf7-fbapxx_p/repo; лимит 1800 с; фичи все
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 5: SLUG_OK · F1 SLUG_OK · WORDS_OK · F2 WORDS_OK · GATE_OK (1 с)
+    verify-phase: claude -p rc 0; воркфлоу completed; агентов 4: claude-sonnet-5-5 ×3, claude-opus-5-5 ×1; проверяющие verify:F1, verify:F2; токенов 73132; 90 с
+    verify-phase: docs/evidence/verify-3312cf7.txt
+    VERDICT: PASS
+    | VERDICT: PASS
+    | FEATURES: F1, F2
+    | /verify-phase · docs/SPEC-1.md · HEAD 3312cf7 · проверяющие claude-sonnet-5-5 (фич 2 из 2, опровергателей 0) · судья claude-opus-5-5
+    | 
+    | Свежий прогон `bin/check-slug` и `bin/check-words` вернул rc 0 с маркерами `SLUG_OK` и `WORDS_OK`. Файлы evidence docs/evidence/F1-slug-result.txt и docs/evidence/F2-words-result.txt на месте, в каждом есть маркер, мутации обеих фич чеки поймали. Все пункты F1.1–F1.3 и F2.1–F2.2 подтверждены собственными командами проверяющего и их сырым выводом, а инвариант §3 (только stdlib python3) соблюдён: импортируются лишь re и sys. Опровергнутых находок нет, ни одна находка не блокирует.
+    | 
+    | ## Блокирующие
+    | Нет.
+    | 
+    | ## Named, not built
+    | - F1: буквы вне ASCII заменяются на `-`, а не транслитерируются (`bin/slug 'Ünï Çode'` → `n-ode`). Это сходится с F1.2, транслитерацию SPEC не требует; не блокирует.
+    | - F1: одиночный аргумент `-h` считается словом заголовка, а не опцией (`bin/slug -h` → `h`). Опции SPEC не описывает; не блокирует.
+    | - F2: слова делит любой пробельный символ Unicode через str.split(): NBSP, VT, FF, CR, U+3000. В скобках F2.1 названы только пробел, таб и перевод строки. Список в скобках читается как пример, поведение как у wc; не блокирует.
+    | 
+    | ## По фичам
+    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); пунктов своим прогоном 3/3; мутация bin/slug: .strip("-") -> .rstrip("-") (leading dash no longer trimmed) → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0
+    | - F2: чек `bin/check-words` rc 0, маркер есть (own_run); пунктов своим прогоном 2/2; мутация bin/words: join arguments with empty string instead of a space (" ".join -> "".join) → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0
+OK   clean: модели агентов: {'claude-sonnet-5-5': '3', 'claude-opus-5-5': '1'}
+OK   clean: первая строка «VERDICT: PASS»; блокирующих 0
+--- point: /tmp/two-tier-v3/verify-fx-clean-9yhoblic · rc 0 · verify-3312cf7-F1.txt
+    пороги: 5 ч 70 % (window_repair_pct, budgets.json defaults) · неделя 85 % (window_seven_day_pct, budgets.json defaults)
+    окно 5 ч 5 % (порог 70 %, сброс 12:39) · неделя 50 % (порог 85 %, сброс 11.10 11:39)
+    WINDOW: start
+    verify-phase: HEAD 3312cf7 ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-3312cf7-9yhqiv7p/repo; лимит 1800 с; фичи F1
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 5: SLUG_OK · F1 SLUG_OK · WORDS_OK · F2 WORDS_OK · GATE_OK (1 с)
+    verify-phase: claude -p rc 0; воркфлоу completed; агентов 3: claude-sonnet-5-5 ×2, claude-opus-5-5 ×1; проверяющие verify:F1; токенов 49743; 67 с
+    verify-phase: docs/evidence/verify-3312cf7-F1.txt
+    VERDICT: PASS
+    | VERDICT: PASS
+    | FEATURES: F1
+    | /verify-phase · docs/SPEC-1.md · HEAD 3312cf7 · проверяющие claude-sonnet-5-5 (фич 1 из 2, опровергателей 0) · судья claude-opus-5-5
+    | 
+    | F1 подтверждена: свежий прогон `bin/check-slug` дал rc 0 и маркер `SLUG_OK`, в docs/evidence/F1-slug-result.txt есть строки F1.1–F1.3 и маркер, а собственные команды проверяющего показали по каждому пункту ровно тот вывод, которого требует SPEC (`hello-world`, `hello-world`, exit 1 и `empty slug` в stderr). Мутация `.strip("-")` → `.rstrip("-")` в bin/slug сделала чек красным, кандидатов на блокировку нет, инвариант §3 (только stdlib python3) соблюдён.
+    | 
+    | ## Блокирующие
+    | Нет.
+    | 
+    | ## Named, not built
+    | - нет
+    | 
+    | ## По фичам
+    | - F1: чек `bin/check-slug` rc 0, маркер есть (own_run); пунктов своим прогоном 3/3; мутация bin/slug: .strip("-") -> .rstrip("-") (leading dash no longer trimmed) → red; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+OK   point: модели агентов: {'claude-sonnet-5-5': '2', 'claude-opus-5-5': '1'}
+--- limit: /tmp/two-tier-v3/verify-fx-limit-9gndam9z · rc 3 · verify-3312cf7.txt
+    пороги: 5 ч 70 % (window_repair_pct, budgets.json defaults) · неделя 85 % (window_seven_day_pct, budgets.json defaults)
+    окно 5 ч 5 % (порог 70 %, сброс 12:39) · неделя 50 % (порог 85 %, сброс 11.10 11:39)
+    WINDOW: start
+    verify-phase: HEAD 3312cf7 ветки main; свежий клон локального репо → /tmp/two-tier-v3/verify-3312cf7-r1orfel5/repo; лимит 20 с; фичи все
+    verify-phase: гейт bin/gate-1 — rc 0, маркеров 5: SLUG_OK · F1 SLUG_OK · WORDS_OK · F2 WORDS_OK · GATE_OK (1 с)
+    verify-phase: лимит истёк на шаге «воркфлоу /verify-phase» через 25 с
+    VERIFY_TIMEOUT
+OK   limit: --limit 20: rc 3, VERIFY_TIMEOUT — да, файл вердикта — нет
+F4.1 стаб: args ["F2"] → verify:F2, «FEATURES: F2»; args "F2" → verify:F2; без args → verify:F1, verify:F2, «FEATURES: F1, F2»; args ["F9"] → NEEDS_WORK «- **F9: нет в docs/SPEC-1.md** · args ["F9"]» · лаунчер с заглушкой claude: F9 → rc 2 «verify-phase: нет фич F9 в docs/SPEC-1.md — в нём: F1, F2»; F1x → rc 2 «verify-phase: аргумент «F1x» — не --limit SEC, не --override-window и не id фичи F<n>»; без списка → rc 0, verify-<sha>.txt — есть, «without args»; F1 → rc 0, verify-<sha>-F1.txt — есть, «["F1"] (an array value», полный файл на месте — да; F1 при FEATURES: F1, F2 → rc 1 «verify-phase: вердикт по фичам F1, F2 ≠ F1 — вердикта нет», файла — нет; без списка при FEATURES: F1 → rc 1 «verify-phase: вердикт по фичам F1 ≠ F1, F2 — вердикта нет» · живой: bin/verify-phase F1 → rc 0, verify-3312cf7-F1.txt «FEATURES: F1», «VERDICT: PASS», проверяющие verify:F1; полный круг → rc 0, «FEATURES: F1, F2», проверяющие verify:F1, verify:F2
+F4.2 стаб: мутация green → NEEDS_WORK «- **F1: мутация выжила — bin/slug: убран strip('-')** · чек `bin/check-F1` остался зелёным»; red → PASS · живой clean: «VERDICT: PASS», мутация bin/slug: .strip("-") -> .rstrip("-") (leading dash no longer trimmed) → red; мутация bin/words: join arguments with empty string instead of a space (" ".join -> "".join) → red · живой red: мутация bin/slug: changed the error message sys.exit("empty slug") to sys.exit("nothing"); product then prints 'nothing' on stderr with rc 1, check stayed green (SLUG_OK). Earlier mutation removing .lower() went red (FAIL: Hello World). File restored with git checkout. → green
+F4.3 стаб: no_own → NEEDS_WORK «нет своей команды или её сырого вывода»; evidence → NEEDS_WORK «команда читает evidence или лог гейта: `grep F1.2 docs/evidence/F1-slug-result.txt`»; check_cmd → NEEDS_WORK «команда — чек фичи, а не своя: `bin/check-F1`»; holds_false → NEEDS_WORK «свой прогон не подтвердил: `bin/slug '  Hello,  World!  '` rc 0 → «-hello-world-»»; свой прогон → PASS · живой red: evidence «F1.2 '  Hello,  World!  ' → hello-world», гейт «verify-phase: гейт bin/gate-1 — rc 0, маркеров 3: SLUG_OK · F1 SLUG_OK · GATE_OK (1 с)», продукт bin/slug '  Hello,  World!  ' → «-hello-world-»; «VERDICT: NEEDS_WORK», «- **F1.2: не подтверждён своим прогоном** — каждая серия символов вне `a-z0-9` — один `-`, без `-` в начале и в конце: `bin/slug '  Hello,  World!  '` → `hello-world` · свой прогон не подтвердил: `bin» · живой clean: пунктов своим прогоном 3/3; пунктов своим прогоном 2/2
+F4.4 полный круг — «SPEC_GATE_OK: features 2, items 4, pushed 685aef1, verify-0902218.txt»; починка «F2.1:» без точечного — block: «F2: changed after the full /verify-phase round 0902218 (commit 98b506f) — no point VERDICT: PASS that names F2»; точечный PASS только по F1 — block: «F2: changed after the full /verify-phase round 0902218 (comm»; точечный PASS по F2 — «SPEC_GATE_OK: features 2, items 4, pushed 4b8b415, verify-0902218.txt, verify-98b506f-F2.txt»
+VERIFY_OK
+rc 0 · 106 с

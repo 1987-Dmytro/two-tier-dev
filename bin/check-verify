@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""check-verify — /verify-phase выносит вердикт фазы (SPEC-v3.1 F4). VERIFY_OK или exit 1.
+"""check-verify — /verify-phase выносит вердикт фазы (SPEC-v3.1 F4; SPEC-v3.3 F4.1–F4.3). VERIFY_OK или exit 1.
 
   · статика: kit/.claude/workflows/verify-phase.js — meta литералом, модели полными id (проверяющие claude-sonnet-5-5,
     судья claude-opus-5-5), без часов и случайности; копия в .claude/workflows/ корня репо — та же; лимит лаунчера 1800 с;
-  · фикстуры во /tmp/two-tier-v3 (кит из bin/two-tier-init, фаза из одной фичи `bin/slug`, параллельно):
-      red   — подложен пограничный дефект (дефисы по краям слага), чек его не видит → VERDICT: NEEDS_WORK, дефект назван;
-      clean — тот же продукт без дефекта, чек покрывает «готово» → VERDICT: PASS, блокирующих 0;
+  · заглушки: скрипт воркфлоу под node с подставными agent/pipeline/parallel и args — какие проверяющие идут и что
+    решает код (F4.1–F4.3); лаунчер с подставным claude на PATH — список фич, args, имя файла вердикта, сверка FEATURES:;
+  · живые фикстуры во /tmp/two-tier-v3 (кит из bin/two-tier-init, фаза `bin/slug` и `bin/words`, параллельно):
+      red   — одна фича, подложен дефект (дефисы по краям), evidence и гейт печатают маркер и строки пунктов, чек дефект
+              не видит → VERDICT: NEEDS_WORK, дефект и пункт F1.2 названы (F4.3);
+      clean — две фичи без дефекта, чеки покрывают пункты → VERDICT: PASS, блокирующих 0, FEATURES: F1, F2;
+      point — та же фаза, `bin/verify-phase F1` → verify-<sha>-F1.txt с FEATURES: F1, проверяющий F2 не идёт (F4.1);
       limit — чистая фикстура с --limit 20 → VERIFY_TIMEOUT, вердикта нет;
-    у агентов прогонов — только claude-sonnet-5-5 и claude-opus-5-5.
+    у агентов прогонов — только claude-sonnet-5-5 и claude-opus-5-5. Окно подписки лаунчера — подставное событие
+    (CHECK_WINDOW_EVENTS, 5 %), хода на снятие оно не тратит.
 Фикстуры синтетические и не пушатся: у них нет origin.
 """
-import json, os, re, subprocess, sys, tempfile
+import json, os, re, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor
 
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -27,6 +32,11 @@ def say(ok, item, msg):
     print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}", flush=True)
 
 
+def probe(item, ok, text):  # строка пробы пункта: id, затем сырой вывод обеих сторон; не сошлось — FAIL сразу за id
+    out.append(bool(ok))
+    print(f"{item} {'' if ok else 'FAIL: '}{text}", flush=True)
+
+
 SLUG = '''#!/usr/bin/env python3
 """slug <заголовок…> — URL-слаг заголовка."""
 import re, sys
@@ -35,44 +45,76 @@ if not s:
     sys.exit("empty slug")
 print(s)
 '''
-CHECK = {  # clean покрывает всё «готово», red — только простой случай и пустой ввод
-    "clean": '''#!/bin/sh
+WORDS = '''#!/usr/bin/env python3
+"""words <текст…> — число слов."""
+import sys
+print(len(" ".join(sys.argv[1:]).split()))
+'''
+OUT = r'''#!/bin/sh
 fail() { echo "FAIL: $1"; exit 1; }
-[ "$(bin/slug Hello World)" = hello-world ] || fail "Hello World"
+out() { "$@" | od -v -An -c | tr -d ' \n'; }
+'''
+CHECK = {  # clean покрывает все пункты, red — только простой случай и пустой ввод, а строки пунктов печатает всегда
+    "clean": OUT + r'''[ "$(out bin/slug Hello World)" = 'hello-world\n' ] || fail "Hello World"
 [ "$(bin/slug '  Hello,  World!  ')" = hello-world ] || fail "края и серии"
 [ "$(bin/slug 'Äb C')" = b-c ] || fail "не-ASCII"
-e=$(mktemp); bin/slug '!!!' 2>"$e" && fail "!!! не отказан"; grep -q 'empty slug' "$e" || fail "нет empty slug"
-bin/slug '' 2>/dev/null && fail "пустой ввод не отказан"
+[ "$(out bin/slug ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789)" = 'abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz-0123456789\n' ] || fail "алфавит и цифры"
+[ "$(bin/slug 'a`b{c@d[e/f:g' Straße)" = a-b-c-d-e-f-g-stra-e ] || fail "соседи a-z0-9 и не-ASCII"
+p=$(python3 -c 'import string; print("x".join(string.punctuation))')
+[ "$(bin/slug "$p")" = "$(python3 -c 'print("-".join(["x"] * 31))')" ] || fail "вся пунктуация ASCII, подчёркивание тоже"
+err=$(bin/slug '!!!' 2>&1 >/dev/null); [ $? -eq 1 ] || fail "!!! — не exit 1"; [ "$err" = "empty slug" ] || fail "нет empty slug"
+bin/slug '' 2>/dev/null; [ $? -eq 1 ] || fail "пустой ввод — не exit 1"
+echo "F1.1 $(bin/slug Hello World)"
+echo "F1.2 $(bin/slug '  Hello,  World!  ')"
+echo "F1.3 rc $(bin/slug '!!!' 2>/dev/null; echo $?) «$(bin/slug '!!!' 2>&1)»"
 echo SLUG_OK
 ''',
-    "red": '''#!/bin/sh
-fail() { echo "FAIL: $1"; exit 1; }
-[ "$(bin/slug Hello World)" = hello-world ] || fail "Hello World"
+    "red": OUT + r'''[ "$(bin/slug Hello World)" = hello-world ] || fail "Hello World"
 bin/slug '' 2>/dev/null && fail "пустой ввод не отказан"
+echo "F1.1 $(bin/slug Hello World)"
+echo "F1.2 '  Hello,  World!  ' → hello-world"
+echo "F1.3 rc 1 «empty slug»"
 echo SLUG_OK
+''',
+    "words": OUT + r'''[ "$(out bin/words 'a b  c')" = '3\n' ] || fail "a b  c"
+[ "$(bin/words "$(printf 'a\tb\nc')" d)" = 4 ] || fail "таб, перевод строки и аргументы"
+[ "$(bin/words 'a b c d e f g h i j' k)" = 11 ] || fail "много слов"
+[ "$(bin/words)" = 0 ] || fail "без аргументов"
+[ "$(bin/words '  ' '')" = 0 ] || fail "одни пробелы"
+echo "F2.1 $(bin/words 'a b  c')"
+echo "F2.2 $(bin/words) $(bin/words '  ' '')"
+echo WORDS_OK
 ''',
 }
+F1 = '''- **F1 Слаг** · оператор получает URL-слаг из заголовка · готово: F1.1–F1.3 · чек: `bin/check-slug` → `SLUG_OK` · служит: S1 · after: —
+  - `F1.1` `bin/slug <заголовок…>` печатает строкой заголовок (аргументы через пробел) в нижнем регистре: `bin/slug Hello World` → `hello-world`
+  - `F1.2` каждая серия символов вне `a-z0-9` — один `-`, без `-` в начале и в конце: `bin/slug '  Hello,  World!  '` → `hello-world`
+  - `F1.3` пустой слаг (`bin/slug '!!!'`, `bin/slug ''`) — exit 1 и `empty slug` в stderr
+'''
+F2 = '''- **F2 Слова** · оператор получает число слов текста · готово: F2.1–F2.2 · чек: `bin/check-words` → `WORDS_OK` · служит: S1 · after: —
+  - `F2.1` `bin/words <текст…>` печатает строкой число слов — серий символов между пробельными (пробел, таб, перевод строки), аргументы через пробел: `bin/words 'a b  c'` → `3`
+  - `F2.2` без слов (`bin/words`, `bin/words '  '`) — `0`, exit 0
+'''
 SPEC = '''# SPEC-1 — slug — фаза 1
 
 **intent:** — · **дата:** 07.10.2026
 
 ## 0. Контекст
-Оператору нужен URL-слаг из заголовка статьи одной командой.
+Оператору нужен URL-слаг из заголовка статьи{words} одной командой.
 
 ## 1. Дизайн высокого уровня
-`bin/slug` — скрипт python3 без зависимостей; `bin/check-slug` — его чек; `bin/gate-1` — гейт фазы.
+`bin/slug`{wbin} — скрипты python3 без зависимостей; `bin/check-slug`{wcheck} — их чеки; `bin/gate-1` — гейт фазы.
 
 ## 2. Фичи
-- **F1 Слаг** · оператор получает URL-слаг из заголовка · готово: `bin/slug <заголовок…>` печатает заголовок (аргументы через пробел) в нижнем регистре, где каждая серия символов вне `a-z0-9` заменена одним `-`, без `-` в начале и в конце; если слаг пуст — exit 1 и `empty slug` в stderr · чек: `bin/check-slug` → `SLUG_OK` · служит: S1 · after: —
-
+{feats}
 ## 3. Инварианты и границы
 - Только stdlib python3; сеть не нужна.
 '''
 PROMPT = '''Read first: docs/SPEC-1.md, docs/PROGRESS.md
 
-This is the start prompt of phase 1 of slug: F1 of SPEC-1 §2.
+This is the start prompt of phase 1 of slug: the features of SPEC-1 §2, each a list of items F<n>.<k>.
 
-Done means: every feature of SPEC-1 §2 is closed, its check ran and its output is in docs/evidence/F1-slug-result.txt; in the final turn `bin/gate-1` prints every marker of the phase.
+Done means: every item of SPEC-1 §2 has its probe line in the evidence: {ev}; in the final turn `bin/gate-1` prints every marker of the phase.
 
 Constraints:
 - Branch main only.
@@ -80,35 +122,54 @@ Constraints:
 
 
 def fixture(kind):
+    """red — одна фича с дефектом; иначе — две фичи без дефекта."""
     os.makedirs(TMP, exist_ok=True)
     d = tempfile.mkdtemp(prefix=f"verify-fx-{kind}-", dir=TMP)
-    g = lambda *a: subprocess.run(["git", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True)
+    g = lambda *a: subprocess.run(["git", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True, text=True)
     g("init", "-q", "-b", "main")
     subprocess.run([f"{REPO}/bin/two-tier-init", d], capture_output=True, check=True)
-    side = "red" if kind == "red" else "clean"
-    files = {"bin/slug": SLUG.format(strip="" if side == "red" else '.strip("-")'), "bin/check-slug": CHECK[side],
-             "bin/gate-1": '#!/bin/sh\nbin/check-slug && echo "F1 SLUG_OK" && echo GATE_OK\n',
-             "docs/SPEC-1.md": SPEC, "docs/PROMPT.txt": PROMPT,
-             "docs/PROGRESS.md": "# PROGRESS — slug, SPEC-1\n\n## Done\n- **F1 Слаг**: `bin/check-slug` → `SLUG_OK` — `docs/evidence/F1-slug-result.txt`.\n"}
+    two = kind != "red"
+    ev = ["docs/evidence/F1-slug-result.txt"] + (["docs/evidence/F2-words-result.txt"] if two else [])
+    files = {"bin/slug": SLUG.format(strip='.strip("-")' if two else ""), "bin/check-slug": CHECK["clean" if two else "red"],
+             "bin/gate-1": '#!/bin/sh\nbin/check-slug && echo "F1 SLUG_OK" || exit 1\n'
+                           + ('bin/check-words && echo "F2 WORDS_OK" || exit 1\n' if two else "") + "echo GATE_OK\n",
+             "docs/SPEC-1.md": SPEC.format(words=" и число слов текста" if two else "", wbin=", `bin/words`" if two else "",
+                                           wcheck=", `bin/check-words`" if two else "", feats=F1 + (F2 if two else "")),
+             "docs/PROMPT.txt": PROMPT.format(ev=", ".join(ev)),
+             "docs/PROGRESS.md": "# PROGRESS — slug, SPEC-1\n\n## Done\n- **F1 Слаг**: `bin/check-slug` → `SLUG_OK` — `docs/evidence/F1-slug-result.txt`.\n"
+                                 + ("- **F2 Слова**: `bin/check-words` → `WORDS_OK` — `docs/evidence/F2-words-result.txt`.\n" if two else "")}
+    if two:
+        files.update({"bin/words": WORDS, "bin/check-words": CHECK["words"]})
     for p, text in files.items():
         os.makedirs(os.path.dirname(f"{d}/{p}"), exist_ok=True)
         open(f"{d}/{p}", "w", encoding="utf-8").write(text)
         os.chmod(f"{d}/{p}", 0o755) if p.startswith("bin/") else None
-    ev = subprocess.run(["bin/check-slug"], cwd=d, capture_output=True, text=True)
     os.makedirs(f"{d}/docs/evidence", exist_ok=True)
-    open(f"{d}/docs/evidence/F1-slug-result.txt", "w").write("$ bin/check-slug\n" + ev.stdout)
-    g("add", "-A")
+    for p in ev:
+        chk = "bin/check-" + p.split("-")[1]
+        open(f"{d}/{p}", "w").write(f"$ {chk}\n" + subprocess.run([chk], cwd=d, capture_output=True, text=True).stdout)
+    g("add", "--", *g("ls-files", "-o", "--exclude-standard", "-z").stdout.split("\0")[:-1])  # точные пути, не -A
     g("commit", "-qm", "slug: фаза 1")
-    return d
+    return d, g("rev-parse", "--short=7", "HEAD").stdout.strip()
+
+
+def window_env():
+    """Окно подписки для лаунчера — подставное событие rate_limit_event на 5 %: check-window не тратит ход (F5)."""
+    d = tempfile.mkdtemp(prefix="verify-window-", dir=TMP)
+    now = int(time.time())
+    open(f"{d}/events.jsonl", "w").write(json.dumps({"type": "rate_limit_event", "rate_limit_info": {"status": "allowed", "unifiedWindows": {
+        "five_hour": {"utilization": 0.05, "resetsAt": now + 3600}, "seven_day": {"utilization": 0.5, "resetsAt": now + 86400}}}}) + "\n")
+    return dict(os.environ, CHECK_WINDOW_EVENTS=f"{d}/events.jsonl")
 
 
 def launch(kind):
-    d = fixture(kind)
-    args = ["--limit", "20"] if kind == "limit" else []
-    r = subprocess.run([f"{REPO}/bin/verify-phase", *args], cwd=d, capture_output=True, text=True, timeout=2400)
-    files = [f for f in os.listdir(f"{d}/docs/evidence") if f.startswith("verify-")]
-    report = open(f"{d}/docs/evidence/{files[0]}", encoding="utf-8").read() if files else ""
-    return kind, d, r.returncode, r.stdout + r.stderr, report
+    d, sha = fixture("clean" if kind == "point" else kind)
+    args = {"limit": ["--limit", "20"], "point": ["F1"]}.get(kind, [])
+    r = subprocess.run([f"{REPO}/bin/verify-phase", *args], cwd=d, env=window_env(), capture_output=True, text=True, timeout=2400)
+    name = f"verify-{sha}{'-F1' if kind == 'point' else ''}.txt"
+    p = f"{d}/docs/evidence/{name}"
+    report = open(p, encoding="utf-8").read() if os.path.isfile(p) else ""
+    return kind, d, r.returncode, r.stdout + r.stderr, report, name
 
 
 def static():
@@ -128,9 +189,114 @@ def static():
     say(lim and lim.group(1) == "1800", "launcher", f"kit/bin/verify-phase: лимит по умолчанию {lim.group(1) if lim else 'нет'} с")
 
 
-def judge(kind, d, rc, text, report):
+# --- заглушки: скрипт воркфлоу под node ------------------------------------------------------------------------------
+HARNESS = r'''
+const fs = require('fs')
+const body = fs.readFileSync(process.argv[1], 'utf8').replace(/^export const meta/m, 'const meta')
+const AF = (async () => {}).constructor
+const run = async s => {
+  const calls = []
+  const agent = async (p, o = {}) => { calls.push(o.label); return o.label in s.answers ? s.answers[o.label] : o.label.startsWith('refute:') ? { refuted: false, reason: '-', observed: '-' } : null }
+  const parallel = ts => Promise.all(ts.map(t => Promise.resolve().then(t).catch(() => null)))
+  const pipeline = (xs, ...st) => Promise.all(xs.map(async (x, i) => { let r = x; for (const f of st) { try { r = await f(r, x, i) } catch (e) { return null } } return r }))
+  const budget = { total: null, spent: () => 0, remaining: () => Infinity }
+  const res = await new AF('agent', 'pipeline', 'parallel', 'phase', 'log', 'budget', 'args', body)(agent, pipeline, parallel, () => {}, () => {}, budget, s.args)
+  return { calls, verdict: res.verdict, report: res.report }
+}
+;(async () => { const out = []; for (const s of JSON.parse(fs.readFileSync(0, 'utf8'))) out.push(await run(s)); console.log(JSON.stringify(out)) })()
+'''
+ITEMS = {"F1": ["F1.1", "F1.2", "F1.3"], "F2": ["F2.1", "F2.2"]}
+SCOPE = {"sha": "abc1234", "spec": "docs/SPEC-1.md", "gate_log": "", "features": [
+    {"id": f, "line": f"- **{f} …** · готово: {its[0]}–{its[-1]}", "items": [{"id": i, "text": f"пункт {i}"} for i in its]} for f, its in ITEMS.items()]}
+OWN = {"command": "bin/slug '  Hello,  World!  '", "rc": 0, "raw_output": "hello-world", "holds": True}
+
+
+def ver(f, outcome="red", **item):
+    """Ответ проверяющего фичи f: чек зелёный, пункты подтверждены своим прогоном; item — подмена пункта F1.2."""
+    its = [{"id": i, **OWN, **(item if i == "F1.2" else {})} for i in ITEMS[f]]
+    return {"check": {"command": f"bin/check-{f}", "rc": 0, "marker_seen": True, "source": "own_run"}, "items": its,
+            "mutation": {"file": "bin/slug", "change": "убран strip('-')", "check_command": f"bin/check-{f}", "outcome": outcome}, "findings": []}
+
+
+def scen(args=None, **answers):
+    a = {"scope": SCOPE, "verify:F1": ver("F1"), "verify:F2": ver("F2"), "judge": {"blocking": [], "named_not_built": [], "summary": "заглушка"}}
+    return {"answers": {**a, **{k.replace("_", ":"): v for k, v in answers.items()}}, **({} if args is None else {"args": args})}
+
+
+STUB = {
+    "f2": scen(["F2"]), "f2str": scen("F2"), "all": scen(), "f9": scen(["F9"]),
+    "mut_green": scen(verify_F1=ver("F1", "green")), "mut_red": scen(verify_F1=ver("F1", "red")),
+    "no_own": scen(verify_F1=ver("F1", command="", raw_output="")),
+    "evidence": scen(verify_F1=ver("F1", command="grep F1.2 docs/evidence/F1-slug-result.txt", raw_output="F1.2 '  Hello,  World!  ' → hello-world")),
+    "check_cmd": scen(verify_F1=ver("F1", command="bin/check-F1", raw_output="F1.2 hello-world\nSLUG_OK")),
+    "holds_false": scen(verify_F1=ver("F1", raw_output="-hello-world-", holds=False)),
+    "own": scen(verify_F1=ver("F1")),
+}
+
+
+def stub():
+    r = subprocess.run(["node", "-e", HARNESS, f"{REPO}/{WF}"], input=json.dumps(list(STUB.values())), capture_output=True, text=True, timeout=60)
+    res = dict(zip(STUB, json.loads(r.stdout))) if r.returncode == 0 and r.stdout.strip() else {}
+    say(res, "stub", f"node: скрипт воркфлоу с заглушками — rc {r.returncode}, сценариев {len(res)} {r.stderr.strip()[-300:]}")
+    return res
+
+
+def line(rep, pat):  # первая строка отчёта по образцу, как есть
+    return next((l for l in rep.splitlines() if re.search(pat, l)), "нет")
+
+
+# --- заглушка claude: лаунчер ------------------------------------------------------------------------------------------
+FAKE = '''#!/usr/bin/env python3
+import json, os, sys
+d = os.environ["FAKE_DIR"]
+open(f"{d}/argv.json", "w").write(json.dumps(sys.argv[1:]))
+json.dump({"result": {"report": open(f"{d}/report.txt").read()}, "workflowProgress": [{"type": "workflow_agent", "label": "verify:F1", "model": "claude-sonnet-5-5"}]}, open(f"{d}/out.json", "w"))
+for e in ({"type": "system", "subtype": "init", "apiKeySource": "none"}, {"type": "system", "subtype": "task_started", "task_id": "w1", "workflow_name": "verify-phase"},
+          {"type": "system", "subtype": "task_notification", "task_id": "w1", "status": "completed", "output_file": f"{d}/out.json"}):
+    print(json.dumps(e), flush=True)
+'''
+
+
+def launcher():
+    """Лаунчер с подставным claude: (сырые строки, ok)."""
+    d, sha = fixture("stub")
+    fk = tempfile.mkdtemp(prefix="verify-fake-", dir=TMP)
+    open(f"{fk}/claude", "w").write(FAKE)
+    os.chmod(f"{fk}/claude", 0o755)
+    env = dict(window_env(), FAKE_DIR=fk, PATH=f"{fk}:{os.environ['PATH']}")
+    full, point = f"{d}/docs/evidence/verify-{sha}.txt", f"{d}/docs/evidence/verify-{sha}-F1.txt"
+
+    def go(feats, *argv):
+        open(f"{fk}/report.txt", "w").write(f"VERDICT: PASS\nFEATURES: {feats}\n")
+        r = subprocess.run([f"{REPO}/bin/verify-phase", *argv], cwd=d, env=env, capture_output=True, text=True, timeout=120)
+        o = (r.stdout + r.stderr).strip().splitlines()
+        prompt = json.load(open(f"{fk}/argv.json"))[1] if os.path.isfile(f"{fk}/argv.json") else ""
+        os.path.isfile(f"{fk}/argv.json") and os.remove(f"{fk}/argv.json")
+        return r.returncode, o[-1] if o else "", prompt
+
+    rc9, l9, _ = go("F9", "F9")
+    rcx, lx, _ = go("F1", "F1x")
+    rca, la, pa = go("F1, F2")
+    a_ok = rca == 0 and os.path.isfile(full) and "without args" in pa
+    rc1, l1, p1 = go("F1", "F1")
+    kept = os.path.isfile(full)  # точечный вердикт не трогает файл полного круга
+    p_ok = rc1 == 0 and os.path.isfile(point) and '["F1"]' in p1 and kept
+    rcm, lm, _ = go("F1, F2", "F1")
+    m_ok = rcm == 1 and "вердикта нет" in lm and not os.path.isfile(point)
+    rcf, lf, _ = go("F1")
+    f_ok = rcf == 1 and "вердикта нет" in lf
+    ok = rc9 == 2 and "F9" in l9 and rcx == 2 and a_ok and p_ok and m_ok and f_ok
+    wa = "without args" if "without args" in pa else pa[:80]
+    w1 = re.search(r"\[[^\]]*\] \(an array value", p1)
+    return (f"лаунчер с заглушкой claude: F9 → rc {rc9} «{l9}»; F1x → rc {rcx} «{lx}»; без списка → rc {rca}, verify-<sha>.txt — "
+            f"{'есть' if a_ok else 'нет'}, «{wa}»; F1 → rc {rc1}, verify-<sha>-F1.txt — {'есть' if p_ok else 'нет'}, "
+            f"«{w1.group(0) if w1 else p1[:80]}», полный файл на месте — {'да' if kept else 'нет'}; "
+            f"F1 при FEATURES: F1, F2 → rc {rcm} «{lm}», файла — {'нет' if m_ok else 'есть'}; без списка при FEATURES: F1 → rc {rcf} «{lf}»"), ok
+
+
+def judge(kind, d, rc, text, report, name):
     used = dict(re.findall(r"(claude-[a-z0-9-]+) ×(\d+)", text))
-    print(f"--- {kind}: {d.replace(TMP, '/tmp/two-tier-v3')} · rc {rc}")
+    print(f"--- {kind}: {d} · rc {rc} · {name}")
     print("\n".join("    " + l for l in text.strip().splitlines()))
     if kind == "limit":
         say(rc == 3 and "VERIFY_TIMEOUT" in text and not report, kind, f"--limit 20: rc {rc}, VERIFY_TIMEOUT — {'да' if 'VERIFY_TIMEOUT' in text else 'нет'}, файл вердикта — {'есть' if report else 'нет'}")
@@ -141,18 +307,107 @@ def judge(kind, d, rc, text, report):
     if kind == "red":
         named = re.search(r"(?i)leading|trailing|ведущ|хвост|начал|конц|крайн|краях|края|strip|hyphen|дефис", block)
         say(report.startswith("VERDICT: NEEDS_WORK") and named, kind, f"первая строка «{report.splitlines()[0] if report else 'нет файла'}»; дефект (дефисы по краям) назван в блокирующих — {'да' if named else 'нет'}")
-    else:
+    elif kind == "clean":
         n = len(re.findall(r"^- ", block, re.M))
         say(report.startswith("VERDICT: PASS") and n == 0, kind, f"первая строка «{report.splitlines()[0] if report else 'нет файла'}»; блокирующих {n}")
 
 
+def checkers(text):  # проверяющие по строке лаунчера, по порядку id
+    return ", ".join(sorted(line(text, r"проверяющие verify:|проверяющие нет").split("проверяющие ")[-1].split(";")[0].split(", ")))
+
+
+def muts(rep):
+    return "; ".join(f"мутация {m} → {o}" for m, o in re.findall(r"мутация (.+?) → (red|green|skipped);", rep)) or "мутаций нет"
+
+
+def counts(rep):
+    return "; ".join(re.findall(r"пунктов своим прогоном \d+/\d+", rep)) or "нет"
+
+
 def main():
     static()
-    with ThreadPoolExecutor(3) as ex:
-        for res in ex.map(launch, ("red", "clean", "limit")):
-            judge(*res)
-    print("VERIFY_OK" if all(out) else "VERIFY_FAIL")
-    return 0 if all(out) else 1
+    with ThreadPoolExecutor(4) as ex:
+        live = ex.map(launch, ("red", "clean", "point", "limit"))  # живые идут, пока работают заглушки
+        s = stub()
+        ltext, lok = launcher()
+        live = {res[0]: res for res in live}
+    for res in live.values():
+        judge(*res)
+    rep = lambda k: s.get(k, {}).get("report", "")
+    calls = lambda k: ", ".join(c for c in s.get(k, {}).get("calls", []) if c.startswith("verify:"))
+    feat = lambda t: line(t, r"^FEATURES:")
+    first = lambda t: t.splitlines()[0] if t else "нет файла"
+    _, _, prc, ptext, prep, pname = live["point"]
+    _, _, crc, ctext, crep, _ = live["clean"]
+    _, rd, rrc, rtext, rrep, _ = live["red"]
+
+    f41 = (calls("f2") == "verify:F2" and feat(rep("f2")) == "FEATURES: F2" and calls("f2str") == "verify:F2"
+           and calls("all") == "verify:F1, verify:F2" and feat(rep("all")) == "FEATURES: F1, F2"
+           and s.get("f9", {}).get("verdict") == "NEEDS_WORK" and "F9: нет в" in rep("f9"))
+    f41_live = feat(prep) == "FEATURES: F1" and checkers(ptext) == "verify:F1" and feat(crep) == "FEATURES: F1, F2" \
+        and checkers(ctext) == "verify:F1, verify:F2"
+    probe("F4.1", f41 and lok and f41_live,
+          f"стаб: args [\"F2\"] → {calls('f2')}, «{feat(rep('f2'))}»; args \"F2\" → {calls('f2str')}; без args → {calls('all')}, "
+          f"«{feat(rep('all'))}»; args [\"F9\"] → {s.get('f9', {}).get('verdict')} «{line(rep('f9'), 'F9: нет в')}» · {ltext} · "
+          f"живой: bin/verify-phase F1 → rc {prc}, {pname} «{feat(prep)}», «{first(prep)}», проверяющие {checkers(ptext)}; "
+          f"полный круг → rc {crc}, «{feat(crep)}», проверяющие {checkers(ctext)}")
+
+    mg = line(rep("mut_green"), r"мутация выжила")
+    f42 = (s.get("mut_green", {}).get("verdict") == "NEEDS_WORK" and "**F1: мутация выжила — bin/slug: убран strip('-')**" in mg
+           and s.get("mut_red", {}).get("verdict") == "PASS")
+    f42_live = crep.startswith("VERDICT: PASS") and "мутация выжила" not in crep
+    probe("F4.2", f42 and f42_live,
+          f"стаб: мутация green → {s.get('mut_green', {}).get('verdict')} «{mg}»; red → {s.get('mut_red', {}).get('verdict')} · "
+          f"живой clean: «{first(crep)}», {muts(crep)} · живой red: {muts(rrep)}")
+
+    bad = {k: s.get(k, {}) for k in ("no_own", "evidence", "check_cmd", "holds_false")}
+    f43 = all(v.get("verdict") == "NEEDS_WORK" and "**F1.2: не подтверждён своим прогоном**" in v.get("report", "") for v in bad.values()) \
+        and s.get("own", {}).get("verdict") == "PASS"
+    product = subprocess.run(["bin/slug", "  Hello,  World!  "], cwd=rd, capture_output=True, text=True).stdout.strip()
+    evl = line(open(f"{rd}/docs/evidence/F1-slug-result.txt", encoding="utf-8").read(), r"^F1\.2 ")
+    f43_live = rrep.startswith("VERDICT: NEEDS_WORK") and "F1.2: не подтверждён своим прогоном" in rrep \
+        and "пунктов своим прогоном 3/3" in crep and "пунктов своим прогоном 2/2" in crep
+    probe("F4.3", f43 and f43_live,
+          "стаб: " + "; ".join(f"{k} → {v.get('verdict')} «{line(v.get('report', ''), 'F1.2: не подтверждён').split(' · ')[-1]}»" for k, v in bad.items())
+          + f"; свой прогон → {s.get('own', {}).get('verdict')} · живой red: evidence «{evl}», гейт «{line(rtext, 'гейт bin/gate-1')}», "
+          f"продукт bin/slug '  Hello,  World!  ' → «{product}»; «{first(rrep)}», «{line(rrep, 'F1.2: не подтверждён')[:200]}» · "
+          f"живой clean: {counts(crep)}")
+    f44()
+    return finish()
+
+
+def f44():
+    """F4.4 — после починки фичи точечный PASS по ней поверх полного круга даёт SPEC_GATE_OK; без него блок называет фичу.
+    Фикстуры и вызов хука — из bin/check-harness (тот же spec-gate кита), без модели."""
+    import importlib.machinery, importlib.util
+    loader = importlib.machinery.SourceFileLoader("harness", os.path.realpath("bin/check-harness"))
+    h = importlib.util.module_from_spec(importlib.util.spec_from_loader("harness", loader))
+    loader.exec_module(h)
+    src = "kit" if os.path.isdir("kit/.claude") else "."
+    launch = ".claude/launch.settings.json" if os.path.isfile(".claude/launch.settings.json") else f"{src}/.claude/launch.settings.json"
+    repo, tr = h.gate_fixture(src, launch, full=True, items=True)
+    full = h.gate_run(repo, tr, "f44-full")[1]
+    open(f"{repo}/bin/b-fix", "w").write("echo B\n")
+    h.ship(repo, "F2.1: починка bin/b", "bin/b-fix")
+    fix = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+    none = h.gate_run(repo, tr, "f44-none")[1]
+    open(f"{repo}/docs/evidence/verify-{fix}-F1.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD {fix}\nFEATURES: F1\n")
+    h.ship(repo, "точечный PASS по F1", f"docs/evidence/verify-{fix}-F1.txt")
+    other = h.gate_run(repo, tr, "f44-other")[1]
+    open(f"{repo}/docs/evidence/verify-{fix}-F2.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD {fix}\nFEATURES: F2\n")
+    h.ship(repo, "точечный PASS по F2", f"docs/evidence/verify-{fix}-F2.txt")
+    point = h.gate_run(repo, tr, "f44-point")[1]
+    f2 = lambda r: next((l[2:] for l in r.get("reason", "").split("\n") if l.startswith("- F2:")), "нет строки F2")
+    ok = (full.get("systemMessage", "").startswith("SPEC_GATE_OK") and none.get("decision") == "block" and "F2: changed after the full" in none.get("reason", "")
+          and other.get("decision") == "block" and "F2: changed after the full" in other.get("reason", "") and "- F1:" not in other.get("reason", "")
+          and point.get("systemMessage", "").startswith("SPEC_GATE_OK") and f"verify-{fix}-F2.txt" in point["systemMessage"])
+    probe("F4.4", ok, f"полный круг — «{full.get('systemMessage', '')[:70]}»; починка «F2.1:» без точечного — {none.get('decision')}: «{f2(none)[:110]}»; "
+          f"точечный PASS только по F1 — {other.get('decision')}: «{f2(other)[:60]}»; точечный PASS по F2 — «{point.get('systemMessage', '')[:110]}»")
+
+
+def finish():
+    print("VERIFY_OK" if out and all(out) else "VERIFY_FAIL")
+    return 0 if out and all(out) else 1
 
 
 if __name__ == "__main__":
