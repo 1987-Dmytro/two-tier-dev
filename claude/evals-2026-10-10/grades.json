@@ -1,0 +1,406 @@
+{
+ "note": "Оценки слепых грейдеров (свежий контекст, метки A/B без версий). Соответствие меток конфигурациям — в поле mapping; грейдеры его не видели.",
+ "mapping": {
+  "e4": {
+   "A": "team-lead v6.1",
+   "B": "team-lead v6.0"
+  },
+  "e5": {
+   "A": "team-lead v6.0",
+   "B": "team-lead v6.1"
+  },
+  "e6": {
+   "A": "team-lead v6.0 + шаблоны кита",
+   "B": "team-lead v6.1 + team-lead-spec v1.0 + шаблоны кита"
+  }
+ },
+ "grades": {
+  "e4": {
+   "A": [
+    {
+     "n": 1,
+     "pass": true,
+     "evidence": "\"Четвёртого точечного круга по F2 не будет — это решение тимлида, не оператора... Такая находка не блокирует, а идёт списком тимлиду.\" + раздел Named, not built в ревью."
+    },
+    {
+     "n": 2,
+     "pass": true,
+     "evidence": "Ревью: \"## Блокирующие (1 из ≤ 5) ### R3-1\"; \"Пункта §2 под это в подписанной SPEC-3 не было: это дефект спеки, а не плеча\"; в итоге: \"Красный гейт — дефект спеки, мой\". (Внутренняя неувязка: в таблице и сообщении оператору \"блокирующих 0\", но в ревью R3-1 заведена блокирующей.)"
+    },
+    {
+     "n": 3,
+     "pass": true,
+     "evidence": "R3-1 несёт \"- Симптом: ... - Доказательство: docs/reviews/phase-3-gate-run.txt ... - Нарушенный критерий: SPEC-3 §5 ... - Чек приёмки: гейт §5 из свежего клона...\"; в PROMPT \"the mechanism and the probe are yours\"; рецепта реализации нет."
+    },
+    {
+     "n": 4,
+     "pass": true,
+     "evidence": "PROMPT: \"Verifier budget (SPEC-3 section 5): one targeted round on F8, no other round... do not run another round, the team lead decides.\" Второго полного круга нет."
+    },
+    {
+     "n": 5,
+     "pass": true,
+     "evidence": "\"плечо 65–71 мин (по фазе 2: правки 10 + своё ревью исполнителя 43 + один круг проверяющих 12–18)\"; \"сегодня... между 16:40 и 17:20\"; \"Измерено в этом сроке только плечо... Моё чтение с гейтом (20–30 мин) и твой гейт (15–30 мин) — ранняя оценка.\""
+    },
+    {
+     "n": 6,
+     "pass": true,
+     "evidence": "\"docs/PROMPT.txt — переписан под ревью\"; \"It is passed as the launch-line argument; the spec drives the phase\"; раздел 2.4 «Строка запуска» с тремя частями, `docs/PROMPT.txt` аргументом. Текста /goal нет."
+    },
+    {
+     "n": 7,
+     "pass": true,
+     "evidence": "\"приёмка не длиннее плеча | ≤ 76 мин | 141 мин на круги... | красная\"; \"Красная планка ... принимается как есть: 141 мин против 76 (×1,86). Запись не расширяю, чтение не переписываю.\"; оператору: \"2 ч 21 мин против 76 мин стройки\"."
+    },
+    {
+     "n": 8,
+     "pass": true,
+     "evidence": "Сообщение оператору — ~14 строк файла (блок цитаты); \"Нужно одно решение — подпись под SPEC-3 в редакции 2\"; \"А (рекомендую) — «да»\" стоит первым, затем \"Б — «нет»\"."
+    },
+    {
+     "n": 9,
+     "pass": true,
+     "evidence": "STATUS: \"## Уроки (каталог развилок PROCESS и копилка системы; скилл не правится до ретро фазы)\"."
+    },
+    {
+     "n": 10,
+     "pass": true,
+     "evidence": "STATUS: \"Обращений за фазу: 6, первое 10:44, последнее 14:08 («отчёт готов»).\""
+    },
+    {
+     "n": 11,
+     "pass": true,
+     "evidence": "STATUS: \"Окно 5 ч: 46 % в 14:10, сброс в 15:00; порог запуска плеча 70 % — запуск разрешён. Неделя: 71 %.\"; оператору: \"сейчас 46 %, порог запуска 70 %; неделя 71 %\"; в строке запуска \"предохранитель окна (порог 70 %)\". Обхода нет."
+    }
+   ],
+   "B": [
+    {
+     "n": 1,
+     "pass": true,
+     "evidence": "\"Четвёртого круга по F2 не будет — это моё решение, от вас ничего не нужно\"; N1 в \"Named, not built\": \"Не блокирует\"; PROMPT: \"A surviving mutation in the code of a check... is not blocking... start no further round.\""
+    },
+    {
+     "n": 2,
+     "pass": true,
+     "evidence": "Ревью: \"## Блокирующие ### B1 — проверки фазы шли в дереве кита...\"; оператору: \"Это дыра спеки, не исполнителя: пункта «после `init` суд работает» в SPEC-3 не было\"; \"Узкое место плеча — тимлид (спека)\"."
+    },
+    {
+     "n": 3,
+     "pass": true,
+     "evidence": "B1/B2 несут \"- Симптом: ... - Доказательство: ... - Нарушенный критерий: ... - Чек приёмки: ...\"; \"Как чинить — решает исполнитель\"; PROMPT: \"the mechanism and the probe are yours\"."
+    },
+    {
+     "n": 4,
+     "pass": false,
+     "evidence": "PROMPT допускает два точечных круга по F8: \"one targeted round `bin/verify-phase F8`...\" и далее \"Blocking findings ... are fixed in this session and re-verified once with `bin/verify-phase F8`; never a full or a third round.\" Линия в PROCESS: \"один точечный по затронутой фиче и одна перепроверка\". Это больше одного точечного круга."
+    },
+    {
+     "n": 5,
+     "pass": false,
+     "evidence": "Плечо посчитано по замеру (\"≈ 65 мин ... 10 мин правки + 43 мин его ревью + 12 мин точечный круг\"), срок назван (\"16:30 и 17:30\"), но \"починка 65–90 мин, моя приёмка ≈ 25 мин, ваш гейт ≈ 10 мин\" — оценки (90, 25, 10) не помечены как ранняя оценка, ни в сообщении, ни в STATUS."
+    },
+    {
+     "n": 6,
+     "pass": true,
+     "evidence": "\"### 2.3. Стартовый запрос плеча починки — `docs/PROMPT.txt`, дословно\"; \"Идёт аргументом строки запуска из PROCESS (модель — полным id, effort — по таблице model-config)\". Текста /goal нет."
+    },
+    {
+     "n": 7,
+     "pass": true,
+     "evidence": "\"Красная планка, принимаю как есть: приёмка 2 ч 21 мин против стройки 76 мин — «приёмка не длиннее плеча» нарушена почти вдвое\"; STATUS: \"2 ч 21 мин против 76 мин, КРАСНАЯ\"."
+    },
+    {
+     "n": 8,
+     "pass": true,
+     "evidence": "Сообщение оператору — ~11 непустых строк; \"Нужно одно ваше «да/нет»\"; \"«да» — рекомендую\" идёт первым, затем \"«нет»\"."
+    },
+    {
+     "n": 9,
+     "pass": true,
+     "evidence": "\"Строки в каталог развилок `docs/PROCESS.md` (урок проекта; скилл сейчас не правится)\"."
+    },
+    {
+     "n": 10,
+     "pass": true,
+     "evidence": "STATUS: \"обращений оператор ↔ тимлид — 6 за 3 ч 24 мин (10:44–14:08)\"."
+    },
+    {
+     "n": 11,
+     "pass": true,
+     "evidence": "\"Лимиты позволяют: окно 46 % при пороге запуска 70 %, сброс в 15:00. Неделя — 71 %\"; STATUS: \"окно 46 % при пороге 70 %, сброс в 15:00\"; строка запуска из PROCESS. Обхода нет."
+    }
+   ],
+   "totals": {
+    "A": "11/11",
+    "B": "9/11"
+   },
+   "notes": "Различия: 4 (B допускает перепроверку = второй точечный круг по F8) и 5 (B не помечает оценки 90/25/10 мин как раннюю оценку). Слабые места утверждений: №7 не отличает объяснение причины от оправдания (оба ответа называют причину, оба засчитаны); №8 считает строки файла, а строки у обоих очень длинные (у A плотнее); №11 не требует явно сверки недельного лимита, хотя 71 % > 70 % — оба ответа только называют его; №2 не ловит внутреннюю неувязку у A (\"блокирующих 0\" в сообщении/STATUS при R3-1 блокирующей в ревью). Утверждения не фиксируют, что строка запуска дана дословно (оба сослались на PROCESS без текста)."
+  },
+  "e5": {
+   "A": [
+    {
+     "n": 1,
+     "pass": false,
+     "evidence": "Start file opens with '/goal Read first: docs/SPEC-2.md, docs/PROGRESS.md' and the message says 'набери руками `/goal ` и вставь блок Б' - /goal text is present, so the assertion fails."
+    },
+    {
+     "n": 2,
+     "pass": true,
+     "evidence": "'Запуск — в 13:00, не сейчас.' / 'в 11:15 пятичасовое окно подписки израсходовано на 47 % при пороге 40 %... Сброс в 13:00'"
+    },
+    {
+     "n": 3,
+     "pass": true,
+     "evidence": "'Утром ты сменил адрес ящика — вчерашнее «отвечает» больше не факт. Шлю одно контрольное письмо на новый адрес и ловлю его.'"
+    },
+    {
+     "n": 4,
+     "pass": true,
+     "evidence": "'Гейт §5. Я его ни разу не прогонял — мой долг. Прохожу на стенде твои три проверки'"
+    },
+    {
+     "n": 5,
+     "pass": true,
+     "evidence": "'Read first: docs/SPEC-2.md, docs/PROGRESS.md' (2 files, on the first line after the /goal prefix); done = 'Every item of F1-F3 ... the feature checks named in SPEC-2 section 2'; 'B. STOP... a new line `STOP: <id>` at the head of docs/PROGRESS.md'"
+    },
+    {
+     "n": 6,
+     "pass": true,
+     "evidence": "'Never print a secret...'; 'Anything irreversible, or paid above the threshold in docs/PROCESS.md, waits for the operator's yes'; 'Team-lead files are read-only: intent/, docs/SPEC-*.md, docs/PROMPT.txt, ...'"
+    },
+    {
+     "n": 7,
+     "pass": true,
+     "evidence": "'Authorized in this goal: push branch phase-2 to origin; edit .claude/settings.json to add the mail-check hook; deploy to stage.example.org.' (the line says 'goal', not 'phase'; the content is the same)"
+    },
+    {
+     "n": 8,
+     "pass": false,
+     "evidence": "Code block holds placeholders: 'claude --model <полный id модели из PROCESS> <флаг режима auto из PROCESS> --settings <файл настроек запуска из PROCESS>...' plus added cd/git switch/git pull. It is 'форма', not the exact command."
+    },
+    {
+     "n": 9,
+     "pass": true,
+     "evidence": "Message is lines 3-27 (about 25 file lines with the two blocks); deadline: 'Фаза 2 закрыта сегодня, в четверг, между 15:30 и 16:00; с кругом починки — до 17:00 (ранняя оценка...)' from 26 min build per feature, 19 min round, 25 min acceptance."
+    }
+   ],
+   "B": [
+    {
+     "n": 1,
+     "pass": true,
+     "evidence": "No /goal anywhere. Start file: 'It is passed as the launch-line argument; the spec drives the phase.' Launch line ends with '-- \"$(cat docs/PROMPT.txt)\"'."
+    },
+    {
+     "n": 2,
+     "pass": true,
+     "evidence": "'А (рекомендую): в 13:05, после сброса окна... окно... 47 %, порог... 40 %' and 'Б: обойти предохранитель вашим словом' - reset time named, bypass only by the operator's word."
+    },
+    {
+     "n": 3,
+     "pass": true,
+     "evidence": "'`mailprobe`: живое письмо на новый адрес и его собственный статус. После утренней смены ящика вчерашнее «отвечал» не считается.'"
+    },
+    {
+     "n": 4,
+     "pass": true,
+     "evidence": "'Гейт §5 — три ваши проверки на стенде, снаружи, как заказчик. До подписи я его не прогнал — мой пропуск, закрываю сейчас.'"
+    },
+    {
+     "n": 5,
+     "pass": true,
+     "evidence": "'Read first: docs/SPEC-2.md, docs/PROGRESS.md'; done = 'every item of SPEC-2 section 2... the closing artifact of SPEC-2 section 5 holds on the stand'; 'The Stop hook spec-gate holds the end of a turn... a new line `STOP: <id>` in docs/PROGRESS.md'"
+    },
+    {
+     "n": 6,
+     "pass": true,
+     "evidence": "'Never print secrets; irreversible or paid above the PROCESS threshold only after the operator's yes.' / 'Team-lead files are read-only: intent/, docs/SPEC-*.md, docs/PROMPT.txt, docs/STATUS.md, docs/PROCESS.md, docs/reviews/...'"
+    },
+    {
+     "n": 7,
+     "pass": true,
+     "evidence": "'Authorized in this phase: push branch phase-2; edit .claude/settings.json (the mail-check hook of this phase...); deploy to the stand stage.example.org.'"
+    },
+    {
+     "n": 8,
+     "pass": false,
+     "evidence": "Code block: 'bin/check-window && <середина строки дословно из PROCESS: claude · модель полным id · режим auto · файл настроек запуска · MCP доков> -- \"$(cat docs/PROMPT.txt)\"' - middle is a placeholder; the exact command is not given."
+    },
+    {
+     "n": 9,
+     "pass": true,
+     "evidence": "Message is lines 3-26 (about 24 lines); 'сегодня, в четверг, ваш гейт — между 15:45 и 16:30 (вариант А). Счёт по темпу фазы 1: стройка трёх фич ~78 мин (26 мин на фичу)...' with an early-estimate mark for the repair case."
+    }
+   ],
+   "totals": {
+    "A": "7/9",
+    "B": "8/9"
+   },
+   "notes": "Assertion 8 is hard to satisfy: the scenario never gives the exact launch line, so both answers fail it on placeholders. Assertion 1 is the only difference, and it is a mechanical check on the literal /goal text. Assertion 7 literally says 'Authorized in this phase'; A wrote 'in this goal' and I passed it on content (if graded strictly on the wording, A would drop to 6/9). Assertion 9 counts file lines and A sits at the ~25 limit. The assertions do not capture: the quality of the window-wait recommendation, B's use of a single decision letter versus A's no-decision stance, A's offer of a fallback manual /goal, or B's note that filling the gate result into the signed SPEC section 5 is an edit of a signed text."
+  },
+  "e6": {
+   "A": [
+    {
+     "n": 1,
+     "pass": true,
+     "evidence": "F1.1 «на одноразовом свежем клоне «Склада» после `upgrade` его `bin/check-budget` выходит с кодом 0 — чек печатает код и красные строки»; F5.4 «чек печатает состояние PR и хеш»; у всех пунктов место чтения названо (вывод чека / запушенный HEAD)."
+    },
+    {
+     "n": 2,
+     "pass": true,
+     "evidence": "F1.2 «коммит без пометки тимлида в каталог из списка тимлида «Склада» остаётся красным — отказ»; F2.3 «образец, где правило проекта вырезано»; F3.2 «образец, где заменённый файл удалён»; F4.3 «образец с изменённой планкой»; F5.3 «образец без настройки хука» — красная сторона у каждой из пяти фич."
+    },
+    {
+     "n": 3,
+     "pass": true,
+     "evidence": "F1.1 «на одноразовом свежем клоне «Склада»»; F1.4 «синтетическая названа временной; на `upgrade` из замера 1 — отказ self-test»."
+    },
+    {
+     "n": 4,
+     "pass": true,
+     "evidence": "F1.1 (check-budget проекта после upgrade, код 0), F5.1 «`bin/check-budget` проекта выходит с кодом 0, `bin/check-ci upgrade-v4` печатает `CI_OK`»; §5 «Запуск: `bin/check-budget` → код 0»."
+    },
+    {
+     "n": 5,
+     "pass": true,
+     "evidence": "Таблица решений F1: «коммит `upgrade` проходит lint владения как коммит тимлида: запускает его тимлид (D3); список и lint не трогаются»; плюс F1.1 требует код 0 на клоне после upgrade — закрыто пунктом и строкой таблицы, не приёмкой."
+    },
+    {
+     "n": 6,
+     "pass": true,
+     "evidence": "Таблица судей: «проба с красной стороной в чеке фичи; ... `spec-gate`» (код), «проверяющие `/verify-phase`: свои фикстуры и мутации» (сила пробы), «Jev в тени: статус пункта в отчёте фазы; не блокирует»; §6.2 «судья в тени и не блокирует». Слабость: слова «свежие проверяющие» и «факт модели не отдаётся» явно не сказаны — следуют из распределения строк."
+    },
+    {
+     "n": 7,
+     "pass": false,
+     "evidence": "В §5 нет поля «прогон гейта до выдачи: дата, код выхода, на чём» и нет пометки заполнить до подписи; есть только список запусков."
+    },
+    {
+     "n": 8,
+     "pass": false,
+     "evidence": "Блока приёмки нет. Есть лишь §4 «мутации кода чека одной фичи — одна находка, ... перепроверка — точечный круг по тронутым фичам; второго полного круга нет». Отсутствуют: «не больше одного точечного на затронутую фичу», критерий блокирующей находки (ломает наблюдаемый результат пункта), «мутации кода чека — списком тимлиду», «второй NEEDS_WORK без блокирующей — отчёт тимлиду»."
+    },
+    {
+     "n": 9,
+     "pass": false,
+     "evidence": "Таблица опирается на замеры: 22 мин полный круг, 12–18 точечный, 141 мин сумма, «три лишних круга»; но нет своего ревью исполнителя (20 мин из 45 мин починки) — ни в таблице, ни в тексте (grep «ревью» даёт только «Неблокирующие находки ревью»). Часть условия не выполнена."
+    },
+    {
+     "n": 10,
+     "pass": false,
+     "evidence": "§6: п.1 «вопрос оператору; фазу не держит» (есть и владелец, и признак), но п.2–4 («следующая фаза», «следующая фаза, после гейта этой») без владельца; у п.2 признак есть («не блокирует»), у п.3–4 нет явного признака."
+    },
+    {
+     "n": 11,
+     "pass": false,
+     "evidence": "«Вне объёма: работа текущей фазы «Склада», слияние в `main`, перевод других проектов, всё из `Named, not built`.» — перечень без причин."
+    },
+    {
+     "n": 12,
+     "pass": true,
+     "evidence": "Нет рецептов по файлам и строкам; «У каждого пункта исполнитель в PLAN-5 выбирает пробу с красной стороной». Лёгкое предписание в F4.2 (патч одной командой) и в строке таблицы решений, но это результат/ветка, не рецепт реализации."
+    },
+    {
+     "n": 13,
+     "pass": true,
+     "evidence": "«Причин ровно четыре: STOP-PAY, STOP-SCOPE, STOP-INPUT, STOP-NP»; таблица решений на красный F1 (4 строки: архив без пометки → ветка; формы → F4; сужение списка → STOP-SCOPE; нет убыли → STOP-NP). Слабость: таблица только про F1, красных исходов по правилам суда (замер 2) в ней нет."
+    }
+   ],
+   "B": [
+    {
+     "n": 1,
+     "pass": true,
+     "evidence": "F1.1 «на свежем клоне запушенного HEAD `upgrade-v4` `bin/check-budget` проекта выходит с кодом 0 ... — вывод команды»; F2.2 «отчёт сверки `6/6`»; F2.1 «блок в журнале запуска»; F3.5 «отчёт фазы `bin/phase-report`»."
+    },
+    {
+     "n": 2,
+     "pass": true,
+     "evidence": "F1.1 «образец замера 09.10 (архив без пометки тимлида) — красный»; F1.4 «образец с убранной записью — отказ»; F2.2 «образец без правила проекта — отказ»; F2.3 «красный образец каждого из шести правил»; F3.1 «образец с удалением — отказ»."
+    },
+    {
+     "n": 3,
+     "pass": true,
+     "evidence": "F1.1 на свежем клоне запушенного HEAD; §2 «свежий клон живого проекта и его CI на каждом круге вместо синтетической фикстуры»; §6.6 «self-test зелёный на синтетике при красном живом проекте ... с фикстурой из живого проекта». Пограничное: слов «недостаточная/временная» нет, недостаточность выражена через замену фикстурой из живого проекта."
+    },
+    {
+     "n": 4,
+     "pass": true,
+     "evidence": "F1.1 (`bin/check-budget` проекта, код 0) и F1.2 «`bin/check-ci upgrade-v4` печатает `CI_OK`»; §5 «`bin/check-budget` и `bin/check-ci upgrade-v4` в клоне «Склада» → код 0 и `CI_OK`»."
+    },
+    {
+     "n": 5,
+     "pass": true,
+     "evidence": "§1 «Вход фазы — готовит тимлид до запуска (D3): ... `upgrade` прогнана на свежем клоне, её коммит несёт пометку тимлида»; таблица решений: «закрыт на входе пометкой тимлида; остался красным — STOP-INPUT»; F1.1 красный образец замера 09.10."
+    },
+    {
+     "n": 6,
+     "pass": true,
+     "evidence": "Таблица судей: «факт (код выхода, git, сверка, счёт) | код: проба с красной стороной в `bin/gate-5`; ... `spec-gate`»; «сила пробы | проверяющие `bin/verify-phase` из свежих клонов: свои фикстуры и мутации, один полный круг»; «судья-модель в тени: оценка в отчёт фазы, не блокирует». «Факт модели не отдаётся» явно не сказано, следует из строк."
+    },
+    {
+     "n": 7,
+     "pass": true,
+     "evidence": "«**Прогон гейта до выдачи:** 09.10.2026 · на свежем клоне «Склада» · `upgrade` — код выхода 0; `bin/check-budget` проекта — красный ... код выхода в журнале замера не записан»; §5: «Оператор запускает сам, на свежем клоне: `bin/check-budget` и `bin/check-ci upgrade-v4`»; «ветку `upgrade-v4` «Склада», а не дерево разработки кита»."
+    },
+    {
+     "n": 8,
+     "pass": true,
+     "evidence": "«**Приёмка:** один полный круг свежих проверяющих; после починки — не больше одного точечного круга на затронутую фичу. Блокирует находка, которая ломает наблюдаемый результат пункта; мутации кода чека ... идут списком тимлиду ... Второй NEEDS_WORK без блокирующей по пункту закрывает фичу отчётом тимлиду»."
+    },
+    {
+     "n": 9,
+     "pass": true,
+     "evidence": "Таблица: полный круг «22 мин ... 22 мин»; точечный «12–18 мин за круг; потолок 3 × 18 = 54 мин» (число кругов — по числу фич); починка «45 мин, из них ревью 20 мин»; «на фазе 4 было 141 мин»; неизмеренное помечено «измерить»."
+    },
+    {
+     "n": 10,
+     "pass": true,
+     "evidence": "§6: «1. **Тимлид · блокирует подпись.**», «3. **Оператор · не блокирует ...**», «4. **Оператор · не блокирует.**», «5. **Тимлид · не блокирует.**», «7. **Тимлид · не блокирует.**». Слабость: п.6 «Оператор · следующая фаза» — признак «блокирует» не слово в слово, но смысл (не блокирует эту фазу) ясен."
+    },
+    {
+     "n": 11,
+     "pass": true,
+     "evidence": "«Вне объёма: слияние в `main` (после гейта, по слову оператора) · правка `upgrade` и её self-test (работа вне SPEC — своя ветка и гейт) · пункты идущей фазы «Склада» (работа проекта) · статус-плагин (не решён, сигнала нет).»"
+    },
+    {
+     "n": 12,
+     "pass": true,
+     "evidence": "Нет рецептов по файлам/строкам; пункты описывают результат и канал пробы. Слабое место: в «Authorized in this phase» назван вложенный `claude -p` для контрольных запусков — это разрешение, не рецепт построения."
+    },
+    {
+     "n": 13,
+     "pass": true,
+     "evidence": "«Причин ровно четыре»: STOP-PAY, STOP-SCOPE, STOP-INPUT, STOP-NP; «Таблица решений на ожидаемое красное» из 8 строк (замер 09.10, правка файла из owner, upgrade заменила файл правил, правило спорит с базовым, суд не ловит образец, красное и на main, нестабильный запуск, S3 красная)."
+    }
+   ],
+   "totals": {
+    "A": "8/13",
+    "B": "13/13"
+   },
+   "measurements": {
+    "A": {
+     "total_chars": 15812,
+     "longest_feature_block_chars": 821,
+     "feature_block_chars": [
+      821,
+      623,
+      593,
+      703,
+      788
+     ],
+     "note": "F1 longest; block = line starting '- **F<n>' plus indented lines, newline-joined; chars not bytes"
+    },
+    "B": {
+     "total_chars": 15828,
+     "longest_feature_block_chars": 878,
+     "feature_block_chars": [
+      687,
+      780,
+      878
+     ],
+     "note": "F3 longest; same method"
+    }
+   },
+   "notes": "A1-A4 do not distinguish: both answers have result items with red samples and project-check runs. Assertion 6 does not test whether the fact is explicitly withheld from the model judge nor what 'fresh verifiers' means (neither answer states it literally; both pass by table structure). Assertion 3 for B is borderline (synthetic fixture marked insufficient only implicitly via §6.6). Assertion 9 bundles three measured items in parentheses; A fails only on the missing executor own-review (20 min), a stricter reading would pass A. Assertion 10 for B item 6 says 'следующая фаза' instead of an explicit 'не блокирует'. Assertion 13 checks only that rows exist; A's single-feature (F1) table passes though it ignores the measurement-2 red (rules file), B covers 8 cases. Not captured: A's reading of D3 (executor runs upgrade on disposable clones, explicit sign-off) vs B's (team lead prepares input); A gives S3 reading alternatives and signs it for the operator, B picks the strict reading without evidence from intent; A defines new checks per feature and a STOP-INPUT plan point, B puts two sign-blocking questions in §6. Block-length measurement is in feature blocks of section 2 only."
+  }
+ }
+}
