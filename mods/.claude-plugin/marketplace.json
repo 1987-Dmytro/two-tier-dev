@@ -1,8 +1,9 @@
 {
   "name": "two-tier-mods",
   "owner": { "name": "two-tier-dev" },
-  "metadata": { "description": "Mods of the two-tier-dev system: handoff (automatic handoff + fresh context)." },
+  "metadata": { "description": "Mods of the two-tier-dev system: handoff (automatic handoff + fresh context), limits (rate-limit status line)." },
   "plugins": [
-    { "name": "handoff", "source": "./handoff", "description": "Writes a handoff from the live transcript past a context threshold or on /handoff, then /clear and resume." }
+    { "name": "handoff", "source": "./handoff", "description": "Writes a handoff from the live transcript past a context threshold or on /handoff, then /clear and resume." },
+    { "name": "limits", "source": "./limits", "description": "Status line with the 5h and weekly rate limits, reset countdowns, context fill and session cost." }
   ]
 }

@@ -20,6 +20,7 @@
 | handoff | плагин | `handoff@two-tier-mods` | да | хендофф и свежий контекст на 70 % окна | `claude plugin install handoff@two-tier-mods` | строка таблицы |
 | Abide | CLI | `abide` | да | коммит: `abide check` по рубрике тимлида (F2.4); хуков на правку и ход нет | `npm i -g @coldtea/abide`, `abide login` | по ретро |
 | без Chrome | флаг | `--no-chrome` | да | выключает встроенный `claude-in-chrome` в сессии исполнителя (cli-reference) | строка запуска | — |
+| limits | плагин | `limits@two-tier-mods` | нет | статус-строка окон подписки: сессии оператора; в фазе — пункт F6.4 | `claude plugin install limits@two-tier-mods` | — |
 | Steer-or-Queue | плагин | `jev-steer-or-queue@jev-steer-or-queue` | нет | событие — сообщение человека посреди хода: только сессии оператора | — | — |
 | Compact Adviser | плагин | `compact-adviser@compact-adviser` | нет | автор: в безнадзорных сессиях выключать; только сессии оператора | — | — |
 | Toolgate | CLI | `toolgate` | нет | судья-модель на каждое действие: только сессии оператора; force-push у исполнителя держит код (F2.3) | — | — |
