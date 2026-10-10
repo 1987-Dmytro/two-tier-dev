@@ -430,7 +430,8 @@ def commit_probes(src):
     hashl = gc(r, "commit", "-qm", f"F2.1: чистый\n\n# {secret}")  # строку на «#» git с -m сохраняет
     shapes = {"AKIA": "AKIA" + secrets.token_hex(8).upper(), "ghp_": "ghp" + "_" + secrets.token_hex(18), "github_pat_": "github" + "_pat_" + secrets.token_hex(18),
               "xoxb-": "xox" + "b-" + secrets.token_hex(8), "AIza": "AIza" + secrets.token_hex(18)[:35], "PRIVATE KEY": "-----BEGIN " + "RSA PRIVATE KEY-----",
-              "присваивание": "api_key = '" + secrets.token_hex(10) + "'"}
+              "присваивание": "api_key = '" + secrets.token_hex(10) + "'", "KEY=value без кавычек": "API_KEY=" + secrets.token_hex(12),
+              "sk_live_": "sk" + "_live_" + secrets.token_hex(12)}
     shaped = {}
     for k, v in shapes.items():
         put(r, "bin/shape.py", v + "\n"); gc(r, "add", "--", "bin/shape.py")
@@ -459,6 +460,9 @@ def commit_probes(src):
     put(r, "CLAUDE.md", "d\n"); gc(r, "add", "--", "CLAUDE.md")
     tl_add = gc(r, "commit", "-qm", "F2.2: CLAUDE.md")  # файл из project.owner_add — тоже файл тимлида
     gc(r, "commit", "-qm", "Тимлид: CLAUDE.md")
+    put(r, "intent/INTENT.md", "i\n"); gc(r, "add", "--", "intent/INTENT.md")
+    tl_dir = gc(r, "commit", "-qm", "F2.2: intent")  # запись owner каталогом («intent/») — файл в нём тоже тимлида
+    gc(r, "commit", "-qm", "Тимлид: intent")
     gc(r, "rm", "-q", "a.txt")
     rm = gc(r, "commit", "-qm", "F2.2: удаление")
     gc(r, "reset", "-q", "HEAD", "--", "a.txt"); gc(r, "checkout", "-q", "--", "a.txt")
@@ -471,9 +475,9 @@ def commit_probes(src):
     gc(r, "reset", "-q", "HEAD", "--", "README.md"); gc(r, "checkout", "-q", "--", "README.md")
     mok = gc(r, "commit", "-qm", "слияние side")
     ok = (tl[0] == 1 and "team-lead-files: docs/STATUS.md" in tl[1] and tl_ok[0] == 0 and rm[0] == 1 and "no-delete: a.txt" in rm[1] and mv[0] == 0
-          and tl_add[0] == 1 and "team-lead-files: CLAUDE.md" in tl_add[1]
+          and tl_add[0] == 1 and "team-lead-files: CLAUDE.md" in tl_add[1] and tl_dir[0] == 1 and "team-lead-files: intent/INTENT.md" in tl_dir[1]
           and mrg[0] == 1 and "no-delete: README.md" in mrg[1] and mok[0] == 0)
-    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; с «Тимлид:» — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
+    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; с «Тимлид:» — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; файл в каталоге owner (intent/) — rc {tl_dir[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
          f"git mv в docs/archive/ — rc {mv[0]}; слияние со своим удалением — rc {mrg[0]} «{mrg[1][:70]}», то же слияние без него — rc {mok[0]}")
     # F2.3 — force-push в любой записи (bare origin); обычный push проходит; написание в Bash — отказ хука кита
     ff = gc(r, "push", "-q", "origin", "v")
