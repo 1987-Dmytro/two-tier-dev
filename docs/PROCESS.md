@@ -25,8 +25,8 @@
 | Compact Adviser | плагин | `compact-adviser@compact-adviser` | нет | влит в `handoff` 0.3.0 (Jev-граница); 0.1.12 молчит: ждёт переменную ранних модов, которую Claude Code 2.1.287+ не читает (mods overview); у оператора выключен 10.10 | — | — |
 | Toolgate | CLI | `toolgate` | нет | судья-модель на каждое действие: только сессии оператора; force-push у исполнителя держит код (F2.3) | — | — |
 | Quicksilver | скилл | `quicksilver` | нет | по задаче: корпус больше grep-удобного; на этом плече корпуса нет; тимлиду — журналы на приёмке | — | — |
-| Jev SEO | скилл | `jev-seo` | нет | по задаче: фаза WEB | — | — |
-| Jev Browser | MCP | `jev-browser` | нет | по задаче: фазы с UI, `bin/check-ui` | — | — |
+| Jev SEO | скилл | `jev-seo` | нет | исполнителю — по задаче: фаза WEB; тимлиду — CLI на Mac оператора через оболочку и скилл Cowork `jev-seo` (копия — `docs/drafts/jev-seo-cowork.md`) | — | — |
+| Jev Browser | MCP | `jev-browser` | нет | исполнителю — по задаче: фазы с UI, `bin/check-ui`; тимлиду — MCP в Claude Desktop: гейт и приёмка страниц | — | — |
 | jev-mcp | MCP | `jev` | нет | инструмент тимлида в Claude Desktop | — | — |
 | Context7 (плагин) | плагин | `context7@claude-plugins-official` | нет | удалённый MCP требует OAuth; вместо него — stdio-сервер выше | — | — |
 | commit-commands | плагин | `commit-commands@claude-plugins-official` | нет | коммиты и PR мимо дисциплины | — | — |
