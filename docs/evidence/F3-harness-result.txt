@@ -1,4 +1,4 @@
-$ bin/check-harness env  # проект из кита: bin/two-tier-init в /tmp/two-tier-v3/t3env-oSWrPH · 10.10.2026 11:36 · HEAD 13a5a31 + рабочее дерево
+$ bin/check-harness env  # проект из кита: bin/two-tier-init в /tmp/two-tier-v3/t3env-FAikyI · 10.10.2026 13:05 · HEAD c6514e1 + рабочее дерево
 источник харнеса: .; строка запуска: ./docs/PROCESS.template.md; launch settings: .claude/launch.settings.json; разделы: env
 ok  modes · зелёная: тень, hint, 70 % — как в pluginConfigs: расхождений нет
 ok  modes · тень в таблице, shadow false: режим jev-belay@jev-belay: в таблице «тень», launch settings — {"shadow": false}
@@ -28,7 +28,7 @@ OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (жд
 OK   settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, refuse_sweeping_commands.py; с ошибкой — нет
 OK   launch: .claude/launch.settings.json: autoMode.environment записей 5, "$defaults" есть
 OK   line: ./docs/PROCESS.template.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 16; нет — ничего; стартовый запрос аргументом — docs/PROMPT.txt, `--` перед ним — есть
-копия харнеса: /tmp/two-tier-v3/harness-xszmq3_2
+копия харнеса: /tmp/two-tier-v3/harness-q_qcl49s
 run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p --max-turns 3 --output-format stream-json --verbose --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3/skills -- "$(cat docs/PROMPT.txt)"
 OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
 OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
@@ -40,19 +40,19 @@ OK   run2: system/init = таблица ./docs/PROCESS.template.md: плагин
 OK   belay: Belay в живой сессии (код без чека и «готово»): решений 1 — shadow; тень дошла из pluginConfigs; ходов 2
 OK   quicksilver: по задаче: `qs status` (модель пином, свой QUICKSILVER_HOME): rc 0, «ready · key from env JEV_API_KEY · model jev-1.13.0»
 OK   jev-seo: по задаче: `jevseo doctor`: rc 0, версия 0.1.1, модулей ok 7/7, ключ — present
-OK   jev-browser: по задаче: `bin/check-ui` — check-ui: rc 0; steps 1, passed 1, statuses done, assert true; Jev calls 2, tokens 2194, 1842 ms in the run, 3.8 s in all
+OK   jev-browser: по задаче: `bin/check-ui` — check-ui: rc 0; steps 1, passed 1, statuses done, assert true; Jev calls 2, tokens 2196, 1711 ms in the run, 3.0 s in all
 F3.1 кит: ушедших в настройках и шаблоне — нет, файлов в ./ — нет, в архиве docs/archive/kit-v3.2/ — не про проект; Belay — тень True; красная фикстура (хук abide.mjs, compact-adviser true, Toolgate «да») — abide.mjs, compact-adviser@compact-adviser, строка «Toolgate» — да
-F3.2 хуков на действие кита, строки запуска и плагинов в живом init — 4, в сеть или к модели — 0; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, Stop fetch) — PreToolUse net.mjs: «fetch(»; PostToolUse prompt: type prompt
+F3.2 хуков на действие кита, строки запуска и плагинов в живом init — 4, в сеть или к модели — 0; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, UserPromptSubmit https.get одной строкой и claude --print, Stop fetch) — PreToolUse net.mjs: «fetch(»; PostToolUse prompt: type prompt; UserPromptSubmit get.mjs: «https.get(»; UserPromptSubmit ask.sh: «claude --print»
 F3.3 живой system/init (./docs/PROCESS.template.md) = таблица: да (плагинов 5, MCP 1 (context7 connected), скиллов 31; строк таблицы 34); фикстура — лишний плагин: «плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»»; нет MCP: «MCP context7: нет в system/init»
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
-OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 5; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
+OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 6; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
 OK   kill: воркфлоу completed; агент создал AGENT_STOP — да; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
 OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
 ENV_OK
 HARNESS_OK
 HOOKS_OK
-rc 0 · 98 с
-$ bin/check-harness env  # корень репо кита · 10.10.2026 12:29 · HEAD 919a729 + рабочее дерево
+rc 0 · 118 с
+$ bin/check-harness env  # корень репо кита · 10.10.2026 13:05 · HEAD c6514e1 + рабочее дерево
 источник харнеса: kit; строка запуска: docs/PROCESS.md; launch settings: .claude/launch.settings.json; разделы: env
 ok  modes · зелёная: тень, hint, 70 % — как в pluginConfigs: расхождений нет
 ok  modes · тень в таблице, shadow false: режим jev-belay@jev-belay: в таблице «тень», launch settings — {"shadow": false}
@@ -82,7 +82,7 @@ OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (жд
 OK   settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, refuse_sweeping_commands.py; с ошибкой — нет
 OK   launch: .claude/launch.settings.json: autoMode.environment записей 6, "$defaults" есть
 OK   line: docs/PROCESS.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 16; нет — ничего; стартовый запрос аргументом — docs/PROMPT.txt, `--` перед ним — есть
-копия харнеса: /tmp/two-tier-v3/harness-q7xetds1
+копия харнеса: /tmp/two-tier-v3/harness-b5y3mbtz
 run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p --max-turns 3 --output-format stream-json --verbose --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}' --add-dir /tmp/two-tier-v3 -- "$(cat docs/PROMPT.txt)"
 OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
 OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
@@ -94,16 +94,16 @@ OK   run2: system/init = таблица docs/PROCESS.md: плагинов 6, MCP
 OK   belay: Belay в живой сессии (код без чека и «готово»): решений 1 — shadow; тень дошла из pluginConfigs; ходов 2
 OK   quicksilver: по задаче: `qs status` (модель пином, свой QUICKSILVER_HOME): rc 0, «ready · key from env JEV_API_KEY · model jev-1.13.0»
 OK   jev-seo: по задаче: `jevseo doctor`: rc 0, версия 0.1.1, модулей ok 7/7, ключ — present
-OK   jev-browser: по задаче: `bin/check-ui` — check-ui: rc 0; steps 1, passed 1, statuses done, assert true; Jev calls 2, tokens 2192, 1644 ms in the run, 3.4 s in all
+OK   jev-browser: по задаче: `bin/check-ui` — check-ui: rc 0; steps 1, passed 1, statuses done, assert true; Jev calls 2, tokens 2192, 1799 ms in the run, 3.0 s in all
 F3.1 кит: ушедших в настройках и шаблоне — нет, файлов в kit/ — нет, в архиве docs/archive/kit-v3.2/ — все 3; Belay — тень True; красная фикстура (хук abide.mjs, compact-adviser true, Toolgate «да») — abide.mjs, compact-adviser@compact-adviser, строка «Toolgate» — да
-F3.2 хуков на действие кита, строки запуска и плагинов в живом init — 4, в сеть или к модели — 0; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, Stop fetch) — PreToolUse net.mjs: «fetch(»; PostToolUse prompt: type prompt
+F3.2 хуков на действие кита, строки запуска и плагинов в живом init — 4, в сеть или к модели — 0; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, UserPromptSubmit https.get одной строкой и claude --print, Stop fetch) — PreToolUse net.mjs: «fetch(»; PostToolUse prompt: type prompt; UserPromptSubmit get.mjs: «https.get(»; UserPromptSubmit ask.sh: «claude --print»
 F3.3 живой system/init (docs/PROCESS.md) = таблица: да (плагинов 6, MCP 1 (context7 connected), скиллов 32; строк таблицы 36); фикстура — лишний плагин: «плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»»; нет MCP: «MCP context7: нет в system/init»
 F3.4 `bin/two-tier-upgrade --self-test` rc 0, UPGRADE_OK: v3.1 d2ca390: до — 1 FAIL «core.hooksPath не задан»; после — rc 0, сверка «пусто», в docs/archive/kit-v2/ байт в байт 0/0 (—), bin/check-budget rc 0 BUDGET_OK, повтор rc 0 изменений нет · v3.1 d2ca390 → китом v3.2 b5b81cd: до — 5 FAIL «.claude/hooks/abide.mjs в HEAD; .claude/hooks/toolgate-deny.mjs в HEAD; хук abide.mjs в .claude/settings.json; хук toolgate-deny.mjs в .claude/settings.json; core.hooksPath не задан» (китом v3.2 rc 0); после — rc 0, сверка «пусто», в docs/archive/kit-2026-10-10/ байт в байт 2/2 (abide.mjs, toolgate-deny.mjs), bin/check-budget rc 0 BUDGET_OK, повтор rc 0 изменений нет · v3.2 b5b81cd: до — 10 FAIL «.claude/hooks/abide.mjs в HEAD; .claude/hooks/toolgate-deny.mjs в HEAD; .claude/toolgate.yaml в HEAD; хук abide.mjs в .claude/settings.json; хук toolgate-deny.mjs в .claude/settings.json; плагин jev-steer-or-queue@jev-steer-or-queue включён; плагин compact-adviser@compact-adviser включён; pluginConfigs jev-steer-or-queue@jev-steer-or-queue; pluginConfigs compact-adviser@compact-adviser; core.hooksPath не задан»; после — rc 0, сверка «пусто», в docs/archive/kit-v2/ байт в байт 4/4 (abide.mjs, toolgate-deny.mjs, toolgate.yaml, launch.settings.json), bin/check-budget rc 0 BUDGET_OK, повтор rc 0 изменений нет
 OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
-OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 5; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «<\tool_use_error>File is in a directory that is denied by your permiss»; `git add -A` — отказ хука; в индексе 0
+OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 5; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
 OK   kill: воркфлоу completed; агент создал AGENT_STOP — да; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
 OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
 ENV_OK
 HARNESS_OK
 HOOKS_OK
-rc 0 · 123 с
+rc 0 · 128 с

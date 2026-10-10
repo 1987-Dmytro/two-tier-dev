@@ -145,6 +145,9 @@ def main(argv):
     spec, items = spec_items()
     base, commits = phase_commits()
     seen = probes()
+    known = {it["id"] for it in items}
+    for c in commits:  # id не пункт этого SPEC (опечатка F1.10, чужой F9.9) — коммит без пункта
+        c["ids"] = [i for i in c["ids"] if i in known]
     by_item = {it["id"]: [c["sha"] for c in commits if it["id"] in c["ids"]] for it in items}
     status, jev_note = ({}, "не спрашивали (--no-jev)") if argv else jev(items, seen)
     os.makedirs("docs/evidence", exist_ok=True)

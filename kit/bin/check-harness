@@ -222,8 +222,9 @@ def items_probes(src, launch):
         return [l for l in o.splitlines() if re.match(r"(OK|FAIL)\s+spec_(items|judges|block_chars)", l)]
     green = budget()
     reds = {"место": budget(it="  - `F9.1` всё работает быстро и надёжно"), "судья": budget(s3="- C1: из репо ничего не удаляется"),
-            "блок": budget(it="  - `F9.1` `bin/x` печатает X " + "y" * 900), "диапазон": budget(rng=True)}
-    want = {"место": ("spec_items", "F9.1"), "судья": ("spec_judges", "C1: из репо"), "блок": ("spec_block_chars", "F9:"), "диапазон": ("spec_items", "без строки пункта — F9.2")}
+            "блок": budget(it="  - `F9.1` `bin/x` печатает X " + "y" * 900), "диапазон": budget(rng=True),
+            "пустой судья": budget(s3="- C1: из репо ничего не удаляется · судья:")}
+    want = {"место": ("spec_items", "F9.1"), "судья": ("spec_judges", "C1: из репо"), "блок": ("spec_block_chars", "F9:"), "диапазон": ("spec_items", "без строки пункта — F9.2"), "пустой судья": ("spec_judges", "C1: из репо")}
     hit = {k: next((l for l in ls if l.startswith("FAIL") and want[k][0] in l and want[k][1] in l), None) for k, ls in reds.items()}
     ok = len(green) == 3 and all(l.startswith("OK") for l in green) and all(hit.values())
     sp = lambda l: " ".join((l or "нет FAIL").split())
@@ -239,14 +240,16 @@ def items_probes(src, launch):
     gx("init", "-q", "-b", "main"); gx("add", "--", "docs/PROMPT.txt", "docs/SPEC-1.md"); gx("commit", "-qm", "Тимлид: SPEC-1"); gx("switch", "-qc", "v")
     put("bin/a", "echo A\n"); gx("add", "--", "bin/a"); gx("commit", "-qm", "F1.1: bin/a печатает A")
     put("notes.txt", "x\n"); gx("add", "--", "notes.txt"); gx("commit", "-qm", "разное без пункта")
+    put("typo.txt", "x\n"); gx("add", "--", "typo.txt"); gx("commit", "-qm", "F1.10: опечатка id пункта")
+    put("alien.txt", "x\n"); gx("add", "--", "alien.txt"); gx("commit", "-qm", "F9.9: чужой пункт")
     put("docs/evidence/F1-a-result.txt", "F1.1 rc 0 · A напечатано\n"); put("docs/evidence/F2-b-result.txt", "F2.1 rc 0 · B напечатано\n")
     gx("add", "--", "docs/evidence/F1-a-result.txt", "docs/evidence/F2-b-result.txt"); gx("commit", "-qm", "F2.1: evidence")
-    sha = {s: gx("log", "--format=%h", f"--grep={s}", "-1").stdout.strip() for s in ("F1.1:", "разное", "F2.1:")}
+    sha = {s: gx("log", "--format=%h", f"--grep={s}", "-1").stdout.strip() for s in ("F1.1:", "разное", "F2.1:", "F1.10:", "F9.9:")}
     rc, summary, rep = report_of(p, src)
     row = next((l for l in rep.splitlines() if l.startswith("| F1.1 |")), "")
     lists = {k: next((l for l in rep.splitlines() if l.startswith(f"- **{k}")), "") for k in ("Пункты без коммитов", "Коммиты без пункта", "Пункты без пробы")}
     ok = (rc == 0 and sha["F1.1:"] in row and "F1-a-result.txt" in row and "A напечатано" in row and "(1): F1.2" in lists["Пункты без коммитов"]
-          and sha["разное"] in lists["Коммиты без пункта"] and "(1)" in lists["Коммиты без пункта"] and "(1): F1.2" in lists["Пункты без пробы"]
+          and all(sha[k] in lists["Коммиты без пункта"] for k in ("разное", "F1.10:", "F9.9:")) and "(3)" in lists["Коммиты без пункта"] and "(1): F1.2" in lists["Пункты без пробы"]
           and sha["F2.1:"] in next((l for l in rep.splitlines() if l.startswith("| F2.1 |")), ""))
     item(S, "F1.4", ok, f"bin/phase-report rc {rc} · строка матрицы «{row[:120]}» · " + " · ".join(f"«{v[:90]}»" for v in lists.values()))
     # F1.5 — STOP только из запушенного HEAD; пропуск хука — строкой с причиной в отчёте фазы
@@ -421,14 +424,19 @@ def commit_probes(src):
     put(r, "docs/evidence/F1-x-result.txt", "rc 0 · X_OK · /tmp/two-tier-v3/x/run1.jsonl\n"); gc(r, "add", "--", "docs/evidence/F1-x-result.txt")
     mail = gc(r, "commit", "-qm", "F2.1: прогнал " + "alex" + "@" + "example.com")
     hashl = gc(r, "commit", "-qm", f"F2.1: чистый\n\n# {secret}")  # строку на «#» git с -m сохраняет
+    put(r, "docs/evidence/F1-x-result.txt", "ran in /home/" + "bob" + "/kit · rc 0\n"); gc(r, "add", "--", "docs/evidence/F1-x-result.txt")
+    linux = gc(r, "commit", "-qm", "F2.1: домашний путь Linux")
+    put(r, "docs/evidence/F1-x-result.txt", "rc 0 · X_OK · /tmp/two-tier-v3/x/run1.jsonl\n"); gc(r, "add", "--", "docs/evidence/F1-x-result.txt")
+    coname = gc(r, "commit", "-qm", "F2.1: соавтор\n\nCo-Authored-By: bob " + "bob" + "@" + "example.com <noreply@anthropic.com>")
     clean = gc(r, "commit", "-qm", "F2.1: чистый evidence\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>")
     ok = (lit[0] == 1 and "no-secret-values: bin/s.py" in lit[1] and secret not in lit[1] and envv[0] == 1 and "no-secret-values: bin/e.py" in envv[1]
           and tok not in envv[1] and home[0] == 1 and "evidence-anonymized: docs/evidence/F1-x-result.txt" in home[1]
           and mail[0] == 1 and "evidence-anonymized: the commit message" in mail[1] and clean[0] == 0
           and utf[0] == 1 and "no-secret-values: bin/заметки.py" in utf[1] and nul[0] == 1 and "no-secret-values: bin/blob.bin" in nul[1]
-          and hashl[0] == 1 and "no-secret-values: the commit message" in hashl[1])
+          and hashl[0] == 1 and "no-secret-values: the commit message" in hashl[1]
+          and linux[0] == 1 and "evidence-anonymized: docs/evidence/F1-x-result.txt" in linux[1] and coname[0] == 1 and "evidence-anonymized: the commit message" in coname[1])
     item(S, "F2.1", ok, f"литерал ключа — rc {lit[0]} «{lit[1][:80]}»; значение ключа из окружения — rc {envv[0]} «{envv[1][:80]}»; домашний путь в evidence — rc {home[0]} "
-         f"«{home[1][:90]}»; почта в сообщении — rc {mail[0]} «{mail[1][:80]}»; ключ в файле с не-ASCII именем — rc {utf[0]}, в бинарном по git — rc {nul[0]}; ключ в строке «#» сообщения — rc {hashl[0]}; "
+         f"«{home[1][:90]}»; почта в сообщении — rc {mail[0]} «{mail[1][:80]}»; ключ в файле с не-ASCII именем — rc {utf[0]}, в бинарном по git — rc {nul[0]}; ключ в строке «#» сообщения — rc {hashl[0]}; путь /home/… в evidence — rc {linux[0]}; почта в имени соавтора — rc {coname[0]}; "
          f"чистый evidence с noreply@ соавтора — rc {clean[0]}")
     # F2.2 — файл тимлида без «Тимлид:», удаление мимо git mv в docs/archive/
     put(r, "docs/STATUS.md", "y\n"); gc(r, "add", "--", "docs/STATUS.md")
@@ -554,8 +562,9 @@ def commit_probes(src):
 RETIRED = {"hooks": ("abide.mjs", "toolgate-deny.mjs"), "plugins": ("jev-steer-or-queue@jev-steer-or-queue", "compact-adviser@compact-adviser"),
            "rows": ("Toolgate", "Compact Adviser", "Steer-or-Queue"), "files": (".claude/hooks/abide.mjs", ".claude/hooks/toolgate-deny.mjs", ".claude/toolgate.yaml")}
 ACTION = ("PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit")
-NET = re.compile(r"\bfetch\(|https?\.request\(|urllib\.request|\brequests\.(?:get|post)\(|\bcurl\b|\bwget\b|socket\.(?:connect|create_connection)|net\.connect\("
-                 r"|bin/jev\b|\btoolgate\b|\babide\b|api\.typesafe\.ai|api\.anthropic\.com|['\"]claude['\"],\s*['\"]-p['\"]|\bclaude -p\b")
+NET = re.compile(r"\bfetch\(|\bhttps?\.(?:request|get)\(|http\.client|urllib|\brequests\.\w+\(|\bhttpx\b|\baiohttp\b|\baxios\b|\bundici\b|XMLHttpRequest|\bWebSocket\b"
+                 r"|\bcurl\b|\bwget\b|\bnc\b|\bncat\b|\btelnet\b|socket\.(?:connect|create_connection)|net\.connect\(|@anthropic-ai/|\b(?:import|from) anthropic\b|\bopenai\b"
+                 r"|bin/jev\b|\btoolgate\b|\babide\b|api\.typesafe\.ai|api\.anthropic\.com|['\"]claude['\"],\s*['\"]-(?:p|-print)['\"]|\bclaude (?:-p|--print)\b")
 
 
 def retired_in(settings, launch, process):
@@ -578,8 +587,13 @@ def action_hooks(sources):
                     if h.get("type") in ("prompt", "agent", "http"):
                         bad.append((ev, name, f"type {h['type']}"))
                         continue
-                    for a in [h.get("command", "")] + list(h.get("args", [])):
-                        path = a.replace("${CLAUDE_PROJECT_DIR}", root).replace("${CLAUDE_PLUGIN_ROOT}", root)
+                    cmd = h.get("command", "")
+                    try:  # команда одной строкой («node ${CLAUDE_PROJECT_DIR}/x.mjs») — читаем и её скрипты
+                        toks = shlex.split(cmd)
+                    except ValueError:
+                        toks = cmd.split()
+                    for a in [cmd, *toks, *h.get("args", [])]:
+                        path = a.replace("${CLAUDE_PROJECT_DIR}", root).replace("${CLAUDE_PLUGIN_ROOT}", root).replace("$CLAUDE_PROJECT_DIR", root)
                         text = open(path, encoding="utf-8", errors="replace").read() if os.path.isfile(path) else a
                         m = NET.search(text)
                         if m:
@@ -620,14 +634,18 @@ def env_probes(src, proc, launch, init, args):
     fx = tempfile.mkdtemp(prefix="action-hooks-", dir=TMP)
     open(f"{fx}/net.mjs", "w").write("await fetch('https://api.typesafe.ai/v1/systemone', { method: 'POST' })\n")
     open(f"{fx}/local.sh", "w").write("#!/bin/sh\nexit 0\n")
+    open(f"{fx}/get.mjs", "w").write("import https from 'node:https'\nhttps.get('https://example.invalid/x')\n")
+    open(f"{fx}/ask.sh", "w").write("#!/bin/sh\nclaude --print 'judge this edit'\n")
     fixture = {"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/net.mjs"]},
                                                     {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/local.sh"}]}],
                          "PostToolUse": [{"hooks": [{"type": "prompt", "prompt": "Judge this edit."}]}],
+                         "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "node ${CLAUDE_PROJECT_DIR}/get.mjs"},
+                                                         {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/ask.sh"}]}],
                          "Stop": [{"hooks": [{"type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/net.mjs"]}]}]}}
     rbad, rseen = action_hooks([(fixture, fx, None)])
-    ok = not bad and [n for _, n, _ in rbad] == ["net.mjs", "prompt"]
+    ok = not bad and [n for _, n, _ in rbad] == ["net.mjs", "prompt", "get.mjs", "ask.sh"]
     item(S, "F3.2", ok, f"хуков на действие кита, строки запуска и плагинов в живом init — {seen}, в сеть или к модели — {len(bad)}"
-         + (f" ({'; '.join(f'{e} {n}: {w}' for e, n, w in bad)})" if bad else "") + f"; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, Stop fetch) — "
+         + (f" ({'; '.join(f'{e} {n}: {w}' for e, n, w in bad)})" if bad else "") + f"; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, UserPromptSubmit https.get одной строкой и claude --print, Stop fetch) — "
          + "; ".join(f"{e} {n}: {w}" for e, n, w in rbad))
     rows = table(open(proc, encoding="utf-8").read())
     live = [compare(rows, init, " ".join(args))[0]] if init else [["нет system/init"]]
