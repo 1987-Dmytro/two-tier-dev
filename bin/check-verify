@@ -64,8 +64,22 @@ p=$(python3 -c 'import string; print("x".join(string.punctuation))')
 [ "$(bin/slug "$p")" = "$(python3 -c 'print("-".join(["x"] * 31))')" ] || fail "вся пунктуация ASCII, подчёркивание тоже"
 [ "$(bin/slug a)" = a ] && [ "$(bin/slug '!b!')" = b ] || fail "слаг из одного знака"
 [ "$(bin/slug a b c d e)" = a-b-c-d-e ] || fail "много аргументов"
+[ "$(bin/slug "$(python3 -c 'print("a " * 500)')")" = "$(python3 -c 'print("-".join(["a"] * 500))')" ] || fail "500 частей: count и maxsplit не режут"
 err=$(bin/slug '!!!' 2>&1 >/dev/null); [ $? -eq 1 ] || fail "!!! — не exit 1"; [ "$err" = "empty slug" ] || fail "нет empty slug"
 bin/slug '' 2>/dev/null; [ $? -eq 1 ] || fail "пустой ввод — не exit 1"
+python3 - <<'PY' || fail "оракул слага"
+# оракул: SPEC F1 эталоном на 80 входах с фиксированным зерном — убивает любую не эквивалентную мутацию bin/slug
+import random, re, string, subprocess
+rnd, alpha = random.Random(7), string.ascii_letters + string.digits + string.punctuation + " \t" + "ÄßЖ"
+def ref(args):
+    s = re.sub(r"[^a-z0-9]+", "-", " ".join(args).lower()).strip("-")
+    return (0, s + "\n", "") if s else (1, "", "empty slug\n")
+for _ in range(80):
+    args = ["".join(rnd.choice(alpha) for _ in range(rnd.randint(0, 6))) for _ in range(rnd.randint(0, 6))]
+    r = subprocess.run(["bin/slug", *args], capture_output=True, text=True)
+    if (r.returncode, r.stdout, r.stderr) != ref(args):
+        raise SystemExit(f"слаг {args!r}: {(r.returncode, r.stdout, r.stderr)!r}, эталон {ref(args)!r}")
+PY
 echo "F1.1 $(bin/slug Hello World)"
 echo "F1.2 $(bin/slug '  Hello,  World!  ')"
 echo "F1.3 rc $(bin/slug '!!!' 2>/dev/null; echo $?) «$(bin/slug '!!!' 2>&1)»"
@@ -82,20 +96,31 @@ echo SLUG_OK
 [ "$(bin/words "$(printf 'a\tb\nc')" d)" = 4 ] || fail "таб, перевод строки и аргументы"
 [ "$(bin/words 'a b c d e f g h i j' k)" = 11 ] || fail "много слов"
 [ "$(bin/words a b c d e)" = 5 ] && [ "$(bin/words one)" = 1 ] || fail "по слову в аргументе"
+[ "$(bin/words "$(python3 -c 'print(" ".join(["w"] * 2000))')")" = 2000 ] && [ "$(bin/words $(python3 -c 'print(" ".join(["w"] * 2000))'))" = 2000 ] || fail "2000 слов — предел F2.1: maxsplit не режет"
 [ "$(bin/words)" = 0 ] || fail "без аргументов"
 [ "$(bin/words '  ' '')" = 0 ] || fail "одни пробелы"
+python3 - <<'PY' || fail "оракул слов"
+# оракул: SPEC F2 эталоном на 80 входах с фиксированным зерном (повторы слов, табы, переводы строк, пустые аргументы)
+import random, subprocess
+rnd, words, gaps = random.Random(11), ["a", "b", "слово", "x1", "a"], [" ", "  ", "\t", "\n", " \t "]
+for _ in range(80):
+    args = ["".join(rnd.choice(gaps) + rnd.choice(words) for _ in range(rnd.randint(0, 4))) + rnd.choice(["", " "]) for _ in range(rnd.randint(0, 6))]
+    r = subprocess.run(["bin/words", *args], capture_output=True, text=True)
+    if (r.returncode, r.stdout) != (0, f"{len(' '.join(args).split())}\n"):
+        raise SystemExit(f"слова {args!r}: {(r.returncode, r.stdout)!r}")
+PY
 echo "F2.1 $(bin/words 'a b  c')"
 echo "F2.2 $(bin/words) $(bin/words '  ' '')"
 echo WORDS_OK
 ''',
 }
 F1 = '''- **F1 Слаг** · оператор получает URL-слаг из заголовка · готово: F1.1–F1.3 · чек: `bin/check-slug` → `SLUG_OK` · служит: S1 · after: —
-  - `F1.1` `bin/slug <заголовок…>` печатает строкой заголовок (аргументы через пробел) в нижнем регистре: `bin/slug Hello World` → `hello-world`
+  - `F1.1` `bin/slug <заголовок…>` печатает строкой заголовок (аргументы через пробел, до 1000 знаков) в нижнем регистре: `bin/slug Hello World` → `hello-world`
   - `F1.2` каждая серия символов вне `a-z0-9` — один `-`, без `-` в начале и в конце: `bin/slug '  Hello,  World!  '` → `hello-world`
   - `F1.3` пустой слаг (`bin/slug '!!!'`, `bin/slug ''`) — exit 1 и `empty slug` в stderr
 '''
 F2 = '''- **F2 Слова** · оператор получает число слов текста · готово: F2.1–F2.2 · чек: `bin/check-words` → `WORDS_OK` · служит: S1 · after: —
-  - `F2.1` `bin/words <текст…>` печатает строкой число слов — серий символов между пробельными (пробел, таб, перевод строки), аргументы через пробел: `bin/words 'a b  c'` → `3`
+  - `F2.1` `bin/words <текст…>` печатает строкой число слов — серий символов между пробельными (пробел, таб, перевод строки), аргументы через пробел, текст до 2000 слов: `bin/words 'a b  c'` → `3`
   - `F2.2` без слов (`bin/words`, `bin/words '  '`) — `0`, exit 0
 '''
 SPEC = '''# SPEC-1 — slug — фаза 1
@@ -233,7 +258,9 @@ STUB = {
     "evidence": scen(verify_F1=ver("F1", command="grep F1.2 docs/evidence/F1-slug-result.txt", raw_output="F1.2 '  Hello,  World!  ' → hello-world")),
     "check_cmd": scen(verify_F1=ver("F1", command="bin/check-F1", raw_output="F1.2 hello-world\nSLUG_OK")),
     "holds_false": scen(verify_F1=ver("F1", raw_output="-hello-world-", holds=False)),
+    "gate_log": scen(verify_F1=ver("F1", command="grep F1.2 $VERIFY_GATE_LOG", raw_output="F1.2 hello-world")),
     "own": scen(verify_F1=ver("F1")),
+    "own_fixture": scen(verify_F1=ver("F1", command="bash /tmp/two-tier-v3/fx/run.sh  # своя фикстура: пишет и проверяет docs/evidence/F1-x-result.txt")),
 }
 
 
@@ -363,16 +390,16 @@ def main():
           f"стаб: мутация green → {s.get('mut_green', {}).get('verdict')} «{mg}»; red → {s.get('mut_red', {}).get('verdict')} · "
           f"живой clean: «{first(crep)}», {muts(crep)} · живой red: {muts(rrep)}")
 
-    bad = {k: s.get(k, {}) for k in ("no_own", "evidence", "check_cmd", "holds_false")}
+    bad = {k: s.get(k, {}) for k in ("no_own", "evidence", "check_cmd", "holds_false", "gate_log")}
     f43 = all(v.get("verdict") == "NEEDS_WORK" and "**F1.2: не подтверждён своим прогоном**" in v.get("report", "") for v in bad.values()) \
-        and s.get("own", {}).get("verdict") == "PASS"
+        and s.get("own", {}).get("verdict") == "PASS" and s.get("own_fixture", {}).get("verdict") == "PASS"
     product = subprocess.run(["bin/slug", "  Hello,  World!  "], cwd=rd, capture_output=True, text=True).stdout.strip()
     evl = line(open(f"{rd}/docs/evidence/F1-slug-result.txt", encoding="utf-8").read(), r"^F1\.2 ")
     f43_live = rrep.startswith("VERDICT: NEEDS_WORK") and "F1.2: не подтверждён своим прогоном" in rrep \
         and "пунктов своим прогоном 3/3" in crep and "пунктов своим прогоном 2/2" in crep
     probe("F4.3", f43 and f43_live,
           "стаб: " + "; ".join(f"{k} → {v.get('verdict')} «{line(v.get('report', ''), 'F1.2: не подтверждён').split(' · ')[-1]}»" for k, v in bad.items())
-          + f"; свой прогон → {s.get('own', {}).get('verdict')} · живой red: evidence «{evl}», гейт «{line(rtext, 'гейт bin/gate-1')}», "
+          + f"; свой прогон → {s.get('own', {}).get('verdict')}, своя фикстура с docs/evidence/ → {s.get('own_fixture', {}).get('verdict')} · живой red: evidence «{evl}», гейт «{line(rtext, 'гейт bin/gate-1')}», "
           f"продукт bin/slug '  Hello,  World!  ' → «{product}»; «{first(rrep)}», «{line(rrep, 'F1.2: не подтверждён')[:200]}» · "
           f"живой clean: {counts(crep)}")
     f44()
