@@ -1,0 +1,21 @@
+VERDICT: NEEDS_WORK
+FEATURES: F2, F3
+/verify-phase · docs/SPEC-v3.3.md · HEAD dc87778 · проверяющие claude-sonnet-5-5 (фич 2 из 7, опровергателей 1) · судья claude-opus-5-5
+
+Свежие прогоны F2 и F3 зелёные с маркерами, у всех пунктов есть подтверждение собственной командой проверяющего, а обе мутации покраснели. Блокирует только F2.3, и это я воспроизвёл сам на dc87778: сокращённая запись `git push --no-verif --force-with-l` проходит и Bash-хук, и pre-push кита и переписывает удалённую ветку, то есть force-push не получает отказа в любой записи.
+
+## Блокирующие
+- **F2: Force-push проходит оба заслона, если опции git сокращены: `git push --no-verif --force-with-l origin v` не запускает pre-push кита (git принимает однозначный префикс --no-verify), а Bash-хук refuse_sweeping_commands.py сравнивает только точную строку --no-verify и префикс --force-with-lease, поэтому удалённая ветка переписывается. Так же `git commit --no-verif` с ключом в staged проходит мимо F2.1.** · доказательство: Своя проба на HEAD dc87778: Bash-хук на `git push --no-verif --force-with-l origin v` дал rc 0, на `git push --no-verify origin v` — rc 2, на `git commit --no-verif -m x` — rc 0. Во временном репо в /tmp/two-tier-v3/judge-fp (core.hooksPath указывает на kit/.githooks): `git push --force origin v` получил отказ (`failed to push some refs`), а сокращённая запись напечатала ` + c68cc7f...1512085 v -> v (forced update)`; после неё удалённый v = 1512085 = локальный. Код: kit/.claude/hooks/refuse_sweeping_commands.py:72 `a == "--no-verify"`, :93 `--no-verify\b`. · критерий: (c) F2.3 «force-push в любой записи — отказ» не выполняется; (b)/(d) инвариант §3 «Force-push запрещены · судья: с F2.3 — код» — необратимый шаг без заслона · чек приёмки: Во временном репо с core.hooksPath=kit/.githooks и разошедшейся историей: `git push --no-verif --force-with-l origin v` — нужен отказ кита, удалённая ветка остаётся прежней. Bash-хук на `git push --no-verif ...`, `git commit --no-verif ...`, `--force-w`, `--no-v` — rc 2. Парсер должен принимать любой однозначный префикс long-опции (--no-v*, --force*) или отказывать commit/push с неизвестной long-опцией.
+
+## Named, not built
+- F2: Bash-хук ищет core.hooksPath только сплошной строкой и только при голове git — GIT_CONFIG_KEY_0=core.hooks""Path и export GIT_CONFIG_* отключают хуки кита (усиление сверх текста пунктов)
+- F2: нецелый ABIDE_CHECK_TIMEOUT_S валит commit-msg на импорте (traceback, rc 1) вопреки конвенции «при своей ошибке — 0»; ответ abide в виде JSON-списка не попадает в commit-judge.jsonl и не считается пропуском в F2.6
+- F2.1: кодовые правила не ловят секреты в .env без кавычек, sk_live_, Bearer JWT, пути C:\Users и /root/ в evidence; при живой модели abide их ловит; соавтор users.noreply.github.com и строка Co-Authored-By noreply@ в evidence получают отказ
+- F2.2: no-delete срабатывает только на чистое удаление — git mv вне docs/archive/, cp+rm в архив, перенос из архива и замена на symlink проходят (содержимое остаётся в репо)
+- F3.2: статический скан хуков не видит `fetch (` с пробелом, /dev/tcp, socket.connect, net.createConnection, ssh, gh api, git push, `$CLAUDE_BIN -p` и тип хука mcp_tool; в ките таких хуков 0
+- F3.3: compare() не краснеет на скилл в system/init, которого нет в таблице, и на плагин с суффиксом @builtin — сверка скиллов работает только в одну сторону
+- F3.4: two-tier-upgrade на проекте с битым или пустым launch.settings.json даёт rc 0, молча оставляет ушедшие плагины и ничего не сообщает о файле; check-budget при этом зелёный
+
+## По фичам
+- F2: чек `bin/check-harness commit` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/.githooks/commit-msg: REFUSE, NOTE = 0.8, 0.5 changed to 0.81, 0.5 (a model score of exactly 0.80 becomes a note instead of a refusal) → red; находок 5, блокирующих-кандидатов 1, опровергнуто 0
+- F3: чек `bin/check-harness` rc 0, маркер есть (own_run); пунктов своим прогоном 4/4; мутация kit/bin/two-tier-upgrade: upgrade() no longer disables retired action plugins: ls["enabledPlugins"][p] = False changed to = True → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
