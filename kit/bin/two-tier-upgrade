@@ -251,7 +251,7 @@ def upgrade(target):
         if hp0 != ".githooks":  # v3.3, F2: коммит проекта судят хуки кита
             run("config", "core.hooksPath", ".githooks")
             print("core.hooksPath: .githooks")
-        if not kit and not tl and not rub:
+        if not kit and not tl:
             restore()  # повторный запуск ничего не меняет — и ветку тоже
             print("изменений нет"); return 0
     except BaseException as e:  # откат: проект — как до запуска
@@ -334,8 +334,10 @@ def self_test():
           "файлы тимлида и CLAUDE.md проекта не тронуты, launch.settings.json не создан")
     rs = g(proj, "log", "-1", "--format=%H", "--", RUBRIC).stdout.strip()
     rsh = [l for l in g(proj, "show", "--name-status", "--format=%s", rs).stdout.splitlines() if l] if rs else [""]
-    check(g(proj, "show", f"HEAD:{RUBRIC}").stdout == read(f"{KIT}/{RUBRIC}") and rsh[0].startswith(f"Тимлид: {RUBRIC}") and rsh[1:] == [f"A\t{RUBRIC}"],
-          f"база рубрики кита {RUBRIC} (SPEC-v3.3 F7.3) — в HEAD байт в байт, своим коммитом «Тимлид: …», в нём только она")
+    rr = read(P(REPORT)) if os.path.isfile(P(REPORT)) else ""
+    check(g(proj, "show", f"HEAD:{RUBRIC}").stdout == read(f"{KIT}/{RUBRIC}") and rsh[0].startswith(f"Тимлид: {RUBRIC}") and rsh[1:] == [f"A\t{RUBRIC}"]
+          and f"- база рубрики кита `{RUBRIC}` отдельным коммитом" in rr and "кроме коммитов «Тимлид: …» выше" in rr,
+          f"база рубрики кита {RUBRIC} (SPEC-v3.3 F7.3) — в HEAD байт в байт, своим коммитом «Тимлид: …», в нём только она; в отчёте — строкой")
     rep = read(P("docs/upgrade-v3.md")) if os.path.isfile(P("docs/upgrade-v3.md")) else ""
     check(all(s in rep for s in ("## Тимлиду", "## Исполнителю", "## Оператору", "launch.settings.json", "intent/intent.template.md")),
           "отчёт docs/upgrade-v3.md: тимлиду, исполнителю, оператору")
@@ -404,7 +406,11 @@ def self_test():
                                                                    write(f"{d}/.gitignore", ".claude/settings.json\n"),
                                                                    commit(d, "v2: settings вне git", ".gitignore"))),
               ("д", "сбой после старта — pre-commit отказал", lambda d: (write(f"{d}/.git/hooks/pre-commit", hook),
-                                                                       os.chmod(f"{d}/.git/hooks/pre-commit", 0o755)))]
+                                                                       os.chmod(f"{d}/.git/hooks/pre-commit", 0o755))),
+              ("е", "`.abide/` в .gitignore — базе рубрики не лечь", lambda d: (write(f"{d}/.gitignore", ".abide/\n"), commit(d, "v2: .gitignore", ".gitignore"))),
+              ("ж", "сбой между копией базы рубрики и её коммитом — clean-фильтр отказал", lambda d: (
+                  write(f"{d}/.gitattributes", f"{RUBRIC} filter=boom\n"), commit(d, "v2: фильтр", ".gitattributes"),
+                  g(d, "config", "filter.boom.clean", "false"), g(d, "config", "filter.boom.required", "true")))]
     for i, (letter, what, tweak) in enumerate(shapes, 1):
         d = f"{fix}/fail-{i}"
         subprocess.run(["git", "clone", "-q", src, d], env=ENV, check=True)
@@ -414,7 +420,7 @@ def self_test():
         r = run(d)
         s1 = state(d)
         print(f"  сбой ({letter}) {what}: rc {r.returncode} | " + " | ".join(r.stdout.splitlines()))
-        pre = letter != "д"  # (а)–(г) ловят предусловия до старта, (д) — откат после старта
+        pre = letter not in "дж"  # (а)–(г), (е) ловят предусловия до старта, (д), (ж) — откат после старта
         check(r.returncode and "two-tier-upgrade:" in r.stdout and "Traceback" not in r.stderr and s1 == s0 and not s1[2]
               and ("апгрейд не начат" in r.stdout) == pre and ("ветка: kit-v3" in r.stdout) != pre,
               f"сбой ({letter}): выход ≠0 с причиной, без трассировки, {'отказ до старта' if pre else 'откат после старта'}; "
