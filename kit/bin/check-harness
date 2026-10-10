@@ -436,7 +436,7 @@ def commit_probes(src):
           and hashl[0] == 1 and "no-secret-values: the commit message" in hashl[1]
           and linux[0] == 1 and "evidence-anonymized: docs/evidence/F1-x-result.txt" in linux[1] and coname[0] == 1 and "evidence-anonymized: the commit message" in coname[1])
     item(S, "F2.1", ok, f"литерал ключа — rc {lit[0]} «{lit[1][:80]}»; значение ключа из окружения — rc {envv[0]} «{envv[1][:80]}»; домашний путь в evidence — rc {home[0]} "
-         f"«{home[1][:90]}»; почта в сообщении — rc {mail[0]} «{mail[1][:80]}»; ключ в файле с не-ASCII именем — rc {utf[0]}, в бинарном по git — rc {nul[0]}; ключ в строке «#» сообщения — rc {hashl[0]}; путь /home/… в evidence — rc {linux[0]}; почта в имени соавтора — rc {coname[0]}; "
+         f"«{home[1][:90]}»; почта в сообщении — rc {mail[0]} «{mail[1][:80]}»; ключ в файле с не-ASCII именем — rc {utf[0]}, в бинарном по git — rc {nul[0]}; ключ в строке «#» сообщения — rc {hashl[0]}; домашний путь Linux в evidence — rc {linux[0]}; почта в имени соавтора — rc {coname[0]}; "
          f"чистый evidence с noreply@ соавтора — rc {clean[0]}")
     # F2.2 — файл тимлида без «Тимлид:», удаление мимо git mv в docs/archive/
     put(r, "docs/STATUS.md", "y\n"); gc(r, "add", "--", "docs/STATUS.md")
