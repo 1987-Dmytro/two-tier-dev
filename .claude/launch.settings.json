@@ -36,7 +36,7 @@
         "handoffDir": "handoffs",
         "autoClear": true,
         "minTurns": 2,
-        "language": "ru"
+        "language": "ru", "jev": "off"
       }
     }
   },

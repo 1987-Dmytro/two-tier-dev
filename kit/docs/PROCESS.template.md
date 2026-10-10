@@ -18,11 +18,11 @@
 | pyright-lsp | плагин | `pyright-lsp@claude-plugins-official` | да | Python: `bin/check-*` | — | когда в фазе нет Python |
 | typesafe | плагин | `typesafe@typesafe-ai` | нет | по задаче: фаза пишет вызовы Jev | `claude plugin install typesafe@typesafe-ai` | строка таблицы |
 | Jev Belay | плагин | `jev-belay@jev-belay` | да | конец хода: второй судья — тень (только журнал); сравнение со `spec-gate` — на ретро | `claude plugin install jev-belay@jev-belay` | по ретро |
-| handoff | плагин | `handoff@two-tier-mods` | да | хендофф и свежий контекст на 70 % окна, затем `/clear`; файлы — `handoffs/` (в `.gitignore` публичного репо) | marketplace `<two-tier-dev>/mods`, плагин `handoff@two-tier-mods` (команда — в выводе `bin/two-tier-init`) | строка таблицы |
+| handoff | плагин | `handoff@two-tier-mods` | да | хендофф и свежий контекст на 70 % окна, затем `/clear`; ниже — Jev-граница задачи (0.3.0): у оператора `jev: hint`, в строке запуска `jev: off`; файлы — `handoffs/` (в `.gitignore` публичного репо) | marketplace `<two-tier-dev>/mods`, плагин `handoff@two-tier-mods` (команда — в выводе `bin/two-tier-init`) | строка таблицы |
 | Abide | CLI | `abide` | да | коммит: `abide check` по рубрике тимлида `.abide/rubric.json` из хука `.githooks/commit-msg`; хуков на правку и ход нет | `npm i -g @coldtea/abide@0.0.9`; ключ — `TYPESAFE_API_KEY` в окружении | по ретро |
 | limits | плагин | `limits@two-tier-mods` | нет | статус-строка окон подписки (5 ч, неделя, время до сброса, контекст, цена сессии) — только сессии оператора | marketplace `<two-tier-dev>/mods`, плагин `limits@two-tier-mods` | — |
 | Steer-or-Queue | плагин | `jev-steer-or-queue@jev-steer-or-queue` | нет | событие — сообщение человека посреди хода: только сессии оператора | — | — |
-| Compact Adviser | плагин | `compact-adviser@compact-adviser` | нет | автор: в безнадзорных сессиях выключать; только сессии оператора | — | — |
+| Compact Adviser | плагин | `compact-adviser@compact-adviser` | нет | влит в `handoff` 0.3.0 (Jev-граница); 0.1.12 молчит: ждёт переменную ранних модов, которую Claude Code 2.1.287+ не читает (mods overview); у оператора выключен 10.10 | — | — |
 | Toolgate | CLI | `toolgate` | нет | судья-модель на каждое действие: только сессии оператора; force-push у исполнителя держит код (`.githooks/pre-push`) | — | — |
 | Quicksilver | скилл | `quicksilver` | нет | по задаче: корпус больше grep-удобного; проба `qs status` | `npx github:UditAkhourii/quicksilver` | — |
 | Jev SEO | скилл | `jev-seo` | нет | по задаче: фаза с сайтом; проба `jevseo doctor` | клон `AgriciDaniel/jev-seo`, venv, симлинк в `~/.claude/skills` | — |

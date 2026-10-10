@@ -90,6 +90,20 @@ Mods, `claude plugin validate`:
 
   The operator's status line — the 5 h and week windows with the time to their reset, context fill, session cost; the warning is the
   missing `author` of `plugin.json`; `claude plugin test mods/limits` — 3 pass, 0 fail. Not in the executor's Environment («нет»).
+- `handoff` 0.3.0 (`mods/handoff`), «Validation passed» — Compact Adviser absorbed (the operator's word, 10.10):
+  - `./register.tsx hooks: session.start, turn.start, classic.SessionStart, turn.complete, command.run{command=handoff}, ui.render{component=AbovePrompt}`
+  - `./register.tsx calls: $.clock.after, $.clock.now (via judgeBoundary, writeHandoff), $.clock.sleep (via judgeBoundary), $.command.register, $.command.run (via clearAndResume), $.env.get (via judgeBoundary), $.fs.read (via journal), $.fs.write (via journal, writeHandoff), $.http.fetch (via judgeBoundary), $.model.fork (via writeHandoff), $.prompt.submit (via clearAndResume), $.session.compact (via compactNow), $.session.messages (via judgeBoundary), $.session.root (via journal, writeHandoff), $.session.turns, $.session.usage, $.state.get, $.state.set, $.store.get (via readLast), $.store.set (via writeHandoff), $.ui.log (via handoffFileOnly, writeHandoff), $.ui.resolve, $.ui.status, $.ui.toast`
+
+  Below the 70 % threshold Jev judges each settled answer with Compact Adviser 0.1.12's two questions (unit finished; hands-on or
+  coordinating), one request, model pinned `jev-1.13.0`, 3 s; the score passes a floor from 0.90 (≤ 10 % fill) to 0.50 (at the
+  threshold): `jev: hint` lights the band, `jev: auto` hands off there; a reply after the next turn began is dropped. Jev reads the
+  turn's prompt and answer (2000 characters each, the key's value and key shapes cut) and tool-call counts by name; each call is a
+  line of numbers in `handoffs/jev.jsonl`. The band gains `Compact` and comes back at once after `/clear` (`$.state` resets there,
+  `session.start` does not fire: «Load the saved value again in a classic.SessionStart hook» —
+  [mods troubleshoot](https://code.claude.com/docs/en/plugins/mods/troubleshoot)). Why Compact Adviser was silent: 0.1.12 runs only
+  when `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is `1`, and «Claude Code v2.1.287 and later ignores it» —
+  [mods overview](https://code.claude.com/docs/en/plugins/mods/overview); the operator's plugin is disabled. The executor's launch
+  settings set `jev: off` (unattended sessions); `claude plugin test mods/handoff` — 18 pass, 0 fail, five mutants killed.
 
 Known debts: Abide 0.0.9 still calls the floating `jev-latest` (SPEC-v3.3, Named); `unifiedWindows` may vanish with any release —
 `bin/check-window` then refuses with the reason, and the window is read by hand until a documented entry exists.
