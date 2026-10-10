@@ -1,0 +1,17 @@
+VERDICT: NEEDS_WORK
+FEATURES: F1
+/verify-phase · docs/SPEC-v3.3.md · HEAD 0c1ad48 · проверяющие claude-sonnet-5-5 (фич 1 из 7, опровергателей 1) · судья claude-opus-5-5
+
+Свежий прогон `bin/check-harness items` дал rc 0 и маркер ITEMS_OK, маркер есть и в docs/evidence/F1-harness-result.txt, а все шесть пунктов F1.1–F1.6 проверяющий подтвердил своими командами по сырому выводу; инвариант §3 не нарушен, дыры безопасности не найдено. Единственный кандидат в blocking — выжившая мутация phase-report probes(), её блокирует код, поэтому blocking пуст, а она и остальные находки ушли в named_not_built.
+
+## Блокирующие
+- **F1: мутация выжила — kit/bin/phase-report: in probes() removed the guard `and m.group(1).startswith(<feature of the evidence file> + ".")`, so an item probe line `F2.2 ...` inside F1-a-result.txt counts as F2.2's probe (the hook rejects exactly this); behaviour confirmed changed: fixture report row `| F2.2 | — | docs/evidence/F1-a-result.txt | stray line in the wrong feature file |` and «Пункты без пробы (2): F1.2, F2.1» instead of the original `нет пробы` and «(3): F1.2, F2.1, F2.2»; restored with git checkout** · чек `bin/check-harness items` остался зелёным
+
+## Named, not built
+- F1.4: мутация kit/bin/phase-report probes() пережила bin/check-harness items. Если убрать проверку префикса фичи у файла evidence, строка «F2.2 …» в F1-a-result.txt засчитывается как проба F2.2, и отчёт показывает «Пункты без пробы (2)» вместо «(3)», а хук эту же строку отклоняет. Выжившую мутацию блокирует код, поэтому здесь её нет в blocking.
+- Ещё две мутации продукта пережили bin/check-harness items. Первая: в spec-gate.mjs LABELS.every заменено на LABELS.some, и голова PROGRESS без «Когда закончим» проходит в SPEC_GATE_OK. Вторая: в phase-report у stray убрано `and not c["tl"]`, и коммит «Тимлид:» попадает в «коммиты без пункта». Обоих поведений нет в строках пунктов F1.
+- F1.6: bin/phase-report падает с traceback (rc 1, отчёт не записан), если JEV_TIMEOUT_MS не целое число ('abc', '1.5') или timeout_ms в .claude/spec-gate.json нечисловой. Docstring обещает rc 0 при любых входах, кроме плохих аргументов (rc 2). Это ошибка конфигурации, а не ответ, ошибка или таймаут Jev, и ход она не задевает.
+- F1.3: bin/check-budget молчит о SPEC, где фича объявляет «готово: F9.1–F9.2», но строк пунктов нет вовсе или id в них без обратных кавычек: rule_spec выходит раньше на `if not items`. Хук при этом требует строки проб, так что гейт и чек бюджета расходятся.
+
+## По фичам
+- F1: чек `bin/check-harness items` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/bin/phase-report: in probes() removed the guard `and m.group(1).startswith(<feature of the evidence file> + ".")`, so an item probe line `F2.2 ...` inside F1-a-result.txt counts as F2.2's probe (the hook rejects exactly this); behaviour confirmed changed: fixture report row `| F2.2 | — | docs/evidence/F1-a-result.txt | stray line in the wrong feature file |` and «Пункты без пробы (2): F1.2, F2.1» instead of the original `нет пробы` and «(3): F1.2, F2.1, F2.2»; restored with git checkout → green; находок 4, блокирующих-кандидатов 1, опровергнуто 0
