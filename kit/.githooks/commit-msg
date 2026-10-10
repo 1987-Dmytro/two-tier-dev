@@ -28,7 +28,8 @@ KEY_SHAPES = [re.compile(p) for p in (
     r"\bAKIA[0-9A-Z]{16}\b", r"\bxox[abposr]-[A-Za-z0-9-]{10,}", r"\bAIza[0-9A-Za-z_-]{35}\b")]
 ASSIGN = re.compile(r"(?i)[\w.-]*(?:api[_-]?key|secret|token|passw(?:or)?d)[\w.-]*[\"']?\s*[:=]\s*[\"']([A-Za-z0-9_\-+/=.]{16,})[\"']")
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-HOME = re.compile(r"(?:/Users|/home)/(?!Shared\b)[A-Za-z0-9._-]+")
+HOME = re.compile(r"(?i)(?:/users|/home)/(?!shared\b)[a-z0-9._-]+|-Users-[A-Za-z0-9._]+-")  # и путь проекта в ~/.claude/projects/
+COAUTHOR = re.compile(r"^Co-Authored-By:[^<\n]*<noreply@[A-Za-z0-9.-]+>\s*$", re.I | re.M)  # строка соавтора — единственное исключение
 
 
 def git(*args, check=False):
@@ -38,16 +39,18 @@ def git(*args, check=False):
     return r.stdout
 
 
-def added_lines(diff):
-    """{path: [added lines]} from `git diff --cached -U0`; binary files carry none."""
-    out, cur = {}, None
-    for line in diff.splitlines():
-        if line.startswith("+++ "):
-            cur = line[6:] if line.startswith("+++ b/") else None
-            if cur:
-                out.setdefault(cur, [])
-        elif cur and line.startswith("+") and not line.startswith("+++"):
-            out[cur].append(line[1:])
+def added_lines(paths):
+    """{path: [added lines]} — по файлу: `git diff --cached --text -U0 -- <path>`, строки хунков с «+» (без разбора заголовков:
+    кавычки не-ASCII путей, diff.noprefix и бинарные по git файлы их не прячут)."""
+    out = {}
+    for p in paths:
+        hunk, lines = False, []
+        for line in git("-c", "core.quotePath=false", "diff", "--cached", "--no-color", "--no-ext-diff", "--text", "-U0", "--", p).splitlines():
+            if line.startswith("@@"):
+                hunk = True
+            elif hunk and line.startswith("+"):
+                lines.append(line[1:])
+        out[p] = lines
     return out
 
 
@@ -56,9 +59,10 @@ def secret_in(text, values):
         re.search(r"[A-Za-z]", m.group(1)) and re.search(r"\d", m.group(1)) for m in ASSIGN.finditer(text))
 
 
-def private_in(text):
-    mails = [m.group(0) for m in EMAIL.finditer(text) if not m.group(0).lower().startswith("noreply@") and ".noreply." not in m.group(0).lower()]
-    return bool(mails) or bool(HOME.search(text))
+def private_in(text, message=False):
+    if message:
+        text = COAUTHOR.sub("", text)
+    return bool(EMAIL.search(text)) or bool(HOME.search(text))
 
 
 def owner():
@@ -74,30 +78,42 @@ def is_tl(path, own):
     return any(path.startswith(e) if e.endswith("/") else fnmatch.fnmatchcase(path, e) for e in own)
 
 
+def staged():
+    """[(статус, [пути])] из `git diff --cached --name-status -z -M`; у R и C — источник и цель."""
+    parts, out, i = git("diff", "--cached", "--name-status", "-z", "-M").split("\0"), [], 0
+    while i < len(parts) - 1:
+        st = parts[i]
+        paths = parts[i + 1:i + 3] if st[:1] in "RC" else parts[i + 1:i + 2]
+        i += 1 + len(paths)
+        out.append((st, paths))
+    return out
+
+
+def from_other_side(path, deleted):
+    """В слиянии: путь пришёл со второй стороны — в индексе ровно её версия (или его нет и там)."""
+    theirs = git("rev-parse", "-q", "--verify", f"MERGE_HEAD:{path}").strip()
+    return not theirs if deleted else theirs == git("rev-parse", "-q", "--verify", f":{path}").strip()
+
+
 def code_rules(msg, merging):
     """(rule, file) of the first refusal or None."""
     values = [v for k, v in os.environ.items() if CRED_NAME.search(k) and len(v) >= 12 and not v.startswith("/")]
     body = "\n".join(l for l in msg.splitlines() if not l.startswith("#"))
     if secret_in(body, values):
         return "no-secret-values", "the commit message"
-    if private_in(body):
+    if private_in(body, message=True):
         return "evidence-anonymized", "the commit message"
-    added = added_lines(git("diff", "--cached", "--no-color", "--no-ext-diff", "-U0"))
+    added = added_lines([p for p in git("-c", "core.quotePath=false", "diff", "--cached", "--name-only", "-z", "--diff-filter=d").split("\0") if p])
     for p, lines in added.items():
         if secret_in("\n".join(lines), values):
             return "no-secret-values", p
     for p, lines in added.items():
         if p.startswith("docs/evidence/") and private_in("\n".join(lines)):
             return "evidence-anonymized", p
-    if merging:
-        return None
-    parts = git("diff", "--cached", "--name-status", "-z", "-M").split("\0")
-    own, i = owner(), 0
-    tl = not msg.startswith("Тимлид:")
-    while i < len(parts) - 1:
-        st = parts[i]
-        paths = parts[i + 1:i + 3] if st[:1] in "RC" else parts[i + 1:i + 2]
-        i += 1 + len(paths)
+    own, tl = owner(), not msg.startswith("Тимлид:")
+    for st, paths in staged():
+        if merging and all(from_other_side(p, st == "D" or (st[:1] == "R" and p == paths[0])) for p in paths):
+            continue  # слияние: эту правку судили там, где её сделали
         if st == "D":
             return "no-delete", paths[0]
         hit = next((p for p in paths if is_tl(p, own)), None)
@@ -164,7 +180,7 @@ def main():
         rec = {"decision": dec, "judge": "abide", "rule": rule, "files": [file] if file else files[:20], "score": p}
         if dec == "skip":
             rec |= {"rule": None, "note": rule}
-        if dec == "refuse" and any(l.get("diff") == digest and l.get("decision") == "refuse" and l.get("judge") == "abide" and l.get("rule") == rule for l in log):
+        if dec == "refuse" and any(l.get("diff") == digest and l.get("decision") == "refuse" and l.get("judge") == "abide" for l in log):
             rec["decision"] = "rejected"  # the same diff once more: the executor's last word, the team lead reads it
     rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **rec, "diff": digest, "ms": int((time.monotonic() - t0) * 1000)}
     try:

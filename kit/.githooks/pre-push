@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """pre-push — no force-push (SPEC-v3.3 F2.3), judged by what the push does, not by how it is spelled: a push that rewrites a ref
 the remote has — the remote's commit is not an ancestor of the pushed one — is refused, whatever the spelling (--force, -f,
---force-with-lease, +<ref>, git -C <dir> …, a subprocess). A new branch, a fast-forward and a deletion pass.
+--force-with-lease, +<ref>, git -C <dir> …, a subprocess), and so is deleting a remote ref (with a push anew it rewrites in two steps).
+A new branch and a fast-forward pass.
 stdin (githooks): <local ref> SP <local sha> SP <remote ref> SP <remote sha> per ref. A refusal is a line of
 docs/evidence/commit-judge.jsonl. On its own error the hook lets the push pass.
 """
@@ -18,7 +19,10 @@ def main():
         if len(parts) != 4:
             continue
         lref, lsha, rref, rsha = parts
-        if lsha.strip("0") == "" or rsha.strip("0") == "":  # a deletion or a new ref
+        if rsha.strip("0") == "":  # a new ref on the remote
+            continue
+        if lsha.strip("0") == "":  # deleting a remote ref, then pushing it anew, is a force-push in two steps
+            bad.append(f"{rref} (deletion)")
             continue
         ff = subprocess.run(["git", "merge-base", "--is-ancestor", rsha, lsha], cwd=root, capture_output=True).returncode == 0
         if not ff:  # not an ancestor, or the remote's commit is not even here: the push would rewrite what the remote has

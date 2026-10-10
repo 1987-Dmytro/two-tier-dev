@@ -43,11 +43,22 @@ def strip_git_globals(toks: list[str]) -> list[str]:
     return toks[i:]
 
 
+WRAPPERS = {"env", "command", "exec", "nohup", "time", "sudo", "builtin", "nice", "xargs"}
+
+
 def check_segment(segment: str) -> None:
     toks = tokens_of(segment)
+    while toks and (os.path.basename(toks[0]) in WRAPPERS or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[0]) or (toks[0].startswith("-") and len(toks) > 1)):
+        toks = toks[1:]  # v3.3: `env git …`, `command git …`, `env A=1 git …` — судим саму команду
     if not toks:
         return
     head = os.path.basename(toks[0])
+    if head in ("bash", "sh", "zsh", "dash") and "-c" in toks[1:]:  # `bash -c "…"` — судим строку команды
+        for sub in re.split(r"&&|\|\||;|\|", toks[toks.index("-c") + 1] if toks.index("-c") + 1 < len(toks) else ""):
+            check_segment(sub)
+        return
+    if head == "git" and any("core.hooksPath" in t for t in toks[1:]):
+        refuse("core.hooksPath is the wiring of the kit's commit and push judges: do not change or bypass it (SPEC-v3.3 F2)")
     if head == "git":
         rest = strip_git_globals(toks)
         if rest and rest[0] in ("add", "stage"):
