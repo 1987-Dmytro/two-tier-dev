@@ -65,6 +65,7 @@
 | F6.4 | `claude plugin validate` и `test` мода `limits` зелёные; строки `hooks:` и `calls:` в CHANGELOG | без строк мода — `DOCS_FAIL` | — |
 | F7.1 | `bin/gate-v3.3` на проекте `two-tier-init`: `F1 ITEMS_OK` … `F6 DOCS_OK`, `F7 GATE_OK` | красный маркер любой фичи — `GATE_FAIL` | `F7-gate-result.txt` |
 | F7.2 | уцелевшие маркеры v3.2 напечатаны; `bin/gate-v3.2` в архиве | — | — |
+| F7.3 | проект от `two-tier-init`: печать ключа в `tools/` — rc 1, «rule no-print-credential»; присутствие и длина ключа — rc 0; `bin/check-budget` — `OK abide_rules`, `BUDGET_OK`; база кита = рубрика корня по id и вопросам | тот же проект без `.abide/rubric.json`: печать ключа — «skip», `bin/check-budget` rc 1 `FAIL abide_rules` с причиной; копия базы с переписанным вопросом и без правила — сверка называет id | `F7-gate-result.txt` |
 
 | фаза | `bin/verify-phase` | `VERDICT: PASS` | `verify-<sha>.txt` |
 |---|---|---|---|
@@ -75,6 +76,12 @@
 3. Jev ушёл из `spec-gate` целиком: SPEC §0 «Jev ничего не блокирует», F1.6 — ячейка отчёта. Вопрос STOP и голова — кодом: вопрос и resume рядом со строкой STOP, три метки головы шаблона.
 4. `abide check` судит staged-патч через `--diff` (README Abide: без него — всё рабочее дерево и неотслеживаемые файлы).
 5. Пороги F5 — доли `unifiedWindows` × 100 против `*_pct` (statusline-док даёт 0–100, событие — 0–1).
+
+## Плечо починки F7.3 (10.10, с 17:08; B1 приёмки тимлида `4096462`)
+- **Файлы.** `kit/.abide/rubric.json` (новый) — база рубрики кита: четыре правила рубрики корня, `id`, `text`, `when`, `status` и `check` (вопрос и образцы) — как в корне; моё — привязка: `scope` `no-print-credential` и `no-writes-outside-repo` — `**/*` (код проекта лежит где угодно, а не в `bin/`, `kit/`, `mods/` этого репо), `no-secret-values` — `**/*`, `evidence-anonymized` — `docs/evidence/**`; источник — `CLAUDE.md` проекта без `sha` и строки (хэш ставит `abide rubric validate` в проекте; `abide check` его не сверяет). `bin/two-tier-init` кладёт её как любой файл дерева кита и называет шагом тимлида. `kit/bin/two-tier-upgrade`: нет рубрики — своим коммитом «Тимлид: …» до прочих коммитов тимлида (файл тимлида — lint владения), есть — не трогает. `kit/bin/check-budget` `rule_abide`: нет `.abide/rubric.json` — `FAIL` с причиной; `--templates` кладёт рубрику кита в пример. `bin/gate-v3.3` — проба F7.3.
+- **Фичи круга** (раскладка выше): `check-budget` — F1, `two-tier-upgrade` — F3, рубрика, `two-tier-init`, гейт — F7: точечный круг `bin/verify-phase F1 F3 F7`.
+- **Порядок.** План → рубрика, init и проба гейта (a, c) → апгрейд с self-test → `check-budget` с self-test и пробой (b) → гейт в evidence → push, CI → точечный круг из свежего клона → отчёт фазы, голова → финальный гейт.
+- **Риски.** (1) Печать ключа у порога `abide check` (замер тимлида 0,98) — до 3 прогонов, журнал ниже. (2) `no-print-credential` на `**/*` судит и документы — отказ модели один раз, повтор диффа проходит (F2.4). (3) Без ключа в окружении проба красная с причиной (`NO_API_KEY`); CI её не гоняет. (4) Коммит базы в этом репо судит рубрика корня (образец `sk-live-…` в `criteria`) — возможен отказ один раз, повтор. (5) Неделя подписки 80 % при пороге 85 % — один точечный круг, свои воркфлоу — малые.
 
 ## Журнал прогонов (стохастика)
 | # | проба | итог | keep/discard |
