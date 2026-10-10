@@ -310,6 +310,8 @@ def rule_abide(b):
         n = len(json.loads(read(p)).get("rules", []))
     except (ValueError, AttributeError):
         return [("FAIL", "abide_rules", f"{p}: не JSON-объект")]
+    if not n:  # v3.3, F7.3: пустая рубрика — тот же тихий пропуск суда модели
+        return [("FAIL", "abide_rules", f"{p}: правил 0 — abide check в хуке коммита пропускает суд модели")]
     if "abide_rules" not in b:
         return [("WARN", "abide_rules", f"{p}: правил {n}; в budgets.json нет abide_rules — ключ вносит тимлид")]
     return [check("abide_rules", n, b["abide_rules"], f"{p}, правил")]
@@ -444,6 +446,9 @@ def fixtures(b, defaults):
     else:  # budgets.json проекта до v3.2: правило предупреждает, а не падает
         add("rubric", "нет abide_rules в budgets.json — WARN", "WARN", rub(3), rule_abide)
     add("rubric", "нет рубрики — FAIL с причиной (F7.3)", "FAIL", {}, rule_abide)
+    add("rubric", "нет рубрики, в budgets.json нет abide_rules — FAIL (F7.3)", "FAIL", {},
+        lambda _b: rule_abide({k: v for k, v in _b.items() if k != "abide_rules"}))
+    add("rubric", "рубрика без правил — FAIL (F7.3)", "FAIL", rub(0), rule_abide)
     add("rubric", "рубрика не JSON", "FAIL", {".abide/rubric.json": "{"}, rule_abide)
     rv = lambda n: {"docs/reviews/r.md": "## Блокирующие\n" + "- f\n" * n + "## Named, not built\n- a\n- b\n- c\n"}
     add("review", "review_blocking", "OK", rv(b["review_blocking"]), rule_review)
