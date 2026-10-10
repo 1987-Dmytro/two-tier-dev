@@ -333,7 +333,7 @@ def cfix(src, rubric=None):
     subprocess.run(["git", "init", "-q", "--bare", f"{d}/origin.git"], env=GIT_ENV, check=True)
     os.makedirs(f"{repo}/docs/evidence")
     shutil.copytree(f"{src}/.githooks", f"{repo}/.githooks")
-    files = {"budgets.json": json.dumps({"defaults": {"owner": ["docs/STATUS.md", "intent/", "budgets.json"]}, "project": {}}),
+    files = {"budgets.json": json.dumps({"defaults": {"owner": ["docs/STATUS.md", "intent/", "budgets.json"]}, "project": {"owner_add": ["CLAUDE.md"]}}), "CLAUDE.md": "c\n",
              "docs/STATUS.md": "s\n", "a.txt": "a\n", "README.md": "r\n"}
     if rubric is not None:
         files[".abide/rubric.json"] = json.dumps(rubric_doc(rubric))
@@ -456,6 +456,9 @@ def commit_probes(src):
     put(r, "docs/STATUS.md", "y\n"); gc(r, "add", "--", "docs/STATUS.md")
     tl = gc(r, "commit", "-qm", "F2.2: статус")
     tl_ok = gc(r, "commit", "-qm", "Тимлид: статус")
+    put(r, "CLAUDE.md", "d\n"); gc(r, "add", "--", "CLAUDE.md")
+    tl_add = gc(r, "commit", "-qm", "F2.2: CLAUDE.md")  # файл из project.owner_add — тоже файл тимлида
+    gc(r, "commit", "-qm", "Тимлид: CLAUDE.md")
     gc(r, "rm", "-q", "a.txt")
     rm = gc(r, "commit", "-qm", "F2.2: удаление")
     gc(r, "reset", "-q", "HEAD", "--", "a.txt"); gc(r, "checkout", "-q", "--", "a.txt")
@@ -468,8 +471,9 @@ def commit_probes(src):
     gc(r, "reset", "-q", "HEAD", "--", "README.md"); gc(r, "checkout", "-q", "--", "README.md")
     mok = gc(r, "commit", "-qm", "слияние side")
     ok = (tl[0] == 1 and "team-lead-files: docs/STATUS.md" in tl[1] and tl_ok[0] == 0 and rm[0] == 1 and "no-delete: a.txt" in rm[1] and mv[0] == 0
+          and tl_add[0] == 1 and "team-lead-files: CLAUDE.md" in tl_add[1]
           and mrg[0] == 1 and "no-delete: README.md" in mrg[1] and mok[0] == 0)
-    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; с «Тимлид:» — rc {tl_ok[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
+    item(S, "F2.2", ok, f"файл тимлида без «Тимлид:» — rc {tl[0]} «{tl[1][:90]}»; с «Тимлид:» — rc {tl_ok[0]}; файл из project.owner_add — rc {tl_add[0]}; git rm — rc {rm[0]} «{rm[1][:70]}»; "
          f"git mv в docs/archive/ — rc {mv[0]}; слияние со своим удалением — rc {mrg[0]} «{mrg[1][:70]}», то же слияние без него — rc {mok[0]}")
     # F2.3 — force-push в любой записи (bare origin); обычный push проходит; написание в Bash — отказ хука кита
     ff = gc(r, "push", "-q", "origin", "v")
@@ -592,6 +596,9 @@ def retired_in(settings, launch, process):
     return names
 
 
+CLAUDE_CALL = (re.compile(r"(?:^|[\s'\"(\[`])claude(?=[\s'\",)\]`]|$)", re.M), re.compile(r"(?:^|[\s'\"\[,`])(?:-p|--print)(?=[\s'\",\]`]|$)", re.M))
+
+
 def action_hooks(sources):
     """F3.2: [(событие, имя, почему)] для хуков на действие, что ходят в сеть или зовут модель. sources — [(settings, корень, плагин)]."""
     bad, seen = [], 0
@@ -613,8 +620,10 @@ def action_hooks(sources):
                         path = a.replace("${CLAUDE_PROJECT_DIR}", root).replace("${CLAUDE_PLUGIN_ROOT}", root).replace("$CLAUDE_PROJECT_DIR", root)
                         text = open(path, encoding="utf-8", errors="replace").read() if os.path.isfile(path) else a
                         m = NET.search(text)
+                        if not m and all(r.search(text) for r in CLAUDE_CALL):  # claude и -p порознь: spawnSync('claude', ['-p', …]) и т. п.
+                            m = CLAUDE_CALL[0].search(text)
                         if m:
-                            bad.append((ev, name, f"«{m.group(0)}»"))
+                            bad.append((ev, name, f"«{m.group(0).strip()}»"))
                             break
     return bad, seen
 
@@ -655,18 +664,20 @@ def env_probes(src, proc, launch, init, args):
     open(f"{fx}/ask.sh", "w").write("#!/bin/sh\nclaude --print 'judge this edit'\n")
     open(f"{fx}/pinned.sh", "w").write("#!/bin/sh\nclaude --model claude-opus-5-5 -p 'judge this edit'\n")
     open(f"{fx}/listed.py", "w").write("import subprocess\nsubprocess.run(['claude', '--model', 'claude-haiku-5-5', '-p', 'judge'])\n")
+    open(f"{fx}/spawn.mjs", "w").write("import { spawnSync } from 'node:child_process'\nspawnSync('claude', ['--model', 'claude-haiku-5-5', '-p', 'judge this edit'])\n")
     fixture = {"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/net.mjs"]},
                                                     {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/local.sh"}]}],
                          "PostToolUse": [{"hooks": [{"type": "prompt", "prompt": "Judge this edit."}]}],
                          "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "node ${CLAUDE_PROJECT_DIR}/get.mjs"},
                                                          {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/ask.sh"},
                                                          {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/pinned.sh"},
-                                                         {"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/listed.py"]}]}],
+                                                         {"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/listed.py"]},
+                                                         {"type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/spawn.mjs"]}]}],
                          "Stop": [{"hooks": [{"type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/net.mjs"]}]}]}}
     rbad, rseen = action_hooks([(fixture, fx, None)])
-    ok = not bad and [n for _, n, _ in rbad] == ["net.mjs", "prompt", "get.mjs", "ask.sh", "pinned.sh", "listed.py"]
+    ok = not bad and [n for _, n, _ in rbad] == ["net.mjs", "prompt", "get.mjs", "ask.sh", "pinned.sh", "listed.py", "spawn.mjs"]
     item(S, "F3.2", ok, f"хуков на действие кита, строки запуска и плагинов в живом init — {seen}, в сеть или к модели — {len(bad)}"
-         + (f" ({'; '.join(f'{e} {n}: {w}' for e, n, w in bad)})" if bad else "") + f"; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, UserPromptSubmit https.get одной строкой, claude --print, claude --model … -p и список subprocess, Stop fetch) — "
+         + (f" ({'; '.join(f'{e} {n}: {w}' for e, n, w in bad)})" if bad else "") + f"; фикстура (PreToolUse fetch, PreToolUse локальный, PostToolUse prompt, UserPromptSubmit https.get одной строкой, claude --print, claude --model … -p, список subprocess и spawnSync('claude', ['-p', …]), Stop fetch) — "
          + "; ".join(f"{e} {n}: {w}" for e, n, w in rbad))
     rows = table(open(proc, encoding="utf-8").read())
     live = [compare(rows, init, " ".join(args))[0]] if init else [["нет system/init"]]
