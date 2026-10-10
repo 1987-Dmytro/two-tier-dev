@@ -14,8 +14,8 @@
     "serena@claude-plugins-official": false,
     "typesafe@typesafe-ai": true,
     "jev-belay@jev-belay": true,
-    "jev-steer-or-queue@jev-steer-or-queue": true,
-    "compact-adviser@compact-adviser": true,
+    "jev-steer-or-queue@jev-steer-or-queue": false,
+    "compact-adviser@compact-adviser": false,
     "handoff@two-tier-mods": true,
     "rust-analyzer-lsp@claude-plugins-official": false,
     "improve@improve": false,
@@ -28,17 +28,6 @@
         "log": true,
         "shadow": true,
         "check": "^bin/(check|gate)-"
-      }
-    },
-    "jev-steer-or-queue@jev-steer-or-queue": {
-      "options": {
-        "mode": "shadow"
-      }
-    },
-    "compact-adviser@compact-adviser": {
-      "options": {
-        "mode": "hint",
-        "logRequests": true
       }
     },
     "handoff@two-tier-mods": {
@@ -88,8 +77,6 @@
       "Edit(./.claude/launch.settings.json)",
       "Edit(./docs/OFFICIAL-SOURCES.md)",
       "Edit(./docs/archive/team-lead-*.md)",
-      "Edit(./budgets.json)",
-      "Edit(./CLAUDE.md)",
       "Edit(./.abide/rubric.json)"
     ]
   },
@@ -100,62 +87,19 @@
       "Source control: github.com/1987-Dmytro/two-tier-dev — pushing feature branches there is routine; main changes only through a pull request after the operator's acceptance.",
       "Trusted domains: github.com, code.claude.com, registry.npmjs.org, context7.com, api.typesafe.ai, docs.typesafe.ai.",
       "Key services: GitHub Actions CI of this repo; scratch repos and fixtures under /tmp/two-tier-v3; nested claude -p control runs on the subscription.",
-      "Decision-model vendor: TypeSafe (Jev) at api.typesafe.ai — paid calls from hooks and bin/ scripts with the key from the environment are routine inside the phase ceiling; the key is never printed or written into the repo."
+      "Decision-model vendor: TypeSafe (Jev) at api.typesafe.ai — paid calls from the Stop hook, bin/ scripts and `abide check` with the key from the environment are routine in this phase; the key is never printed or written into the repo."
     ]
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" session-start",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" turn-start",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|mcp__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 10,
-            "command": "toolgate decide 2>/dev/null | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{const d=JSON.parse(s);if(d.verdict===\"deny\")console.log(JSON.stringify({hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"deny\",permissionDecisionReason:\"[toolgate] \"+d.reason}}))}catch(e){}})'"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" post-tool-use",
-            "timeout": 20
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$(npm root -g)/@coldtea/abide/dist/abide-hook.js\" stop",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/kit/.claude/hooks/spec-gate.mjs"
+            ],
             "timeout": 30
           }
         ]
