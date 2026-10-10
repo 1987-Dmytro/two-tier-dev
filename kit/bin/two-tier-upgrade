@@ -515,8 +515,9 @@ def self_test():
         hooks = json.dumps(json.loads(g(d, "show", "HEAD:.claude/settings.json").stdout or "{}").get("hooks", {}))
         bad += [f"хук {os.path.basename(r)} в .claude/settings.json" for r in ACT if os.path.basename(r) in hooks]
         ls = json.loads(g(d, "show", f"HEAD:{LS}").stdout or "{}")
-        bad += [f"плагин {p} включён" for p in PLUGINS_OFF if (ls.get("enabledPlugins") or {}).get(p) is True]
-        bad += [f"pluginConfigs {p}" for p in PLUGINS_OFF if p in (ls.get("pluginConfigs") or {})]
+        retired = ["jev-steer-or-queue@jev-steer-or-queue", "compact-adviser@compact-adviser"]  # свой список сверки, не PLUGINS_OFF кода (ревью 919a729, F3)
+        bad += [f"плагин {p} включён" for p in retired if (ls.get("enabledPlugins") or {}).get(p) is True]
+        bad += [f"pluginConfigs {p}" for p in retired if p in (ls.get("pluginConfigs") or {})]
         hp = g(d, "config", "--get", "core.hooksPath").stdout.strip()
         return bad + ([] if hp == ".githooks" else [f"core.hooksPath {hp or 'не задан'}"])
 
@@ -574,7 +575,7 @@ def self_test():
         pj = f"{fix}/f34-v32-judged"  # судьи проекта уже стоят: core.hooksPath .githooks и pre-commit с отказом
         shutil.copytree(q32, pj, symlinks=True)
         for name, d, need in [("v3.1 d2ca390", q31, []), ("v3.1 d2ca390 → китом v3.2 b5b81cd", q31r, ["abide.mjs", "toolgate-deny.mjs"]),
-                              ("v3.2 b5b81cd", q32, ["abide.mjs", "toolgate-deny.mjs", "toolgate.yaml", *PLUGINS_OFF])]:
+                              ("v3.2 b5b81cd", q32, ["abide.mjs", "toolgate-deny.mjs", "toolgate.yaml", "jev-steer-or-queue@jev-steer-or-queue", "compact-adviser@compact-adviser"])]:
             pre, red = g(d, "rev-parse", "HEAD").stdout.strip(), env(d)
             r = run(d)
             good, raw = after(d, pre, r)
