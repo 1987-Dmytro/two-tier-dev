@@ -88,6 +88,12 @@ def main() -> None:
     except Exception:
         return
     cmd = (payload.get("tool_input") or payload).get("command", "") or ""
+    # v3.3, F2: обойти хуки git можно только --no-verify или core.hooksPath — их ищем в сыром тексте: подоболочка, eval, bash -lc,
+    # timeout N не прячут; упоминание в echo тоже отказывается — дешевле, чем дыра (.githooks/pre-push держит force-push поведением)
+    if re.search(r"\bgit\b", cmd) and re.search(r"--no-verify\b", cmd):
+        refuse("no --no-verify: the kit's git hooks judge every commit and push (SPEC-v3.3 F2)")
+    if re.search(r"\bgit\b", cmd) and re.search(r"core\.hooksPath", cmd, re.I):
+        refuse("core.hooksPath is the wiring of the kit's commit and push judges: do not change or bypass it (SPEC-v3.3 F2)")
     for segment in re.split(r"&&|\|\||;|\|", cmd):
         check_segment(segment)
 
