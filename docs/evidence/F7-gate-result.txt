@@ -1,0 +1,40 @@
+$ bin/gate-v3.3  # корень репо кита; проект t3 — bin/two-tier-init во /tmp/two-tier-v3 · 10.10.2026 12:02 · HEAD d26d67a + рабочее дерево
+F7: bin/two-tier-init t3 — файлов кита 36 (в git 36), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate33-nIRIGD
+init: (t3) bin/check-budget — rc 0
+jev: (t3) bin/jev --self-test — rc 0
+templates: (t3) bin/check-budget --templates — rc 0
+templates-repo: (корень ветки) bin/check-budget --templates — rc 0
+owner: (t3) bin/check-budget --self-test intent owner — rc 0
+kit-t3: (t3) bin/check-kit — rc 0
+kit-repo: (корень ветки) bin/check-kit — rc 0
+commit-t3: (t3) bin/check-harness commit — rc 0
+upgrade: (корень ветки) bin/two-tier-upgrade --self-test — rc 0
+spend: (корень ветки) bin/check-spend — rc 0
+docs: (корень ветки) bin/check-docs — rc 0
+items-t3: (t3) bin/check-harness items — rc 0
+verify: (корень ветки) bin/check-verify — rc 0
+env-t3: (t3) bin/check-harness env — rc 0
+F7-init BUDGET_OK
+F1 ITEMS_OK
+F2 COMMIT_OK
+F3 ENV_OK
+F4 VERIFY_OK
+F5 WINDOW_OK
+F6 DOCS_OK
+v3.2 JEV_OK
+v3.2 GATE_HOOK_OK
+v3.2 HARNESS_OK
+v3.2 HOOKS_OK
+v3.2 KIT_OK
+v3.2 HANDOFF_OK
+v3.2 OWNER_OK
+    templates: WARN intent: intent/INTENT.md: маркеров неясности 1
+    templates-repo: WARN intent: intent/INTENT.md: маркеров неясности 1
+v3.2 BUDGET_OK
+v3.2 SPEND_OK
+v3.2 UPGRADE_OK
+F7.1 проект t3 от bin/two-tier-init: файлов кита 36 из 36, core.hooksPath .githooks; BUDGET_OK проекта и маркеры F1–F6 с номером фичи — красных 0; красный образец разметки (лог без маркера, rc 1) — «F0 FAIL: RED_OK — red-sample: нет RED_OK; red-sample: rc 1»
+F7.2 уцелевшие маркеры v3.2 — 10, красных 0; bin/gate-v3.2 — в docs/archive/gate-v3.2/
+F7 GATE_OK
+GATE_OK
+rc 0 · 122 с

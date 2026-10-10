@@ -263,7 +263,9 @@ def upgrade(target):
 
 # ---------- self-test: синтетический проект v2, тестовый клон без origin ----------
 ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
-           GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
+           GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid",
+           # фикстуры копируются copytree: фоновый gc или maintenance после коммита не должен прибирать объекты на ходу (гейт, 10.10)
+           GIT_CONFIG_COUNT="2", GIT_CONFIG_KEY_0="gc.auto", GIT_CONFIG_VALUE_0="0", GIT_CONFIG_KEY_1="maintenance.auto", GIT_CONFIG_VALUE_1="false")
 V2 = {".claude/settings.json": '{"model": "opus", "ultracode": true}\n',
       ".claude/hooks/kill-switch.sh": '#!/usr/bin/env bash\necho \'{"decision":"block"}\'\n',
       ".claude/hooks/verify-gate.sh": "#!/usr/bin/env bash\n", ".claude/hooks/track-read.sh": "#!/usr/bin/env bash\n",

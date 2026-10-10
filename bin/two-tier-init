@@ -44,5 +44,12 @@ cat <<'EOF'
   3. bin/check-budget → BUDGET_OK; запуск исполнителя и контрольный прогон — docs/LAUNCH.md.
   Остановить исполнителя: touch AGENT_STOP (снять — rm AGENT_STOP); подсказать — строка в STEER.md.
 EOF
+# v3.3, F2: судьи коммита кита — хуки git .githooks/ (commit-msg, pre-push); core.hooksPath — локальный конфиг, в клон не едет
+if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "$TARGET" config core.hooksPath .githooks
+  echo "  core.hooksPath .githooks — судьи коммита кита включены в этом клоне; в другом клоне: git config core.hooksPath .githooks"
+else
+  echo "  не git-репо: после git init — git config core.hooksPath .githooks (судьи коммита кита)"
+fi
 echo "  4. Мод handoff (строка таблицы Environment) — оператор ставит его один раз на машину:"
 echo "     claude plugin marketplace add \"$HERE/mods\" && claude plugin install handoff@two-tier-mods"
