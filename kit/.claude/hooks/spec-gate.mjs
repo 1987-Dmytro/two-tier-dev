@@ -7,8 +7,9 @@
 // branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова» section) names what is done, the operator's
 // next step and when, and was rewritten — in this session when the session committed anything beyond evidence, else in this phase
 // (since the last commit of the start prompt: a fresh context on a closed phase is not held); a VERDICT: PASS of a full
-// /verify-phase round for HEAD or an ancestor, and for every feature changed after it (item ids at the start of the commit
-// message) a point VERDICT: PASS that names it (`FEATURES: F<n>, …`), at or after its last change (SPEC-v3.3 F4.4).
+// /verify-phase round for HEAD or an ancestor (or a NEEDS_WORK one whose blocking features are then verified again), and for every
+// feature changed after it (item ids at the start of the commit message) a point verdict that names it (`FEATURES: F<n>, …`) without
+// blocking it, at or after its last change (SPEC-v3.3 F4.4, §5).
 // The set is judged as pushed: the start prompt, the SPEC, docs/PROGRESS.md, the evidence files of the SPEC's features and the
 // verdict files are read from HEAD, and any of them that `git status` shows as changed, untracked or deleted (eol conversion and
 // filters as git applies them) holds the turn by its name. Logs that checks and hooks append (docs/evidence/*.jsonl) and the phase
@@ -167,7 +168,9 @@ function coverage(root, sha, ids) {  // what the verdicts leave uncovered — []
   const isFull = v => !v.scope || ids.every(i => v.scope.includes(i))
   const dist = v => Number(git(root, 'rev-list', '--count', `${v.sha}..${sha}`) ?? 1e9)
   const full = all.filter(isFull).sort((a, b) => dist(a) - dist(b) || b.pass - a.pass)[0]  // the newest full round, PASS or NEEDS_WORK
-  const vs = all.filter(v => v.pass)
+  // a feature counts as verified at v.sha when v names it and does not block it (a NEEDS_WORK verdict without a parsed blocking list verifies nothing)
+  const verifies = (v, f) => v !== full && v.scope?.includes(f) && (v.pass || (v.blocking.length > 0 && !v.blocking.includes(f)))
+  const vs = all.filter(v => v.pass || v.blocking.length)
   if (!full) return { missing: [`no full /verify-phase round for HEAD ${sha.slice(0, 7)} or an ancestor in HEAD (docs/evidence/verify-<sha>.txt)`] }
   const missing = [], last = {}
   // SPEC-v3.3 §5: the blocking findings of the one full round are fixed, then only the touched features are verified again
@@ -181,12 +184,12 @@ function coverage(root, sha, ids) {  // what the verdicts leave uncovered — []
     for (const f of fs_) if (!last[f] || last[f] === full.sha) last[f] = c.sha  // newest first: the first seen is the last change of the feature
   }
   for (const [f, c] of Object.entries(last)) {
-    if (!vs.some(v => v.scope?.includes(f) && isAncestor(root, c, v.sha) && (v !== full))) {
+    if (!vs.some(v => verifies(v, f) && isAncestor(root, c, v.sha))) {
       missing.push(c === full.sha ? `${f}: blocking in the full /verify-phase round ${full.sha.slice(0, 7)} (${full.file}) — no point VERDICT: PASS that names ${f} after it`
         : `${f}: changed after the full /verify-phase round ${full.sha.slice(0, 7)} (commit ${c.slice(0, 7)}) — no point VERDICT: PASS that names ${f} at or after it`)
     }
   }
-  const point = vs.filter(v => v !== full && v.scope && !isFull(v) && Object.keys(last).some(f => v.scope.includes(f)))
+  const point = vs.filter(v => Object.keys(last).some(f => verifies(v, f)))
   return { missing, used: [full.file, ...point.map(v => v.file)].join(', ') }
 }
 

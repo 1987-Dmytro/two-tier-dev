@@ -86,7 +86,8 @@ const unconfirmed = (r, i) => {
   if (!x) return 'пункта нет в ответе проверяющего'
   if (!x.command.trim() || !x.raw_output.trim()) return 'нет своей команды или её сырого вывода'
   // лог гейта — где угодно; evidence — когда его читает инструмент чтения: свой скрипт с фикстурой и её docs/evidence/ — свой прогон
-  if (/gate\.log|VERIFY_GATE_LOG/.test(x.command) || /(?:^|[\s;&|(`])(?:cat|grep|egrep|rg|head|tail|sed|awk|less|more|cut|wc|jq|sort)\b[^;&|]*docs\/evidence\//.test(x.command)) {
+  const cmd = x.command.replace(/(^|\s)#.*$/gm, '$1')  // комментарий проверяющего к команде — не то, что она читает
+  if (/gate\.log|VERIFY_GATE_LOG/.test(cmd) || /(?:^|[\s;&|(`])(?:cat|grep|egrep|rg|head|tail|sed|awk|less|more|cut|wc|jq|sort)\b[^;&|]*docs\/evidence\//.test(cmd)) {
     return `команда читает evidence или лог гейта: \`${clip(x.command)}\``
   }
   if (x.command.trim() === r.check.command.trim()) return `команда — чек фичи, а не своя: \`${clip(x.command)}\``
