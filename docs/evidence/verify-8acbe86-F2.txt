@@ -1,0 +1,17 @@
+VERDICT: NEEDS_WORK
+FEATURES: F2
+/verify-phase · docs/SPEC-v3.3.md · HEAD 8acbe86 · проверяющие claude-sonnet-5-5 (фич 1 из 7, опровергателей 2) · судья claude-opus-5-5
+
+Обе кандидатуры в блокирующие код блокирует сам, и в мой список они не входят. Первая — пережившая мутация `is_tl()` (каталожные записи owner, `bin/check-harness commit` всё равно зелёный). Вторая — неподтверждённый пункт F2.1 (holds:false): секрет вида `KEY=value` без кавычек и `sk_live_` проходят, `.env` вне scope рубрики, и это та же причина. Остальное F2.2–F2.6 подтверждено собственными командами чекера с красной и зелёной сторонами, свежий прогон `bin/check-harness commit` даёт rc 0 и `COMMIT_OK`; оставшиеся находки — пограничные побочные эффекты и пробелы покрытия, которые не противоречат пунктам SPEC и не ломают инварианты §3.
+
+## Блокирующие
+- **F2: мутация выжила — kit/.githooks/commit-msg: is_tl(): dropped the directory-prefix branch (path.startswith(e) for entries ending in '/'), so intent/ and docs/reviews/ files are no longer team-lead files** · чек `bin/check-harness commit` остался зелёным
+- **F2.1: не подтверждён своим прогоном** — секрет в любом файле, домашний путь или почта в `docs/evidence/` и сообщении коммита — отказ с именем правила; `noreply@` соавторства проходит · свой прогон не подтвердил: `/tmp/two-tier-v3/a8acbe86/t21.sh (own fixtures: kit .githooks/commit-msg copied into a throwaway repo; commits staged fi` rc 0 → «[literal-sk] rc=1 :: commit refused by the kit — rule no-secret-values: s.py ⏎ [AKIA] rc=1 ... no-secret-values: notes.m»
+
+## Named, not built
+- F2.2: охрана удаления обходится переименованием — `git mv a.txt elsewhere.txt` мимо `docs/archive/` и `git rm` с похожим новым файлом (детект переименования git ≥50%) проходят, rc=0 ([mv-elsewhere], [del-plus-similar] в t22.sh); содержимое остаётся в репо, поэтому это не удаление в смысле C1
+- F2.3: pre-push считает force-push любое удаление удалённой ветки (`--delete`, `:ветка`, `-d`) и отказывает даже при обычной уборке ветки фичи ([push --delete origin new] rc=1); это побочный эффект за рамками текста F2.3
+- F2.1: регэксп домашнего пути не ловит путь Windows (`C:\Users\name`) в сообщении коммита и evidence ([msg-win-home] rc=0); фаза идёт на darwin, это пробел покрытия, а не путь заказчика
+
+## По фичам
+- F2: чек `bin/check-harness commit` rc 0, маркер есть (own_run); пунктов своим прогоном 5/6; мутация kit/.githooks/commit-msg: is_tl(): dropped the directory-prefix branch (path.startswith(e) for entries ending in '/'), so intent/ and docs/reviews/ files are no longer team-lead files → green; находок 4, блокирующих-кандидатов 2, опровергнуто 0
