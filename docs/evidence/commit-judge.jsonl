@@ -36,3 +36,12 @@
 {"ts": "2026-10-10T13:16:52Z", "decision": "refuse", "judge": "code", "rule": "no-secret-values", "files": ["docs/evidence/verify-d12c3ad-F2.txt"], "diff": "2e82a1eceb3589f7", "ms": 109}
 {"ts": "2026-10-10T13:17:09Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/verify-d12c3ad-F2.txt"], "score": 0.29, "diff": "2a44fd8e63866a8d", "ms": 1090}
 {"ts": "2026-10-10T13:35:18Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/verify-19e79c3-F2.txt"], "score": 0.15, "diff": "cc011004db5d1922", "ms": 1065}
+{"ts": "2026-10-10T13:36:12Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["docs/evidence/phase-report.md"], "score": 0.2, "diff": "b1f5932fe60b1be4", "ms": 2013}
+{"ts": "2026-10-10T14:59:37Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["mods/handoff/README.md"], "score": 0.27, "diff": "2ca61310a8f2f59f", "ms": 3621}
+{"ts": "2026-10-10T15:00:08Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["docs/STATUS.md"], "score": 0.06, "diff": "d20676ee683b25ba", "ms": 2945}
+{"ts": "2026-10-10T15:12:28Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["docs/PLAN-v3.3.md"], "score": 0.28, "diff": "6d81f772b01ff171", "ms": 1172}
+{"ts": "2026-10-10T15:15:39Z", "decision": "pass", "judge": "abide", "rule": "no-print-credential", "files": ["bin/gate-v3.3"], "score": 0.48, "diff": "0b8b6f276edbadab", "ms": 1289}
+{"ts": "2026-10-10T15:17:34Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/two-tier-upgrade"], "score": 0.11, "diff": "a284ad3eb8a3c992", "ms": 863}
+{"ts": "2026-10-10T15:19:01Z", "decision": "pass", "judge": "abide", "rule": "no-print-credential", "files": ["bin/gate-v3.3"], "score": 0.22, "diff": "7954266742ea9011", "ms": 1009}
+{"ts": "2026-10-10T15:44:47Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/two-tier-upgrade"], "score": 0.37, "diff": "ae57f83193c96503", "ms": 831}
+{"ts": "2026-10-10T15:44:48Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/gate-v3.3"], "score": 0.13, "diff": "38d45266e645abec", "ms": 855}
