@@ -1,0 +1,81 @@
+# PLAN-v3.3 — two-tier-dev, судья на заявлении
+
+**Спека:** `docs/SPEC-v3.3.md` · **база фазы:** `main` @ `b5b81cd`, SPEC — `60ae608`, поправка «Б» — `0b6ff06` · **дата:** 10.10.2026 · только текущий план; отклонение по ходу — правка этого файла тем же коммитом. Потолок — 150 строк.
+
+## Файлы
+Раскладка v3.2 остаётся: продукт — в `kit/`, `bin/` — symlink на `kit/bin/`; только в репо — `bin/two-tier-init`, `bin/check-docs`, `bin/check-verify`, `bin/gate-v3.3`, `Makefile`.
+- **Шаг 0a (`c3ff68d`):** `git mv` PROGRESS v3.2 → `docs/archive/PROGRESS-v3.2.md`, evidence v3.2 → `docs/archive/evidence-v3.2/`; пути записи v3.2 CHANGELOG — следом (F6.1).
+- **F1:** `kit/.claude/hooks/spec-gate.mjs` — пункты `F<n>.<k>` под строкой фичи, строка пробы пункта в evidence HEAD, STOP только из запушенного HEAD (с вопросом и resume рядом), голова — свежая в сессии, а в тихой сессии на закрытой фазе — свежая за фазу; Jev из хука ушёл. `kit/bin/phase-report` (новый) — `docs/evidence/phase-report.md`: матрица, три списка, судьи коммита, пропуски хука, ячейка Jev (`choice`: confirms / contradicts / silent) через `bin/jev`; вопрос — `questions.item_status` в `kit/.claude/spec-gate.json`. `kit/bin/check-budget` — `rule_spec`: блок фичи ≤ `spec_block_chars` (900, новый ключ кита), у пункта — место чтения, у строки §3 — `судья:`. `kit/bin/check-harness items` — раздел `ITEMS` и `GATE_HOOK`.
+- **F2:** `kit/.githooks/commit-msg` (код: `no-secret-values`, `evidence-anonymized`, `team-lead-files`, `no-delete`; затем `abide check --json --phase edit --diff <staged patch>`, 30 с) и `kit/.githooks/pre-push` (не fast-forward — отказ); журнал `docs/evidence/commit-judge.jsonl`. `core.hooksPath .githooks` ставят `bin/two-tier-init` и `two-tier-upgrade`; в этом клоне — `kit/.githooks` (разрешено стартовым запросом). `refuse_sweeping_commands.py` — ещё `--no-verify` и force-push по написанию. `kit/bin/check-harness commit` — раздел `COMMIT`, F2.5 — рубрика ≤ 8 правил и красный образец (`criteria.true`) каждого ≥ 0,8; `kit/budgets.json` `abide_rules` 15 → 8.
+- **F3:** `kit/.claude/settings.json` без хуков Abide и Toolgate; `kit/.claude/launch.settings.json` — Steer-or-Queue и Compact Adviser `false`, без их `pluginConfigs`; `git mv` `kit/.claude/hooks/abide.mjs`, `toolgate-deny.mjs`, `kit/.claude/toolgate.yaml` → `docs/archive/kit-v3.2/`; owner кита без `toolgate.yaml`. `kit/bin/check-harness env` — `ENV`, `HARNESS`, `HOOKS`: скан хуков на действие (сеть, модель, `type: prompt|agent|http`), сверка `system/init` на проекте из кита. `kit/bin/two-tier-upgrade` — список кита из дерева `kit/`, ушедшие файлы — в `RETIRED`, плагины — коммитом «Тимлид:», self-test на проектах китов `d2ca390` и `b5b81cd`.
+- **F4:** `kit/bin/verify-phase [--limit SEC] [F<n> …]` → воркфлоу с `args`; `kit/.claude/workflows/verify-phase.js` (и копия в `.claude/workflows/`): пункты в scope, вердикт кодом — выжившая мутация, красный чек, пункт без своей команды и сырого вывода → блокирующая; строка `FEATURES:`; файл точечного — `verify-<sha>-F2.txt`. `bin/check-verify` — прогон скрипта воркфлоу под node с заглушками `agent` (F4.1–F4.3), фикстуры `spec-gate` (F4.4), живые фикстуры v3.1.
+- **F5:** `kit/bin/check-window [--repair] [--override]` — один ход `claude -p` (Haiku, `rate_limit_event`, `unifiedWindows`), пороги из `budgets.json`; строка запуска шаблона — `bin/check-window && …`; `kit/bin/verify-phase` — `--repair` до клона. `kit/bin/check-kit` — раздел `WINDOW` на подставленных событиях и заглушке `claude`.
+- **F6:** CHANGELOG `## v3.3` (свип 09.10, поля, мод `limits`), `README.md`, `docs/dev-system.ru.md`, `kit/docs/LAUNCH.md` (= `docs/LAUNCH.md`), `docs/README.md`; шаблоны `kit/docs/SPEC.template.md`, `PROCESS.template.md`, `PROMPT.template.txt`, `kit/CLAUDE.md`; `bin/check-docs` — правила v3.3.
+- **F7:** `bin/gate-v3.3` (новый); `git mv bin/gate-v3.2` → `docs/archive/gate-v3.2/`.
+- Не создаётся: `.claude/settings.json` в корне (переключил бы `check-harness` на корень); файлы тимлида (`budgets.json`, `CLAUDE.md`, PROCESS, рубрика) — их правки строкой в `## Notes`.
+
+## Порядок
+`0a → 0b → F1 → F2 (включить хуки в этом клоне) → F3 → F4 → F5 → F6 → F7 → push → CI → /verify-phase (один круг) → починка и точечный повтор → отчёт фазы → финальный гейт`.
+- F1 раньше F4: F4.4 судит хук F1. F2 раньше F3: F3.4 кладёт `.githooks`. F5 раньше F6: строка запуска шаблона. F6 и F7 — последними: документы и гейт видят готовое.
+- Параллельно — агенты воркфлоу в своих worktree: F3.4 (апгрейд), F4.1–F4.3 (воркфлоу и лаунчер), F5 (`check-window`), F6 (документы). `check-harness`, `spec-gate.mjs`, `.githooks` — главная сессия. Коммит — главная сессия, `git add` по точным путям.
+- Push — после каждой фичи; `make ci` до push (урок 31).
+
+## Риски
+1. **Хук на себе: правка `spec-gate` судит это плечо** — ошибка хука пропускает молча. → пробы `GATE_HOOK` и `ITEMS` на фикстурах до коммита; строка `error:` в журнале — строка отчёта фазы.
+2. **Ложный блок `spec-gate`** — планка «не больше одного». → строка в `## Notes`; второй — STOP-INPUT (SPEC §4).
+3. **F2.4 стохастичен у порога**: образец заметки 0,74–0,78 (замер 10.10) рядом с 0,8. → до 3 прогонов на сторону, журнал ниже.
+4. **F2.5 красный образец**: рубрику правит тимлид; если образец правила < 0,8 — числа в evidence и строка в Notes (SPEC §4).
+5. **Обход хуков git**: `--no-verify`, `-c core.hooksPath`. → `refuse_sweeping_commands.py` отказывает по написанию; подпроцесс без них судят хуки git.
+6. **`unifiedWindows` — недокументированное поле** (исключение C2): исчезнет — F5.3 отказ с причиной; пробы — на подставленных событиях.
+7. **Полный круг `/verify-phase` дольше 30 мин** (гейт с живыми прогонами). → в клоне гейт идёт как есть; таймаут — `VERIFY_TIMEOUT`, повтор по фичам — точечный.
+8. **CI без `claude` и ключа**: живые части — только локально; `make ci` — self-test без сети.
+
+## Доказательство
+Идиом захвата: `( set -o pipefail; { <КОМАНДА>; } 2>&1 | tee "$PWD/docs/evidence/F<n>-<check>-result.txt" ); rc=$?`. Каждая проба печатает строку `F<n>.<k> <сырой вывод обеих сторон>`; маркер фичи — только после всех проверок.
+
+| Пункт | Зелёная сторона | Красный образец (результат не наступает) | Evidence |
+|---|---|---|---|
+| F1.1 | все строки пунктов F1, F2 фикстуры в HEAD — `SPEC_GATE_OK` | нет строки `F2.2` при маркере `B_OK`; близнецы `F2.20`, `xF2.2`; строка только на диске — блок называет `F2.2` | `F1-harness-result.txt` |
+| F1.2 | полный комплект — `SPEC_GATE_OK`; новая сессия на закрытой фазе без коммитов — `SPEC_GATE_OK` | голова не переписана с коммита запроса; сессия с коммитом кода без новой головы — блок | — |
+| F1.3 | SPEC-v3.3 и шаблон — `BUDGET_OK` | пункт без места чтения, строка §3 без `судья:`, блок 901 знак — `FAIL` с id | — |
+| F1.4 | фикстура: матрица «пункт × коммиты, проба, наблюдение» | пункт без коммита, коммит без пункта, пункт без пробы — по спискам | — |
+| F1.5 | строка STOP запушена — ход кончается | STOP только на диске — блок «on disk only»; пропуск по капу — строка с причиной в отчёте | — |
+| F1.6 | фейковый Jev: confirms / contradicts / silent — в отчёте | ошибка 500 и таймаут — статус в отчёте, rc 0; решение хука с Jev и без — одно | — |
+| F2.1 | чистая правка, `noreply@` соавтора — проходит | литерал ключа, значение ключа из окружения, домашний путь и почта в evidence и сообщении — отказ с правилом | `F2-harness-result.txt` |
+| F2.2 | «Тимлид:» на файле тимлида, `git mv` в архив — проходит | файл тимлида без «Тимлид:», `git rm` — отказ с правилом и файлом | — |
+| F2.3 | push в bare-репо fast-forward — проходит | `--force`, `+v`, `git -C … push -f`, push из подпроцесса — отказ; `--no-verify` и `--force` в Bash — отказ хука | — |
+| F2.4 | повтор того же диффа — `rejected`, проходит; 0,5–0,8 — заметка; ошибка и таймаут — пропуск | печать ключа — отказ один раз с правилом и файлом | — |
+| F2.5 | рубрика репо: 4 правила, каждый образец ≥ 0,8 | рубрика из 9 правил; правило со слабым образцом — красный с id | — |
+| F2.6 | счёт коммитов, отказов, отклонённых, заметок, пропусков в отчёте | коммит с секретом из подпроцесса Python — отказ | — |
+| F3.1 | кит: 0 хуков Abide и Toolgate, Steer и Compact выключены, Belay — тень, файлы в архиве | фикстура настроек с `abide.mjs` и `compact-adviser` включённым — красный с именем | `F3-harness-result.txt` |
+| F3.2 | хуки кита на действие — 0 сетевых | фикстура: PreToolUse с `fetch`, PostToolUse `type: prompt` — красный с именем | — |
+| F3.3 | живой `system/init` проекта из `two-tier-init` = таблица | фикстура init с лишним плагином и без MCP — красный с именем | — |
+| F3.4 | апгрейд проектов китов `d2ca390` и `b5b81cd`: хуков и плагинов нет, прежнее в архиве, `BUDGET_OK` | тот же проект до апгрейда — сверка красная с именем хука | — |
+| F4.1 | `bin/verify-phase F1` на фикстуре — вердикт `FEATURES: F1`; без списка — все | список с неизвестной фичей — rc 2; скрипт с `args` проверяет только названные | `F4-verify-result.txt` |
+| F4.2 | мутация убита — PASS | мутация выжила — NEEDS_WORK, блокирующая называет фичу и мутацию | — |
+| F4.3 | пункт подтверждён своей командой и сырым выводом — PASS | evidence зелёный, продукт сломан; пункт без своей команды — не PASS | — |
+| F4.4 | полный PASS, починка `F2.1:`, точечный PASS по F2 — `SPEC_GATE_OK` | без точечного или точечный только по F1 — блок называет F2 | — |
+| F5.1 | 5 ч 39 %, неделя 84 % — строка стартует (заглушка `claude` вызвана) | 41 % или неделя 86 % — отказ до старта, оба числа и время сброса | `F5-kit-result.txt` |
+| F5.2 | `--repair` и `bin/verify-phase`: 69 % — идёт | 71 % — отказ | — |
+| F5.3 | `--override` — проходит, обход напечатан | нет события, нет `unifiedWindows`, ошибка входа — отказ с причиной | — |
+| F5.4 | пороги из `budgets.json` фикстуры | смена порога в фикстуре меняет решение | — |
+| F6.1 | CHANGELOG v3.3: строки свипа с цитатой и адресом, поля с источником и до/после | запись без адреса или поле без строки — `DOCS_FAIL` | `F6-docs-result.txt` |
+| F6.2 | три документа называют судью на заявлении, предохранитель и флаг обхода, один круг; ссылки живые | мёртвая ссылка — `DOCS_FAIL` | — |
+| F6.3 | шаблоны — формат пунктов, таблица судей, Environment без ушедших, строка с предохранителем; `bin/check-budget --templates` | шаблон с Toolgate «да» — красный | — |
+| F6.4 | `claude plugin validate` и `test` мода `limits` зелёные; строки `hooks:` и `calls:` в CHANGELOG | без строк мода — `DOCS_FAIL` | — |
+| F7.1 | `bin/gate-v3.3` на проекте `two-tier-init`: `F1 ITEMS_OK` … `F6 DOCS_OK`, `F7 GATE_OK` | красный маркер любой фичи — `GATE_FAIL` | `F7-gate-result.txt` |
+| F7.2 | уцелевшие маркеры v3.2 напечатаны; `bin/gate-v3.2` в архиве | — | — |
+
+| фаза | `bin/verify-phase` | `VERDICT: PASS` | `verify-<sha>.txt` |
+|---|---|---|---|
+
+## Отклонения от SPEC и документации
+1. Блок фичи меряется новым ключом `spec_block_chars` (900): `spec_feature_chars` (600, строка фичи) — в корневом `budgets.json` тимлида, правка — строкой в Notes.
+2. «Место чтения» пункта — лексически: команда, файл или маркер в обратных кавычках или слово места (блок, отказ, вердикт, отчёт, чек, печатает, CHANGELOG, README, шаблон, строка запуска). Строка §3 «Вне объёма» — не запрет, судьи не требует.
+3. Jev ушёл из `spec-gate` целиком: SPEC §0 «Jev ничего не блокирует», F1.6 — ячейка отчёта. Вопрос STOP и голова — кодом: вопрос и resume рядом со строкой STOP, три метки головы шаблона.
+4. `abide check` судит staged-патч через `--diff` (README Abide: без него — всё рабочее дерево и неотслеживаемые файлы).
+5. Пороги F5 — доли `unifiedWindows` × 100 против `*_pct` (statusline-док даёт 0–100, событие — 0–1).
+
+## Журнал прогонов (стохастика)
+| # | проба | итог | keep/discard |
+|---|---|---|---|
