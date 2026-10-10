@@ -300,10 +300,12 @@ def rule_owner(b):
 
 
 def rule_abide(b):
-    """v3.2, F3: правил в рубрике Abide (файл тимлида) — не больше abide_rules; нет рубрики — нет правила."""
+    """v3.2, F3: правил в рубрике Abide (файл тимлида) — не больше abide_rules. v3.3, F7.3: нет рубрики — FAIL: хук коммита молча
+    пропускал бы суд модели."""
     p = ".abide/rubric.json"
     if not os.path.isfile(p):
-        return [("OK", "abide_rules", f"нет {p} — рубрики Abide нет")]
+        return [("FAIL", "abide_rules", f"нет {p} — abide check в хуке коммита пропускает суд модели: база рубрики — из кита "
+                 "(bin/two-tier-init, two-tier-upgrade), коммитом «Тимлид: …»")]
     try:
         n = len(json.loads(read(p)).get("rules", []))
     except (ValueError, AttributeError):
@@ -441,7 +443,7 @@ def fixtures(b, defaults):
         add("rubric", "abide_rules+1", "FAIL", rub(b["abide_rules"] + 1), rule_abide)
     else:  # budgets.json проекта до v3.2: правило предупреждает, а не падает
         add("rubric", "нет abide_rules в budgets.json — WARN", "WARN", rub(3), rule_abide)
-    add("rubric", "нет рубрики", "OK", {}, rule_abide)
+    add("rubric", "нет рубрики — FAIL с причиной (F7.3)", "FAIL", {}, rule_abide)
     add("rubric", "рубрика не JSON", "FAIL", {".abide/rubric.json": "{"}, rule_abide)
     rv = lambda n: {"docs/reviews/r.md": "## Блокирующие\n" + "- f\n" * n + "## Named, not built\n- a\n- b\n- c\n"}
     add("review", "review_blocking", "OK", rv(b["review_blocking"]), rule_review)
@@ -522,6 +524,7 @@ TEMPLATES = {  # шаблон кита → куда его кладёт прим
     "docs/PROMPT.template.txt": "docs/PROMPT.txt", "docs/PLAN.template.md": "docs/PLAN-1.md",
     "docs/PROGRESS.template.md": "docs/PROGRESS.md", "docs/STATUS.template.md": "docs/STATUS.md",
     "docs/PROCESS.template.md": "docs/PROCESS.md", "REVIEW.md": "docs/reviews/1-1.md", "CLAUDE.md": "CLAUDE.md",
+    ".abide/rubric.json": ".abide/rubric.json",  # v3.3, F7.3: база рубрики кита — как её кладёт bin/two-tier-init
 }
 
 

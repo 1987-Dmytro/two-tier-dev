@@ -42,7 +42,8 @@ run spend "$REPO" bin/check-spend
 run docs "$REPO" bin/check-docs
 
 # F7.3: проект от bin/two-tier-init без ручных шагов — коммит скрипта, печатающего ключ, отказан abide check с именем правила; скрипт с
-# присутствием и длиной ключа проходит. Красная сторона — такой же проект без .abide/rubric.json: суда модели нет. База рубрики кита —
+# присутствием и длиной ключа проходит, bin/check-budget зелёный. Красная сторона — такой же проект без .abide/rubric.json: суда модели
+# нет, bin/check-budget красный с причиной — одним FAIL. База рубрики кита —
 # правила корня без привязки (scope, source); красный образец сверки — копия базы с переписанным вопросом и без правила.
 P73=$(mktemp -d /tmp/two-tier-v3/f73-XXXXXX)
 for p in kit bare; do git init -q "$P73/$p" && "$REPO/bin/two-tier-init" "$P73/$p" >/dev/null; done
@@ -69,6 +70,11 @@ leak='echo "key: $TYPESAFE_API_KEY"'
 k_leak=$(c73 kit tools/show-key.sh "$leak")
 k_safe=$(c73 kit tools/key-set.sh '[ -n "$TYPESAFE_API_KEY" ] && echo "key set, length ${#TYPESAFE_API_KEY}"')
 b_leak=$(c73 bare tools/show-key.sh "$leak")
+bud73() {  # bud73 <проект>: bin/check-budget — rc, строка abide_rules и итог
+  local out rc; out=$(cd "$P73/$1" && bin/check-budget 2>&1); rc=$?
+  echo "rc $rc «$(grep -m1 abide_rules <<<"$out" | cut -c1-150)» $(tail -1 <<<"$out")"
+}
+k_bud=$(bud73 kit); b_bud=$(bud73 bare)
 python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); r["rules"] = [x for x in r["rules"] if x["id"] != "evidence-anonymized"]
 [x["check"]["question"].update(instructions=x["check"]["question"]["instructions"] + " Logging it is fine.") for x in r["rules"] if x["id"] == "no-print-credential"]
 json.dump(r, open(sys.argv[2], "w"))' "$P73/kit/.abide/rubric.json" "$P73/reworded.json"
@@ -122,9 +128,12 @@ echo "F7.2 $([ "$f72" -eq 0 ] && [ "$arch" != "НЕ в архиве" ] || echo '
 f73=$([[ $k_leak == "rc 1 «commit refused once by abide check — rule no-print-credential "* ]] \
   && [[ $k_safe =~ ^rc\ 0\ .*журнал:\ (pass|note)\ abide\ no- ]] \
   && [[ $b_leak == "rc 0 «abide check — skip: no rubric"* ]] && [ "$same_rc" = 0 ] && [ "$diff_rc" = 1 ] \
+  && [[ $k_bud == "rc 0 «OK   abide_rules: .abide/rubric.json, правил 4/"*"» BUDGET_OK" ]] \
+  && [[ $b_bud == "rc 1 «FAIL abide_rules: нет .abide/rubric.json — abide check в хуке коммита пропускает суд модели"*"» BUDGET_FAIL: 1" ]] \
   && [[ $diff73 == *no-print-credential* && $diff73 == *evidence-anonymized* ]] && echo ok)
 echo "F7.3 $([ -n "$f73" ] || echo 'FAIL: ')проект от bin/two-tier-init ($P73/kit), без ручных шагов: печать ключа tools/show-key.sh — $k_leak;" \
-  "присутствие и длина ключа tools/key-set.sh — $k_safe ‖ без .abide/rubric.json ($P73/bare): печать ключа — $b_leak ‖ база кита — $same;" \
+  "присутствие и длина ключа tools/key-set.sh — $k_safe; bin/check-budget — $k_bud ‖ без .abide/rubric.json ($P73/bare): печать ключа — $b_leak;" \
+  "bin/check-budget — $b_bud ‖ база кита — $same;" \
   "scope — $scopes ‖ копия базы с переписанным вопросом и без правила — $diff73"
 [ -n "$f73" ] || fails=$((fails + 1))
 [ "$fails" -eq 0 ] && echo "F7 GATE_OK" && echo GATE_OK || { echo "GATE_FAIL: $fails"; exit 1; }
