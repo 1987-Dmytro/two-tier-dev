@@ -26,7 +26,7 @@ CRED_NAME = re.compile(r"(?i)(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)$")
 KEY_SHAPES = [re.compile(p) for p in (
     r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----", r"\bsk-[A-Za-z0-9_-]{20,}", r"\bgh[pousr]_[A-Za-z0-9]{30,}", r"\bgithub_pat_[A-Za-z0-9_]{30,}",
     r"\bAKIA[0-9A-Z]{16}\b", r"\bxox[abposr]-[A-Za-z0-9-]{10,}", r"\bAIza[0-9A-Za-z_-]{35}\b", r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}")]
-ASSIGN = re.compile(r"(?i)[\w.-]*(?:api[_-]?key|secret|token|passw(?:or)?d)[\w.-]*[\"']?\s*[:=]\s*[\"']?([A-Za-z0-9_\-+/=.]{16,})(?![\w(\[])")  # и без кавычек: KEY=value
+ASSIGN = re.compile(r"(?i)(?<![\w.-])[\w.-]{0,40}(?:api[_-]?key|secret|token|passw(?:or)?d)[\w.-]{0,40}[\"']?\s{0,4}[:=]\s{0,4}[\"']?([A-Za-z0-9_\-+/=.]{16,200})(?![\w(\[])")  # и без кавычек: KEY=value; кванторы ограничены — строка в 20 тыс. знаков не тормозит
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 HOME = re.compile(r"(?i)(?:/users|/home)/(?!shared\b)[a-z0-9._-]+|-Users-[A-Za-z0-9._]+-")  # и путь проекта в ~/.claude/projects/
 COAUTHOR = re.compile(r"^(Co-Authored-By:[^<\n]*)<noreply@[A-Za-z0-9.-]+>(\s*)$", re.I | re.M)  # исключение — только адрес noreply@ соавтора, имя судится
