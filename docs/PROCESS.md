@@ -26,7 +26,7 @@
 | Toolgate | CLI | `toolgate` | нет | судья-модель на каждое действие: только сессии оператора; force-push у исполнителя держит код (F2.3) | — | — |
 | Quicksilver | скилл | `quicksilver` | нет | по задаче: корпус больше grep-удобного; на этом плече корпуса нет; тимлиду — журналы на приёмке | — | — |
 | Jev SEO | скилл | `jev-seo` | нет | исполнителю — по задаче: фаза WEB; тимлиду — CLI на Mac оператора через оболочку и скилл Cowork `jev-seo` (копия — `docs/drafts/jev-seo-cowork.md`) | — | — |
-| Jev Browser | MCP | `jev-browser` | нет | исполнителю — по задаче: фазы с UI, `bin/check-ui`; тимлиду — MCP в Claude Desktop: гейт и приёмка страниц | — | — |
+| Jev Browser | MCP | `jev-browser` | нет | исполнителю — по задаче: фазы с UI, `bin/check-ui`; тимлиду — MCP в Claude Desktop и скилл Cowork `jev-browser` (копия — `docs/drafts/jev-browser-cowork.md`): гейт и приёмка страниц | — | — |
 | jev-mcp | MCP | `jev` | нет | инструмент тимлида в Claude Desktop | — | — |
 | Context7 (плагин) | плагин | `context7@claude-plugins-official` | нет | удалённый MCP требует OAuth; вместо него — stdio-сервер выше | — | — |
 | commit-commands | плагин | `commit-commands@claude-plugins-official` | нет | коммиты и PR мимо дисциплины | — | — |
