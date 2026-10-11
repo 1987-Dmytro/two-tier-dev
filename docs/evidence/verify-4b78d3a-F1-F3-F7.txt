@@ -1,0 +1,25 @@
+VERDICT: NEEDS_WORK
+FEATURES: F1, F3, F7
+/verify-phase · docs/SPEC-v3.3.md · HEAD 4b78d3a · проверяющие claude-sonnet-5-5 (фич 3 из 7, опровергателей 1) · судья claude-opus-5-5
+
+По F1 и F3 свежие прогоны дали маркер, пункты подтверждены собственными командами проверяющего с сырым выводом, мутации продукта покраснели. Кандидатов на блокировку после опровержения не осталось. Красный прогон F7 в логе запускающего не воспроизвёлся: три повторных прогона дали GATE_OK, мутация базы рубрики сделала гейт красным. Этот красный прогон (rc 1, маркера нет) код блокирует сам, поэтому в моём списке блокирующих его нет. Остальные находки — эвристики и краевые случаи вне формулировок пунктов, они не блокируют.
+
+## Блокирующие
+- **F7: свежий чек красный или без маркера** · `bin/gate-v3.3` rc 1, маркер нет (gate_log)
+- **F7.1: не подтверждён своим прогоном** — `bin/gate-v3.3` на проекте, созданном `bin/two-tier-init` во `/tmp/two-tier-v3`, печатает маркеры F1–F6 с номером фичи и `F7 GATE_OK` · команда читает evidence или лог гейта: `cd worktree && bin/gate-v3.3 > /tmp/two-tier-v3/myrun-gate.log 2>&1 (own rerun; it does bin/two-tier-init into a fresh /`
+
+## Named, not built
+- F1.3: в check-budget место чтения пункта ищется по словам («блок», «отказ», «печата», «отчёт»), поэтому пункт без настоящего места чтения, но с таким словом, проходит spec_items
+- F1.3: строка §3, написанная маркером `*`, не считается строкой, и строка без «судья:» проходит spec_judges (формат SPEC — маркер `- `)
+- F1.1/F1.5: spec-gate принимает строку STOP с отступом 4+ пробела, а строку пробы — с любым содержимым (проверяется только её наличие, смысл оценивает теневая ячейка Jev)
+- F3.2: проверяется только входной скрипт хука; сеть через импортированный модуль, сокет, git ls-remote, ssh, /dev/tcp, dns.lookup, вычисленное имя fetch или codex exec не делает проверку красной
+- F3.1: retired_in узнаёт только имена abide.mjs и toolgate-deny.mjs; Stop-хук, который запускает CLI abide или команду toolgate напрямую, F3.1 не называет
+- F3.3: скиллы сверяются только в одну сторону; флаги ищутся по подстроке (--no-chrome-x проходит как --no-chrome); у inline-хука F3.2 называет хвост URL, а не команду
+- F3.4: two-tier-upgrade оставляет строковое значение "true" у снятого плагина compact-adviser как есть (такое значение в настройках недопустимо)
+- F4/F7: шаг F4 гейта гоняет живые фикстуры модели (clean и red-мутация) и иногда падает: прогон запускающего красный (GATE_FAIL: 2), три повторных прогона зелёные
+- F7.3: если в .abide/rubric.json поле rules — null или число, check-budget падает с traceback вместо FAIL с причиной; при строке в rules проверка зелёная («правил 3/8», BUDGET_OK)
+
+## По фичам
+- F1: чек `bin/check-harness items` rc 0, маркер есть (gate_log); пунктов своим прогоном 6/6; мутация kit/.claude/hooks/spec-gate.mjs: `if (valid.length && pushed) return { decision: 'stop' ...` changed to `if (valid.length) return ...` (STOP honoured from an unpushed HEAD, violating F1.5). Restored with git checkout. → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F3: чек `grep F3 /tmp/two-tier-v3/verify-4b78d3a-ugn4tukk/gate.log (line 19: 'F3 ENV_OK'); grep ENV_OK docs/evidence/F3-harness-result.txt (lines 51, 106); own run of bin/check-harness env on a kit project with an injected curl hook (F3.2 red, name ping.sh, rc 1, 1m45s)` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация kit/bin/two-tier-upgrade: PLUGINS_OFF: removed "compact-adviser@compact-adviser" (the upgrade no longer switches off the Compact Adviser plugin); restored with git checkout, self-test UPGRADE_OK again → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `bin/gate-v3.3` rc 1, маркер нет (gate_log); пунктов своим прогоном 2/3; мутация kit/.abide/rubric.json: removed the sentence "Reporting only its presence or length is not a violation." from the no-print-credential question instructions of the kit rubric base (behavior of the model judge changes; the kit base no longer matches the root rubric question) → red; находок 2, блокирующих-кандидатов 1, опровергнуто 1

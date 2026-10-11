@@ -1,0 +1,46 @@
+VERDICT: NEEDS_WORK
+FEATURES: F1, F2, F3, F4, F5, F7
+/verify-phase · docs/SPEC-v3.3.md · HEAD c6514e1 · проверяющие claude-sonnet-5-5 (фич 6 из 7, опровергателей 6) · судья claude-opus-5-5
+
+Все чеки фич свежими прогонами зелёные и с маркерами. Выжившие мутации F1, F2, F4 и неподтверждённые пункты F2.1 и F3.2 блокирует код, поэтому в блокирующие вне кода осталась одна находка. Это F1.4: в kit/bin/phase-report (строки 81 и 161) коммит считается «без пункта», только если в его сообщении вообще нет id, поэтому коммит с id, которого нет в SPEC (F9.9, F1.10), выпадает из всех списков отчёта; это подтверждено своей фикстурой f14.sh и чтением кода.
+
+## Блокирующие
+- **F1: мутация выжила — kit/bin/check-budget (bin/check-budget is a symlink to it): JUDGE = re.compile(r"судья:\s*\S") -> re.compile(r"судья:") : a §3 row with an empty «судья:» now counts as judged** · чек `bin/check-harness items (also bin/check-budget --self-test)` остался зелёным
+- **F2: мутация выжила — kit/.githooks/commit-msg: HOME regex: removed the /home alternative, (?:/users|/home)/ -> (?:/users)/ so a Linux home path in docs/evidence/ is no longer refused (confirmed by own product run: rc=0 on <домашний путь скрыт> in evidence, original refuses it)** · чек `bin/check-harness commit` остался зелёным
+- **F2.1: не подтверждён своим прогоном** — секрет в любом файле, домашний путь или почта в `docs/evidence/` и сообщении коммита — отказ с именем правила; `noreply@` соавторства проходит · свой прогон не подтвердил: `env -u TYPESAFE_API_KEY /tmp/two-tier-v3/acc-F2-Tf4ZZf/f21b.sh (scratch repo with kit/.githooks; git commit of each case` rc 0 → «[email in message] rc=1 :: commit refused by the kit — rule evidence-anonymized: the commit message. ⏎ [secret in messag»
+- **F3.2: не подтверждён своим прогоном** — хук на действие (PreToolUse, PostToolUse, UserPromptSubmit), который ходит в сеть или зовёт модель, — `bin/check-harness` красный с именем хука; в ките таких 0 · свой прогон не подтвердил: `project from kit + net hook: cd /tmp/two-tier-v3/acc/env/net && bin/check-harness env ; and project with node https.get ` rc 1 → «[net, curl hook] F3.2 FAIL: ...в сеть или к модели — 1 (PreToolUse judge.sh: «curl»); ENV_FAIL rc=1 ⏎ [model, UserPrompt»
+- **F4: мутация выжила — kit/.claude/hooks/spec-gate.mjs: coverage(): in the point-verdict test `isAncestor(root, c, v.sha) && (v !== full)` replaced by `true && (v !== full)` (a point PASS made before the fix commit now counts)** · чек `bin/check-verify` остался зелёным
+- **F4.3: не подтверждён своим прогоном** — зелёный evidence при сломанном продукте — вердикт не PASS: проверяющий подтверждает пункт только своей командой и её сырым выводом · команда читает evidence или лог гейта: `/tmp/two-tier-v3/acc-F4-9JdTLn/i43.sh  # own node harness: verifier answers whose item command reads docs/evidence, read`
+- **F1: Отчёт фазы теряет коммит, чей id не пункт SPEC (опечатка F1.10, несуществующий F9.9): его нет ни в матрице, ни в списке «коммиты без пункта», ни в одном другом списке.** · доказательство: bash /tmp/two-tier-v3/vf-scripts/f14.sh: коммиты 'F9.9: …' и 'F1.10: …' на ветке фазы; отчёт пишет «Коммиты без пункта (1): `6117cb4` random work without id», grep 'F9.9\|F1.10' по docs/evidence/phase-report.md даёт 0. Причина в kit/bin/phase-report: в строке 81 ids берутся только из regex F\d+\.\d+, в строке 161 stray = [c for c in commits if not c["ids"] and not c["tl"]]. Принадлежность id пунктам SPEC не проверяется. · критерий: (c) наблюдаемое поведение противоречит пункту F1.4: список «коммиты без пункта» строит код, а коммит без пункта этого SPEC в него не попадает · чек приёмки: В фикстуре с SPEC без F9.9 и F1.10 закоммитить 'F9.9: x' и 'F1.10: y', запустить bin/phase-report --no-jev. Оба коммита должны появиться в «Коммиты без пункта», счётчик «коммитов без пункта» должен вырасти на 2. Добавить эту пробу в bin/check-harness items, чтобы при мутации stray обратно на `not c["ids"]` чек краснел.
+
+## Named, not built
+- F1: мутация JUDGE «судья:\s*\S» → «судья:» выжила в ITEMS_OK и в check-budget --self-test — блокирует код
+- F1: phase-report падает с traceback при нечисловом JEV_TIMEOUT_MS
+- F1.5: пропуск хука по SPEC_GATE=off не пишется в spec-gate.jsonl и в отчёт фазы; блок в режиме shadow в отчёте без перечня недостающего
+- F1: STOP-id сверяется по префиксу (STOP-INPUT-X засчитывается как STOP-INPUT); линт check-budget пропускает строки §3 с «* », нумерацией или в таблице и место чтения из пустых обратных кавычек
+- F2: мутация regex домашнего пути (убрана альтернатива /home) выжила в COMMIT_OK — блокирует код
+- F2.1: почта или домашний путь в ИМЕНИ трейлера Co-Authored-By проходят суд сообщения (пункт не подтверждён — блокирует код)
+- F2: узкое распознавание секрета по форме: KEY=value без кавычек, пароль из одних букв, ключ вида TypeSafe под другим именем или в сообщении коммита
+- F2.4: `git commit -a` при отслеживаемом commit-judge.jsonl до второго прохода не доходит
+- F2: amend Тимлид-коммита без префикса проходит; git mv не в docs/archive/ проходит; git mv с полной перезаписью судится как удаление; перенос тега +tag проходит; --no-verify из подпроцесса Python проходит
+- F3.2: статический скан хуков не видит https.get, http.client, requests.put, httpx, `claude --print`, nc, а у хука, заданного одной строкой команды, не читает тело скрипта (пункт не подтверждён — блокирует код)
+- F3.3: скилл, который есть в system/init и отсутствует в таблице Environment, не отмечается
+- F3.3: флаги запуска сверяются как подстрока (--no-chrome-x засчитывается за --no-chrome)
+- F3.3: table() падает с IndexError, если в PROCESS нет раздела «## Environment»
+- F4: мутация isAncestor → true в coverage() spec-gate выжила в VERIFY_OK, устаревший точечный PASS засчитывается — блокирует код
+- F4.3: охрана unconfirmed() обходится через `check | grep`, ./bin, bash -c, python, git show и перенаправление ввода
+- F4.2: исход мутации «skipped» код не отклоняет даже у быстрых чеков
+- F4.1: workflow, вызванный напрямую с неразборчивыми args, молча гоняет полный круг (лаунчер это ловит)
+- F4: лаунчер печатает два уведомления подряд о гейте из PROMPT.txt, и второе ложное
+- F5: utilization NaN или отрицательная засчитывается как число, и строка стартует
+- F5.4: битый budgets.json молча считается пустым; нечисловой порог падает с TypeError без строки «WINDOW: refuse»
+- F5.1: при отсутствующем или нечисловом resetsAt время сброса печатается как «?»
+- F7: гейт и jev --self-test оставляют каталоги в /tmp/two-tier-v3 и неотслеживаемый docs/evidence/jev.jsonl
+
+## По фичам
+- F1: чек `bin/check-harness items` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/bin/check-budget (bin/check-budget is a symlink to it): JUDGE = re.compile(r"судья:\s*\S") -> re.compile(r"судья:") : a §3 row with an empty «судья:» now counts as judged → green; находок 5, блокирующих-кандидатов 2, опровергнуто 0
+- F2: чек `bin/check-harness commit` rc 0, маркер есть (own_run); пунктов своим прогоном 5/6; мутация kit/.githooks/commit-msg: HOME regex: removed the /home alternative, (?:/users|/home)/ -> (?:/users)/ so a Linux home path in docs/evidence/ is no longer refused (confirmed by own product run: rc=0 on <домашний путь скрыт> in evidence, original refuses it) → green; находок 5, блокирующих-кандидатов 2, опровергнуто 0
+- F3: чек `bin/check-harness` rc 0, маркер есть (own_run); пунктов своим прогоном 3/4; мутация kit/bin/two-tier-upgrade: PLUGINS_OFF: dropped "compact-adviser@compact-adviser" (upgrade no longer switches that retired plugin off) → red; находок 4, блокирующих-кандидатов 1, опровергнуто 0
+- F4: чек `bin/check-verify` rc 0, маркер есть (gate_log); пунктов своим прогоном 3/4; мутация kit/.claude/hooks/spec-gate.mjs: coverage(): in the point-verdict test `isAncestor(root, c, v.sha) && (v !== full)` replaced by `true && (v !== full)` (a point PASS made before the fix commit now counts) → green; находок 5, блокирующих-кандидатов 1, опровергнуто 0
+- F5: чек `bin/check-kit` rc 0, маркер есть (own_run); пунктов своим прогоном 4/4; мутация kit/bin/check-window: weekly comparison p7 > t7 changed to p7 >= t7 (week exactly at 85 % now refuses instead of starting) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `bin/gate-v3.3 (launcher run in fresh clone; read /tmp/two-tier-v3/verify-c6514e1-pb0sp94q/gate.log)` rc 0, маркер есть (gate_log); пунктов своим прогоном 2/2; мутация kit/.githooks/commit-msg: chmod -x (mode 100755 -> 100644): git silently ignores a non-executable hook, so the commit judge would be disabled in projects made by two-tier-init → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0

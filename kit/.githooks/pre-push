@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""pre-push — no force-push (SPEC-v3.3 F2.3), judged by what the push does, not by how it is spelled: a push that rewrites a ref
+the remote has — the remote's commit is not an ancestor of the pushed one — is refused, whatever the spelling (--force, -f,
+--force-with-lease, +<ref>, git -C <dir> …, a subprocess), and so is deleting a remote ref (with a push anew it rewrites in two steps).
+A new branch and a fast-forward pass.
+stdin (githooks): <local ref> SP <local sha> SP <remote ref> SP <remote sha> per ref. A refusal is a line of
+docs/evidence/commit-judge.jsonl. On its own error the hook lets the push pass.
+"""
+import json, os, subprocess, sys, time
+
+ZERO = "0" * 40
+
+
+def main():
+    root = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    bad = []
+    for line in sys.stdin.read().splitlines():
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        lref, lsha, rref, rsha = parts
+        if rsha.strip("0") == "":  # a new ref on the remote
+            continue
+        if lsha.strip("0") == "":  # deleting a remote ref, then pushing it anew, is a force-push in two steps
+            bad.append(f"{rref} (deletion)")
+            continue
+        ff = subprocess.run(["git", "merge-base", "--is-ancestor", rsha, lsha], cwd=root, capture_output=True).returncode == 0
+        if not ff:  # not an ancestor, or the remote's commit is not even here: the push would rewrite what the remote has
+            bad.append(rref)
+    if not bad:
+        return 0
+    try:
+        os.makedirs(f"{root}/docs/evidence", exist_ok=True)
+        with open(f"{root}/docs/evidence/commit-judge.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "decision": "refuse", "judge": "code",
+                                "rule": "no-force-push", "files": bad}) + "\n")
+    except OSError:
+        pass
+    print(f"push refused by the kit — rule no-force-push: {', '.join(bad)} would be rewritten (not a fast-forward of the remote). "
+          "Fix-ups are new commits on top.", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:
+        print(f"pre-push hook error ({e.__class__.__name__}) — the push passes", file=sys.stderr)
+        sys.exit(0)

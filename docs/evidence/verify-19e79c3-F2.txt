@@ -1,0 +1,17 @@
+VERDICT: PASS
+FEATURES: F2
+/verify-phase · docs/SPEC-v3.3.md · HEAD 19e79c3 · проверяющие claude-sonnet-5-5 (фич 1 из 7, опровергателей 0) · судья claude-opus-5-5
+
+Свой прогон `bin/check-harness commit` дал rc=0 и маркер COMMIT_OK. Мутация KEY_SHAPES в kit/.githooks/commit-msg покрасила чек. Каждый пункт F2.1–F2.6 подтверждён собственной фикстурой проверяющего и сырым выводом: отказы с именем правила и файла, проход «Тимлид:», git mv и noreply, отказ на force-push в записях +ветка и git -C, пороги abide 0,8 и 0,5, пропуск на ошибке и таймауте, красный F2.5 с id, счёт в отчёте фазы. Блокирующих кандидатов нет, остались только находки про качество и крайние случаи. Они не противоречат пункту «готово» и не теряют историю, поэтому вынесены в named_not_built.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- Регулярка EMAIL в kit/.githooks/commit-msg растёт квадратично: одна строка в 120 000 символов в docs/evidence/ держит коммит 21 с, а своего таймаута у git-хука нет. Пункт F2 предела размера не задаёт, поэтому замечание неблокирующее.
+- pre-push судит по тому, что push делает, а не по тому, как он записан: перемотка вперёд через `git push -f` и сдвиг тега вперёд через `+tag` проходят. Отказывает на эти записи только Bash-хук Claude (rc=2). Старый коммит остаётся достижим, история не теряется.
+- Правило evidence-anonymized пропускает домашние пути `/root/...` и Windows `C:\Users\...` в docs/evidence/. Сейчас ловятся только /Users и /home.
+- pre-push отказывает на любое удаление удалённой ветки (`git push origin :v`, `--delete`), в том числе слитой feature-ветки, как на «would be rewritten». Это перестраховка.
+
+## По фичам
+- F2: чек `bin/check-harness commit` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/.githooks/commit-msg: KEY_SHAPES: sk- key-shape quantifier {20,} -> {60,}, so bare sk-style keys of 20..59 chars are no longer recognised as secrets (restored with git checkout) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0

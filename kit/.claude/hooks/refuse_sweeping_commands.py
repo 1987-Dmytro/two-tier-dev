@@ -43,17 +43,34 @@ def strip_git_globals(toks: list[str]) -> list[str]:
     return toks[i:]
 
 
+WRAPPERS = {"env", "command", "exec", "nohup", "time", "sudo", "builtin", "nice", "xargs"}
+
+
 def check_segment(segment: str) -> None:
     toks = tokens_of(segment)
+    while toks and (os.path.basename(toks[0]) in WRAPPERS or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[0]) or (toks[0].startswith("-") and len(toks) > 1)):
+        toks = toks[1:]  # v3.3: `env git …`, `command git …`, `env A=1 git …` — судим саму команду
     if not toks:
         return
     head = os.path.basename(toks[0])
+    if head in ("bash", "sh", "zsh", "dash") and "-c" in toks[1:]:  # `bash -c "…"` — судим строку команды
+        for sub in re.split(r"&&|\|\||;|\|", toks[toks.index("-c") + 1] if toks.index("-c") + 1 < len(toks) else ""):
+            check_segment(sub)
+        return
+    if head == "git" and any("core.hooksPath" in t for t in toks[1:]):
+        refuse("core.hooksPath is the wiring of the kit's commit and push judges: do not change or bypass it (SPEC-v3.3 F2)")
     if head == "git":
         rest = strip_git_globals(toks)
         if rest and rest[0] in ("add", "stage"):
             args = rest[1:]
             if not args or any(a in STAGE_SWEEPS or a.startswith(":/") for a in args):
                 refuse("stage BY PATH (git add <file>...), never the whole tree: a commit carries the exact paths it changes")
+        # v3.3, F2.3: force-push по написанию (поведение держит .githooks/pre-push); --no-verify обошёл бы хуки git кита
+        if rest and rest[0] == "push" and any(a in ("-f", "--mirror") or a.startswith("--for")  # --force и его префиксы: --forc, --force-with-l
+                                              or (a.startswith("+") and len(a) > 1) or (re.fullmatch(r"-[a-zA-Z]*f[a-zA-Z]*", a) is not None) for a in rest[1:]):
+            refuse("no force-push: fix-ups are new commits on top (SPEC §3)")
+        if rest and rest[0] in ("commit", "push", "merge") and any(a.startswith("--no-ve") or (rest[0] == "commit" and re.fullmatch(r"-[a-zA-Z]*n[a-zA-Z]*", a)) for a in rest[1:]):
+            refuse("no --no-verify: the kit's git hooks judge every commit and push (SPEC-v3.3 F2)")
     elif head == "make":
         if "fmt" in toks[1:]:
             refuse("repo-wide format is forbidden (producer pins) — ruff format <the one file you touched>")
@@ -71,6 +88,12 @@ def main() -> None:
     except Exception:
         return
     cmd = (payload.get("tool_input") or payload).get("command", "") or ""
+    # v3.3, F2: обойти хуки git можно только --no-verify или core.hooksPath — их ищем в сыром тексте: подоболочка, eval, bash -lc,
+    # timeout N не прячут; упоминание в echo тоже отказывается — дешевле, чем дыра (.githooks/pre-push держит force-push поведением)
+    if re.search(r"\bgit\b", cmd) and re.search(r"--no-ve[a-z]*\b", cmd):  # git берёт однозначный префикс: --no-verif, --no-veri
+        refuse("no --no-verify: the kit's git hooks judge every commit and push (SPEC-v3.3 F2)")
+    if re.search(r"\bgit\b", cmd) and re.search(r"core\.hooksPath", cmd, re.I):
+        refuse("core.hooksPath is the wiring of the kit's commit and push judges: do not change or bypass it (SPEC-v3.3 F2)")
     for segment in re.split(r"&&|\|\||;|\|", cmd):
         check_segment(segment)
 

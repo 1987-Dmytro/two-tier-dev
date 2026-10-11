@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""check-window [--repair] [--override] — окна подписки до запуска плеча (SPEC-v3.3 F5).
+
+Числа: один ход `claude -p` на Haiku во временном каталоге /tmp/two-tier-v3 (без ANTHROPIC_API_KEY, SPEC_GATE=off, 120 с),
+событие rate_limit_event, поле rate_limit_info.unifiedWindows (недокументированное — исключение C2): доли 0..1 × 100.
+Пороги — budgets.json корня проекта (git toplevel): defaults, в репо кита без ключей — kit/budgets.json, иначе 40/85/70;
+project только ужесточает. Окно 5 ч > window_five_hour_pct (с --repair — window_repair_pct) или неделя > window_seven_day_pct —
+«WINDOW: refuse», rc 1; равно — проходит, «WINDOW: start», rc 0. Числа не сняты — отказ с причиной, rc 1.
+--override — rc 0 всегда, обход печатается. CHECK_WINDOW_EVENTS=<файл> — строки stream-json вместо живого хода
+(подставленные значения проб), CHECK_WINDOW_RC — код выхода claude к ним. Данных аккаунта не печатает.
+"""
+import json, os, re, shutil, subprocess, sys, tempfile, time
+
+KEYS = {"window_five_hour_pct": 40, "window_seven_day_pct": 85, "window_repair_pct": 70}
+CMD = ["claude", "-p", "reply ok", "--model", "claude-haiku-5-5", "--max-turns", "1", "--output-format", "stream-json", "--verbose",
+       "--setting-sources", "project,local", "--strict-mcp-config", "--no-chrome", "--no-session-persistence"]
+
+
+def load(p):
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def thresholds(top):
+    raw = load(f"{top}/budgets.json")
+    d, p, kit = raw.get("defaults", {}), raw.get("project") or {}, load(f"{top}/kit/budgets.json").get("defaults", {})
+    th, notes = {}, []
+    for k, v in KEYS.items():
+        th[k] = (d[k], "budgets.json defaults") if k in d else (kit[k], "kit/budgets.json defaults") if k in kit else (v, "встроенный")
+        if k in p:
+            if type(p[k]) is int and p[k] <= th[k][0]:
+                th[k] = (p[k], "budgets.json project")
+            else:
+                notes.append(f"project.{k}={p[k]!r} ослабляет — взят {th[k][0]} ({th[k][1]})")
+    return th, notes
+
+
+def events():
+    f = os.environ.get("CHECK_WINDOW_EVENTS")
+    if f:
+        with open(f, encoding="utf-8") as fh:
+            return fh.read(), int(os.environ.get("CHECK_WINDOW_RC", "0")), "", None
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    env["SPEC_GATE"] = "off"
+    os.makedirs("/tmp/two-tier-v3", exist_ok=True)
+    d = tempfile.mkdtemp(prefix="check-window-", dir="/tmp/two-tier-v3")  # без настроек и хуков проекта
+    try:
+        r = subprocess.run(CMD, cwd=d, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+        return r.stdout, r.returncode, r.stderr, None
+    except FileNotFoundError:
+        return "", None, "", "claude нет в PATH"
+    except subprocess.TimeoutExpired:
+        return "", None, "", "claude не ответил за 120 с"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def clean(s):  # текст ошибки — без почты и домашнего каталога, одной строкой
+    s = re.sub(r"\S+@\S+", "<почта>", " ".join(s.split())).replace(os.path.expanduser("~"), "~")
+    return s[:160] or "без текста"
+
+
+def parse(text, rc, err):
+    ev, res = None, None
+    for line in text.splitlines():
+        try:
+            o = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(o, dict) and o.get("type") == "rate_limit_event":
+            ev = o
+        elif isinstance(o, dict) and o.get("type") == "result":
+            res = o
+    w = ((ev or {}).get("rate_limit_info") or {}).get("unifiedWindows")
+    miss = [k for k in ("five_hour", "seven_day") if not isinstance((w or {}).get(k), dict)
+            or not isinstance(w[k].get("utilization"), (int, float))]
+    if w and not miss:
+        return {k: (round(w[k]["utilization"] * 100, 1), w[k].get("resetsAt")) for k in ("five_hour", "seven_day")}, None
+    if rc or (res or {}).get("is_error"):
+        return None, f"ошибка claude (rc {rc}): {clean(str((res or {}).get('result') or err))}"
+    if ev is None:
+        return None, "нет события rate_limit_event"
+    return None, "нет поля unifiedWindows в событии" if not w else f"нет окна {', '.join(miss)} в unifiedWindows"
+
+
+def at(ts):
+    if not isinstance(ts, (int, float)):
+        return "?"
+    t = time.localtime(ts)
+    return time.strftime("%H:%M" if t[:3] == time.localtime()[:3] else "%d.%m %H:%M", t)
+
+
+args = sys.argv[1:]
+if set(args) - {"--repair", "--override"}:
+    print("usage: check-window [--repair] [--override]")
+    sys.exit(2)
+top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip() or os.getcwd()
+th, notes = thresholds(top)
+k5 = "window_repair_pct" if "--repair" in args else "window_five_hour_pct"
+(t5, s5), (t7, s7) = th[k5], th["window_seven_day_pct"]
+print(f"пороги: 5 ч {t5} % ({k5}, {s5}) · неделя {t7} % (window_seven_day_pct, {s7})" + "".join(f" · {n}" for n in notes))
+text, rc, err, why = events()
+nums, why = parse(text, rc, err) if why is None else (None, why)
+if nums:
+    (p5, r5), (p7, r7) = nums["five_hour"], nums["seven_day"]
+    print(f"окно 5 ч {p5:g} % (порог {t5} %, сброс {at(r5)}) · неделя {p7:g} % (порог {t7} %, сброс {at(r7)})")
+    over = ([f"окно 5 ч {p5:g} % > {t5} %"] if p5 > t5 else []) + ([f"неделя {p7:g} % > {t7} %"] if p7 > t7 else [])
+    why = ", ".join(over) + f" — ждать сброса до {at(r7 if p7 > t7 else r5)}" if over else None
+else:
+    why = f"окна не сняты: {why}"
+if "--override" in args:
+    print(f"WINDOW: обход флагом --override — {'был бы отказ: ' + why if why else 'был бы старт'}")
+    sys.exit(0)
+print(f"WINDOW: refuse — {why}" if why else "WINDOW: start")
+sys.exit(1 if why else 0)

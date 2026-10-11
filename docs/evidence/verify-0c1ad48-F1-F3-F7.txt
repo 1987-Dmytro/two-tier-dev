@@ -1,0 +1,22 @@
+VERDICT: NEEDS_WORK
+FEATURES: F1, F3, F7
+/verify-phase · docs/SPEC-v3.3.md · HEAD 0c1ad48 · проверяющие claude-sonnet-5-5 (фич 3 из 7, опровергателей 1) · судья claude-opus-5-5
+
+У F1, F3 и F7 есть свежий зелёный прогон с маркером (ITEMS_OK, ENV_OK, GATE_OK) и файлы docs/evidence/F1-harness-result.txt, F3-harness-result.txt, F7-gate-result.txt с маркером. Все пункты подтверждены собственной командой проверяющего и её сырым выводом. Мутации F3 и F7 пойманы. Единственный кандидат в blocking — выжившая мутация head-check в spec-gate (F1.2). Её блокирует код, поэтому в blocking судьи она не входит. Остальные находки — пограничные случаи вне сказанного в «готово», они не ломают ни инвариант §3, ни путь заказчика и вынесены в named_not_built.
+
+## Блокирующие
+- **F1: мутация выжила — kit/.claude/hooks/spec-gate.mjs: head check LABELS.every(...) -> LABELS.some(...): a PROGRESS head that names only «Сделано» (no next step, no «Когда закончим») now passes as part of the full set** · чек `bin/check-harness items` остался зелёным
+
+## Named, not built
+- F1.2: мутация LABELS.every -> LABELS.some в kit/.claude/hooks/spec-gate.mjs выжила под bin/check-harness items. Ни одна проба не подаёт голову PROGRESS без «Следующий шаг оператора» или «Когда закончим». Решает код как выжившую мутацию, в blocking судьи не входит
+- F1.5: строка STOP в PROGRESS.md, закоммиченном с CRLF, отвергается как «нет вопроса и строки resume» (STOP_LINE исключает \r, indexOf даёт -1). Ход отпускают только колпаки
+- F1.6: bin/phase-report падает с traceback (rc 1) и оставляет отчёт устаревшим, когда Jev отвечает 200 с "confidence": null или с ответом не-объектом. Ход это не задевает
+- F1.3: spec_judges в check-budget не считает строку §3 с маркером «* », и строка без «судья:» проходит
+- F3.2: статический поиск выхода в сеть в хуках пропускает формы вне списка регулярок: socket, деструктурированный require('https'), node:http request, net/tls/dns, ssh, openssl s_client, claude через переменную
+- F3.3: навыки сверяются только в одну сторону (лишний навык в init даёт зелёный), флаги сверяются по подстроке (--no-chrome-x проходит как --no-chrome)
+- F3.4: two-tier-upgrade оставляет compact-adviser@compact-adviser со строковым значением "true" в enabledPlugins. Проверки F3.1 и F3.4 смотрят только на `is True`
+
+## По фичам
+- F1: чек `bin/check-harness items` rc 0, маркер есть (own_run); пунктов своим прогоном 6/6; мутация kit/.claude/hooks/spec-gate.mjs: head check LABELS.every(...) -> LABELS.some(...): a PROGRESS head that names only «Сделано» (no next step, no «Когда закончим») now passes as part of the full set → green; находок 4, блокирующих-кандидатов 1, опровергнуто 0
+- F3: чек `bin/check-harness` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация kit/bin/two-tier-upgrade: ACT list: removed ".claude/hooks/toolgate-deny.mjs" so the upgrade no longer retires the Toolgate hook file → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `gate.log: F7 lines (/tmp/two-tier-v3/verify-0c1ad48-e2bkalne/gate.log); docs/evidence/F7-gate-result.txt` rc 0, маркер есть (gate_log); пунктов своим прогоном 3/3; мутация kit/.abide/rubric.json: no-print-credential question instructions: 'Reporting only its presence or length is not a violation.' -> 'Reporting its value is not a violation.' (kit base question diverges from root rubric) → red; находок 0, блокирующих-кандидатов 0, опровергнуто 0

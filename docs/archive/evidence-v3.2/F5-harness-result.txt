@@ -1,0 +1,95 @@
+$ bin/check-harness
+ok  modes · зелёная: тень, hint, 70 % — как в pluginConfigs: расхождений нет
+ok  modes · тень в таблице, shadow false: режим jev-belay@jev-belay: в таблице «тень», launch settings — {"shadow": false}
+ok  modes · hint в таблице, auto в настройках: режим compact-adviser@compact-adviser: в таблице «hint», launch settings — {"mode": "auto"}
+ok  modes · 70 % в таблице, 60 в настройках: режим handoff@two-tier-mods: в таблице «70», launch settings — {"threshold": 60}
+ok  modes · нет pluginConfigs плагина: режим jev-belay@jev-belay: в таблице «тень», по умолчанию мода — нет pluginConfigs и значений мода по умолчанию
+ok  modes · нет pluginConfigs, 70 — по умолчанию мода: расхождений нет
+ok  modes · нет pluginConfigs, по умолчанию 60: режим handoff@two-tier-mods: в таблице «70», по умолчанию мода — {"threshold": 60}
+фикстура таблицы: строк 10; CLI: 2; флаг: 1; плагин: 1 …
+ok  env · зелёная: init = таблица, встроенный плагин и бандл-скилл не в счёт: расхождений нет
+ok  env · лишний плагин: плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»
+ok  env · плагин таблицы не загружен: плагин ponytail@ponytail: нет в system/init
+ok  env · MCP needs-auth: MCP context7: статус needs-auth, ждём connected
+ok  env · MCP таблицы нет: MCP context7: нет в system/init
+ok  env · лишний MCP из «нет»: MCP ref: лишний — в таблице «нет»
+ok  env · коннектор claude.ai: MCP claude.ai Gmail: лишний — в таблице «нет»
+ok  env · скилл Cowork включён: скилл anthropic-skills:docx: включён — в таблице «нет»
+ok  env · скилл таблицы не загружен: скилл graphify: нет в system/init
+ok  env · флага нет в строке: флаг --effort ultracode: нет в строке запуска
+ok  env · CLI нет в PATH: CLI gh: нет в PATH
+OK   self-test: фикстуры обеих сторон сверки
+источник харнеса: kit; строка запуска: docs/PROCESS.md; launch settings: .claude/launch.settings.json
+OK   settings: model claude-opus-5-5; effortLevel нет; ultracode нет
+OK   settings: autoMemoryEnabled False; disableClaudeAiConnectors True
+OK   settings: worktree.baseRef head; workflowSizeGuideline medium
+OK   settings: deny Edit на файлы тимлида 13/13; правил Write(…) 0
+OK   settings: allow 3: Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci) (ждём ровно Bash(bin/check-*), Bash(bin/gate-*), Bash(make ci))
+OK   settings: хуки PreToolUse (exec form, ${CLAUDE_PROJECT_DIR}): kill-switch.sh, steer.sh, refuse_sweeping_commands.py, toolgate-deny.mjs; с ошибкой — нет
+OK   settings: хуки Abide через .claude/hooks/abide.mjs (exec form; PostToolUse — на Edit, Write и MultiEdit): SessionStart 1, UserPromptSubmit 1, PostToolUse 1, Stop 1
+OK   settings: Stop-хук spec-gate (node, exec form): есть, таймаут 30 с; .claude/spec-gate.json: режим active, вопросов 3, капы {'blocks': 12, 'hours': 3, 'same_list': 3}
+OK   launch: .claude/launch.settings.json: autoMode.environment записей 6, "$defaults" есть
+OK   line: docs/PROCESS.md: env ENABLE_CLAUDEAI_MCP_SERVERS; флагов 16; нет — ничего; стартовый запрос аргументом — нет (запуск — словами PROCESS)
+копия харнеса: /tmp/two-tier-v3/harness-rbdn31m2
+run: env -u ANTHROPIC_API_KEY ENABLE_CLAUDEAI_MCP_SERVERS=false claude -p '<prompt>' --permission-mode auto --model claude-opus-5-5 --effort ultracode --no-chrome --setting-sources project,local --settings .claude/launch.settings.json --strict-mcp-config --mcp-config '{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]},"jev-browser":{"command":"npx","args":["-y","-p","jev-browser@0.1.2","jev-browser-mcp"]}}}' --add-dir /tmp/two-tier-v3 --max-turns 3 --output-format stream-json --verbose
+OK   run1: init permissionMode auto, model claude-opus-5-5, apiKeySource none
+OK   run1: без AGENT_STOP: probe.txt создан, маркер из STEER.md в файле; STEER.md очищен; tool_use 2, ходов 3
+OK   run2: с AGENT_STOP: probe.txt не создан; tool_use 1; причина kill-switch в выводе — да; terminal_reason hook_stopped
+OK   allow: dontAsk, --allowedTools 3 правила settings: `bin/check-ci` — выполнен; `bin/two-tier-upgrade --help` — отказ; tool_use 2, отказов 1
+OK   modes: режимы плагинов таблицы против pluginConfigs .claude/launch.settings.json: jev-belay@jev-belay {"threshold": 0.75, "log": true, "shadow": true, "check": "^bin/(check|gate)-"}, jev-steer-or-queue@jev-steer-or-queue {"mode": "shadow"}, compact-adviser@compact-adviser {"mode": "hint", "logRequests": true}, handoff@two-tier-mods {"threshold": 70, "handoffDir": "handoffs", "autoClear": true, "minTurns": 2, "language": "ru"}
+OK   run1: system/init = таблица docs/PROCESS.md: плагинов 8, MCP 2 (context7 connected, jev-browser connected), скиллов 34; строк таблицы 35
+OK   run2: system/init = таблица docs/PROCESS.md: плагинов 8, MCP 2 (context7 connected, jev-browser connected), скиллов 34; строк таблицы 35
+OK   belay: Belay в живой сессии (код без чека и «готово»): решений 1 — shadow; тень дошла из pluginConfigs; ходов 2
+OK   steer: Steer-or-Queue в той же сессии: строк журнала 1, режим shadow
+NOTE compact-adviser: режим `hint` — статикой: в -p мод молчит (isInteractive); CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 в строке docs/PROCESS.md — нет: мод молчит и в интерактивной сессии (register.ts:147-159)
+OK   quicksilver: по задаче: `qs status` (модель пином, свой QUICKSILVER_HOME): rc 0, «ready · key from env JEV_API_KEY · model jev-1.13.0»
+OK   jev-seo: по задаче: `jevseo doctor`: rc 0, версия 0.1.1, модулей ok 7/7, ключ — present
+OK   jev-browser: по задаче: `bin/check-ui` — check-ui: rc 0; steps 1, passed 1, statuses done, assert true; Jev calls 2, tokens 2194, 1781 ms in the run, 2.9 s in all
+OK   guards: главная сессия: Write docs/STATUS.md — отказ deny, файл не создан; `git add -A` — отказ хука, ссылка на CLAUDE.md в отказе — нет; в индексе 0
+OK   agent: воркфлоу completed, агентов 1 (claude-sonnet-5-5), вызовов 5; STEER.md после агента — заметка на месте, агент видел её в cat — True; Write docs/STATUS.md — файл не создан, ответ инструмента «File is in a directory that is denied by your permission settings.»; `git add -A` — отказ хука; в индексе 0
+OK   kill: воркфлоу completed; агент создал AGENT_STOP — да; запись пробы попытана — да; agent-probe.txt не создан; вызовов агента 2, состояние done; terminal_reason главной completed
+OK   partial: один маркер из двух и «готово»: решение block, причина называет F2 — да, F1 — нет; rc 0
+OK   partial: в evidence F2 только строки-близнецы маркера: решение block, причина называет F2 — да
+OK   stop: новая строка «STOP: STOP-INPUT» с вопросом и resume: решение stop, причина STOP-INPUT; Jev {'model': 'jev-1.13.0', 'tokens': 663, 'ms': 474}; «spec-gate (active): stop — STOP-INPUT»
+OK   stop: строка STOP отпускает ход один раз: та же сессия ещё раз — block; новая сессия — block; дописан «снят» — block; запись «- STOP: … — снят» — block
+OK   stop: строка «STOP: STOP-PAY» — не причина §4 фикстуры: решение block, причина называет STOP-PAY — да
+OK   stop: строка STOP из коммита до сессии не в счёт: решение block
+OK   no-progress: один список четыре раза подряд: block → block → block → pass; причина последнего — no-progress: the same list blocked 3 times in a row
+OK   caps: 12 блоков в сессии → pass (cap-blocks: 12 blocks in this session); сессия старше 3 ч → pass (cap-time: the session is older than 3 h)
+OK   caps: полный комплект в сессии старше 3 ч — «SPEC_GATE_OK: features 2, pushed 41642c0, verify-892728a.txt»: кап только смягчает блок, комплект не теряется
+OK   head: полный комплект, но голова PROGRESS как до сессии (дописана только строка заметок): решение block, причина называет голову — да; PROGRESS из пробелов — block, голова названа — да
+OK   verdict: после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение block, вердикт не в счёт — да
+OK   set: комплект — из запушенного HEAD, файл вне HEAD или отличный от HEAD держит ход по имени: голова, evidence F2 и вердикт вне коммита (ревью) — блок, назван; вне git только вердикт (ревью) — блок, назван; evidence F2 дописан на диске — блок, назван; evidence F2 удалён на диске — блок, назван; лишний evidence F2 вне git — блок, назван; вердикт переписан на диске — блок, назван; строка F2 убрана из SPEC на диске — блок, назван; стартовый запрос правлен на диске — блок, назван
+OK   set: запушенный комплект — SPEC_GATE_OK: журналы jev.jsonl и spec-gate.jsonl в git и дописаны — да; evidence F2 с не-ASCII именем — да; чекаут с CRLF (core.autocrlf) — да
+OK   full: полный комплект: «SPEC_GATE_OK: features 2, pushed 41642c0, verify-892728a.txt»; Jev — модель jev-1.13.0, токенов 977, 442 мс
+OK   fail-open: без ключа: «SPEC_GATE_OK: features 2, pushed 41642c0, verify-892728a.txt» за 0.4 с, Jev — bin/jev rc 2: jev: TYPESAFE_API_KEY is not set — the key comes from the environment only; адрес молчит: «SPEC_GATE_OK: features 2, pushed 41642c0, verify-892728a.txt» за 10.4 с, Jev — bin/jev rc 4: jev: timeout after 10000 ms
+OK   modes: OFF: stdout пуст, строк журнала +0; shadow: stdout пуст, в журнале block (shadow)
+OK   config: .claude/spec-gate.json с ошибкой JSON: «spec-gate (shadow): pass — config: .claude/spec-gate.json is not readable JSON (SyntaxError) — the gate passes» — хук пропускает, а не блокирует без вопросов
+OK   pass: AGENT_STOP → pass (agent-stop); фоновый воркфлоу → pass (background: tasks 1, crons 0), stdout пуст
+OK   log: docs/evidence/spec-gate.jsonl фикстур: строк 17, поля решения — все, с путём домашнего каталога — 0
+OK   live-block: «готово» без маркера F2: решений хука 4 (block, block, block, pass), первый блок называет F2 — да; ответов модели 4 — ход не кончился на первом; ходов 4, tool_use 0
+OK   live-ok: полный комплект: решений хука 1 (ok), «SPEC_GATE_OK: features 2, pushed 593fbc2, verify-14fa22e.txt»; голову PROGRESS модель переписала, закоммитила и запушила в сессии — да; ответов модели 1, ходов 4
+OK   session-start: рубрика устарела (CLAUDE.md изменён): rc 0, заметка оператору — да, просьба компилировать до Claude — нет
+OK   no-abide: Abide нет в PATH: rc 0, stdout пуст
+OK   stop-note: заглушка Abide блокирует Stop: решение нет, заметка оператору — да; prompt и transcript_path до Abide — не дошли
+OK   session-start: рубрика-фикстура свежая: rc 0, stdout пуст
+OK   secret: правка печатает секрет фикстуры (Write leak.py, хук PostToolUse напрямую): решение block, требование починки «Abide: This edit appears to break a rule from this repository's instru», правило no-print-credential — названо
+OK   abide-live: живая правка ломает правило маркера: проверок Abide 3, блок 1 (act — 1); требование починки дошло до Claude в том же ходе — да; правок zebra.txt 2, маркер в файле после хода — нет; ходов 3
+OK   abide-clean: чистая правка: проверок Abide 2, блоков 0, требование — нет; ходов 2
+OK   policy: .claude/toolgate.yaml: модель — typesafe:jev-1.13.0; аудит — /tmp/two-tier-v3/toolgate/audit.jsonl; ledger — выключен
+OK   allow: безобидное `ls` ×5: stdout пуст; задержка хука p95 0.53 с, медиана 0.52 с (≤ 2 с)
+OK   deny: `git push --force origin main`: решение deny, причина «[toolgate] a force-push is forbidden in an executor's phase (kit policy)», 0.09 с
+OK   fail-open: без ключа `rm -rf docs/archive` — тишина (0.1 с); `git push --force`: `decide` завис — тишина за 8.0 с (срок хука 8 с, таймаут настроек 10 с); нет политики — тишина
+OK   ask: `decide` ответил ask (заглушка): тишина — хук печатает только deny
+OK   audit: строк проб в /tmp/two-tier-v3/toolgate/audit.jsonl: 7 (решений deny 1), вход инструмента в них — нет; в ~/.toolgate/audit.jsonl строк проб — 0
+OK   live: живой `git push --force`: попыток 1, отказ хука — да («PreToolUse:Bash hook error: [toolgate] a force-push is forbidden in an executor'»); решение хука кита в его аудите — deny
+OK   pairs: с хуком кита: allow — OK; agent — OK; kill — OK (dontAsk: команда вне allow — отказ прав; агенты воркфлоу не остановлены)
+OK   doctor: rc 0; ошибок настроек 0; «No installation issues found» — да
+ENV_OK
+HARNESS_OK
+ABIDE_OK
+GATE_HOOK_OK
+HOOKS_OK
+TOOLGATE_OK
+bin/check-harness  81,93s user 34,22s system 48% cpu 3:57,33 total
+rc 0

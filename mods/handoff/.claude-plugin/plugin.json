@@ -1,7 +1,7 @@
 {
   "name": "handoff",
-  "version": "0.2.0",
-  "description": "Writes a handoff document from the live transcript when the context fills past a threshold (or on /handoff), then clears the context and resumes from the handoff — a fresh session without retyping anything.",
+  "version": "0.3.0",
+  "description": "Writes a handoff document from the live transcript when the context fills past a threshold, when Jev judges the unit of work finished (absorbed from compact-adviser), or on /handoff, then clears the context and resumes from it.",
   "author": {
     "name": "two-tier-dev"
   },
@@ -39,6 +39,17 @@
       ],
       "description": "Language of the handoff document and the resume prompt.",
       "title": "Language"
+    },
+    "jev": {
+      "type": "string",
+      "default": "hint",
+      "options": [
+        "off",
+        "hint",
+        "auto"
+      ],
+      "description": "Jev's boundary judgment after each settled answer below the threshold (needs TYPESAFE_API_KEY): hint lights the band, auto hands off right there, off never asks.",
+      "title": "Jev boundary (off / hint / auto)"
     }
   },
   "types": "./types/index.d.ts"

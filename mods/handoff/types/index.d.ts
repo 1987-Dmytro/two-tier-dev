@@ -9,6 +9,8 @@ declare module 'claude-code' {
       isHidden: boolean
       /** The last outcome shown beside the buttons ("" when none). */
       note: string
+      /** Jev's boundary hint for the last settled turn ("" when none or below the floor); cleared when a turn starts. */
+      advice: string
     }
   }
 }
