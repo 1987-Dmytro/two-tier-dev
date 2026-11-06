@@ -97,3 +97,9 @@
 {"ts": "2026-11-06T15:07:44Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.18, "diff": "fa3c2c1a817a742d", "ms": 3394}
 {"ts": "2026-11-06T15:13:23Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.14, "diff": "11ab02ac52c55078", "ms": 4379}
 {"ts": "2026-11-06T15:15:38Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.12, "diff": "68e3d1ef0b122158", "ms": 1593}
+{"ts": "2026-11-06T16:45:45Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/spec-gate.jsonl"], "score": 0.06, "diff": "8f80eec26a3ba4b8", "ms": 2921}
+{"ts": "2026-11-06T18:42:53Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.22, "diff": "05421708b7e04ab0", "ms": 2563}
+{"ts": "2026-11-06T18:43:44Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-budget"], "score": 0.18, "diff": "d1f072ab94bbcdc2", "ms": 1821}
+{"ts": "2026-11-06T18:46:45Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.16, "diff": "dcc3003911fe5bd1", "ms": 2800}
+{"ts": "2026-11-06T18:47:44Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.18, "diff": "1759b63129578b06", "ms": 3097}
+{"ts": "2026-11-06T19:33:50Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.09, "diff": "47090c1e6a09310c", "ms": 4207}
