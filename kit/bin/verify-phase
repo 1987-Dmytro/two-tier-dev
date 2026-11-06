@@ -3,7 +3,7 @@
 (SPEC-v3.1 F4, F5; SPEC-v3.3 F4.1, F5.2).
 
 0. Фичи (F4.1): id — строки `- **F<n>` SPEC (первый файл `Read first:` docs/PROMPT.txt, нет его — docs/GOAL.txt) в HEAD; неизвестный —
-   exit 2. Без списка — все фичи. Окно подписки (F5.2): рядом есть check-window — до клона `check-window --repair` (с
+   exit 2. Без списка — все фичи. Окно подписки (F5.2): рядом есть check-window — до клона `check-window` (с
    --override-window — и --override); отказ — exit 1, клона нет. Нет check-window — строка, прогон идёт.
 1. HEAD запушен: есть origin — origin/<ветка> = HEAD и клон с origin; нет origin — клон этого репо (фикстуры).
 2. Свежий клон — свой каталог во /tmp/two-tier-v3. Гейт фазы — первая `bin/gate…` стартового запроса docs/PROMPT.txt (нет его —
@@ -98,9 +98,9 @@ def main(argv):
     env.update(ENABLE_CLAUDEAI_MCP_SERVERS="false", CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="0", CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS="16",
                SPEC_GATE="off")  # v3.2: приёмочная сессия не держится spec-gate (SPEC-v3.2 §1)
     cw = os.path.join(os.path.dirname(os.path.realpath(__file__)), "check-window")
-    if os.path.isfile(cw):  # v3.3 F5.2: порог окна 5 ч плеча починки — до клона
+    if os.path.isfile(cw):  # v3.3 F5.2: окно подписки — до клона
         try:
-            w = subprocess.run([cw, "--repair", *(["--override"] if override else [])], env=env, stdin=subprocess.DEVNULL,
+            w = subprocess.run([cw, *(["--override"] if override else [])], env=env, stdin=subprocess.DEVNULL,
                                capture_output=True, text=True, timeout=180)
             text, wrc = (w.stdout + w.stderr).strip(), w.returncode
         except subprocess.TimeoutExpired:

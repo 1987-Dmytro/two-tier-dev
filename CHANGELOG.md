@@ -6,6 +6,10 @@ version is what the next `bin/two-tier-init` ships. A rule enters only on the RE
 it, and it enters first as a hook (D10). Dates are the days the rule entered the live kit.
 
 ## Unreleased — named debts
+- **The 5-hour window is gone (the operator's word, 06.11, in phase v3.4).** The plan dropped it: the live `rate_limit_event` of 06.11 carries only `unifiedWindows.seven_day`.
+  `bin/check-window` judges the week alone: before — `WINDOW: refuse — окна не сняты: нет окна five_hour`, and `bin/verify-phase` refused before the clone; after — `WINDOW: start`, `WINDOW_OK`.
+  `window_five_hour_pct` and `window_repair_pct` left `kit/budgets.json` (the repair threshold stood on that window); `--repair` is still accepted and does nothing, a project's launch line may carry it.
+  The root `budgets.json` and the team lead's `docs/PROCESS.md` still name them: the team lead removes them, the check tolerates the two keys.
 - The Cowork card v3.22 that the v2 architecture §3 sends to the archive is not producible from repo content (PLAN-v2,
   risk 6); either the operator exports it or the line is retired.
 - The limit cost of ultracode is measured on the v3.1 leg (SPEC-v3.1 §2: ≤40 % of the week, ordinary phases 15 %); the

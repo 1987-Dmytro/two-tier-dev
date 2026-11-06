@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""check-window [--repair] [--override] — окна подписки до запуска плеча (SPEC-v3.3 F5).
+"""check-window [--override] — окно подписки до запуска плеча (SPEC-v3.3 F5; окно 5 ч снято словом оператора 06.11: тариф его отменил).
 
 Числа: один ход `claude -p` на Haiku во временном каталоге /tmp/two-tier-v3 (без ANTHROPIC_API_KEY, SPEC_GATE=off, 120 с),
-событие rate_limit_event, поле rate_limit_info.unifiedWindows (недокументированное — исключение C2): доли 0..1 × 100.
-Пороги — budgets.json корня проекта (git toplevel): defaults, в репо кита без ключей — kit/budgets.json, иначе 40/85/70;
-project только ужесточает. Окно 5 ч > window_five_hour_pct (с --repair — window_repair_pct) или неделя > window_seven_day_pct —
-«WINDOW: refuse», rc 1; равно — проходит, «WINDOW: start», rc 0. Числа не сняты — отказ с причиной, rc 1.
---override — rc 0 всегда, обход печатается. CHECK_WINDOW_EVENTS=<файл> — строки stream-json вместо живого хода
+событие rate_limit_event, поле rate_limit_info.unifiedWindows.seven_day (недокументированное — исключение C2): доля 0..1 × 100; другие окна события не судятся.
+Порог — budgets.json корня проекта (git toplevel): defaults, в репо кита без ключа — kit/budgets.json, иначе 85;
+project только ужесточает. Неделя > window_seven_day_pct — «WINDOW: refuse», rc 1; равно — проходит, «WINDOW: start», rc 0. Числа не сняты — отказ с причиной, rc 1.
+--override — rc 0 всегда, обход печатается. --repair — прежний флаг плеча починки: его порог был у окна 5 ч, теперь без действия; строка запуска проекта с ним не падает. CHECK_WINDOW_EVENTS=<файл> — строки stream-json вместо живого хода
 (подставленные значения проб), CHECK_WINDOW_RC — код выхода claude к ним. Данных аккаунта не печатает.
 """
 import json, os, re, shutil, subprocess, sys, tempfile, time
 
-KEYS = {"window_five_hour_pct": 40, "window_seven_day_pct": 85, "window_repair_pct": 70}
+KEYS = {"window_seven_day_pct": 85}
 CMD = ["claude", "-p", "reply ok", "--model", "claude-haiku-5-5", "--max-turns", "1", "--output-format", "stream-json", "--verbose",
        "--setting-sources", "project,local", "--strict-mcp-config", "--no-chrome", "--no-session-persistence"]
 
@@ -75,15 +74,14 @@ def parse(text, rc, err):
         elif isinstance(o, dict) and o.get("type") == "result":
             res = o
     w = ((ev or {}).get("rate_limit_info") or {}).get("unifiedWindows")
-    miss = [k for k in ("five_hour", "seven_day") if not isinstance((w or {}).get(k), dict)
-            or not isinstance(w[k].get("utilization"), (int, float))]
-    if w and not miss:
-        return {k: (round(w[k]["utilization"] * 100, 1), w[k].get("resetsAt")) for k in ("five_hour", "seven_day")}, None
+    week = (w or {}).get("seven_day")
+    if isinstance(week, dict) and isinstance(week.get("utilization"), (int, float)):
+        return (round(week["utilization"] * 100, 1), week.get("resetsAt")), None
     if rc or (res or {}).get("is_error"):
         return None, f"ошибка claude (rc {rc}): {clean(str((res or {}).get('result') or err))}"
     if ev is None:
         return None, "нет события rate_limit_event"
-    return None, "нет поля unifiedWindows в событии" if not w else f"нет окна {', '.join(miss)} в unifiedWindows"
+    return None, "нет поля unifiedWindows в событии" if not w else "нет окна seven_day в unifiedWindows"
 
 
 def at(ts):
@@ -95,20 +93,18 @@ def at(ts):
 
 args = sys.argv[1:]
 if set(args) - {"--repair", "--override"}:
-    print("usage: check-window [--repair] [--override]")
+    print("usage: check-window [--override]")
     sys.exit(2)
 top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip() or os.getcwd()
 th, notes = thresholds(top)
-k5 = "window_repair_pct" if "--repair" in args else "window_five_hour_pct"
-(t5, s5), (t7, s7) = th[k5], th["window_seven_day_pct"]
-print(f"пороги: 5 ч {t5} % ({k5}, {s5}) · неделя {t7} % (window_seven_day_pct, {s7})" + "".join(f" · {n}" for n in notes))
+t7, s7 = th["window_seven_day_pct"]
+print(f"порог: неделя {t7} % (window_seven_day_pct, {s7})" + "".join(f" · {n}" for n in notes))
 text, rc, err, why = events()
 nums, why = parse(text, rc, err) if why is None else (None, why)
 if nums:
-    (p5, r5), (p7, r7) = nums["five_hour"], nums["seven_day"]
-    print(f"окно 5 ч {p5:g} % (порог {t5} %, сброс {at(r5)}) · неделя {p7:g} % (порог {t7} %, сброс {at(r7)})")
-    over = ([f"окно 5 ч {p5:g} % > {t5} %"] if p5 > t5 else []) + ([f"неделя {p7:g} % > {t7} %"] if p7 > t7 else [])
-    why = ", ".join(over) + f" — ждать сброса до {at(r7 if p7 > t7 else r5)}" if over else None
+    p7, r7 = nums
+    print(f"неделя {p7:g} % (порог {t7} %, сброс {at(r7)})")
+    why = f"неделя {p7:g} % > {t7} % — ждать сброса до {at(r7)}" if p7 > t7 else None
 else:
     why = f"окна не сняты: {why}"
 if "--override" in args:

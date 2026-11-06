@@ -30,8 +30,7 @@ hours to the gate; its judges on every action made 80 % of the Jev calls and cau
 Between the claims no model judges: Toolgate, the Abide hooks on edit and turn, Compact Adviser and Steer-or-Queue left the executor
 for the operator's sessions, where their events are; Jev Belay stays in the shadow, and Jev keeps one cell of the phase report in the
 shadow — an item against the raw output of its probe. **The window guard** starts the launch line: `bin/check-window` refuses
-before the session when the subscription's 5-hour window is above 40 % or the week above 85 % (repair leg and acceptance: 70 %,
-`--repair`); the only bypass is `--override` in the line, and it is printed.
+before the session when the subscription's week is above 85 % (the plan dropped the 5-hour window); the only bypass is `--override` in the line, and it is printed.
 
 Three judges, by the cost of a question, still hold: **code** where a file answers, **Jev** where a bounded question repeats (now in
 the shadow), **a fresh agent** (`/verify-phase`) where the work must be reproduced. Why: [`intent/INTENT.md`](intent/INTENT.md). The phase
@@ -68,7 +67,7 @@ GATE     the operator runs the product and judges it by the success signals of t
 | `bin/jev --self-test` | typed questions to Jev in one command: every side of the contract on a fake server; with a key, one live call (HTTP 200, `jev-1.13.0`) | `JEV_OK` |
 | `bin/check-spend` | Jev spend of the leg from the logs of the layer: calls, tokens, $ and €, no cap; a fixture with a known sum | `SPEND_OK` |
 | `bin/check-ui [<flow.json>]` | a Jev Browser scenario as a check (template); without an argument — a probe on a local page | `UI_OK` |
-| `bin/check-window [--repair] [--override]` | the window guard of the launch line: one `claude -p` turn on Haiku reads the 5-hour and weekly windows; above the thresholds of `budgets.json` — a refusal before the session with both numbers and the reset; `--override` passes and prints the bypass | — |
+| `bin/check-window [--override]` | the window guard of the launch line: one `claude -p` turn on Haiku reads the weekly window; above the threshold of `budgets.json` — a refusal before the session with the number and the reset; `--override` passes and prints the bypass | — |
 | `bin/verify-phase [F<n> …]` | the saved workflow `/verify-phase` from a fresh clone of the pushed HEAD: per feature a fresh check run, edge cases against the items, a mutation; refuters; a judge; with a list — only those features (`FEATURES:` in the verdict) | `VERDICT: PASS` |
 | `bin/check-verify` | `/verify-phase` checks only the named features, a surviving mutation and green evidence over a broken product are not PASS, a point PASS after a fix passes `spec-gate` | `VERIFY_OK` |
 | `bin/phase-report` | the phase report `phase-report.md` in `docs/evidence/`: items × commits, probe, observation; items without commits, commits without an item, items without a probe; commit-judge counts; the hook's passes; Jev's status in the shadow | — |
@@ -98,7 +97,7 @@ commit hook and by the ownership lint: a commit that changes one of them must st
 | `kit/.claude/workflows/verify-phase.js` | the saved workflow `/verify-phase`, a feature list through `args`; its copy in `.claude/workflows/` lets this repository accept its own phases |
 | `kit/.claude/hooks/` | `kill-switch.sh` (`continue: false`), `steer.sh` (a factual note, to the main session only), `refuse_sweeping_commands.py`, `spec-gate.mjs` (Stop, by the items) |
 | `kit/.claude/spec-gate.json` | the gate's mode, caps and the question of the Jev cell — a team-lead file |
-| `mods/` | marketplace `two-tier-mods`: `handoff` (a handoff document and a fresh context at 70 % of the window), `limits` (the operator's status line: the 5-hour and weekly windows, time to reset, context, session cost) |
+| `mods/` | marketplace `two-tier-mods`: `handoff` (a handoff document and a fresh context at 70 % of the window), `limits` (the operator's status line: the subscription windows, time to reset, context, session cost) |
 | `kit/.claude/skills/` · `kit/.claude/agents/evaluator.md` | `plan-phase`, `accept`; the evaluator |
 | `.github/workflows/two-tier.yml` | CI of this repository; the same file ships in `kit/.github/` |
 | `docs/archive/` | everything retired, moved and never deleted: v1, the v2 kit (`kit-v2/`), the v3.2 hooks of Abide and Toolgate (`kit-v3.2/`), PROGRESS, PLAN, evidence and gates of earlier phases |
