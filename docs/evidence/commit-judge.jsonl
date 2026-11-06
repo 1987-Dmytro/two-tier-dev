@@ -103,3 +103,5 @@
 {"ts": "2026-11-06T18:46:45Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.16, "diff": "dcc3003911fe5bd1", "ms": 2800}
 {"ts": "2026-11-06T18:47:44Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.18, "diff": "1759b63129578b06", "ms": 3097}
 {"ts": "2026-11-06T19:33:50Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.09, "diff": "47090c1e6a09310c", "ms": 4207}
+{"ts": "2026-11-06T19:46:20Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F1-check-harness-result.txt"], "score": 0.12, "diff": "72c191a28d4113ee", "ms": 3414}
+{"ts": "2026-11-06T20:07:18Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/verify-phase"], "score": 0.21, "diff": "851e180eaaa515cc", "ms": 3904}
