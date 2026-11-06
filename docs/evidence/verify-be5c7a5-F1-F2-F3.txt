@@ -1,0 +1,24 @@
+VERDICT: NEEDS_WORK
+FEATURES: F1, F2, F3
+/verify-phase · docs/SPEC-v3.4.md · HEAD be5c7a5 · проверяющие claude-sonnet-5-5 (фич 3 из 8, опровергателей 0) · судья claude-opus-5-5
+
+Блокирующих кандидатов после опровержения нет, мутации F1–F3 покраснели, evidence с первой строкой `spec: SPEC-v3.4` и маркером есть на все три фичи, а небоковые находки я сверил с текстом SPEC §2–§3 и PLAN-v3.4: они лежат вне букв пунктов либо отложены записанным решением. Красный rc 1 полного `bin/check-harness` из-за секции ENV и rc 1 команд пунктов F2.1 и F3.1–F3.4 (там `holds: true`) я не оценивал, это часть решения кода.
+
+## Блокирующие
+- **F1: свежий чек красный или без маркера** · `bin/check-harness  (full run; plus bin/check-harness items for the rc)` rc 1, маркер есть (own_run)
+
+## Named, not built
+- F1: полный `bin/check-harness` даёт rc 1 только из-за секции ENV (таблица плагинов и скиллов на этой машине, территория F6); `GATE_HOOK_OK` и `ITEMS_OK` напечатаны, красный чек судит код.
+- F1.1: тип фоновой задачи сравнивается точно и с учётом регистра (' monitor', 'Monitor' → block), массив ['monitor'] через String() проходит как monitor; ложный блок ограничен same_list=3 и platform_cap=8.
+- F1.2: `caps.same_list` = 0 и 1 ведут себя странно (`prior.slice(-0)` берёт весь список); значение вне нормы в файле тимлида, по умолчанию 3.
+- F2.4: `bin/gate-test` зовёт только `check-budget --lints`; проводка в гейт отложена на F8.5 (`bin/gate-v3.4`), отклонение записано в PLAN-v3.4.
+- F2.1: файл распределения засчитывается по ненулевому размеру: проходят файл из одних пробелов и симлинк наружу репо (/etc/hosts).
+- F2.3: `checks/planken.json` ещё нет в owner этого репо (есть в `kit/budgets.json`); по SPEC §3 входит в `owner_add` коммитом тимлида на приёмке.
+- F3.4: `DEPLOY_CMD` с `exit N` завершает `deploy.template.sh` без строки `DEPLOY_FAIL step=rollout` и записи в журнал; `DEPLOY_OK` не печатается, деплой падает закрыто.
+- F3.1: префикс id терпит пробел перед двоеточием ('F1.1 : x'); обхода нет, id всё равно должен быть в `offen`.
+- F3.1: при невалидном `frozen.json` на HEAD хук `commit-msg` пропускает коммит в замороженный путь, `bin/check-frozen-diff` в CI отвечает `FROZEN_DIFF_FAIL`; поведение описано в докстринге судьи и в хуке.
+
+## По фичам
+- F1: чек `bin/check-harness  (full run; plus bin/check-harness items for the rc)` rc 1, маркер есть (own_run); пунктов своим прогоном 5/5; мутация kit/.claude/hooks/spec-gate.mjs: const WAKES = ['monitor','workflow','shell'] -> added 'subagent' (a subagent background task now passes the turn instead of sending it to the set judge); behaviour confirmed changed: subagent -> pass background:subagent, FULL set+subagent -> pass instead of ok; file restored with git checkout → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F2: чек `bin/check-budget --lints` rc 0, маркер есть (own_run); пунктов своим прогоном 4/4; мутация kit/bin/check-budget: rule_scope: `if len(new) > paid:` changed to `if len(new) > paid + 1:`, so one new feature without a Поправка line passes. Confirmed behaviour change: the --lints output showed `F2.2 FAIL: ohne=OK mit=1`. → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F3: чек `bin/check-kit frozen` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутация kit/bin/check-frozen-diff: module_of: path.startswith(stem + "/") -> path.startswith(stem) (prefix boundary: src/demox/ and src/other.py.bak became locked) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
