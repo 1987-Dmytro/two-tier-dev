@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""check-fenster [<журнал>] — окно деплоя (SPEC-v3.4 F4.1): каждый `DEPLOY_OK … linie=1` журнала docs/evidence/deploy-window.log закрыт строкой `LIVE_OK` или
-`ROLLBACK_OK` до следующего деплоя (один деплой на окно); `linie=0` окна не открывает, `ROLLBACK_FAIL` не закрывает. Метка считается в любом месте строки: BOM или префикс времени деплой не прячут.
+"""check-fenster [<журнал>] — окно деплоя (SPEC-v3.4 F4.1): каждый `DEPLOY_OK … linie=1` журнала docs/evidence/deploy-window.log и каждый `DEPLOY_FAIL … linie=1` (красная выкатка или регрессия: код уже на линии) закрыт строкой `LIVE_OK` или
+`ROLLBACK_OK` до следующего деплоя (один деплой на окно); `linie=0` окна не открывает, `ROLLBACK_FAIL` не закрывает, `DEPLOY_FAIL` без `linie=` (сервер не тронут) окна не касается. Метка считается в любом месте строки: BOM или префикс времени деплой не прячут.
 Незакрытый — `FENSTER_ROT sha=<sha> — …`, код 1; все закрыты — `FENSTER_GRUEN деплоев на линию <k>`. Журнал по умолчанию — от корня git, вердикт не зависит от каталога запуска; его нет — деплоев не было, зелёный.
 Вне репозитория, явный путь без файла, каталог вместо журнала, битые байты — `FENSTER_ROT журнал=<путь> — …`, код 2. Этот чек зовёт гейт фазы: пункт окна.
 """
@@ -25,7 +25,7 @@ def main(argv):
         lines = []
     opened, red, n = None, [], 0
     for line in lines:
-        if re.search(r"\bDEPLOY_OK\b", line):
+        if re.search(r"\bDEPLOY_OK\b", line) or re.search(r"\bDEPLOY_FAIL\b.*\blinie=\d", line):
             if opened:
                 red.append(opened)
             sha = re.search(r"\bsha=(\S+)", line)

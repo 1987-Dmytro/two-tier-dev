@@ -287,10 +287,14 @@ def rule_scope(b):
     text = read(spec)
     was, now = ids(text if base is None else base), ids(text)
     new = [f for i, f in enumerate(now) if now[:i + 1].count(f) > was.count(f)]
-    sec0 = re.search(r"^## 0\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
-    k = len(AMEND.findall(sec0.group(1))) if sec0 else 0
-    if len(new) > k:
-        return [("FAIL", "scope-growth", f"{' '.join(new[k:])}: новая фича без строки «Поправка <решение>: слово оператора <дата>» в §0 {spec}; фич на выдаче {len(was)}, сейчас {len(now)}, поправок: {k}")]
+
+    def amendments(t):
+        sec0 = re.search(r"^## 0\.[^\n]*\n(.*?)(?=^## |\Z)", t, re.S | re.M)
+        return len(AMEND.findall(sec0.group(1))) if sec0 else 0
+    k = amendments(text)
+    paid = max(k - amendments(text if base is None else base), 0)  # строка, что была на выдаче, за новую фичу не платит
+    if len(new) > paid:
+        return [("FAIL", "scope-growth", f"{' '.join(new[paid:])}: новая фича без строки «Поправка <решение>: слово оператора <дата>» в §0 {spec}; фич на выдаче {len(was)}, сейчас {len(now)}, поправок: {k}")]
     return [("OK", "scope-growth", f"{spec}: фич на выдаче {len(was)}, сейчас {len(now)}, поправок: {k}")]
 
 
@@ -815,6 +819,7 @@ def lints():
     amend = lambda tail: sc(grown(f"Контекст.\nПоправка {tail}"))
     prompt_edit = {"docs/PROMPT.txt": pr["docs/PROMPT.txt"] + "ещё\n"}
     line = "Контекст.\nПоправка 391: слово оператора 06.11.2026 — новая фича.\n"
+    issued_with_line = {**pr, "docs/SPEC-1.md": lint_fixture_spec("ранняя", sec0=line)}
     same = sc(work)
     without, withl, two = sc(grown()), sc(grown(line)), sc(grown(line, ("F1", "F2", "F3")))
     ohne, ohne_text = judge([
@@ -837,6 +842,7 @@ def lints():
         ("рост и правка запроса одним коммитом", "FAIL", "F2:", sc([("Тимлид: x", {**spec_of(), **prompt_edit}, [])])),
         ("правка запроса после роста", "FAIL", "F2:", sc(grown() + [("Тимлид: запрос", prompt_edit, [])])),
         ("SPEC после запроса, затем рост", "FAIL", "F2:", sc([("Тимлид: SPEC", spec_of(feats=("F1",)), [])] + grown(), pr)),
+        ("строка выдачи не платит за новую фичу", "FAIL", "F2:", sc(grown(line), issued_with_line)),
     ])
     mit, mit_text = judge([
         ("фичи те же", "OK", "поправок: 0", same),
@@ -847,6 +853,8 @@ def lints():
         ("запрос назвал SPEC не сразу", "OK", "фич на выдаче 2, сейчас 2",
          sc(grown() + [("Тимлид: запрос", pr, [])], {"docs/PROMPT.txt": "Read first: docs/OTHER.md\n", "docs/SPEC-1.md": lint_fixture_spec("ранняя")})),
         ("истории нет", "OK", "фич на выдаче 1, сейчас 1", sc(None)),
+        ("строка выдачи снята, фичи те же", "OK", "поправок: 0", sc([("Тимлид: снял строку", {"docs/SPEC-1.md": lint_fixture_spec("ранняя")}, [])], issued_with_line)),
+        ("новая фича и своя строка к строке выдачи", "OK", "поправок: 2", sc(grown(line + "Поправка 392: слово оператора 07.11.2026\n"), issued_with_line)),
     ])
     p_scope = plain(base, grown())
     named = "BUDGET_FAIL scope-growth F2" in p_scope[1]

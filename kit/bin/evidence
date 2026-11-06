@@ -4,10 +4,12 @@
 Первая строка файла — `spec: SPEC-<n>` текущей фазы (правило хука и отчёта: файл фазы docs/PROMPT.txt, иначе docs/GOAL.txt; в его строке
 `Read first:` — первая запись через запятую с именем файла SPEC-*.md): только такие файлы судит spec-gate; вторая — `$ <команда>` одной
 строкой (CR, LF и прочие концы строк в ней экранированы); дальше вывод команды как есть. Домашний каталог в обеих — `~`; HOME пуст
-или `/` — не вычищается ничего. На экран — то же, по мере вывода. Код выхода — код команды, убитая сигналом n — 128+n; файл заменяется
+или `/` — не вычищается ничего. На экран — то же, по мере вывода; пока команда идёт, файл лежит под /tmp/two-tier-v3. Код выхода — код команды, убитая сигналом n — 128+n; файл заменяется
 по её окончании. Нет SPEC или неверные аргументы — код 2, команда не идёт. Команда идёт из корня проекта (git toplevel).
 """
-import os, re, subprocess, sys, tempfile
+import os, re, shutil, subprocess, sys, tempfile
+
+TMP = "/tmp/two-tier-v3"
 
 
 def main(argv):
@@ -33,7 +35,8 @@ def main(argv):
     path = f"docs/evidence/{feature}-{check}-result.txt"
     home = os.path.expanduser("~").rstrip("/")  # HOME пуст или «/» — домашнего каталога нет, вычищать нечего
     scrub = lambda s: s.replace(home, "~") if home else s
-    fd, tmp = tempfile.mkstemp(prefix=f".{feature}-", dir="docs/evidence", text=True)
+    os.makedirs(TMP, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f"evidence-{feature}-", dir=TMP, text=True)
     with os.fdopen(fd, "w", encoding="utf-8") as out:
         # одной строкой: команда не допишет в файл своих строк — экранировано всё, что str.splitlines отчёта считает концом строки
         shown = re.sub(r"[\r\n\x0b\x0c\x1c-\x1e\x85\u2028\u2029]", lambda c: ascii(c.group())[1:-1], scrub(" ".join(cmd)))
@@ -56,7 +59,7 @@ def main(argv):
         if rc < 0:  # убита сигналом n — код как в оболочке
             rc = 128 - rc
     os.chmod(tmp, 0o644)
-    os.replace(tmp, path)
+    shutil.move(tmp, path)  # из /tmp на другой том os.replace не пишет
     print(f"evidence: {path} — rc {rc}")
     return rc
 

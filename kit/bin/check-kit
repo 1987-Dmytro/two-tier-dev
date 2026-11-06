@@ -236,6 +236,17 @@ def section_frozen():
     put(d, "src/demo/c.py", "x = 1\n")
     sh(["git", "add", "--", "src/demo/c.py"], d)
     ci.append(fz_rc(0, "замок не той формы: хук", fz_staged(d, "F1.1: замок не той формы"), "judge error"))
+    # CI судит коммиты своей фазы: смена запроса не красит прошлые, новая фаза судится
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}})
+    ci.append(fz_rc(0, "работа фазы SPEC-2", commit(d, "F1.1: работа фазы", "src/demo/p.py", "1\n")))
+    ci.append(fz_rc(0, "смена фазы коммитом запроса", commit(d, "Тимлид: новая фаза", "docs/PROMPT.txt", "Read first: docs/SPEC-3.md\n")))
+    ci.append(fz_rc(0, "прошлая фаза не судится", judge(d), "FROZEN_DIFF_OK"))
+    fz_past_hook(d, "F2.1: код мимо хука в новой фазе", "src/demo/q.py", "2\n")
+    ci.append(fz_rc(1, "новая фаза мимо хука", judge(d), "SPEC-3 его не открывает"))
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-20": ["*"]})}}, spec="SPEC-20")  # начало фазы SPEC-2 — не коммит запроса с SPEC-20
+    ci.append(fz_rc(0, "работа фазы SPEC-20", commit(d, "F1.1: работа фазы", "src/demo/p.py", "1\n")))
+    ci.append(fz_rc(0, "смена на SPEC-2", commit(d, "Тимлид: новая фаза", "docs/PROMPT.txt", "Read first: docs/SPEC-2.md\n")))
+    ci.append(fz_rc(0, "SPEC-20 — прошлая фаза для SPEC-2", judge(d), "FROZEN_DIFF_OK"))
     # pfade: префикс без «/» — тоже каталог, файл — точно; равные длины без «/» — первый модуль
     d = project({"basis": None, "module": {"demo": demo(pfade=["src/demo", "src/other.py"]), "tie-open": demo({"SPEC-2": ["*"]}, pfade=["src/tie"]), "tie-closed": demo(pfade=["src/tie/"])}})
     vb += [fz_rc(1, "pfade без «/»: каталог", commit(d, "F9.9: x", "src/demo/x.py", "x\n"), "frozen-paths: src/demo/x.py"),
@@ -339,6 +350,27 @@ def section_frozen():
            fz_rc(0, "и CI: docs/ не в счёт", judge(d), "diff=demo 0/1"),
            fz_rc(0, "исполнитель после него — в пределах", commit(d, "F1.1: код", "src/demo/x.py", "1\n")),
            fz_rc(1, "вторая строка кода — сверх", commit(d, "F1.1: код", "src/demo/x2.py", "2\n"), "дифф 2 строк > diff_cap 1")]
+    # файлы тимлида и без строки в owner: апгрейд budgets.json проекта не пишет
+    no_own = json.loads(owners)
+    no_own["defaults"]["owner"] = [e for e in no_own["defaults"]["owner"] if e not in ("frozen.json", "checks/planken.json")]
+    no_own = json.dumps(no_own, ensure_ascii=False)
+    lock = {"basis": None, "module": {"demo": demo()}}
+    opened = {"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}}
+    d = project(lock, extra={"budgets.json": no_own, "checks/planken.json": "{}\n"})
+    tl += [fz_rc(1, "исполнитель открывает замок, строки в owner нет", commit(d, "F1.1: открыть замок", "frozen.json", json.dumps(opened, ensure_ascii=False)), "frozen-paths: frozen.json"),
+           fz_rc(1, "исполнитель правит планки, строки в owner нет", commit(d, "F1.1: планки", "checks/planken.json", '{"flaky": {}}\n'), "frozen-paths: checks/planken.json"),
+           fz_rc(0, "и CI чист", judge(d), "FROZEN_DIFF_OK"),
+           fz_rc(0, "«Тимлид:» правит замок, строки в owner нет", commit(d, "Тимлид: замок", "frozen.json", json.dumps(opened, ensure_ascii=False))),
+           fz_rc(0, "«Тимлид:» правит планки", commit(d, "Тимлид: планки", "checks/planken.json", '{"flaky": {}}\n'))]
+    fz_past_hook(d, "F1.1: замок мимо хука", "frozen.json", json.dumps(lock, ensure_ascii=False))
+    tl.append(fz_rc(1, "замок мимо хука", judge(d), "frozen.json — файл тимлида"))
+    d = project(lock, extra={"budgets.json": no_own})
+    fz_past_hook(d, "F1.1: планки мимо хука, создание", "checks/planken.json", "{}\n")
+    tl.append(fz_rc(0, "создание в истории не судится", judge(d), "FROZEN_DIFF_OK"))
+    fz_past_hook(d, "F1.1: планки мимо хука, правка", "checks/planken.json", '{"flaky": {}}\n')
+    tl.append(fz_rc(1, "правка мимо хука", judge(d), "checks/planken.json — файл тимлида"))
+    d = project({"basis": "0000000", "module": {"demo": demo()}}, extra={"budgets.json": no_own})
+    tl.append(fz_rc(0, "«Тимлид:» чинит basis замка, строки в owner нет", commit(d, "Тимлид: замок", "frozen.json", json.dumps(lock, ensure_ascii=False))))
     tl_ok, tl_raw = fz_join(tl)
     probe("F3.2", tl_ok, f"tl={'OK' if tl_ok else 'нет'} · {tl_raw}")
     # F3.3 — паспорт: расхождение без <МОДУЛЬ>_OFFEN → DEPLOY_FAIL step=passport
@@ -450,6 +482,8 @@ def section_frozen():
         c2 = commit(d, "Тимлид: проба замка", src_file, original + "# проба\n")
         c3 = commit(d, "F53.9: пункт фичи из offen", src_file, original + "# проба\n")
         c4 = commit(d, "F9.9: проба docs", "docs/zz-probe.md", "x\n")
+        c5 = commit(d, "F53.9: открыть замок", "frozen.json", open(f"{d}/frozen.json", encoding="utf-8").read() + "\n")
+        c6 = commit(d, "F53.9: планки", "checks/planken.json", open(f"{d}/checks/planken.json", encoding="utf-8").read() + "\n")
         rc_b, text_b = sh(["bin/check-budget"], d, env=dict(os.environ))
         frozen_line = fz_budget_line(text_b)
         fz_past_hook(d, "F9.9: мимо хука", src_file, original + "# мимо хука\n")
@@ -464,11 +498,11 @@ def section_frozen():
         installed = os.path.isfile(f"{d}/frozen.json") and sh(["git", "ls-files", "frozen.json"], d)[1] == "frozen.json"
         subject = sh(["git", "log", "-1", "--format=%s", "--", "frozen.json"], d)[1]
         shutil.rmtree(d, ignore_errors=True)
-        ok = (dash[0] == 2 and "--branch" in dash[1] and same_branch[0] == 1 and "--branch" in same_branch[1] and rc_up == 0 and c1[0] == 1 and src_file in c1[1] and c2[0] == 1 and c3[0] == 0 and c4[0] == 0
+        ok = (dash[0] == 2 and "--branch" in dash[1] and same_branch[0] == 1 and "--branch" in same_branch[1] and rc_up == 0 and c1[0] == 1 and src_file in c1[1] and c2[0] == 1 and c3[0] == 0 and c4[0] == 0 and c5[0] == 1 and "frozen.json" in c5[1] and c6[0] == 1 and "checks/planken.json" in c6[1]
               and rc_b == 0 and text_b.splitlines()[-1] == "BUDGET_OK" and frozen_line.startswith("OK") and "FROZEN_DIFF_OK" in frozen_line and list(lock_ok["module"]) == ["telefon", "backoffice", "command-center"]
               and rc_ph == 1 and past_line.startswith("FAIL") and "FROZEN_DIFF_FAIL" in past_line and src_file in past_line and rc_abs == 0 and installed and subject.startswith("Тимлид: frozen.json"))
         probe("F3.5", ok, f"telefon={'OK' if ok else 'нет'} · копия клона, {spec_now.group(1) if spec_now else '?'}; --branch -x — rc {dash[0]}; без --branch при разошедшейся kit-v3 — rc {same_branch[0]}; --branch kit-v3.4 — rc {rc_up} «{tail(text_up)[:90]}»; модули {', '.join(lock_ok['module'])} — замок проекта цел; "
-              f"коммит в код модуля без offen — rc {c1[0]} «{c1[1][:110]}»; «Тимлид:» туда же — rc {c2[0]}; пункт фичи из offen — rc {c3[0]}; в docs/ — rc {c4[0]}; bin/check-budget проекта — rc {rc_b} «{frozen_line[:100]}» {tail(text_b)}; коммит мимо хука: rc {rc_ph} «{past_line[:110]}»; "
+              f"коммит в код модуля без offen — rc {c1[0]} «{c1[1][:110]}»; «Тимлид:» туда же — rc {c2[0]}; пункт фичи из offen — rc {c3[0]}; в docs/ — rc {c4[0]}; без «Тимлид:» в замок — rc {c5[0]}, в планки — rc {c6[0]}; bin/check-budget проекта — rc {rc_b} «{frozen_line[:100]}» {tail(text_b)}; коммит мимо хука: rc {rc_ph} «{past_line[:110]}»; "
               f"копия без frozen.json: апгрейд — rc {rc_abs}, замок {'поставлен' if installed else 'не поставлен'}, коммит «{subject[:70]}»")
     green = all(sec) and len(sec) == 5
     print(("--   frozen: F3.5 не гонялся, маркера FROZEN нет" if skipped else "FROZEN_OK") if green else "FROZEN_FAIL", flush=True)
@@ -647,7 +681,26 @@ def section_fenster():
     one = "DEPLOY_OK sha=abc1234 linie=1 rollback=none\n"
     logs = [("BOM", "\ufeff" + one, 1), ("префикс времени", "05:30:00 " + one, 1), ("префикс без пробела", "[05:30:00]" + one, 1), ("LIVE_OK с префиксом", "05:30:00 " + one + "05:40:00 LIVE_OK sha=abc1234\n", 0),
             ("ROLLBACK_OK с префиксом", one + "05:40:00 ROLLBACK_OK sha=abc1233\n", 0), ("S4 ROLLBACK_FAIL", one + "ROLLBACK_FAIL sha=abc1233 rc=1\n", 1), ("LIVE_FAIL", one + "LIVE_FAIL x\n", 1), ("linie=0 с префиксом", "05:30:00 DEPLOY_OK sha=abc1234 linie=0 rollback=none\n", 0)]
+    red_regress = "DEPLOY_FAIL step=regress sha=abc1234 rc=1 linie=1\n"
+    logs += [("красная регрессия на линии", red_regress, 1), ("её закрывает откат", red_regress + "ROLLBACK_OK sha=abc1233 sekunden=1\n", 0), ("красная выкатка на линии", "DEPLOY_FAIL step=rollout sha=abc1234 rc=1 linie=1\n", 1),
+             ("красная выкатка не на линию", "DEPLOY_FAIL step=rollout sha=abc1234 rc=1 linie=0\n", 0), ("паспорт окна не открывает", "DEPLOY_FAIL step=passport sha=abc1234 модуль=x\n", 0),
+             ("паспорт открытое окно не красит", one + "DEPLOY_FAIL step=passport sha=abc1234 модуль=x\nLIVE_OK sha=abc1234\n", 0), ("красный деплой поверх открытого окна", one + red_regress + "LIVE_OK sha=abc1234\n", 1)]
     log_runs = [(n, by_log(text), want) for n, text, want in logs]
+    hx = fresh()
+    hx0 = sh(["git", "rev-parse", "--short", "HEAD"], hx)[1]
+    step(hx)
+    undo(hx, hx0)
+    step(hx)
+    hx_after = deploy(hx)
+    rr = fresh()
+    rr_sha = sh(["git", "rev-parse", "--short", "HEAD"], rr)[1]
+    rr_red = deploy(rr, regress="exit 1", DEPLOY_LINIE=1)
+    rr_win = window(rr)
+    rr_back = undo(rr, rr_sha)
+    rr_closed = window(rr)
+    ro = fresh()
+    ro_red = sh(["bash", "scripts/deploy.sh"], ro, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false", DEPLOY_LINIE="1"))
+    ro_win = window(ro)
     sides_line("F4.1", [("zeile", "строка отката", zeile, f"первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт её «{tail(fail_line[1], 2)}»"),
                         ("zeile", "S7 красная выкатка", rollout[0] == 1 and says(rollout, w0) and "DEPLOY_FAIL step=rollout" in rollout[1], raw(rollout, 2)),
                         ("zeile", "E6 единственный sha второй раз", prints(h_only) == "none" and "rollback=none" in h_only[1], raw(h_only, 2)),
@@ -655,13 +708,16 @@ def section_fenster():
                         ("zeile", "E6 тот же sha второй раз", says(h_same, s0) and f"DEPLOY_OK sha={s1} linie=0 rollback={s0}" in h_same[1], raw(h_same, 2)),
                         ("zeile", "S8 красный деплой не цель отката", h_red[0] == 1 and says(h_red, s1) and says(h_after_red, s1), f"{raw(h_red, 2)} → {raw(h_after_red, 2)}"),
                         ("zeile", "S9 откат двигает историю", says(h_after_undo, s1), raw(h_after_undo, 2)),
-                        ("zeile", "откат дописывает, не затирает", says(h_same_undone, s4), raw(h_same_undone, 2)),
+                        ("zeile", "откат снимает отозванное: повтор того же sha в него не целит", says(h_same_undone, s0), raw(h_same_undone, 2)),
+                        ("zeile", "откат на sha не из истории становится целью", says(hx_after, hx0), raw(hx_after, 2)),
                         ("zeile", "откат полным SHA, деплой того же коммита", says(h_full, s1), raw(h_full, 2)),
                         ("zeile", "E17 S11 строка дословно через Makefile шапки", via_make[0] == 0 and f"ROLLBACK_OK sha={w0}" in via_make[1] and rolled_to == w0 and closed[0] == 0, f"{raw(via_make)}, ROLLBACK_SHA совпал — {rolled_to == w0}, окно — {raw(closed)}"),
                         ("zeile", "S12 SHA из 4 знаков", too_short[0] == 1 and "ROLLBACK_FAIL" in too_short[1], raw(too_short)),
                         ("zeile", "SHA мусор и нет коммита", bad[0] == 1 and gone[0] == 1, f"rc {bad[0]}, rc {gone[0]}"),
                         ("zeile", "E11 шапка отката", "любой существующий коммит" in rollback_text and "подсказка оператору" in rollback_text, "названо" if "подсказка оператору" in rollback_text else "нет"),
                         ("fenster_rot", "окно", rot and gruen, f"без живой проверки — rc {r1[0]} «{tail(r1[1])[:70]}»; LIVE_OK — rc {g1[0]} «{tail(g1[1])}»; откат «{tail(back[1])}» — rc {g2[0]}; linie=0 — rc {g3[0]}; два деплоя на окно — rc {twice[0]}; журнала нет — rc {empty[0]}"),
+                        ("fenster_rot", "красная регрессия на линии держит окно до отката", rr_red[0] == 1 and "DEPLOY_FAIL step=regress" in rr_red[1] and "linie=1" in rr_red[1] and rr_win[0] == 1 and "FENSTER_ROT" in rr_win[1] and rr_back[0] == 0 and rr_closed[0] == 0, f"{raw(rr_red)} → {raw(rr_win)} → откат {raw(rr_closed)}"),
+                        ("fenster_rot", "красная выкатка на линии держит окно", ro_red[0] == 1 and "DEPLOY_FAIL step=rollout" in ro_red[1] and "linie=1" in ro_red[1] and ro_win[0] == 1 and "FENSTER_ROT" in ro_win[1], f"{raw(ro_red)} → {raw(ro_win)}"),
                         ("fenster_rot", "S10 без DEPLOY_LINIE", "linie=0" in plain[1] and plain_win[0] == 0, f"{raw(plain)} → {raw(plain_win)}"),
                         ("fenster_rot", "E10 DEPLOY_LINIE не 0 и не 1", all(r[0] == 1 and "DEPLOY_FAIL step=args" in r[1] and "DEPLOY_OK" not in r[1] for r in refused) and no_step and refused_win[0] == 0, f"{raw(refused[0])}, шагов не было — {no_step}"),
                         ("fenster_rot", "S0 упавший откат", failed[0] == 1 and "ROLLBACK_FAIL" in failed[1] and failed_win[0] == 1 and stand_after == stand, f"{raw(failed)} → {raw(failed_win)}, история та же — {stand_after == stand}"),

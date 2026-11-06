@@ -4,8 +4,8 @@
 #   DEPLOY_CMD   выкатка проекта (пусто — шаг снят: пробы шаблона)
 #   REGRESS_CMD  регрессия закрытых модулей, по умолчанию `make regress`: последняя строка stdout `REGRESS_OK` или `REGRESS_OK <поля>` и код 0, иначе `DEPLOY_FAIL step=regress`; stderr идёт мимо суда
 #   PASSPORT_CMD сверка паспортов, по умолчанию `bin/check-passport`; `<МОДУЛЬ>_OFFEN=SPEC-<n>` открывает модуль текущей SPEC
-#   DEPLOY_LINIE 0 (по умолчанию) или 1 — деплой на линию (сигнал, который чувствует клиент): после `DEPLOY_OK` окно закрывает живая проверка `LIVE_OK` или откат `ROLLBACK_OK` (`bin/check-fenster`); другое значение — `DEPLOY_FAIL step=args` до всех шагов
-# Итог и окно — строками журнала docs/evidence/deploy-window.log. История sha — файл deploy-stand в служебном каталоге git: `DEPLOY_OK` и успешный откат дописывают свой sha; прежний sha — последняя строка, отличная от этого sha: повтор деплоя его не теряет, красный деплой целью отката не становится. `make rollback SHA=<sha>` — scripts/rollback.template.sh.
+#   DEPLOY_LINIE 0 (по умолчанию) или 1 — деплой на линию (сигнал, который чувствует клиент): после `DEPLOY_OK` или красных выкатки и регрессии (`linie=` в `DEPLOY_FAIL`: код уже на линии) окно закрывает живая проверка `LIVE_OK` или откат `ROLLBACK_OK` (`bin/check-fenster`); другое значение — `DEPLOY_FAIL step=args` до всех шагов
+# Итог и окно — строками журнала docs/evidence/deploy-window.log. История sha — файл deploy-stand в служебном каталоге git: `DEPLOY_OK` дописывает свой sha, успешный откат снимает всё, что шло после своего; прежний sha — последняя строка, отличная от этого sha: повтор деплоя его не теряет, красный и отозванный деплой целью отката не становятся. `make rollback SHA=<sha>` — scripts/rollback.template.sh.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 SHA=$(git rev-parse --short HEAD)
@@ -37,7 +37,7 @@ echo "$out"
 
 # 2. выкатка
 if [ -n "${DEPLOY_CMD:-}" ]; then
-  eval "$DEPLOY_CMD" || finish_red rollout "rc=$?"
+  eval "$DEPLOY_CMD" || finish_red rollout "rc=$? linie=$LINIE"
 fi
 
 # 3. регрессия закрытых модулей
@@ -45,7 +45,7 @@ out=$(eval "${REGRESS_CMD:-make regress}"); rc=$?
 echo "$out"
 case "$rc:$(tail -1 <<<"$out")" in
   0:REGRESS_OK|0:REGRESS_OK[[:space:]]*) ;;
-  *) finish_red regress "rc=$rc" ;;
+  *) finish_red regress "rc=$rc linie=$LINIE" ;;
 esac
 
 # 4. итог: строка отката рядом с DEPLOY_OK, следующий деплой откатывается на этот sha

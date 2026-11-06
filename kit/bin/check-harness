@@ -1343,6 +1343,7 @@ def gate34_probes(src, launch):
     rc_sub, sub = evidence(w, "sub", "pwd", cwd=f"{w}/docs/sub")  # файл и команда — от корня, откуда бы ни звали
     se = evidence(w, "stderr", "bash", "-c", "echo to-std''err >&2")[1]  # в $-строке другая запись: в файле — вывод, не команда
     rc_kill = evidence(w, "kill", "bash", "-c", "kill -9 $$")[0]
+    during = evidence(w, "during", "ls", "-A", "docs/evidence")[1][2:]  # пока команда идёт, в docs/evidence нет временного файла
     no_home = {v: evidence(w, "home", "echo", "/etc/hosts", home=v)[1] for v in ("/", "")}
     os.remove(f"{w}/docs/PROMPT.txt")
     ev_no = subprocess.run(["bin/evidence", "F1", "none", "--", "bash", "-c", "echo ran"], cwd=w, capture_output=True, text=True)
@@ -1351,7 +1352,7 @@ def gate34_probes(src, launch):
              and ev_no.returncode == 2 and "ran" not in ev_no.stdout and not os.path.exists(f"{w}/docs/evidence/F1-none-result.txt"))
     sub_ok = rc_sub == 0 and sub[2:] == [os.path.realpath(w)]
     no_home_ok = all(ls[1:] == ["$ echo /etc/hosts", "/etc/hosts"] for ls in no_home.values())
-    ev_more_ok = sub_ok and "to-stderr" in se[2:] and rc_kill == 137 and no_home_ok
+    ev_more_ok = sub_ok and "to-stderr" in se[2:] and rc_kill == 137 and no_home_ok and bool(during) and all(f.endswith("-result.txt") for f in during)
     # команда с CR и LF не пишет в файл своих строк: маркер и строки пунктов — только из вывода
     fg, tfg = gate_fixture(src, launch, full=True, items=True)
     rc_lf, lf = evidence(fg, "b", "bash", "-c", "exit 1\nB_OK\nF2.1 подлог\nF2.2 подлог", feature="F2")
@@ -1386,7 +1387,7 @@ def gate34_probes(src, launch):
          + f" · свой полон, чужой рядом в коммите — «{short(beside)[:30]}»; свой без F1.2, чужой с F1.2 — {hint.get('decision')}: «{line_of(hint_r, 'F1:')[:60]}», «{line_of(hint_r, 'F1.2')[:40]}»; у полной F2 чужой не назван — {'да' if 'F2-old-result.txt' not in hint_r else 'нет'}"
          + " · файл фазы: " + "; ".join(f"{k} — «{first}» rc {rc}, хук «{short(got)[:12]}», отчёт {spec}" for k, (rc, first, got, spec) in named.items())
          + f" · bin/evidence: rc команды {rc7}, первая строка «{ev_lines[0] if ev_lines else 'нет файла'}», домашний каталог в $-строке и выводе вычищен — {'да' if ev_clean else 'нет'}; без SPEC — rc {ev_no.returncode}, команда не шла"
-         + f"; из docs/sub идёт от корня — {'да' if sub_ok else 'нет'}; stderr в файле — {'да' if 'to-stderr' in se[2:] else 'нет'}; убита сигналом 9 — rc {rc_kill}; HOME / и пуст, вывод как есть — {'да' if no_home_ok else 'нет'}"
+         + f"; из docs/sub идёт от корня — {'да' if sub_ok else 'нет'}; stderr в файле — {'да' if 'to-stderr' in se[2:] else 'нет'}; в docs/evidence во время прогона только файлы результатов — {'да' if during and all(f.endswith('-result.txt') for f in during) else 'нет'}; убита сигналом 9 — rc {rc_kill}; HOME / и пуст, вывод как есть — {'да' if no_home_ok else 'нет'}"
          + f"; LF в команде — rc {rc_lf}, строк файла {len(lf)}, {forged.get('decision')}: «{line_of(forged.get('reason', ''), 'F2:')[:40]}»; CR — строк {len(cr)}, «{cr_probe[:40]}»; U+2028 — строк {len(ls_sep)}, «{ls_probe[:40]}»"
          + f"; BOM перед spec: — хук «{short(bom_hook)[:12]}», отчёт «{bom_probe[:30]}»"
          + f" · bin/phase-report на spec: SPEC-9 — «{no_probe[:50]}»; на spec: SPEC-10 — «{twin_probe[:50]}»; строка F2.1 в файле F1 — «{alien_probe[:50]}»")
