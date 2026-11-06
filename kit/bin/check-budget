@@ -4,13 +4,14 @@
   bin/check-budget                        правила над корнем проекта: строка OK/WARN/FAIL на правило, BUDGET_OK или exit 1
   bin/check-budget --self-test [группа…]  зелёная и красная фикстура на каждое правило: <ГРУППА>_OK … SELFTEST_OK
   bin/check-budget --templates            шаблоны кита, развёрнутые примером во временный проект: BUDGET_OK
+  bin/check-budget --lints                линты спеки (SPEC-v3.4 F2) обеими сторонами на фикстурах и на текущей SPEC: BUDGET_LINT_OK
 
 budgets.json: {"defaults": кит, "project": только ужесточение — число не выше defaults, owner_add}.
 Знаки — символы Unicode. Пути правил — от корня проекта; в репо кита те же правила видят kit/.
 SPEC и PLAN — файлы текущей фазы: первый `Read first:` стартового запроса docs/PROMPT.txt (v3.2; нет его — прежнее имя
 docs/GOAL.txt) и PLAN с тем же суффиксом.
 """
-import fnmatch, glob, hashlib, json, os, re, shutil, subprocess, sys, tempfile
+import contextlib, fnmatch, glob, hashlib, io, json, os, re, shutil, subprocess, sys, tempfile
 
 TMP = "/tmp/two-tier-v3"
 FEATURE = re.compile(r"- \*\*(F\d+)")
@@ -42,6 +43,10 @@ SIZES = [  # ключ budgets.json · файлы · мера
 REQUIRED = [k for k, _, _ in SIZES] + ["dollar_digit", "spec_feature_chars", "plan_lines",
                                        "read_first_files", "read_first_chars", "review_blocking", "owner"]
 PROMPTS = ["docs/PROMPT.txt", "docs/GOAL.txt"]  # v3.2: стартовый запрос; прежнее имя — до переноса тимлидом или апгрейдом
+PLANKEN = "checks/planken.json"  # v3.4, F2.3: параметры судей — файл тимлида; SPEC ссылается ключом `planken:<ключ>`
+KEYREF = re.compile(r"planken:([A-Za-z0-9_](?:[\w.-]*[A-Za-z0-9_])?)")
+AMEND = re.compile(r"Поправка\s+[^:\n<>]+:\s*слово оператора\s+[^\s<>]+")  # v3.4, F2.2: строка поправки объёма в §0 SPEC
+LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
 
 
 def read(p):
@@ -208,6 +213,124 @@ def rule_spec(b):
     return out
 
 
+def issued(spec, prompt):
+    """SPEC выдана: HEAD впереди последнего коммита стартового запроса, после него SPEC не менялась, на диске запрос и SPEC чисты."""
+    at = git("log", "-1", "--format=%H", "--", prompt).stdout.strip()
+    if not at or at == git("rev-parse", "HEAD").stdout.strip():
+        return False
+    return not git("log", "-1", "--format=%H", f"{at}..HEAD", "--", spec).stdout.strip() and not git("status", "--porcelain", "--", spec, prompt).stdout.strip()
+
+
+def landing_rows(text):
+    """Планки таблиц посадки: [(звено, ячейка «измерено у нас»)]; разделитель и итоговая строка (жирная первая ячейка) — не планки."""
+    rows, col = [], None
+    for l in text.splitlines():
+        if not l.lstrip().startswith("|"):
+            col = None
+            continue
+        cells = [c.strip() for c in l.strip().strip("|").split("|")]
+        if col is None:
+            col = next((i for i, c in enumerate(cells) if "измерено у нас" in c), None)
+        elif not set(cells[0]) <= set("-: ") and not cells[0].startswith("**"):
+            rows.append((cells[0], cells[col] if col < len(cells) else ""))
+    return rows
+
+
+def rule_planka(b):
+    """v3.4, F2.1: планка без файла распределения — красная до выдачи SPEC (SPEC-v3.4 §1); выданная SPEC — файл тимлида, у неё WARN."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec, prompt = ph[2], ph[4]
+    rows, bad = landing_rows(read(spec)), []
+    for name, cell in rows:
+        f = re.search(r"docs/evidence/[^\s`,;()]+", cell)
+        why = None if "ранняя" in cell else "нет docs/evidence/<файл>" if not f else f"нет файла {f.group(0)}" if not os.path.isfile(f.group(0)) \
+            else "нет n=" if not re.search(r"\bn\s*=\s*\d", cell) else "нет p50/p95" if not (re.search("p50", cell, re.I) and re.search("p95", cell, re.I)) else None
+        if why:
+            bad.append(f"«{name[:40]}»: {why}")
+    if not rows:
+        return []
+    if not bad:
+        return [("OK", "planka-source", f"{spec}: планок {len(rows)}, у всех файл распределения или «ранняя»")]
+    weight, note = ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) else ("FAIL", "")
+    return [(weight, "planka-source", f"{spec}: планок {len(rows)}, без файла распределения и без «ранняя» — {'; '.join(bad)}{note}")]
+
+
+def rule_scope(b):
+    """v3.4, F2.2: новая фича против SPEC на коммите стартового запроса — только строкой «Поправка» в §0; поправки считаются."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec, prompt = ph[2], ph[4]
+    at = git("log", "-1", "--format=%H", "--", prompt).stdout.strip()
+    base = git("show", f"{at}:{spec}") if at else None
+    if not base or base.returncode:
+        return [("OK", "scope-growth", f"{spec}: на коммите {prompt} SPEC нет — счёта нет")]
+    ids = lambda text: [m.group(1) for l in text.splitlines() for m in [FEATURE.match(l)] if m]
+    text = read(spec)
+    was, now = ids(base.stdout), ids(text)
+    new = [f for f in now if f not in was]
+    sec0 = re.search(r"^## 0\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    k = len(AMEND.findall(sec0.group(1))) if sec0 else 0
+    if len(new) > k:
+        return [("FAIL", "scope-growth", f"{' '.join(new[k:])}: новая фича без строки «Поправка <решение>: слово оператора <дата>» в §0 {spec}; фич на выдаче {len(was)}, сейчас {len(now)}, поправок: {k}")]
+    return [("OK", "scope-growth", f"{spec}: фич на выдаче {len(was)}, сейчас {len(now)}, поправок: {k}")]
+
+
+def numbers(v):
+    if isinstance(v, dict):
+        return [n for x in v.values() for n in numbers(x)]
+    if isinstance(v, list):
+        return [n for x in v for n in numbers(x)]
+    return [v] if type(v) in (int, float) else []
+
+
+def rule_planken(b):
+    """v3.4, F2.3: `planken:<ключ>` — ключ есть в checks/planken.json, а чисел его коридора нет в тексте блока SPEC."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec = ph[2]
+    lines = read(spec).splitlines()
+    refs = sorted({k for l in lines for k in KEYREF.findall(l)})
+    if not refs:
+        return []
+    try:
+        data = json.loads(read(PLANKEN))
+    except OSError:
+        return [("FAIL", "planken-key", f"{spec}: ключи {', '.join(refs)} — нет файла {PLANKEN}")]
+    except ValueError:
+        return [("FAIL", "planken-key", f"{spec}: ключи {', '.join(refs)} — {PLANKEN} не JSON")]
+
+    def value(key):
+        v = data
+        for part in key.split("."):
+            if not isinstance(v, dict) or part not in v:
+                raise KeyError(key)
+            v = v[part]
+        return v
+    lost, vals = [], {}
+    for k in refs:
+        try:
+            vals[k] = value(k)
+        except KeyError:
+            lost.append(k)
+    if lost:
+        return [("FAIL", "planken-key", f"{spec}: ключей нет в {PLANKEN} — {', '.join(lost)}")]
+    inside = {l for _, ls in blocks(lines) for l in ls}
+    scopes = ["\n".join(ls) for _, ls in blocks(lines)] + [l for l in lines if l not in inside]
+    inline = []
+    for s in scopes:
+        flat = re.sub(r"(?<=\d)[  ](?=\d{3}\b)", "", KEYREF.sub("", s))
+        for k in KEYREF.findall(s):
+            hit = [n for n in numbers(vals[k]) if re.search(rf"(?<![\w.,]){re.escape(str(n))}(?![\d])", flat)]
+            inline += [f"{k}: {n}" for n in hit]
+    if inline:
+        return [("WARN", "planken-inline", f"{spec}: числа коридора в тексте при ключе — {', '.join(sorted(set(inline)))}: логика судьи — в {PLANKEN}")]
+    return [("OK", "planken-key", f"{spec}: ключей {len(refs)}, все в {PLANKEN}, чисел коридора в тексте нет")]
+
+
 def rule_plan(b):
     ph = phase()
     if not ph or not ph[3]:
@@ -319,7 +442,7 @@ def rule_abide(b):
     return [check("abide_rules", n, b["abide_rules"], f"{p}, правил")]
 
 
-RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_plan, rule_review, rule_intent, rule_owner, rule_abide]
+RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide]
 
 
 def run(b):
@@ -332,6 +455,9 @@ def run(b):
 def report(out):
     for s, r, m in out:
         print(f"{s:4} {r}: {m}")
+    for s, r, m in out:
+        if r in LINT_RULES and s != "OK":  # v3.4, F2: строка линта для гейта и тимлида; scope-growth называет фичи
+            print(f"BUDGET_{s} {r}" + (" " + m.split(":", 1)[0] if r == "scope-growth" else ""))
     fails = sum(s == "FAIL" for s, _, _ in out)
     print(f"BUDGET_FAIL: {fails}" if fails else "BUDGET_OK")
     return 1 if fails else 0
@@ -528,6 +654,105 @@ def self_test(groups):
     return 0 if all_ok else 1
 
 
+# ---------- --lints: линты спеки обеими сторонами (SPEC-v3.4 F2) ----------
+def lint_fixture_spec(cell="<ячейка>", extra="", sec0="Контекст.\n", feats=("F1",)):
+    fl = "\n".join(f"- **{f} x** · готово: {f}.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n  - `{f}.1` `bin/x` печатает X" for f in feats)
+    return (f"# SPEC-1\n\n## 0. Контекст\n{sec0}\n## 2. Фичи\n{fl}\n{extra}\n"
+            "| звено | инструмент | нижняя оценка | источник | измерено у нас (`docs/evidence/<файл>`, n, p50/p95) |\n|---|---|---|---|---|\n"
+            f"| сборка | Opus | 10 мин | док | {cell} |\n| **сумма** | | 10 мин | | — |\n\n## 3. Инварианты\n")
+
+
+def lints():
+    b, out0 = load_budgets()
+    if not b:
+        return report(out0)
+    ok_all = []
+
+    def run_side(fs, commits, fn):
+        res = in_fixture(fs, commits, lambda: fn(dict(b)))
+        return worst(res), " ".join((res[0][2] if res else "нет строки").split())[:110]
+
+    def emit(iid, ok, text):
+        ok_all.append(bool(ok))
+        print(f"{iid} {'' if ok else 'FAIL: '}{text}", flush=True)
+    pr = {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n"}
+    ev = {"docs/evidence/x.txt": "x\n"}
+    good = "`docs/evidence/x.txt`, n=12, p50 2100, p95 3300"
+    # F2.1
+    s = lambda cell: {**pr, **ev, "docs/SPEC-1.md": lint_fixture_spec(cell)}
+    g1, g2 = run_side(s(good), None, rule_planka), run_side(s("— ранняя, файла нет"), None, rule_planka)
+    r1 = run_side(s("≈ 2 ч"), None, rule_planka)
+    r2 = run_side(s("`docs/evidence/nope.txt`, n=12, p50 1, p95 2"), None, rule_planka)
+    r3 = run_side(s("`docs/evidence/x.txt`, n=12"), None, rule_planka)
+    r4 = run_side(s("`docs/evidence/x.txt`, p50 1, p95 2"), None, rule_planka)
+    at = run_side(s("≈ 2 ч"), [], rule_planka)  # HEAD = коммит запроса: ещё выдача
+    done = run_side(s("≈ 2 ч"), [("F1.1: работа", {"src/x.py": "x\n"}, [])], rule_planka)  # выдана и идёт
+    changed = run_side(s("≈ 2 ч"), [("F1.1: работа", {"src/x.py": "x\n"}, []), ("Тимлид: поправка SPEC", {"docs/SPEC-1.md": lint_fixture_spec("≈ 3 ч")}, [])], rule_planka)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        in_fixture(s("≈ 2 ч"), None, lambda: report(rule_planka(dict(b))))
+    fail_line = next((l for l in buf.getvalue().splitlines() if l.startswith("BUDGET_FAIL planka-source")), "нет")
+    rot = [x[0] for x in (r1, r2, r3, r4, at)] == ["FAIL"] * 5 and fail_line == "BUDGET_FAIL planka-source"
+    gruen = g1[0] == g2[0] == "OK"
+    emit("F2.1", rot and gruen and done[0] == "WARN" and changed[0] == "FAIL",
+         f"rot={'OK' if rot else 'нет'} gruen={'OK' if gruen else 'нет'} · с файлом — {g1[0]}, «ранняя» — {g2[0]} · без файла — {r1[0]}: «{r1[1]}» → «{fail_line}»; файла нет на диске — {r2[0]}; без p50/p95 — {r3[0]}; без n — {r4[0]}; "
+         f"HEAD на коммите запроса — {at[0]} · выдана и идёт — {done[0]}; SPEC правлена после выдачи — {changed[0]}")
+    # F2.2
+    base = {**pr, "docs/SPEC-1.md": lint_fixture_spec("ранняя")}
+    grown = lambda sec0="Контекст.\n", feats=("F1", "F2"): [("Тимлид: новая фича", {"docs/SPEC-1.md": lint_fixture_spec("ранняя", sec0=sec0, feats=feats)}, [])]
+    line = "Контекст.\nПоправка 391: слово оператора 06.11.2026 — новая фича.\n"
+    same = run_side(base, [("F1.1: работа", {"src/x.py": "x\n"}, [])], rule_scope)
+    without = run_side(base, grown(), rule_scope)
+    withl = run_side(base, grown(line), rule_scope)
+    place = run_side(base, grown("Контекст.\nПоправка <решение>: слово оператора <дата>\n"), rule_scope)
+    two = run_side(base, grown(line, ("F1", "F2", "F3")), rule_scope)
+    outside = run_side(base, [("Тимлид: x", {"docs/SPEC-1.md": lint_fixture_spec("ранняя", extra="Поправка 391: слово оператора 06.11.2026\n", feats=("F1", "F2"))}, [])], rule_scope)
+    emit("F2.2", without[0] == "FAIL" and without[1].startswith("F2:") and withl[0] == "OK" and "поправок: 1" in withl[1] and "поправок: 0" in same[1]
+         and place[0] == "FAIL" and two[0] == "FAIL" and two[1].startswith("F3:") and outside[0] == "FAIL",
+         f"ohne={without[0]} mit={withl[1].rsplit('поправок: ', 1)[-1] if 'поправок: ' in withl[1] else '?'} · без строки — «{without[1]}»; со строкой — «{withl[1]}»; фичи те же — «{same[1]}»; "
+         f"строка-образец из шаблона — {place[0]}; две новые, одна строка — {two[0]}: «{two[1][:20]}»; строка вне §0 — {outside[0]}")
+    # F2.3
+    pl = {"checks/planken.json": json.dumps({"korridor": {"word": {"p95": 3300, "max": 6500}}, "flaky": {}})}
+    sk = lambda body: {**pr, **pl, "docs/SPEC-1.md": lint_fixture_spec("ранняя", feats=()) + body}
+    item = lambda txt: f"\n- **F1 x** · готово: F1.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n  - `F1.1` {txt}\n"
+    clean = run_side(sk(item("`bin/x` судит `planken:korridor.word`")), None, rule_planken)
+    inl = run_side(sk(item("`bin/x` судит `planken:korridor.word`, p95 3300 мс")), None, rule_planken)
+    inl_sp = run_side(sk(item("`bin/x` судит `planken:korridor.word`, предел 6 500 мс")), None, rule_planken)
+    other = run_side(sk(item("`bin/x` судит `planken:korridor.word`, пункт 33000 и F3300.1")), None, rule_planken)
+    nof = run_side({**pr, "docs/SPEC-1.md": lint_fixture_spec("ранняя", feats=()) + item("`bin/x` судит `planken:korridor.word`")}, None, rule_planken)
+    nok = run_side(sk(item("`bin/x` судит `planken:korridor.nope`")), None, rule_planken)
+    emit("F2.3", clean[0] == "OK" and inl[0] == "WARN" and inl_sp[0] == "WARN" and other[0] == "OK" and nof[0] == "FAIL" and nok[0] == "FAIL",
+         f"inline={inl[0]} ohne={nof[0]} · ключ без чисел — {clean[0]}; число рядом — «{inl[1]}»; «6 500» — {inl_sp[0]}; 33000 и F3300.1 — {other[0]}; нет файла — «{nof[1]}»; нет ключа — «{nok[1]}»")
+    # F2.4
+    gt = os.path.join(os.path.dirname(os.path.realpath(__file__)), "gate-test")
+
+    def test_run(planken, script):
+        fs = {"tests/t.sh": script, **({"checks/planken.json": planken} if planken else {})}
+        def go(_=None):
+            r = subprocess.run([gt, "bash", "tests/t.sh"], capture_output=True, text=True)
+            return r.returncode, " ".join((r.stdout + r.stderr).split())[-90:]
+        return in_fixture(fs, [], go)
+    red, green = "echo x; exit 3\n", "exit 0\n"
+    label = json.dumps({"flaky": {"tests/t.sh": "решение 388: настенное время"}})
+    fl = test_run(label, red)
+    no = test_run(json.dumps({"flaky": {}}), red)
+    nof2 = test_run(None, red)
+    bad = test_run("{", red)
+    gl = test_run(label, green)
+    wrong = test_run(json.dumps({"flaky": {"tests/other.sh": "x"}}), red)
+    emit("F2.4", fl[0] == 0 and "FLAKY" in fl[1] and no[0] == 1 and "TEST_FAIL" in no[1] and nof2[0] == 1 and bad[0] == 1 and gl[0] == 0 and "TEST_OK" in gl[1] and wrong[0] == 1,
+         f"flaky={'OK' if fl[0] == 0 and 'FLAKY' in fl[1] else 'нет'} ohne={'block' if no[0] == 1 else 'нет'} · с меткой, красный — rc {fl[0]} «{fl[1]}»; без метки — rc {no[0]} «{no[1]}»; нет файла — rc {nof2[0]}; "
+         f"файл не JSON — rc {bad[0]}; метка другого теста — rc {wrong[0]}; с меткой, зелёный — rc {gl[0]} «{gl[1]}»")
+    cur = rule_planka(dict(b)) + rule_scope(dict(b)) + rule_planken(dict(b))
+    for s_, r_, m_ in cur:
+        print(f"{s_:4} {r_}: {m_}")
+    if all(ok_all) and not any(s_ == "FAIL" for s_, _, _ in cur):
+        print("BUDGET_LINT_OK")
+        return 0
+    print("BUDGET_LINT_FAIL")
+    return 1
+
+
 TEMPLATES = {  # шаблон кита → куда его кладёт пример в проекте
     "docs/INTENT.template.md": "intent/INTENT.md", "docs/SPEC.template.md": "docs/SPEC-1.md",
     "docs/PROMPT.template.txt": "docs/PROMPT.txt", "docs/PLAN.template.md": "docs/PLAN-1.md",
@@ -598,6 +823,8 @@ def main(argv):
         return self_test(argv[1:])
     if argv == ["--templates"]:
         return templates()
+    if argv == ["--lints"]:
+        return lints()
     if argv:
         print(__doc__)
         return 2

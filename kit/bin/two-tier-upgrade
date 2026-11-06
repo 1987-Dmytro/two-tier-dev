@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""two-tier-upgrade <путь> — перевести проект на кит two-tier-dev v3 без потери истории (SPEC-v3 §1, F7).
+"""two-tier-upgrade [--branch <имя>] <путь> — перевести проект на кит two-tier-dev v3 без потери истории (SPEC-v3 §1, F7).
 two-tier-upgrade --self-test — то же на синтетической фикстуре во /tmp/two-tier-v3: UPGRADE_OK.
+--branch — ветка апгрейда вместо kit-v3: когда прежняя kit-v3 разошлась с рабочей веткой проекта (SPEC-v3.4 F3.5).
 
 В проекте: ветка kit-v3 — от HEAD; уже есть и впереди HEAD (её или origin/kit-v3) — работа идёт там; позади (слита) — переставляется
-на HEAD; разошлась с HEAD — rc 1, проект не тронут. Механика v3 из кита — все файлы дерева кита, кроме CLAUDE.md и budgets.json
+на HEAD; разошлась с HEAD — rc 1, проект не тронут. Механика v3 из кита — все файлы дерева кита, кроме CLAUDE.md, budgets.json, frozen.json и checks/planken.json
 (ставятся, если их нет) и файлов тимлида; прежние версии и ушедшие из кита файлы — `git mv` в архив запуска: первый свободный из
 docs/archive/kit-v2/, docs/archive/kit-<дата>/, docs/archive/kit-<дата>-<n>/ (проект, уже переведённый раньше, — ревью v3.2-2, B1);
 раздутые PROGRESS и PLAN — в docs/archive/ с датой, свежие — из шаблонов со ссылкой на архив, отчёт docs/upgrade-v3.md об этом
@@ -26,10 +27,13 @@ IF_ABSENT = ["CLAUDE.md", "budgets.json"]          # файлы с фактам�
 LS = ".claude/launch.settings.json"
 TL_IN_KIT = [LS, ".claude/spec-gate.json"]  # файлы тимлида: апгрейд их не пишет (плагины в LS — коммитом «Тимлид: …»)
 RUBRIC = ".abide/rubric.json"  # v3.3, F7.3: база рубрики кита — файл тимлида: нет в проекте — своим коммитом «Тимлид: …», есть — не трогается
+# файлы тимлида с базой кита: нет в проекте — своим коммитом «Тимлид: …», есть — не трогаются (замок и пороги проекта — его, SPEC-v3.4 F3)
+TL_IF_ABSENT = {RUBRIC: "база рубрики кита: abide check судит коммит проекта", "frozen.json": "пустой замок закрытых модулей кита",
+                "checks/planken.json": "ключи параметров судей кита"}
 IN_PROJECT = KIT == ROOT and os.path.exists(os.path.join(ROOT, ".git"))  # копия скрипта в проекте: дерево вокруг — проект, не кит
 KIT_FILES = [] if IN_PROJECT else sorted(r for r in (os.path.relpath(os.path.join(d, f), KIT) for d, _, fs in os.walk(KIT)
                                                      if not {".git", "__pycache__"} & set(os.path.relpath(d, KIT).split(os.sep)) for f in fs)
-                                         if r not in IF_ABSENT + TL_IN_KIT + [RUBRIC])  # дерево кита, как у bin/two-tier-init
+                                         if r not in IF_ABSENT + TL_IN_KIT + list(TL_IF_ABSENT))  # дерево кита, как у bin/two-tier-init
 ACT = [".claude/hooks/abide.mjs", ".claude/hooks/toolgate-deny.mjs"]  # v3.3, F3.1: судьи на действие ушли из кита
 TL_RETIRED = [".claude/toolgate.yaml"]  # ушедший файл тимлида: в архив коммитом «Тимлид: …»
 RETIRED = [".claude/hooks/verify-gate.sh", ".claude/hooks/track-read.sh", ".claude/hooks/commit-on-stop.sh",
@@ -37,6 +41,7 @@ RETIRED = [".claude/hooks/verify-gate.sh", ".claude/hooks/track-read.sh", ".clau
            ".claude/skills/grilling/SKILL.md", "intent/intent.template.md", "docs/GOAL.template.txt"] + ACT + TL_RETIRED
 PLUGINS_OFF = ["jev-steer-or-queue@jev-steer-or-queue", "compact-adviser@compact-adviser"]  # v3.3, F3.1: плагины на действие
 TODAY = time.strftime("%Y-%m-%d")
+BRANCH = "kit-v3"  # ветка апгрейда; --branch
 
 
 def read(p):
@@ -73,8 +78,8 @@ def upgrade(target):
     is_tl = lambda p: any(p.startswith(e) if e.endswith("/") else p == e for e in owner)
     start, head0 = git("branch", "--show-current").stdout.strip(), git("rev-parse", "HEAD").stdout.strip()
     hp0 = git("config", "--local", "--get", "core.hooksPath").stdout.strip()  # .githooks — судьи кита уже стоят: свои коммиты апгрейд делает мимо них
-    kv_head = git("rev-parse", "--verify", "-q", "refs/heads/kit-v3").stdout.strip()
-    kv_remote = git("rev-parse", "--verify", "-q", "refs/remotes/origin/kit-v3").stdout.strip()
+    kv_head = git("rev-parse", "--verify", "-q", f"refs/heads/{BRANCH}").stdout.strip()
+    kv_remote = git("rev-parse", "--verify", "-q", f"refs/remotes/origin/{BRANCH}").stdout.strip()
     had = bool(kv_head)
     anc = lambda a, b: git("merge-base", "--is-ancestor", a, b).returncode == 0
 
@@ -82,9 +87,9 @@ def upgrade(target):
         if not start or git("branch", "--show-current").stdout.strip() != start:
             git("switch", "-q", start) if start else git("switch", "-q", "--detach", head0)
         if not had:
-            git("branch", "-q", "-D", "kit-v3")
-        elif start != "kit-v3" and git("rev-parse", "refs/heads/kit-v3").stdout.strip() != kv_head:
-            git("branch", "-q", "-f", "kit-v3", kv_head)
+            git("branch", "-q", "-D", BRANCH)
+        elif start != BRANCH and git("rev-parse", f"refs/heads/{BRANCH}").stdout.strip() != kv_head:
+            git("branch", "-q", "-f", BRANCH, kv_head)
 
     def run(*a):  # git, который обязан пройти: иначе исключение с ответом git
         r = git(*a)
@@ -92,14 +97,14 @@ def upgrade(target):
             raise RuntimeError(f"git {a[0]}: {(r.stderr or r.stdout).strip()}")
     made, fresh, started = [], set(), False
     try:
-        on_kv, kv = start == "kit-v3", kv_head or kv_remote
+        on_kv, kv = start == BRANCH, kv_head or kv_remote
         if not on_kv and kv:  # kit-v3 уже есть: впереди HEAD — работа фазы там, план на её дереве; позади (слита) — ветка от HEAD
             if anc(head0, kv):
-                run("switch", "-q", *(["kit-v3"] if kv_head else ["-c", "kit-v3", "--no-track", kv_remote]))
+                run("switch", "-q", *([BRANCH] if kv_head else ["-c", BRANCH, "--no-track", kv_remote]))
                 on_kv = True
             elif not anc(kv, head0):
-                raise RuntimeError(f"проект не готов, апгрейд не начат:\n  - ветка kit-v3 ({kv[:7]}) разошлась с {start or 'HEAD'} ({head0[:7]}): "
-                                   "запусти апгрейд из kit-v3 или слей ветки")
+                raise RuntimeError(f"проект не готов, апгрейд не начат:\n  - ветка {BRANCH} ({kv[:7]}) разошлась с {start or 'HEAD'} ({head0[:7]}): "
+                                   f"запусти апгрейд из {BRANCH}, слей ветки или возьми новую: --branch <имя>")
         # план: old — прежние версии в архив запуска, moves — путь → архив, copies — путь ← файл кита, texts — путь ← текст
         old, moves, copies, texts, tl_todo, tl_old, tl_mv, tl_moves, tl_puts = [], [], [], [], [], [], [], [], []
         for rel in KIT_FILES + IF_ABSENT:
@@ -156,7 +161,7 @@ def upgrade(target):
                 moves.append((rel, arch))
                 texts.append((rel, f"{title}\n\n> Прежний файл ({n} строк) — `{arch}` (two-tier-upgrade, {TODAY}).\n{rest}"))
         prompt_mv = os.path.isfile(T("docs/GOAL.txt")) and not os.path.lexists(T("docs/PROMPT.txt"))  # v3.2, F7
-        rub = [] if os.path.lexists(T(RUBRIC)) else [RUBRIC]  # v3.3, F7.3
+        rub = [r for r in TL_IF_ABSENT if not os.path.lexists(T(r))]  # v3.3, F7.3; v3.4, F3
         if copies or old or texts or prompt_mv or tl_mv or off or rub:  # запуск что-то меняет — отчёт о нём; прежний отчёт — в архив запуска
             old += [REPORT] if os.path.isfile(T(REPORT)) else []
             root = next((r for r in ROOTS if not os.path.lexists(T(r))), None)  # свой каталог на запуск: kit-v2 — только у первого
@@ -167,12 +172,12 @@ def upgrade(target):
             tl_puts = [LS, archived(LS, root)] if off else []
             tl_todo += [f"`{rel}` (v2) — в `{archived(rel, root)}` коммитом «Тимлид: …»" for rel in tl_old]
             L = [f"# Переход на кит two-tier-dev v3 — {TODAY} (`bin/two-tier-upgrade`)", "",
-                 "Ветка `kit-v3`; remotes не тронуты, push не делался — его делает исполнитель проекта по своему стартовому запросу.", "",
+                 f"Ветка `{BRANCH}`; remotes не тронуты, push не делался — его делает исполнитель проекта по своему стартовому запросу.", "",
                  "## Сделано этим запуском"] + [f"- поставлено из кита: `{r}`" for r, _ in copies] + [f"- архив: `{a} → {d}`" for a, d in moves] + \
                 [f"- снят хук `{r}` — в `{archived(r, root)}`" for r in old if r in RETIRED and r.startswith(".claude/hooks/")] + \
                 [f"- снят файл тимлида `{a}` — в `{d}` отдельным коммитом «Тимлид: …»" for a, d in tl_moves] + \
                 [f"- выключен плагин `{p}` в `{LS}` (false, без pluginConfigs) отдельным коммитом «Тимлид: …»; прежний файл — `{archived(LS, root)}`" for p in off] + \
-                [f"- база рубрики кита `{RUBRIC}` отдельным коммитом «Тимлид: …»: по ней `abide check` судит коммит (SPEC-v3.3 F7.3)" for _ in rub] + \
+                [f"- `{r}` отдельным коммитом «Тимлид: …»: {TL_IF_ABSENT[r]}" for r in rub] + \
                 ([f"- стартовый запрос: `docs/GOAL.txt → docs/PROMPT.txt` отдельным коммитом «Тимлид: …»"] if prompt_mv else []) + \
                 ([f"- `core.hooksPath` → `.githooks`: коммит судят хуки кита (SPEC-v3.3 F2)" + (f", прежнее значение — `{hp0}`" if hp0 else "")
                   + "; в другом клоне проекта — `git config core.hooksPath .githooks`"] if hp0 != ".githooks" else []) + \
@@ -184,10 +189,10 @@ def upgrade(target):
                  "## Исполнителю",
                  "- `CLAUDE.md` — к v3: до 40 строк, без ссылок на выведенные из кита файлы; головы PROGRESS и PLAN; `bin/check-budget` → `BUDGET_OK`.",
                  "- Поля прежнего `.claude/settings.json` (архив) сверить с v3: своё проекта вернуть по settings-reference.",
-                 "- Push ветки `kit-v3` — по своему стартовому запросу.", "",
+                 f"- Push ветки `{BRANCH}` — по своему стартовому запросу.", "",
                  "## Оператору",
                  "- `autoMode.environment` (`/auto-mode-setup` или `.claude/launch.settings.json`); запуск — `docs/LAUNCH.md`, контрольный прогон — `bin/check-harness`.",
-                 "- Merge `kit-v3` — после приёмки."]
+                 f"- Merge `{BRANCH}` — после приёмки."]
             texts.append((REPORT, "\n".join(L) + "\n"))
         tracked, puts = set(git("ls-files", "-z").stdout.split("\0")), [rel for rel, _ in copies + texts]
         why += [f"{a}: файл вне git — git mv его не возьмёт" for a, _ in moves + tl_moves if a not in tracked]
@@ -204,8 +209,8 @@ def upgrade(target):
             while d and not os.path.isdir(T(d)):
                 fresh.add(d); d = os.path.dirname(d)
         if not on_kv:  # kit-v3 нет или она позади HEAD — ветка от HEAD
-            run("switch", "-q", "-C", "kit-v3")
-        print("ветка: kit-v3")
+            run("switch", "-q", "-C", BRANCH)
+        print(f"ветка: {BRANCH}")
         tip = git("rev-parse", "HEAD").stdout.strip()  # откат возвращает ветку сюда — и после первого из двух коммитов
         started = True
         for rel, dst in moves:
@@ -221,13 +226,13 @@ def upgrade(target):
         commit = lambda msg: run(*(["-c", "core.hooksPath=/dev/null"] if hp0 == ".githooks" else []), "commit", "-q", "-m", msg)
         kit = bool(git("diff", "--cached", "--quiet").returncode)
         if kit:
-            commit("kit-v3: механика two-tier-dev v3 (two-tier-upgrade)")
-        for rel in rub:  # v3.3, F7.3: база рубрики кита — файл тимлида: свой коммит «Тимлид: …», до прочих
-            os.makedirs(os.path.dirname(T(rel)), exist_ok=True)
+            commit(f"{BRANCH}: механика two-tier-dev v3 (two-tier-upgrade)")
+        for rel in rub:  # v3.3, F7.3; v3.4, F3: база кита для файла тимлида — свой коммит «Тимлид: …», до прочих
+            os.makedirs(os.path.dirname(T(rel)) or T("."), exist_ok=True)
             shutil.copy2(os.path.join(KIT, rel), T(rel))
             run("add", "--", rel)
-            commit(f"Тимлид: {rel} — база рубрики кита: abide check судит коммит проекта (two-tier-upgrade)")
-            print(f"коммит «Тимлид: …»: {rel} — база рубрики кита")
+            commit(f"Тимлид: {rel} — {TL_IF_ABSENT[rel]} (two-tier-upgrade)")
+            print(f"коммит «Тимлид: …»: {rel} — {TL_IF_ABSENT[rel]}")
         tl = []  # коммит «Тимлид: …»: перенос запроса, ушедший файл тимлида, плагины на действие
         if prompt_mv:
             run("mv", "docs/GOAL.txt", "docs/PROMPT.txt")
@@ -336,7 +341,7 @@ def self_test():
     rsh = [l for l in g(proj, "show", "--name-status", "--format=%s", rs).stdout.splitlines() if l] if rs else [""]
     rr = read(P(REPORT)) if os.path.isfile(P(REPORT)) else ""
     check(g(proj, "show", f"HEAD:{RUBRIC}").stdout == read(f"{KIT}/{RUBRIC}") and rsh[0].startswith(f"Тимлид: {RUBRIC}") and rsh[1:] == [f"A\t{RUBRIC}"]
-          and f"- база рубрики кита `{RUBRIC}` отдельным коммитом" in rr and "кроме коммитов «Тимлид: …» выше" in rr,
+          and f"- `{RUBRIC}` отдельным коммитом" in rr and "кроме коммитов «Тимлид: …» выше" in rr,
           f"база рубрики кита {RUBRIC} (SPEC-v3.3 F7.3) — в HEAD байт в байт, своим коммитом «Тимлид: …», в нём только она; в отчёте — строкой")
     rep = read(P("docs/upgrade-v3.md")) if os.path.isfile(P("docs/upgrade-v3.md")) else ""
     check(all(s in rep for s in ("## Тимлиду", "## Исполнителю", "## Оператору", "launch.settings.json", "intent/intent.template.md")),
@@ -530,6 +535,8 @@ def self_test():
         dv = run(pdv)
         check(dv.returncode and "разошлась" in dv.stdout and "Traceback" not in dv.stderr and state(pdv) == d0,
               "kit-v3 разошлась с main — rc 1 с причиной, проект как до запуска")
+        ub = subprocess.run([me, "--branch", "kit-v3-next", pdv], capture_output=True, text=True, env=ENV)  # SPEC-v3.4 F3.5: своя ветка вместо разошедшейся
+        check(ub.returncode == 0 and g(pdv, "branch", "--show-current").stdout.strip() == "kit-v3-next" and kitted(pdv), "kit-v3 разошлась — --branch: новая ветка от HEAD, файлы кита = кит")
 
     # v3.3, F3.4: проекты китов v3.1 (d2ca390, main) и v3.2 (b5b81cd) — каждый своим bin/two-tier-init; апгрейд снимает ушедшие
     # хуки и плагины, прежнее — в архив, bin/check-budget проекта зелёный. Красная сторона — та же сверка env() до апгрейда
@@ -627,6 +634,10 @@ def self_test():
 if __name__ == "__main__":
     if sys.argv[1:] == ["--self-test"]:
         sys.exit(self_test())
-    if len(sys.argv) != 2 or sys.argv[1].startswith("-"):
+    args = sys.argv[1:]
+    if args[:1] == ["--branch"] and len(args) == 3 and args[1] and not args[1].startswith("-"):
+        BRANCH = args[1]
+        args = args[2:]
+    if len(args) != 1 or args[0].startswith("-"):
         print(__doc__); sys.exit(2)
-    sys.exit(upgrade(os.path.abspath(sys.argv[1])))
+    sys.exit(upgrade(os.path.abspath(args[0])))

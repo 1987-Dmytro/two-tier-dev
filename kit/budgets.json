@@ -34,7 +34,9 @@
       ".claude/launch.settings.json",
       ".claude/spec-gate.json",
       ".abide/rubric.json",
-      "budgets.json"
+      "budgets.json",
+      "checks/planken.json",
+      "frozen.json"
     ]
   },
   "project": {}

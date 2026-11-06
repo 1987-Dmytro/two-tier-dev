@@ -4,6 +4,7 @@ ci:
 	bin/check-spend --self-test
 	bin/check-budget --self-test
 	bin/check-budget --templates
+	bin/check-budget --lints
 	bin/check-harness --self-test
 	bin/check-kit
 	bin/check-docs

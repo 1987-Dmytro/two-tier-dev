@@ -1,0 +1,38 @@
+{
+  "_": "Параметры судей (SPEC-v3.4 F2.3): файл тимлида, чеки и гейт читают его, SPEC ссылается ключом `planken:<ключ>`. Шаблон — только имена ключей; числа вносит тимлид проекта с приёмки.",
+  "korridore": {
+    "<звено>": {
+      "p50": null,
+      "p95": null,
+      "max": null
+    }
+  },
+  "ausnahmen": {
+    "nachfrage": null,
+    "leer": null
+  },
+  "ab": {
+    "<опыт>": {
+      "a": null,
+      "b": null
+    }
+  },
+  "flaky": {},
+  "live": {
+    "word_max_ms": null,
+    "word_max_sicher_ms": null,
+    "warten_ms": null,
+    "felder": {},
+    "stoppwoerter": [],
+    "fertige_saetze": []
+  },
+  "canary": {
+    "p95_gelb_ms": null,
+    "word_max_rot_ms": null,
+    "timeout_s": null
+  },
+  "pair": {
+    "max_diff_p50_ms": null,
+    "max_diff_p95_ms": null
+  }
+}

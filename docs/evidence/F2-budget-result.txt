@@ -1,0 +1,9 @@
+spec: SPEC-v3.4
+$ bin/check-budget --lints
+F2.1 rot=OK gruen=OK · с файлом — OK, «ранняя» — OK · без файла — FAIL: «docs/SPEC-1.md: планок 1, без файла распределения и без «ранняя» — «сборка»: нет docs/evidence/<файл>» → «BUDGET_FAIL planka-source»; файла нет на диске — FAIL; без p50/p95 — FAIL; без n — FAIL; HEAD на коммите запроса — FAIL · выдана и идёт — WARN; SPEC правлена после выдачи — FAIL
+F2.2 ohne=FAIL mit=1 · без строки — «F2: новая фича без строки «Поправка <решение>: слово оператора <дата>» в §0 docs/SPEC-1.md; фич на выдаче 1, с»; со строкой — «docs/SPEC-1.md: фич на выдаче 1, сейчас 2, поправок: 1»; фичи те же — «docs/SPEC-1.md: фич на выдаче 1, сейчас 1, поправок: 0»; строка-образец из шаблона — FAIL; две новые, одна строка — FAIL: «F3: новая фича без с»; строка вне §0 — FAIL
+F2.3 inline=WARN ohne=FAIL · ключ без чисел — OK; число рядом — «docs/SPEC-1.md: числа коридора в тексте при ключе — korridor.word: 3300: логика судьи — в checks/planken.json»; «6 500» — WARN; 33000 и F3300.1 — OK; нет файла — «docs/SPEC-1.md: ключи korridor.word — нет файла checks/planken.json»; нет ключа — «docs/SPEC-1.md: ключей нет в checks/planken.json — korridor.nope»
+F2.4 flaky=OK ohne=block · с меткой, красный — rc 0 «FLAKY bash tests/t.sh rc=3 · решение 388: настенное время»; без метки — rc 1 «x TEST_FAIL bash tests/t.sh rc=3»; нет файла — rc 1; файл не JSON — rc 1; метка другого теста — rc 1; с меткой, зелёный — rc 0 «TEST_OK bash tests/t.sh»
+WARN planka-source: docs/SPEC-v3.4.md: планок 3, без файла распределения и без «ранняя» — «стройка 8 фич»: нет файла docs/evidence/verify-*; «один полный круг `verify-phase`»: нет docs/evidence/<файл>; «приёмка тимлида»: нет docs/evidence/<файл> (SPEC уже выдана: правит тимлид)
+OK   scope-growth: docs/SPEC-v3.4.md: фич на выдаче 8, сейчас 8, поправок: 0
+BUDGET_LINT_OK

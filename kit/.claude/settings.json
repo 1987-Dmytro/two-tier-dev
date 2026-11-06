@@ -19,7 +19,9 @@
       "Edit(/.claude/launch.settings.json)",
       "Edit(/.claude/spec-gate.json)",
       "Edit(/.abide/rubric.json)",
-      "Edit(/budgets.json)"
+      "Edit(/budgets.json)",
+      "Edit(/checks/planken.json)",
+      "Edit(/frozen.json)"
     ]
   },
   "hooks": {
