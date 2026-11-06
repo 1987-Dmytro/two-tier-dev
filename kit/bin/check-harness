@@ -1289,11 +1289,26 @@ def gate34_probes(src, launch):
     open(f"{r3}/docs/evidence/{v}", "w", encoding="utf-8").write(text.replace("docs/SPEC-1.md", "docs/SPEC-9.md"))
     ship(r3, "вердикт чужой SPEC", f"docs/evidence/{v}")
     alien = end("f13-verdict", repo=r3, transcript=tr3)[1]
+    # bin/evidence пишет первую строку, отдаёт код команды, домашний каталог — «~»; без SPEC команда не идёт. Отчёт фазы чужую строку не считает
+    w, _ = gate_fixture(src, launch, items=True)
+    home = os.path.expanduser("~")
+    ev_cmd = subprocess.run(["bin/evidence", "F1", "probe", "--", "bash", "-c", f"echo {home}/x; exit 7"], cwd=w, capture_output=True, text=True)
+    ev_lines = open(f"{w}/docs/evidence/F1-probe-result.txt", encoding="utf-8").read().splitlines()
+    os.remove(f"{w}/docs/PROMPT.txt")
+    ev_no = subprocess.run(["bin/evidence", "F1", "none", "--", "bash", "-c", "echo ran"], cwd=w, capture_output=True, text=True)
+    ev_ok = (ev_cmd.returncode == 7 and ev_lines[0] == "spec: SPEC-1" and ev_lines[1].startswith("$ bash -c") and "~/x" in ev_lines[2] and home not in "\n".join(ev_lines[2:])
+             and ev_no.returncode == 2 and "ran" not in ev_no.stdout and not os.path.exists(f"{w}/docs/evidence/F1-none-result.txt"))
+    rp, trp = gate_fixture(src, launch, full=True, items=True)
+    open(f"{rp}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-9\n" + body)
+    rep_lines = report_of(rp, src)[2].splitlines()
+    no_probe = next((l for l in rep_lines if l.startswith("- **Пункты без пробы")), "")
     ok = (own.get("systemMessage", "").startswith("SPEC_GATE_OK") and all(foreign.values()) and back.get("systemMessage", "").startswith("SPEC_GATE_OK")
-          and alien.get("decision") == "block" and "no full /verify-phase round" in alien.get("reason", "") and (not alt or alt_res.get("systemMessage", "").startswith("SPEC_GATE_OK")))
+          and alien.get("decision") == "block" and "no full /verify-phase round" in alien.get("reason", "") and (not alt or alt_res.get("systemMessage", "").startswith("SPEC_GATE_OK"))
+          and ev_ok and "F2.1" in no_probe and "F1.1" not in no_probe)
     item(S, "F1.3", ok, f"fremd={'missing' if all(foreign.values()) else 'засчитан'} eigen={'OK' if own.get('systemMessage', '').startswith('SPEC_GATE_OK') else 'нет'} · своя — «{short(own)[:60]}»; чужие: "
          + ", ".join(f"{k} — {'block' if x else 'НЕ block'}" for k, x in foreign.items()) + f"; «{last_reason[:100]}»; вердикт docs/SPEC-9.md — {alien.get('decision')}: «{line_of(alien.get('reason', ''), 'no full')[:70]}»"
-         + (f" · хук v3.3 на spec: SPEC-9 — «{short(alt_res)[:40]}»" if alt else ""))
+         + (f" · хук v3.3 на spec: SPEC-9 — «{short(alt_res)[:40]}»" if alt else "")
+         + f" · bin/evidence: rc команды {ev_cmd.returncode}, первая строка «{ev_lines[0]}», домашний каталог — «{ev_lines[2]}»; без SPEC — rc {ev_no.returncode}, команда не шла · bin/phase-report на spec: SPEC-9 — «{no_probe[:50]}»")
     # F1.4 — STOP-TL: с вопросом и Resume → stop; без вопроса → missing; SPEC без §4 — STOP_IDS
     no4 = re.sub(r"\n## 4\..*", "\n", GATE_SPEC_ITEMS, flags=re.S)
     def stop_case(name, spec, text, old=False):  # своя фикстура на прогон: стоп отпускает ход один раз, в любой сессии
