@@ -41,7 +41,8 @@
       "docs/OFFICIAL-SOURCES.md",
       "docs/archive/team-lead-*.md",
       "CLAUDE.md",
-      ".abide/rubric.json"
+      ".abide/rubric.json",
+      "checks/planken.json"
     ]
   }
 }

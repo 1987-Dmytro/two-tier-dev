@@ -10,17 +10,17 @@
 | node | CLI | `node` | да | `bin/jev`, `spec-gate`, хуки кита | — | — |
 | ultracode | флаг | `--effort ultracode` | да | все фичи (D4) | строка запуска | — |
 | источник настроек | флаг | `--setting-sources project,local` | да | настройки и хуки пользователя в сессию исполнителя не входят | строка запуска | — |
-| Ponytail | плагин | `ponytail@ponytail` | да | база | `/plugin install ponytail@ponytail` | строка таблицы |
+| Ponytail | плагин | `ponytail@ponytail` | нет | база — **v3.4: снят** (решение 391, kit-fixes §3: 4 скилла ≈ 540 токенов на ход, SessionStart пишет «lazy senior developer»); в профиле `false` | `/plugin install ponytail@ponytail` | строка таблицы |
 | Context7 | MCP | `context7` | да | база: доки библиотек | `--mcp-config` строки запуска, stdio `npx -y @upstash/context7-mcp` | из строки запуска |
-| Graphify | скилл | `graphify` | да | база; скилл пользователя приходит через `--add-dir /tmp/two-tier-v3` (подготовка — в разделе запуска) | подготовка запуска | — |
-| pr-review-toolkit | плагин | `pr-review-toolkit@claude-plugins-official` | да | база: ревью диффа ветки | `claude plugin install pr-review-toolkit@claude-plugins-official` | строка таблицы |
-| pyright-lsp | плагин | `pyright-lsp@claude-plugins-official` | да | Python: `bin/check-*` | — | когда в фазе нет Python |
+| Graphify | скилл | `graphify` | нет | база; скилл пользователя приходит через `--add-dir /tmp/two-tier-v3` (подготовка — в разделе запуска) — **v3.4: исполнителю кита не ставится** (SPEC §1); MCP `graphify` приложения — deny профиля; тимлиду — MCP в Claude Desktop | подготовка запуска | — |
+| pr-review-toolkit | плагин | `pr-review-toolkit@claude-plugins-official` | нет | база: ревью диффа ветки — **v3.4: снят** (391; 25 дней без использования); ревью диффа — `/code-review` по `kit/REVIEW.md` | `claude plugin install pr-review-toolkit@claude-plugins-official` | строка таблицы |
+| pyright-lsp | плагин | `pyright-lsp@claude-plugins-official` | нет | Python: `bin/check-*` — **v3.4: снят** (391; `pyright-langserver` не стоит) | — | когда в фазе нет Python |
 | typesafe | плагин | `typesafe@typesafe-ai` | да | F1: исполнитель пишет вопросы к Jev | `claude plugin install typesafe@typesafe-ai` | фаза без вызовов Jev |
 | Jev Belay | плагин | `jev-belay@jev-belay` | да | конец хода: второй судья — тень (только журнал); сравнение со `spec-gate` — ретро telefon | `claude plugin install jev-belay@jev-belay` | по ретро |
 | handoff | плагин | `handoff@two-tier-mods` | да | хендофф и свежий контекст на 70 % окна; ниже — Jev-граница задачи (0.3.0): у оператора `jev: hint`, в строке запуска `jev: off` | `claude plugin install handoff@two-tier-mods` | строка таблицы |
 | Abide | CLI | `abide` | да | коммит: `abide check` по рубрике тимлида (F2.4); хуков на правку и ход нет | `npm i -g @coldtea/abide`, `abide login` | по ретро |
 | без Chrome | флаг | `--no-chrome` | да | выключает встроенный `claude-in-chrome` в сессии исполнителя (cli-reference) | строка запуска | — |
-| limits | плагин | `limits@two-tier-mods` | нет | статус-строка окон подписки: сессии оператора; в фазе — пункт F6.4 | `claude plugin install limits@two-tier-mods` | — |
+| limits | плагин | `limits@two-tier-mods` | да | статус-строка окон подписки: сессии оператора; в фазе — пункт F6.4 — **v3.4: включён** в профиле вкладки Code (статус-строка окон; мод M2 `window-guard` вбирает его — F8.3) | `claude plugin install limits@two-tier-mods` | — |
 | Steer-or-Queue | плагин | `jev-steer-or-queue@jev-steer-or-queue` | нет | событие — сообщение человека посреди хода: только сессии оператора | — | — |
 | Compact Adviser | плагин | `compact-adviser@compact-adviser` | нет | влит в `handoff` 0.3.0 (Jev-граница); 0.1.12 молчит: ждёт переменную ранних модов, которую Claude Code 2.1.287+ не читает (mods overview); у оператора выключен 10.10 | — | — |
 | Toolgate | CLI | `toolgate` | нет | судья-модель на каждое действие: только сессии оператора; force-push у исполнителя держит код (F2.3) | — | — |
@@ -36,7 +36,7 @@
 | serena, rust-analyzer-lsp, improve, drawio | плагин | `serena@claude-plugins-official`, `rust-analyzer-lsp@claude-plugins-official`, `improve@improve`, `drawio@365-skills` | нет | — | — | — |
 | brain-init | скилл | `brain-init` | нет | харнес v2 | — | — |
 | memory-protocol | скилл | `memory-protocol` | нет | — | — | — |
-| скиллы Cowork | скилл | `anthropic-skills:*` — 20, поимённо в `.claude/launch.settings.json` | нет | скиллы тимлида и Cowork исполнителю не нужны | — | — |
+| скиллы Cowork | скилл | `anthropic-skills:*` — 25, поимённо в `.claude/launch.settings.json` | нет | скиллы тимлида и Cowork исполнителю не нужны | — | — |
 | ref, blockscout | MCP | `ref`, `blockscout` | нет | вне таблицы; blockscout — по задаче (DeFi) | — | — |
 | коннекторы claude.ai | MCP | `claude.ai …` | нет | почта, диск, календарь | — | — |
 | Claude in Chrome | MCP | `claude-in-chrome` | нет | встроенный MCP: настоящий Chrome оператора с его входами | — | флаг выше |
@@ -64,7 +64,7 @@ bin/check-window && ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode a
 1. **Потолок проекта:** платное — только Jev (TypeSafe, D6). Отдельных потолков на плечо и на фазу нет — оператор снял их 09.10 в 11:06 («убери лимиты»). Потолок — предоплаченный остаток на счёте TypeSafe. Оценка плеча v3.3 — ~0,15 € (суд коммитов `abide check`: ~45 коммитов, меньше цента на коммит) и вопросы `spec-gate` в тени. Остальное — подписка, usage credits выключены. Оценка плеча v3.4 — того же порядка: суд коммитов `abide check` (≈ 60–80 коммитов за два плеча, меньше цента на коммит), Belay и вопросы `spec-gate` в тени; платных стартов нет; `claude -p` и воркфлоу — подписка.
 2. **Расход:** `bin/check-spend` по журналам инструментов слоя; число тимлид пишет в STATUS на приёмке.
 3. **Порог платного шага:** платных шагов, кроме Jev, нет; STOP-PAY не нужен.
-4. **Лимиты подписки:** плечо стартует при окне 5 ч не выше 40 % и неделе не выше 85 %; плечо починки и точечная приёмка — при окне не выше 70 % (оператор, 09.10, Q6). Числа — ключи `window_five_hour_pct`, `window_seven_day_pct`, `window_repair_pct` в `budgets.json` кита (F5.4); в корневой `budgets.json` тимлид вносит их на приёмке — его defaults повторяют кит, это сверяет `bin/check-kit`. Обход — только словом оператора. До F5 окна снимает тимлид одним ходом `claude -p` из события `rate_limit_event` (`unifiedWindows` — наблюдаемое поле, исключение из C2 в журнале intent) — до стройки, после неё и после круга приёмки.
+4. **Лимиты подписки:** **окно 5 ч снято тарифом (слово оператора 06.11 ≈ 21:00 исполнителю, коммит `1e31e90`; поправка 396 в SPEC-v3.4 §0): событие `rate_limit_event` несёт только `seven_day`** — плечо стартует при неделе не выше 85 %; прежде: плечо стартует при окне 5 ч не выше 40 % и неделе не выше 85 %; плечо починки и точечная приёмка — при окне не выше 70 % (оператор, 09.10, Q6). Числа — ключи `window_five_hour_pct`, `window_seven_day_pct`, `window_repair_pct` в `budgets.json` кита (F5.4); в корневой `budgets.json` тимлид вносит их на приёмке — его defaults повторяют кит, это сверяет `bin/check-kit`. Обход — только словом оператора. До F5 окна снимает тимлид одним ходом `claude -p` из события `rate_limit_event` (`unifiedWindows` — наблюдаемое поле, исключение из C2 в журнале intent) — до стройки, после неё и после круга приёмки.
 5. **Данные вендору (Q6 грилинга v3.2):** хуки и скрипты с Jev работают только там, где нет реальных персональных данных; проект с такими данными называет в своём PROCESS пути, которые хуки не читают. В этом репо таких данных нет.
 
 ## Каталог развилок

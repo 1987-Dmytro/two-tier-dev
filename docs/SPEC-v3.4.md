@@ -8,6 +8,7 @@
 - **Исходная точка.** Ветка `v3.4` от `tl/kit-v3.4` `42b0562` (= `main` `5a92e48` + тексты ретро). Первый коммит — «Тимлид: SPEC-v3.4 …»: этот SPEC, стартовый запрос, `.claude/launch.settings.json` v3.4, PROCESS (строка запуска — вкладка Code), STATUS, kit-fixes (K79, K80); CLAUDE.md не меняется. Исполнитель кита — вкладка Code приложения Claude на папке `two-tier-dev`, профиль `.claude/settings.local.json` этого репо = копия `.claude/launch.settings.json` v3.4 (файл тимлида; Stop-хук → `kit/.claude/hooks/spec-gate.mjs` рабочего дерева: слой меряется на себе, как в v3.3); хуки Abide/Toolgate оператора, что лежали в этом файле с 31.10 (telefon 332, A1), до старта уезжают из папки — судьи на каждое действие в сессию исполнителя не входят (PROCESS, строка запуска v3.4).
 - **Факты и источники (сверка 05.11, `docs/OFFICIAL-SOURCES.md`):** hooks — Stop input `background_tasks[].type` (shell · subagent · monitor · workflow · teammate · cloud session · MCP task), «8-consecutive-continuation cap … resets each time Claude calls a tool», `onFailure` не действует на Stop; changelog 2.1.302 (подагенты фоном в приложении), 2.1.314 (`permissions.blockWritesOutsideWorkingDirectories`), 2.1.317 (`effortLevel` проекта во вкладке Code; подагенты другой модели — её сохранённый effort), 2.1.318 (шелл-команды подагентов в фон через 3 мин); best-practices («give Claude something it can run that comes back pass or fail», «If it's a rule that can't bend, turn it into a hook or a deny rule»); auto-mode-config (`PermissionDenied`-хук получает `tool_input`); Anthropic engineering «Quantifying infrastructure noise in agentic coding evals» (05.02.2026). Поле харнеса без источника в кит не входит (C2).
 - **Замеры (ретро §1):** `spec-gate.jsonl` 03–05.11 — 91 решение, 13 стопов, 61 `pass background`, 12 `cap-time`, 5 честных блоков; `verify-phase` F56 ×2 упёрся в 1800 с (гейт 612 с); круги до PASS: F51/F54 — 1, F53 — NEEDS_WORK закрыт отчётом; откатов деплоя 1 из 5 (108 с); темп плеч telefon 1,3–3,3 ч на 5–7 фич, приёмка 10–46 мин.
+- **Поправка 396: слово оператора 06.11** (исполнителю напрямую, ≈ 21:00; коммит `1e31e90`): окно 5 ч снято тарифом — событие несёт только `seven_day`; `bin/check-window`, пороги кита, пробы и документы судят одну неделю; F5.5 — `WINDOW_WARN <окно>=fehlt` по отсутствующему ключу; второе слово — `verify-phase` обязательна. Фич — 8, пунктов — 36, как на выдаче.
 - **Одно вошло — одно вышло:** сняты K30 (счётчик OTel), P1-4 для `spec-gate` (`onFailure` не действует на Stop), `ultrareview` как шаг пути (352 → по слову), кап `blocks 12` — остаётся документацией (платформа 8).
 
 ## 1. Дизайн высокого уровня
@@ -50,7 +51,7 @@
   - `F5.2` шаблон SPEC §2 — строка «пара одного часа»; `planka-source` для звена вендора требует `pair` или «ранняя» — `F5.2 vorlage=OK` там же
   - `F5.3` K78: `verify-phase F<n>` на 2.1.316 и 2.1.318 — время, команды в фоне, n ≥ 2; лимит 1800 с по числам — `F5.3 n=<k> fon=<m>` там же
   - `F5.4` `bin/phase-report`: кругов до PASS · откатов деплоя · поправок объёма — `F5.4 metriken=3` там же
-  - `F5.5` `check-window`: окно без ключа в событии (06.11: лишь `seven_day`) → `WINDOW_WARN <окно>=fehlt`, не отказ; оба → OK — `F5.5 fehlt=WARN` там же
+  - `F5.5` `check-window`: окно без ключа в событии → `WINDOW_WARN <окно>=fehlt`, не отказ; ключ есть → OK (396: одна неделя) — `F5.5 fehlt=WARN` там же
 - **F6 Harness & Umgebung** · среда числом, профиль вкладки Code · готово: F6.1–F6.4 · чек: `bin/check-harness --desktop` → `HARNESS_OK` · служит: S1, S5 · after: F1
   - `F6.1` версии CLI/приложения/GitHub, возраст графа против HEAD, брошенные worktree; граф старше → `HARNESS_WARN graph-age` — `F6.1 versionen=3 graph=OK` в `F6-check-harness-result.txt`
   - `F6.2` `blockWritesOutsideWorkingDirectories: true` в шаблоне (CLI ≥ 2.1.314), парный прогон: вне → отказ; внутри → OK — `F6.2 aussen=verboten innen=OK` там же
@@ -87,9 +88,9 @@
 
 | звено | инструмент | нижняя оценка | источник | измерено у нас (`docs/evidence/<файл>`, n, p50/p95) |
 |---|---|---|---|---|
-| стройка 8 фич | Opus 5.5, ultracode, вкладка Code | 2 × 100 мин | v3.3 (7 фич — 91 мин); telefon 5–7 фич — 1,3–3,3 ч | `docs/evidence/verify-*` v3.3; `claude/retro-2026-11-05-three-days.md` §1.1 (n=4 плеча) |
-| один полный круг `verify-phase` | воркфлоу, Sonnet 5.5 × N | 30–60 мин | v3.3 — 30 мин; telefon F56 ×2 → 1800 с (K78) | `verify-55b0091-F51-F53-F54-F56.txt` (1800 с, лимит); `verify-2351337-F53.txt` — измерить (F5.3) |
-| приёмка тимлида | свой клон, `gate-v3.4`, чтение | 40–60 мин | v3.3 — 35 мин; telefon 10–46 мин | ретро §1.1 (n=5) |
+| стройка 8 фич | Opus 5.5, ultracode, вкладка Code | 2 × 100 мин | v3.3 (7 фич — 91 мин); telefon 5–7 фич — 1,3–3,3 ч | ранняя: `docs/archive/evidence-v3.3/`, ретро telefon §1.1 (n=4); **плечо 1 измерено:** F1–F4 стройка 35 мин (15:38–16:13), мутации/ревью/починка до 20:46 |
+| один полный круг `verify-phase` | воркфлоу, Sonnet 5.5 × N | 30–60 мин | v3.3 — 30 мин; telefon F56 ×2 → 1800 с (K78) | ранняя; **плечо 1 измерено:** `verify-be5c7a5-F1-F2-F3.txt` 1223 с, `verify-be5c7a5-F4.txt` 647 с (n=2 вызова) |
+| приёмка тимлида | свой клон, `gate-v3.4`, чтение | 40–60 мин | v3.3 — 35 мин; telefon 10–46 мин | ранняя: ретро telefon §1.1 (n=5); плечо 1 — чтение 21:45–22:40 (`docs/reviews/V3.4-review.md`) |
 | **приёмка против плеча** | | **≤ 120 против ≈ 200 мин** | | влезает при одном круге; второй круг — только словом оператора |
 
 Контр-метрика: блокирующая находка чинится, а не уходит в Named; починка — отдельное плечо с точечной перепроверкой. Планка на звене вендора в этой фазе одна — время `verify-phase` (F5.3): судится **парой** 2.1.316/2.1.318, не абсолютом. Оператор принял: 06.11.2026 (подпись SPEC).
