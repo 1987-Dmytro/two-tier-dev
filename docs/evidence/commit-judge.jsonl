@@ -109,3 +109,4 @@
 {"ts": "2026-11-06T20:41:24Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/verify-be5c7a5-F1-F2-F3.txt"], "score": 0.09, "diff": "94da5340a24c1a5e", "ms": 2152}
 {"ts": "2026-11-06T20:41:26Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/spec-gate.jsonl"], "score": 0.05, "diff": "7ea6ebf39af4145b", "ms": 1542}
 {"ts": "2026-11-06T20:50:44Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["budgets.json", "docs/PROCESS.md", "docs/SPEC-v3.4.md", "docs/STATUS.md", "docs/reviews/V3.4-review.md"], "score": null, "note": "abide check error TYPESAFE_AI_API_KEY", "diff": "3c57a40e1ee3a0b0", "ms": 1177}
+{"ts": "2026-11-06T21:01:47Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F1-check-harness-result.txt"], "score": 0.38, "diff": "6108bc117fd6692a", "ms": 2278}
