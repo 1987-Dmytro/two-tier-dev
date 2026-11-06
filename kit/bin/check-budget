@@ -44,8 +44,11 @@ REQUIRED = [k for k, _, _ in SIZES] + ["dollar_digit", "spec_feature_chars", "pl
                                        "read_first_files", "read_first_chars", "review_blocking", "owner"]
 PROMPTS = ["docs/PROMPT.txt", "docs/GOAL.txt"]  # v3.2: стартовый запрос; прежнее имя — до переноса тимлидом или апгрейдом
 PLANKEN = "checks/planken.json"  # v3.4, F2.3: параметры судей — файл тимлида; SPEC ссылается ключом `planken:<ключ>`
-KEYREF = re.compile(r"planken:([A-Za-z0-9_](?:[\w.-]*[A-Za-z0-9_])?)")
-AMEND = re.compile(r"Поправка\s+[^:\n<>]+:\s*слово оператора\s+[^\s<>]+")  # v3.4, F2.2: строка поправки объёма в §0 SPEC
+KEYREF = re.compile(r"planken:(\w(?:[\w.-]*\w)?)")  # буквы Unicode: звенья в SPEC пишут по-русски
+DAY, MONTH = r"(?:0[1-9]|[12]\d|3[01])", r"(?:0[1-9]|1[0-2])"
+# v3.4, F2.2: строка поправки объёма в §0 SPEC — одной строкой, решение непустое, дата — 06.11.2026, 06.11 или 2026-11-06
+AMEND = re.compile(rf"Поправка[ \t]+[^\s:<>][^:\n<>]*:[ \t]*слово оператора[ \t]+(?:{DAY}\.{MONTH}(?:\.\d{{4}})?|\d{{4}}-{MONTH}-{DAY})(?!\.?\d)")
+EVIDENCE = re.compile(r"(?<![\w./-])docs/evidence/[^\s`,;()]+")  # v3.4, F2.1: путь в ячейке «измерено у нас»; ../docs/evidence/ — уже не он
 LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
 
 
@@ -222,55 +225,68 @@ def issued(spec, prompt):
 
 
 def landing_rows(text):
-    """Планки таблиц посадки: [(звено, ячейка «измерено у нас»)]; разделитель и итоговая строка (жирная первая ячейка) — не планки."""
-    rows, col = [], None
+    """Планки таблиц посадки: [(звено, ячейка «измерено у нас»)]. Не планки: разделитель (во всех ячейках только тире и двоеточия), итог (первая ячейка
+    жирная и вторая пустая), таблица в блоке кода ```; экранированный \\| ячейку не делит. Жирное имя планки и пустая первая ячейка — планки."""
+    rows, col, fence = [], None, False
     for l in text.splitlines():
-        if not l.lstrip().startswith("|"):
+        if re.match(r"\s*```[^`]*$", l):
+            fence = not fence
+        if fence or not l.lstrip().startswith("|"):
             col = None
             continue
-        cells = [c.strip() for c in l.strip().strip("|").split("|")]
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", re.sub(r"^\||(?<!\\)\|$", "", l.strip()))]
         if col is None:
-            col = next((i for i, c in enumerate(cells) if "измерено у нас" in c), None)
-        elif not set(cells[0]) <= set("-: ") and not cells[0].startswith("**"):
+            col = next((i for i, c in enumerate(cells) if "измерено у нас" in c.lower()), None)
+        elif not all(c and not c.strip("-:") for c in cells) and not (re.fullmatch(r"\*\*.+\*\*", cells[0]) and not "".join(cells[1:2])):
             rows.append((cells[0], cells[col] if col < len(cells) else ""))
     return rows
 
 
 def rule_planka(b):
-    """v3.4, F2.1: планка без файла распределения — красная до выдачи SPEC (SPEC-v3.4 §1); выданная SPEC — файл тимлида, у неё WARN."""
+    """v3.4, F2.1: планка без файла распределения — красная до выдачи SPEC (SPEC-v3.4 §1); выданная SPEC — файл тимлида, у неё WARN; на обрезанной истории
+    выдачу не определить — тоже WARN. Ячейка годна: «ранняя» своим первым словом или непустой файл в docs/evidence/ (путь, glob), а вне пути — n=<число ≥ 1>
+    и числа p50/p95: «p50 1180, p95 2300» или «p50/p95 1180/2300», между именем и числом может стоять =, : или ≈."""
     ph = phase()
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec, prompt = ph[2], ph[4]
     rows, bad = landing_rows(read(spec)), []
     for name, cell in rows:
-        f = re.search(r"docs/evidence/[^\s`,;()]+", cell)
-        why = None if "ранняя" in cell else "нет docs/evidence/<файл>" if not f else f"нет файла {f.group(0)}" if not os.path.isfile(f.group(0)) \
-            else "нет n=" if not re.search(r"\bn\s*=\s*\d", cell) else "нет p50/p95" if not (re.search("p50", cell, re.I) and re.search("p95", cell, re.I)) else None
+        if re.match(r"[^\w<]*ранняя\b", cell, re.I):  # своё первое слово: «<файл … или «ранняя»>» и «не ранняя» — не пометка
+            continue
+        f = EVIDENCE.search(cell)
+        path = f.group(0).rstrip(".:!…»”\"'") if f else ""  # * и ? в конце — glob
+        found = [p for p in glob.glob(path) if os.path.isfile(p)]
+        rest = EVIDENCE.sub(" ", cell)
+        n = re.search(r"\bn\s*=\s*(\d+)\b", rest)
+        pct = re.search(r"\bp50\s*[=:≈]?\s*\d", rest, re.I) and re.search(r"\bp95\s*[=:≈]?\s*\d", rest, re.I) or re.search(r"\bp50\s*/\s*p95\s*[=:≈]?\s*[\d.,]+\s*/\s*\d", rest, re.I)
+        why = "нет docs/evidence/<файл>" if not os.path.normpath(path).startswith("docs/evidence/") else f"нет файла {path}" if not found \
+            else f"пустой файл {path}" if not any(map(os.path.getsize, found)) else "нет n=" if not (n and int(n.group(1))) else "нет p50/p95" if not pct else None
         if why:
             bad.append(f"«{name[:40]}»: {why}")
     if not rows:
         return []
     if not bad:
         return [("OK", "planka-source", f"{spec}: планок {len(rows)}, у всех файл распределения или «ранняя»")]
-    weight, note = ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) else ("FAIL", "")
+    shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
+    weight, note = ("WARN", " (история git обрезана: выдана ли SPEC — не определить)") if shallow \
+        else ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) else ("FAIL", "")
     return [(weight, "planka-source", f"{spec}: планок {len(rows)}, без файла распределения и без «ранняя» — {'; '.join(bad)}{note}")]
 
 
 def rule_scope(b):
-    """v3.4, F2.2: новая фича против SPEC на коммите стартового запроса — только строкой «Поправка» в §0; поправки считаются."""
+    """v3.4, F2.2: новая фича против SPEC на выдаче — только строкой «Поправка» в §0; поправки считаются. Выдача — первый коммит, где стартовый запрос называет эту
+    SPEC: поздняя правка запроса базу не двигает; SPEC там ещё нет — её первый коммит; в истории её нет вовсе — база она сама. Повтор id — тоже новая фича: сравниваются счета."""
     ph = phase()
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec, prompt = ph[2], ph[4]
-    at = git("log", "-1", "--format=%H", "--", prompt).stdout.strip()
-    base = git("show", f"{at}:{spec}") if at else None
-    if not base or base.returncode:
-        return [("OK", "scope-growth", f"{spec}: на коммите {prompt} SPEC нет — счёта нет")]
+    first = lambda *a: git("log", "--reverse", "--format=%H", *a).stdout.split()[:1]
+    base = next((r.stdout for c in first(f"-S{spec}", "--", prompt) + first("--", spec) for r in [git("show", f"{c}:{spec}")] if r.returncode == 0), None)
     ids = lambda text: [m.group(1) for l in text.splitlines() for m in [FEATURE.match(l)] if m]
     text = read(spec)
-    was, now = ids(base.stdout), ids(text)
-    new = [f for f in now if f not in was]
+    was, now = ids(text if base is None else base), ids(text)
+    new = [f for i, f in enumerate(now) if now[:i + 1].count(f) > was.count(f)]
     sec0 = re.search(r"^## 0\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
     k = len(AMEND.findall(sec0.group(1))) if sec0 else 0
     if len(new) > k:
@@ -283,17 +299,20 @@ def numbers(v):
         return [n for x in v.values() for n in numbers(x)]
     if isinstance(v, list):
         return [n for x in v for n in numbers(x)]
+    if type(v) is float and v.is_integer():
+        return [int(v)]  # JSON 3300.0 — в тексте 3300
     return [v] if type(v) in (int, float) else []
 
 
 def rule_planken(b):
-    """v3.4, F2.3: `planken:<ключ>` — ключ есть в checks/planken.json, а чисел его коридора нет в тексте блока SPEC."""
+    """v3.4, F2.3: `planken:<ключ>` — ключ есть в checks/planken.json, а чисел его коридора нет во всём тексте SPEC; сами токены `planken:` не в счёт. Число — и с десятичной
+    запятой, и с пробелом, U+00A0 или U+202F между тысячами."""
     ph = phase()
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec = ph[2]
-    lines = read(spec).splitlines()
-    refs = sorted({k for l in lines for k in KEYREF.findall(l)})
+    text = read(spec)
+    refs = sorted(set(KEYREF.findall(text)))
     if not refs:
         return []
     try:
@@ -318,14 +337,8 @@ def rule_planken(b):
             lost.append(k)
     if lost:
         return [("FAIL", "planken-key", f"{spec}: ключей нет в {PLANKEN} — {', '.join(lost)}")]
-    inside = {l for _, ls in blocks(lines) for l in ls}
-    scopes = ["\n".join(ls) for _, ls in blocks(lines)] + [l for l in lines if l not in inside]
-    inline = []
-    for s in scopes:
-        flat = re.sub(r"(?<=\d)[  ](?=\d{3}\b)", "", KEYREF.sub("", s))
-        for k in KEYREF.findall(s):
-            hit = [n for n in numbers(vals[k]) if re.search(rf"(?<![\w.,]){re.escape(str(n))}(?![\d])", flat)]
-            inline += [f"{k}: {n}" for n in hit]
+    flat = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?!\d))", "", KEYREF.sub("", text))
+    inline = [f"{k}: {n}" for k in refs for n in numbers(vals[k]) if re.search(rf"(?<![\w.,]){str(n).replace('.', '[.,]')}(?!\d)", flat)]
     if inline:
         return [("WARN", "planken-inline", f"{spec}: числа коридора в тексте при ключе — {', '.join(sorted(set(inline)))}: логика судьи — в {PLANKEN}")]
     return [("OK", "planken-key", f"{spec}: ключей {len(refs)}, все в {PLANKEN}, чисел коридора в тексте нет")]
@@ -667,82 +680,260 @@ def lints():
     if not b:
         return report(out0)
     ok_all = []
+    me, budgets = os.path.realpath(__file__), read("budgets.json")
 
     def run_side(fs, commits, fn):
         res = in_fixture(fs, commits, lambda: fn(dict(b)))
-        return worst(res), " ".join((res[0][2] if res else "нет строки").split())[:110]
+        return worst(res), " ".join((res[0][2] if res else "нет строки").split())[:200]
+
+    def plain(fs, commits=None):  # настоящий скрипт, не правило: правила стоят в RULES, строки BUDGET_ печатает report
+        def go():
+            r = subprocess.run([sys.executable, me], capture_output=True, text=True)
+            return r.returncode, r.stdout.splitlines()
+        return in_fixture({"budgets.json": budgets, **fs}, commits, go)
+
+    def judge(rows):
+        """[(сторона, статус, кусок сообщения, результат)] → (все совпали, сырой вывод): у красной стороны один дефект и своя причина."""
+        hit = [r[0] == st and piece in r[1] for _, st, piece, r in rows]
+        return all(hit), "; ".join(f"{n} — {r[0]}" + ("" if h else f" «{r[1]}», ждали {st} «{piece}»") for (n, st, piece, r), h in zip(rows, hit))
 
     def emit(iid, ok, text):
         ok_all.append(bool(ok))
         print(f"{iid} {'' if ok else 'FAIL: '}{text}", flush=True)
     pr = {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n"}
     ev = {"docs/evidence/x.txt": "x\n"}
+    work = [("F1.1: работа", {"src/x.py": "x\n"}, [])]
     good = "`docs/evidence/x.txt`, n=12, p50 2100, p95 3300"
     # F2.1
     s = lambda cell: {**pr, **ev, "docs/SPEC-1.md": lint_fixture_spec(cell)}
-    g1, g2 = run_side(s(good), None, rule_planka), run_side(s("— ранняя, файла нет"), None, rule_planka)
-    r1 = run_side(s("≈ 2 ч"), None, rule_planka)
-    r2 = run_side(s("`docs/evidence/nope.txt`, n=12, p50 1, p95 2"), None, rule_planka)
-    r3 = run_side(s("`docs/evidence/x.txt`, n=12"), None, rule_planka)
-    r4 = run_side(s("`docs/evidence/x.txt`, p50 1, p95 2"), None, rule_planka)
-    at = run_side(s("≈ 2 ч"), [], rule_planka)  # HEAD = коммит запроса: ещё выдача
-    done = run_side(s("≈ 2 ч"), [("F1.1: работа", {"src/x.py": "x\n"}, [])], rule_planka)  # выдана и идёт
-    changed = run_side(s("≈ 2 ч"), [("F1.1: работа", {"src/x.py": "x\n"}, []), ("Тимлид: поправка SPEC", {"docs/SPEC-1.md": lint_fixture_spec("≈ 3 ч")}, [])], rule_planka)
+    pk = lambda cell, extra={}, commits=None: run_side({**s(cell), **extra}, commits, rule_planka)
+    tb = lambda *lines: run_side({**pr, **ev, "docs/SPEC-1.md": "# SPEC-1\n\n" + "\n".join(lines) + "\n"}, None, rule_planka)
+    head, sep = "| звено | измерено у нас |", "|---|---|"
+    no_file, no_n, no_pct = "нет docs/evidence/<файл>", "нет n=", "нет p50/p95"
+
+    def dirty(path, text):  # правка на диске, без коммита
+        def go(_b):
+            write(path, text)
+            return rule_planka(_b)
+        return go
+
+    def cut(_b):  # клон глубины 1: коммит запроса выглядит как HEAD
+        subprocess.run(["git", "clone", "-q", "--depth", "1", "file://" + os.getcwd(), "cut"], env=GIT_ENV, capture_output=True, check=True)
+        os.chdir("cut")
+        return rule_planka(_b)
+    r1 = pk("≈ 2 ч")
+    changed = pk("≈ 2 ч", commits=work + [("Тимлид: поправка SPEC", {"docs/SPEC-1.md": lint_fixture_spec("≈ 3 ч")}, [])])
+    rot, rot_text = judge([
+        ("без файла", "FAIL", no_file, r1),
+        ("файла нет на диске", "FAIL", "нет файла docs/evidence/nope.txt", pk("`docs/evidence/nope.txt`, n=12, p50 1, p95 2")),
+        ("каталог вместо файла", "FAIL", "нет файла docs/evidence/sub", pk("`docs/evidence/sub`, n=1, p50 1, p95 2", {"docs/evidence/sub/a.txt": "x\n"})),
+        ("glob без совпадений", "FAIL", "нет файла docs/evidence/verify-*", pk("`docs/evidence/verify-*`, n=2, p50 1, p95 2")),
+        ("пустой файл", "FAIL", "пустой файл docs/evidence/e.txt", pk("`docs/evidence/e.txt`, n=12, p50 1, p95 2", {"docs/evidence/e.txt": ""})),
+        ("путь выходит из docs/evidence/", "FAIL", no_file, pk("`docs/evidence/../PROGRESS.md`, n=3, p50 1, p95 2", {"docs/PROGRESS.md": "x\n"})),
+        ("путь ../docs/evidence/", "FAIL", no_file, pk("`../docs/evidence/x.txt`, n=3, p50 1, p95 2")),
+        ("без n", "FAIL", no_n, pk("`docs/evidence/x.txt`, p50 1, p95 2")),
+        ("n=?", "FAIL", no_n, pk("`docs/evidence/x.txt`, n=?, p50 1, p95 2")),
+        ("n=", "FAIL", no_n, pk("`docs/evidence/x.txt`, n=, p50 1, p95 2")),
+        ("n=0", "FAIL", no_n, pk("`docs/evidence/x.txt`, n=0, p50 1, p95 2")),
+        ("n=12abc", "FAIL", no_n, pk("`docs/evidence/x.txt`, n=12abc, p50 1, p95 2")),
+        ("min=12 — не n", "FAIL", no_n, pk("`docs/evidence/x.txt`, min=12, p50 1, p95 2")),
+        ("n лишь в имени файла", "FAIL", no_n, pk("`docs/evidence/n=3.txt`, p50 1, p95 2", {"docs/evidence/n=3.txt": "x\n"})),
+        ("без p50/p95", "FAIL", no_pct, pk("`docs/evidence/x.txt`, n=12")),
+        ("p50 без p95", "FAIL", no_pct, pk("`docs/evidence/x.txt`, n=12, p50 2100")),
+        ("p95 без p50", "FAIL", no_pct, pk("`docs/evidence/x.txt`, n=12, p95 3300")),
+        ("p50/p95 без чисел", "FAIL", no_pct, pk("`docs/evidence/x.txt`, n=12, p50/p95")),
+        ("p50/p95 с одним числом", "FAIL", no_pct, pk("`docs/evidence/x.txt`, n=12, p50/p95 1180")),
+        ("p50= без числа", "FAIL", no_pct, pk("`docs/evidence/x.txt`, n=12, p50=, p95=")),
+        ("p50 и p95 лишь в имени файла", "FAIL", no_pct, pk("`docs/evidence/p50-p95.txt`, n=3", {"docs/evidence/p50-p95.txt": "x\n"})),
+        ("ячейка шаблона не заполнена", "FAIL", no_file, pk("<файл, n, p50/p95 — или «ранняя»>")),
+        ("<ранняя>", "FAIL", no_file, pk("<ранняя>")),
+        ("не ранняя", "FAIL", no_file, pk("не ранняя: ≈ 2 ч")),
+        ("жирное имя планки", "FAIL", no_file, tb(head, sep, "| **сборка** | ≈ 2 ч |")),
+        ("жирное лишь начало имени, вторая пуста", "FAIL", no_file, tb(head, sep, "| **сборка** этап | |")),
+        ("строка короче шапки", "FAIL", no_file, tb(head, sep, "| сборка |")),
+        ("пустая первая ячейка", "FAIL", no_file, tb(head, sep, "|  | ≈ 2 ч |")),
+        ("все ячейки пусты", "FAIL", no_file, tb(head, sep, "|  |  |")),
+        ("тире лишь в первой ячейке", "FAIL", no_file, tb(head, sep, "| --- | ≈ 2 ч |")),
+        ("экранированный | в имени", "FAIL", no_file, tb("| звено | a | измерено у нас |", "|---|---|---|", "| x \\| y | ранняя | ≈ 2 ч |")),
+        ("шапка «Измерено у нас»", "FAIL", no_file, tb("| звено | Измерено у нас |", sep, "| сборка | ≈ 2 ч |")),
+        ("``` внутри строки текста — не блок", "FAIL", no_file, tb("```x``` в тексте", head, sep, "| сборка | ≈ 2 ч |")),
+        ("HEAD на коммите запроса", "FAIL", no_file, pk("≈ 2 ч", commits=[])),
+        ("SPEC правлена после выдачи", "FAIL", no_file, changed),
+        ("SPEC правлена без коммита", "FAIL", no_file, run_side(s("≈ 2 ч"), work, dirty("docs/SPEC-1.md", lint_fixture_spec("≈ 3 ч")))),
+        ("запрос правлен без коммита", "FAIL", no_file, run_side(s("≈ 2 ч"), work, dirty("docs/PROMPT.txt", pr["docs/PROMPT.txt"] + "ещё\n"))),
+    ])
+    gruen, gruen_text = judge([
+        ("с файлом", "OK", "планок 1", pk(good)),
+        ("p50/p95 1180/2300", "OK", "планок 1", pk("`docs/evidence/x.txt`, n=12, p50/p95 1180/2300")),
+        ("p50=1180, p95=2300", "OK", "планок 1", pk("`docs/evidence/x.txt`, n=12, p50=1180, p95=2300")),
+        ("p50: 1180, p95 ≈ 2300", "OK", "планок 1", pk("`docs/evidence/x.txt`, n=12, p50: 1180, p95 ≈ 2300")),
+        ("p50/p95: 1180/2300", "OK", "планок 1", pk("`docs/evidence/x.txt`, n=12, p50/p95: 1180/2300")),
+        ("n=1", "OK", "планок 1", pk("`docs/evidence/x.txt`, n=1, p50 1, p95 2")),
+        ("n = 12, P50, P95", "OK", "планок 1", pk("`docs/evidence/x.txt`, n = 12, P50 1, P95 2")),
+        ("glob с файлом", "OK", "планок 1", pk("`docs/evidence/verify-*`, n=2, p50 1, p95 2", {"docs/evidence/verify-a.txt": "x\n"})),
+        ("glob: один файл из двух не пуст", "OK", "планок 1", pk("`docs/evidence/e*`, n=2, p50 1, p95 2", {"docs/evidence/e1.txt": "", "docs/evidence/e2.txt": "x\n"})),
+        ("точка после пути", "OK", "планок 1", pk("см. docs/evidence/x.txt. n=12, p50 1, p95 2")),
+        ("путь в кавычках", "OK", "планок 1", pk("«docs/evidence/x.txt», n=12, p50 1, p95 2")),
+        ("ранняя", "OK", "планок 1", pk("— ранняя, файла нет")),
+        ("Ранняя", "OK", "планок 1", pk("Ранняя, файла нет")),
+        ("в кавычках", "OK", "планок 1", pk("«ранняя»")),
+        ("пример в блоке кода", "OK", "нет строки", tb("```", head, sep, "| пример | ≈ 2 ч |", "```")),
+        ("двоеточия в разделителе", "OK", "планок 1", tb(head, "|:---|---:|", "| сборка | ранняя |")),
+        ("итог из одной ячейки", "OK", "планок 1", tb(head, sep, "| сборка | ранняя |", "| **сумма** |")),
+        ("вторая таблица после посадки", "OK", "планок 1", tb(head, sep, "| сборка | ранняя |", "", "| красное | решение |", sep, "| a | b |")),
+        ("шапка без фразы «измерено у нас»", "OK", "нет строки", tb("| звено | измерено 04.11 (линия) |", sep, "| сборка | ≈ 2 ч |")),
+    ])
+    state, state_text = judge([
+        ("выдана и идёт", "WARN", "SPEC уже выдана", pk("≈ 2 ч", commits=work)),
+        ("выдана, клон глубины 1", "WARN", "история git обрезана", run_side(s("≈ 2 ч"), work, cut)),
+    ])
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         in_fixture(s("≈ 2 ч"), None, lambda: report(rule_planka(dict(b))))
     fail_line = next((l for l in buf.getvalue().splitlines() if l.startswith("BUDGET_FAIL planka-source")), "нет")
-    rot = [x[0] for x in (r1, r2, r3, r4, at)] == ["FAIL"] * 5 and fail_line == "BUDGET_FAIL planka-source"
-    gruen = g1[0] == g2[0] == "OK"
-    emit("F2.1", rot and gruen and done[0] == "WARN" and changed[0] == "FAIL",
-         f"rot={'OK' if rot else 'нет'} gruen={'OK' if gruen else 'нет'} · с файлом — {g1[0]}, «ранняя» — {g2[0]} · без файла — {r1[0]}: «{r1[1]}» → «{fail_line}»; файла нет на диске — {r2[0]}; без p50/p95 — {r3[0]}; без n — {r4[0]}; "
-         f"HEAD на коммите запроса — {at[0]} · выдана и идёт — {done[0]}; SPEC правлена после выдачи — {changed[0]}")
+    p_red, p_good = plain(s("≈ 2 ч")), plain(s(good))
+    plain_fail = next((l for l in p_red[1] if l.startswith("FAIL planka-source")), "нет строки")[:40]
+    plain_rot = plain_fail != "нет строки" and "BUDGET_FAIL planka-source" in p_red[1] and p_red[0] == 1
+    plain_gruen = any(l.startswith("OK   planka-source") for l in p_good[1]) and "BUDGET_FAIL planka-source" not in p_good[1]
+    rot, gruen = rot and fail_line == "BUDGET_FAIL planka-source" and plain_rot, gruen and plain_gruen
+    emit("F2.1", rot and gruen and state,
+         f"rot={'OK' if rot else 'нет'} gruen={'OK' if gruen else 'нет'} · без файла — {r1[0]}: «{r1[1]}» → «{fail_line}» · bin/check-budget на фикстуре — rc {p_red[0]} «{plain_fail}…» и "
+         f"BUDGET_FAIL planka-source — {'есть' if 'BUDGET_FAIL planka-source' in p_red[1] else 'нет'}; с файлом — {'OK planka-source' if plain_gruen else 'нет'} · красные: {rot_text} · зелёные: {gruen_text} · выдача: {state_text}")
     # F2.2
     base = {**pr, "docs/SPEC-1.md": lint_fixture_spec("ранняя")}
-    grown = lambda sec0="Контекст.\n", feats=("F1", "F2"): [("Тимлид: новая фича", {"docs/SPEC-1.md": lint_fixture_spec("ранняя", sec0=sec0, feats=feats)}, [])]
+    spec_of = lambda sec0="Контекст.\n", feats=("F1", "F2"): {"docs/SPEC-1.md": lint_fixture_spec("ранняя", sec0=sec0, feats=feats)}
+    grown = lambda sec0="Контекст.\n", feats=("F1", "F2"): [("Тимлид: новая фича", spec_of(sec0, feats), [])]
+    sc = lambda commits, fs=base: run_side(fs, commits, rule_scope)
+    amend = lambda tail: sc(grown(f"Контекст.\nПоправка {tail}"))
+    prompt_edit = {"docs/PROMPT.txt": pr["docs/PROMPT.txt"] + "ещё\n"}
     line = "Контекст.\nПоправка 391: слово оператора 06.11.2026 — новая фича.\n"
-    same = run_side(base, [("F1.1: работа", {"src/x.py": "x\n"}, [])], rule_scope)
-    without = run_side(base, grown(), rule_scope)
-    withl = run_side(base, grown(line), rule_scope)
-    place = run_side(base, grown("Контекст.\nПоправка <решение>: слово оператора <дата>\n"), rule_scope)
-    two = run_side(base, grown(line, ("F1", "F2", "F3")), rule_scope)
-    outside = run_side(base, [("Тимлид: x", {"docs/SPEC-1.md": lint_fixture_spec("ранняя", extra="Поправка 391: слово оператора 06.11.2026\n", feats=("F1", "F2"))}, [])], rule_scope)
-    emit("F2.2", without[0] == "FAIL" and without[1].startswith("F2:") and withl[0] == "OK" and "поправок: 1" in withl[1] and "поправок: 0" in same[1]
-         and place[0] == "FAIL" and two[0] == "FAIL" and two[1].startswith("F3:") and outside[0] == "FAIL",
-         f"ohne={without[0]} mit={withl[1].rsplit('поправок: ', 1)[-1] if 'поправок: ' in withl[1] else '?'} · без строки — «{without[1]}»; со строкой — «{withl[1]}»; фичи те же — «{same[1]}»; "
-         f"строка-образец из шаблона — {place[0]}; две новые, одна строка — {two[0]}: «{two[1][:20]}»; строка вне §0 — {outside[0]}")
+    same = sc(work)
+    without, withl, two = sc(grown()), sc(grown(line)), sc(grown(line, ("F1", "F2", "F3")))
+    ohne, ohne_text = judge([
+        ("без строки", "FAIL", "F2: новая фича", without),
+        ("образец шаблона", "FAIL", "F2:", amend("<решение>: слово оператора <дата>\n")),
+        ("только <решение>", "FAIL", "F2:", amend("<решение>: слово оператора 06.11.2026\n")),
+        ("только <дата>", "FAIL", "F2:", amend("391: слово оператора <дата>\n")),
+        ("решение пустое", "FAIL", "F2:", amend(" : слово оператора 06.11.2026\n")),
+        ("без даты", "FAIL", "F2:", amend("391: слово оператора\nДальше обычный текст.\n")),
+        ("дата словом", "FAIL", "F2:", amend("391: слово оператора вчера\n")),
+        ("дата на следующей строке", "FAIL", "F2:", amend("391: слово оператора\n06.11.2026\n")),
+        ("перенос после двоеточия", "FAIL", "F2:", amend("391:\nслово оператора 06.11.2026\n")),
+        ("перенос после «Поправка»", "FAIL", "F2:", sc(grown("Контекст.\nПоправка\n391: слово оператора 06.11.2026\n"))),
+        ("31.13 — не дата", "FAIL", "F2:", amend("391: слово оператора 31.13\n")),
+        ("2026-13-01 — не дата", "FAIL", "F2:", amend("391: слово оператора 2026-13-01\n")),
+        ("06.11.26 — не дата", "FAIL", "F2:", amend("391: слово оператора 06.11.26\n")),
+        ("две новые, одна строка", "FAIL", "F3:", two),
+        ("строка вне §0", "FAIL", "F2:", sc([("Тимлид: x", {"docs/SPEC-1.md": lint_fixture_spec("ранняя", extra="Поправка 391: слово оператора 06.11.2026\n", feats=("F1", "F2"))}, [])])),
+        ("повтор id", "FAIL", "F1:", sc(grown(feats=("F1", "F1")))),
+        ("рост и правка запроса одним коммитом", "FAIL", "F2:", sc([("Тимлид: x", {**spec_of(), **prompt_edit}, [])])),
+        ("правка запроса после роста", "FAIL", "F2:", sc(grown() + [("Тимлид: запрос", prompt_edit, [])])),
+        ("SPEC после запроса, затем рост", "FAIL", "F2:", sc([("Тимлид: SPEC", spec_of(feats=("F1",)), [])] + grown(), pr)),
+    ])
+    mit, mit_text = judge([
+        ("фичи те же", "OK", "поправок: 0", same),
+        ("со строкой", "OK", "поправок: 1", withl),
+        ("дата 06.11", "OK", "поправок: 1", amend("391: слово оператора 06.11\n")),
+        ("дата 2026-11-06", "OK", "поправок: 1", amend("391: слово оператора 2026-11-06\n")),
+        ("SPEC после запроса", "OK", "фич на выдаче 3, сейчас 3", sc([("Тимлид: SPEC", spec_of(feats=("F1", "F2", "F3")), [])], pr)),
+        ("запрос назвал SPEC не сразу", "OK", "фич на выдаче 2, сейчас 2",
+         sc(grown() + [("Тимлид: запрос", pr, [])], {"docs/PROMPT.txt": "Read first: docs/OTHER.md\n", "docs/SPEC-1.md": lint_fixture_spec("ранняя")})),
+        ("истории нет", "OK", "фич на выдаче 1, сейчас 1", sc(None)),
+    ])
+    p_scope = plain(base, grown())
+    named = "BUDGET_FAIL scope-growth F2" in p_scope[1]
+    emit("F2.2", ohne and mit and named and without[1].startswith("F2:") and two[1].startswith("F3:"),
+         f"ohne={without[0]} mit={withl[1].rsplit('поправок: ', 1)[-1] if 'поправок: ' in withl[1] else '?'} · без строки — «{without[1]}»; со строкой — «{withl[1]}» · "
+         f"bin/check-budget на фикстуре — {'BUDGET_FAIL scope-growth F2' if named else 'нет строки BUDGET_FAIL scope-growth F2'}; две новые, одна строка — «{two[1][:20]}» · FAIL: {ohne_text} · OK: {mit_text}")
     # F2.3
-    pl = {"checks/planken.json": json.dumps({"korridor": {"word": {"p95": 3300, "max": 6500}}, "flaky": {}})}
-    sk = lambda body: {**pr, **pl, "docs/SPEC-1.md": lint_fixture_spec("ранняя", feats=()) + body}
+    K = {"korridor": {"word": {"p95": 3300, "max": 6500}}, "flaky": {}}
+    top = lint_fixture_spec("ранняя", feats=())
     item = lambda txt: f"\n- **F1 x** · готово: F1.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n  - `F1.1` {txt}\n"
-    clean = run_side(sk(item("`bin/x` судит `planken:korridor.word`")), None, rule_planken)
-    inl = run_side(sk(item("`bin/x` судит `planken:korridor.word`, p95 3300 мс")), None, rule_planken)
-    inl_sp = run_side(sk(item("`bin/x` судит `planken:korridor.word`, предел 6 500 мс")), None, rule_planken)
-    other = run_side(sk(item("`bin/x` судит `planken:korridor.word`, пункт 33000 и F3300.1")), None, rule_planken)
-    nof = run_side({**pr, "docs/SPEC-1.md": lint_fixture_spec("ранняя", feats=()) + item("`bin/x` судит `planken:korridor.word`")}, None, rule_planken)
-    nok = run_side(sk(item("`bin/x` судит `planken:korridor.nope`")), None, rule_planken)
-    emit("F2.3", clean[0] == "OK" and inl[0] == "WARN" and inl_sp[0] == "WARN" and other[0] == "OK" and nof[0] == "FAIL" and nok[0] == "FAIL",
-         f"inline={inl[0]} ohne={nof[0]} · ключ без чисел — {clean[0]}; число рядом — «{inl[1]}»; «6 500» — {inl_sp[0]}; 33000 и F3300.1 — {other[0]}; нет файла — «{nof[1]}»; нет ключа — «{nok[1]}»")
+    pfile = lambda data: {} if data is None else {"checks/planken.json": data if isinstance(data, str) else json.dumps(data)}
+    pn = lambda body, data=K: run_side({**pr, **pfile(data), "docs/SPEC-1.md": top + body}, None, rule_planken)
+    key = "`bin/x` судит `planken:korridor.word`"
+    inl, nof = pn(item(f"{key}, p95 3300 мс")), pn(item(key), None)
+    p95, big = "korridor.word: 3300", "korridor.word: 6500"
+    inline, inline_text = judge([
+        ("число рядом", "WARN", p95, inl),
+        ("6 500", "WARN", big, pn(item(f"{key}, предел 6 500 мс"))),
+        ("U+00A0", "WARN", big, pn(item(f"{key}, предел 6 500 мс"))),
+        ("U+202F", "WARN", big, pn(item(f"{key}, предел 6 500 мс"))),
+        ("U+202F, единица слитно", "WARN", big, pn(item(f"{key}, предел 6 500мс"))),
+        ("дробное", "WARN", "k: 0.95", pn(item("`bin/x` судит `planken:k`, доля 0.95"), {"k": {"share": 0.95}})),
+        ("десятичная запятая", "WARN", "k: 0.95", pn(item("`bin/x` судит `planken:k`, доля 0,95"), {"k": {"share": 0.95}})),
+        ("JSON 3300.0", "WARN", "k: 3300", pn(item("`bin/x` судит `planken:k`, 3300 мс"), {"k": {"p": 3300.0}})),
+        ("значения списком", "WARN", "k: 3300", pn(item("`bin/x` судит `planken:k`, p95 3300 мс"), {"k": [3300, 6500]})),
+        ("другой пункт той же фичи", "WARN", p95, pn(item(key) + "  - `F1.2` `bin/x` предел 3300 мс\n")),
+        ("другая фича", "WARN", p95, pn(item(key) + "\n- **F2 y** · готово: F2.1 · чек: `bin/y` → `Y_OK` · служит: S1 · after: —\n  - `F2.1` `bin/y` предел 3300 мс\n")),
+        ("таблица", "WARN", p95, pn(item(key) + "\n| звено | p95 |\n|---|---|\n| word | 3300 |\n")),
+        ("следующая строка прозы", "WARN", p95, pn("\nСудья — `planken:korridor.word`.\nПредел 3300 мс.\n")),
+    ])
+    clean = "чисел коридора в тексте нет"
+    fine, fine_text = judge([
+        ("ключ без чисел", "OK", clean, pn(item(key))),
+        ("33000 и F3300.1", "OK", clean, pn(item(f"{key}, пункт 33000 и F3300.1"))),
+        ("точка сразу за ключом", "OK", clean, pn(item("`bin/x` судит planken:korridor.word."))),
+        ("число лишь в токене ключа", "OK", clean, pn(item("`bin/x` судит `planken:3300`"), {"3300": {"p95": 3300}})),
+        ("ключ по-русски есть", "OK", clean, pn(item("`bin/x` судит `planken:коридор.слово`"), {"коридор": {"слово": {"p95": 3300}}})),
+    ])
+    keyred, keyred_text = judge([
+        ("нет файла", "FAIL", "нет файла checks/planken.json", nof),
+        ("нет ключа", "FAIL", "ключей нет в checks/planken.json — korridor.nope", pn(item("`bin/x` судит `planken:korridor.nope`"))),
+        ("нет ключа, хвост по-русски", "FAIL", "ключей нет в checks/planken.json — korridor.нет", pn(item("`bin/x` судит `planken:korridor.нет`"))),
+        ("ключ по-русски, нет файла", "FAIL", "ключи коридор — нет файла", pn(item("`bin/x` судит `planken:коридор`"), None)),
+        ("файл не JSON", "FAIL", "checks/planken.json не JSON", pn(item(key), "{")),
+    ])
+    p_inl = plain({**pr, **pfile(K), "docs/SPEC-1.md": top + item(f"{key}, p95 3300 мс")})
+    warned = "BUDGET_WARN planken-inline" in p_inl[1]
+    emit("F2.3", inline and fine and keyred and warned,
+         f"inline={inl[0]} ohne={nof[0]} · число рядом — «{inl[1]}»; нет файла — «{nof[1]}» · bin/check-budget на фикстуре — {'BUDGET_WARN planken-inline' if warned else 'нет строки BUDGET_WARN planken-inline'} · "
+         f"WARN: {inline_text} · OK: {fine_text} · FAIL: {keyred_text}")
     # F2.4
-    gt = os.path.join(os.path.dirname(os.path.realpath(__file__)), "gate-test")
-
-    def test_run(planken, script):
-        fs = {"tests/t.sh": script, **({"checks/planken.json": planken} if planken else {})}
-        def go(_=None):
-            r = subprocess.run([gt, "bash", "tests/t.sh"], capture_output=True, text=True)
-            return r.returncode, " ".join((r.stdout + r.stderr).split())[-90:]
-        return in_fixture(fs, [], go)
+    gt = os.path.join(os.path.dirname(me), "gate-test")
     red, green = "echo x; exit 3\n", "exit 0\n"
-    label = json.dumps({"flaky": {"tests/t.sh": "решение 388: настенное время"}})
-    fl = test_run(label, red)
-    no = test_run(json.dumps({"flaky": {}}), red)
-    nof2 = test_run(None, red)
-    bad = test_run("{", red)
-    gl = test_run(label, green)
-    wrong = test_run(json.dumps({"flaky": {"tests/other.sh": "x"}}), red)
-    emit("F2.4", fl[0] == 0 and "FLAKY" in fl[1] and no[0] == 1 and "TEST_FAIL" in no[1] and nof2[0] == 1 and bad[0] == 1 and gl[0] == 0 and "TEST_OK" in gl[1] and wrong[0] == 1,
-         f"flaky={'OK' if fl[0] == 0 and 'FLAKY' in fl[1] else 'нет'} ohne={'block' if no[0] == 1 else 'нет'} · с меткой, красный — rc {fl[0]} «{fl[1]}»; без метки — rc {no[0]} «{no[1]}»; нет файла — rc {nof2[0]}; "
-         f"файл не JSON — rc {bad[0]}; метка другого теста — rc {wrong[0]}; с меткой, зелёный — rc {gl[0]} «{gl[1]}»")
+
+    def test_run(planken, script=red, argv=("bash", "tests/t.sh"), sub=None, name="tests/t.sh"):
+        def go():
+            if sub:
+                os.chdir(sub)
+            r = subprocess.run([gt, *argv], capture_output=True, text=True)
+            return r.returncode, " ".join((r.stdout + r.stderr).split())[-90:]
+        return in_fixture({name: script, **pfile(planken)}, [], go)
+    label = {"flaky": {"tests/t.sh": "решение 388: настенное время"}}
+    decision = lambda v: test_run({"flaky": {"tests/t.sh": v}})
+    fl, no = test_run(label), test_run({"flaky": {}})
+    flaky, flaky_text = judge([
+        ("с меткой, красный", 0, "FLAKY bash tests/t.sh rc=3 · решение 388", fl),
+        ("метка корня, тест из подкаталога", 0, "FLAKY bash t.sh rc=3", test_run({"flaky": {"t.sh": "решение"}}, argv=("bash", "t.sh"), sub="tests")),
+        ("ключ из двух токенов", 0, "FLAKY bash tests/t.sh rc=3", test_run({"flaky": {"bash tests/t.sh": "решение"}})),
+        ("с меткой, убит сигналом", 0, "FLAKY bash tests/t.sh rc=-9", test_run(label, "kill -9 $$\n")),
+        ("с меткой, зелёный", 0, "TEST_OK", test_run(label, green)),
+    ])
+    block, block_text = judge([
+        ("без метки", 1, "TEST_FAIL bash tests/t.sh rc=3", no),
+        ("вывод не UTF-8", 1, "TEST_FAIL", test_run({"flaky": {}}, "printf '\\377\\376'; exit 3\n")),
+        ("нет файла", 1, "TEST_FAIL", test_run(None)),
+        ("файл не JSON", 1, "TEST_FAIL", test_run("{")),
+        ("корень файла — список", 1, "TEST_FAIL", test_run("[]")),
+        ("flaky — список", 1, "TEST_FAIL", test_run({"flaky": ["tests/t.sh"]})),
+        ("метка другого теста", 1, "TEST_FAIL", test_run({"flaky": {"tests/other.sh": "x"}})),
+        ("t.sh на tests/test.sh", 1, "TEST_FAIL", test_run({"flaky": {"t.sh": "решение"}}, argv=("bash", "tests/test.sh"), name="tests/test.sh")),
+        ("пустой ключ", 1, "TEST_FAIL", test_run({"flaky": {"": "x"}}, argv=("bash", "tests/t.sh", ""))),
+        ("пробельный ключ", 1, "TEST_FAIL", test_run({"flaky": {" ": "x"}}, argv=("bash", "tests/t.sh", "", ""))),
+        ("решение пустое", 1, "TEST_FAIL", decision("")),
+        ("решение из пробелов", 1, "TEST_FAIL", decision("  ")),
+        ("решение false", 1, "TEST_FAIL", decision(False)),
+        ("решение null", 1, "TEST_FAIL", decision(None)),
+        ("убит сигналом", 1, "TEST_FAIL bash tests/t.sh rc=-9", test_run({"flaky": {}}, "kill -9 $$\n")),
+        ("команды нет", 1, "TEST_FAIL /nonexistent/test-cmd rc=127", test_run({"flaky": {}}, argv=("/nonexistent/test-cmd",))),
+        ("команды нет, с меткой", 1, "TEST_FAIL /nonexistent/test-cmd rc=127", test_run({"flaky": {"/nonexistent/test-cmd": "решение"}}, argv=("/nonexistent/test-cmd",))),
+        ("скрипта нет, с меткой", 1, "TEST_FAIL bash tests/gone.sh rc=127", test_run({"flaky": {"tests/gone.sh": "решение"}}, argv=("bash", "tests/gone.sh"))),
+        ("нет права на запуск, с меткой", 1, "TEST_FAIL tests/t.sh rc=127", test_run({"flaky": {"tests/t.sh": "решение"}}, argv=("tests/t.sh",))),
+        ("rc 126, с меткой", 1, "TEST_FAIL bash tests/t.sh rc=126", test_run(label, "exit 126\n")),
+    ])
+    emit("F2.4", flaky and block,
+         f"flaky={'OK' if flaky else 'нет'} ohne={'block' if block else 'нет'} · с меткой, красный — rc {fl[0]} «{fl[1]}»; без метки — rc {no[0]} «{no[1]}» · FLAKY и зелёные: {flaky_text} · блок, rc 1: {block_text}")
     cur = rule_planka(dict(b)) + rule_scope(dict(b)) + rule_planken(dict(b))
     for s_, r_, m_ in cur:
         print(f"{s_:4} {r_}: {m_}")
@@ -777,7 +968,8 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
 
 
 def templates():
-    """Пример — шаблон как есть, только номер фазы, пин и Read first подставлены; плейсхолдеры <…> остаются."""
+    """Пример — шаблон как есть, только номер фазы, пин и Read first подставлены; плейсхолдеры <…> остаются, кроме ячейки планки: незаполненная — FAIL planka-source (F2.1),
+    в примере — «ранняя»."""
     root = "kit" if os.path.isdir("kit/docs") else "."
     missing = [t for t in list(TEMPLATES) + list(CONTRACT) if not os.path.isfile(f"{root}/{t}")]
     if missing:
@@ -809,7 +1001,7 @@ def templates():
                     + ("; ".join(old) if old else "prompt_chars, docs/PROMPT.txt в owner, схемы GOAL нет")))
     pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
     subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),
-            ("<первые 12 знаков git hash-object>", pin)]
+            ("<первые 12 знаков git hash-object>", pin), ("<файл, n, p50/p95 — или «ранняя»>", "ранняя")]
     fs = {}
     for t, dst in TEMPLATES.items():
         text = read(f"{root}/{t}")
