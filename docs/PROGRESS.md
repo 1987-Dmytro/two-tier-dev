@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3.4 «кит под вкладкой Code» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — плечо 1, F1–F4 построены, круг прошёл, F1 ждёт окружение
-**Сделано:** шаг 0 и F1–F4: судья конца хода, линты, замок и паспорт, окно и канарейка; мутации разобраны и починены; `/code-review`: 10 находок, 7 починены (`6b089d2`), названы 3: F1.5 — реплей формы Stop input, вечный `shell` в фоне, срез журнала `bin/check-live`. Окно 5 ч снято словом оператора (`1e31e90`), `make ci` зелёный. Круг `verify-phase` на `be5c7a5`: F4 — PASS; F1 F2 F3 — NEEDS_WORK, одна блокирующая: голый `bin/check-harness` даёт rc 1 от `ENV_FAIL`, маркер `GATE_HOOK_OK` есть, мутации F1–F3 покраснели. **Следующий шаг оператора:** ответ на вопрос стопа ниже. **Когда закончим:** плечо 1 — точечный `bin/verify-phase F1`, затем строка `STOP: STOP-TL «Leg 1»`; без него — сразу `STOP-TL`, если `ENV_FAIL` принят.
+## Голова — плечо 1, F1–F4 построены, F1 ждёт Chromium нужной ревизии
+**Сделано:** шаг 0 и F1–F4: судья конца хода, линты, замок и паспорт, окно и канарейка; мутации разобраны и починены; `/code-review`: 10 находок, 7 починены (`6b089d2`), названы 3: F1.5 — реплей формы Stop input, вечный `shell` в фоне, срез журнала `bin/check-live`. Окно 5 ч снято словом оператора (`1e31e90`), `make ci` зелёный. Круг `verify-phase` на `be5c7a5`: F4 — PASS; F1 F2 F3 — NEEDS_WORK, одна блокирующая: `ENV_FAIL` голого `bin/check-harness`. Решение 396 (`7c34be5`): таблица PROCESS зелёная, осталась одна красная строка — проба `jev-browser`. **Следующий шаг оператора:** команда в строке стопа ниже. **Когда закончим:** плечо 1 — голый `bin/check-harness`, точечный `bin/verify-phase F1`, затем строка `STOP: STOP-TL «Leg 1»`.
 
 ## Done
 - Шаг 0 (`5944469`): `git mv` PROGRESS → `docs/archive/PROGRESS-v3.3-2026-11-06.md`, evidence и вердикты v3.3 → `docs/archive/evidence-v3.3/`; `docs/PLAN-v3.4.md`.
@@ -11,12 +11,12 @@
 - **F4 Fenster & Kanarienvogel** (`598b336`, `e6c1958`, `6b089d2`): `bin/check-kit fenster` → `FENSTER_OK` — `docs/evidence/F4-check-kit-result.txt`.
 
 ## Next — один айтем
-1. **Точечный `bin/verify-phase F1`** после ответа оператора: вердикт в `docs/evidence/`.
+1. **Голый `bin/check-harness`, точечный `bin/verify-phase F1`** после Chromium: вердикт в `docs/evidence/`.
 
 ## Open stop — STOP-INPUT
-STOP: STOP-INPUT «Leg 1 — окружение F1»: круг `verify-phase` сделан, F1 держит только `ENV_FAIL`: таблица `docs/PROCESS.md` (файл тимлида) расходится с профилем v3.4, нет Chromium для `bin/check-ui` (домашний кэш) — PROCESS (g).
-Вопрос оператору: чинить окружение (оператор — `npx playwright install chromium`; тимлид — в таблице ponytail, pr-review-toolkit, pyright-lsp и скилл graphify на «нет», `limits` на «да») и гонять точечный круг F1 или закрыть плечо с `ENV_FAIL` как записью не от плеча?
-Resume: «Продолжай по SPEC-v3.4: окружение поправлено, точечный круг F1, затем STOP-TL» или «Продолжай по SPEC-v3.4: ENV_FAIL принят, сразу STOP-TL».
+STOP: STOP-INPUT «Leg 1 — Chromium 1254»: голый `bin/check-harness` rc 1, `ENV_FAIL`, единственная красная строка — `FAIL jev-browser: по задаче: bin/check-ui — check-ui: rc 1; steps None, passed None, statuses none, assert —; Jev calls None, tokens None, None ms in the run, 1.5 s in all`. Причина: `jev-browser@0.1.2` идёт на `playwright-core 1.65.0`, ему нужен Chromium ревизии 1254, в домашнем кэше — 1243 и 1248.
+Вопрос оператору: поставишь нужную ревизию командой `npx -y playwright@1.65.0 install chromium` (сухой прогон: `chromium-1254`, `chromium_headless_shell-1254`, `ffmpeg-1013`; уровень пользователя, исполнителю нельзя)?
+Resume: «Продолжай по SPEC-v3.4: Chromium 1254 стоит — голый bin/check-harness, точечный круг F1, затем STOP-TL».
 
 ## Notes
 - Старт: CLI 2.1.316, вкладка Code; стартовый контекст (S2): SPEC 23 516 + kit-fixes 14 494 + `CLAUDE.md` 2 873 — 40 883 из 50 000 знаков; стартовый запрос 3 972.
@@ -26,7 +26,8 @@ Resume: «Продолжай по SPEC-v3.4: окружение поправле
 - Развилка F2.1: на самой SPEC-v3.4 три строки посадки без файла и n, p50/p95. SPEC §1 говорит «красная до выдачи»: до выдачи (HEAD на коммите запроса или SPEC правлена после него) — FAIL, выданная и идущая — `WARN planka-source`; красная сторона — на фикстурах. Тимлиду: пометить строки «ранняя» или дать файлы.
 - Развилка F1.5: «10 концов хода» — реплей точной формы Stop input на фикстуре плюс живые решения этой вкладки в журнале; живой прогон вкладки на фикстуре — гейт оператора §5 (1).
 - Журнал telefon: 61/78 — срез ретро (91 решение, 13 стопов, 12 cap-time, до 20:33Z); по всем 03–05.11 — 66/83, чек печатает оба.
-- Тимлиду: `WARN planka-source` на SPEC-v3.4 — три строки посадки пометить «ранняя» или дать файлы; `checks/planken.json` и `frozen.json` — в `owner` корня на приёмке.
+- Решение 396 (`7c34be5`): голый `bin/check-harness` на нём — `OK run2: system/init = таблица`, `HARNESS_OK`, `HOOKS_OK`, `GATE_HOOK_OK`, `ITEMS_OK`, `COMMIT_OK`, красный один `jev-browser`; вывод — `docs/evidence/F1-check-harness-result.txt`.
+- Тимлиду: `bin/check-ui` пинит `jev-browser@0.1.2`, а его `playwright ^1.63.0` плавает: ревизия Chromium зависит от кэша npx под /tmp и может уехать после чистки /tmp. Совет пакета `npx playwright install chromium` ставит другую ревизию: так вышло в этот раз. `frozen.json` — в `owner` корня на приёмке.
 - `bin/check-harness env` на этой вкладке → `ENV_FAIL` не от правок плеча: таблица `docs/PROCESS.md` (файл тимлида) расходится с профилем v3.4 (ponytail, pr-review-toolkit, pyright-lsp — «да», сняты по SPEC §1; `limits` — «нет», включён в launch settings; скилл graphify — «да», не ставится), и нет Chromium для Playwright в домашнем кэше (`bin/check-ui`). PROCESS (g): таблицу правит тимлид, установку — оператор.
 - Время плеча 1: стройка F1–F4 — 35 мин (15:38–16:13); мутации, ревью и починка — до 20:46; круг `verify-phase` на `be5c7a5`: F1 F2 F3 — 1223 с, 338 582 токена, F4 — 647 с, 157 032 токена (лимит 1800 с).
 - Мутации и ревью плеча 1: 151 мутант, 81 выжил; подтверждённых находок 8. Закрыты правкой или пробой; что сознательно оставлено — `docs/PLAN-v3.4.md`, «Итог мутаций и ревью».
