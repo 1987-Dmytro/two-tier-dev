@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""check-frozen-diff — судья замка закрытых модулей (SPEC-v3.4 F3.1, F3.2): один для правила `frozen-paths` хука .githooks/commit-msg и для CI.
+"""check-frozen-diff — судья замка закрытых модулей (SPEC-v3.4 F3.1, F3.2): один для правила `frozen-paths` хука .githooks/commit-msg и для CI (правило frozen-paths bin/check-budget).
 
-frozen.json (корень проекта, файл тимлида): module.<имя> — pfade (префиксы путей: файл или каталог с «/»), phase (фаза-владелец), offen
-({SPEC: [фичи или пункты]}, «*» — любые), diff_cap (предел строк диффа путей модуля от base; нет base — от basis файла). Путь — модуль по самому
-длинному префиксу. Текущая SPEC — первый SPEC-*.md строки `Read first:` docs/PROMPT.txt. Замок и запрос судья читает из HEAD: правка на диске замок не открывает.
-Коммит в замороженный путь, который текущая SPEC не открывает, или с id пунктов (начало сообщения) не из offen — отказ. «Тимлид:» замок кода не
-обходит: для него вне замка только docs/, intent/, claude/ и файлы тимлида (список owner в budgets.json). Сумма строк диффа выше diff_cap — отказ с числом.
-`bin/check-frozen-diff` — коммиты basis..HEAD и дифф HEAD против предела: `FROZEN_DIFF_OK commits=<n> spec=<SPEC> diff=<модуль k/cap …>` или
-`FROZEN_DIFF_FAIL <sha> <путь> — <причина>`, код 1. Нет frozen.json — `FROZEN_DIFF_OK замка нет`.
+frozen.json (корень проекта, файл тимлида): module.<имя> — pfade (префиксы путей: файл или каталог, «/» на конце не обязателен), phase (фаза-владелец), offen
+({SPEC: [фичи или пункты]}, «*» — любые), diff_cap (предел строк диффа путей модуля от якоря; 0 — тоже предел, нет ключа — предела нет; бинарный файл — одна строка; docs/, intent/, claude/ и файлы тимлида в счёт не идут).
+Якорь: base модуля, иначе basis файла, иначе последний коммит, менявший frozen.json. Путь — модуль по самому длинному префиксу (длина без «/» на конце).
+Текущая SPEC — первая запись SPEC-*.md (по имени файла) строки `Read first:` docs/PROMPT.txt, записи через запятую — как в spec-gate. Замок и запрос судья читает из HEAD: правка на диске и в индексе замок не открывает.
+Замок не JSON или не той формы (сам не объект, модуль не объект, pfade не список строк, diff_cap не целое ≥ 0, offen не объект со списками строк) — ошибка судьи: хук пишет заметку и пропускает, CI красный.
+Коммит в замороженный путь, который текущая SPEC не открывает, или с id пунктов не из offen — отказ. Id — только с самого начала первой строки и до двоеточия: F<n> или F<n>.<k> через запятую, точку с запятой или пробел.
+«Тимлид:» замок кода не обходит: для него вне замка и вне предела только docs/, intent/, claude/ и файлы тимлида (список owner в budgets.json). Сумма строк диффа выше diff_cap — отказ с числом. base или basis, не называющий коммит, — отказ с этой причиной на первом судимом пути.
+Слияние судится по своим путям: в хуке путь, чья версия в индексе равна версии MERGE_HEAD (или его нет в обоих), пришёл со второй стороны и не судится; в CI — `diff-tree -c`, пути, изменённые относительно всех родителей.
+`bin/check-frozen-diff` — коммиты от basis (нет его — от последнего коммита frozen.json) до HEAD, со слияниями, и дифф HEAD против предела: `FROZEN_DIFF_OK commits=<n> spec=<SPEC> diff=<модуль k/cap …>` или
+`FROZEN_DIFF_FAIL <sha> <путь> — <причина>`, `FROZEN_DIFF_FAIL <причина>`, код 1. Нет frozen.json — `FROZEN_DIFF_OK замка нет`.
 """
 import fnmatch, json, os, re, subprocess, sys
 
@@ -19,13 +22,36 @@ def git(*args):
 
 
 def load():
+    """Замок из HEAD: None — его там нет; не JSON или не та форма — ValueError с причиной."""
     r = git("show", "HEAD:frozen.json")
-    return json.loads(r.stdout) if r.returncode == 0 else None
+    if r.returncode:
+        return None
+    try:
+        fr = json.loads(r.stdout)
+    except ValueError:
+        raise ValueError("не JSON") from None
+    if not isinstance(fr, dict):
+        raise ValueError("не объект")
+    if not isinstance(fr.get("module", {}), dict):
+        raise ValueError("module — не объект")
+    for name, m in fr.get("module", {}).items():
+        if not isinstance(m, dict):
+            raise ValueError(f"модуль {name} — не объект")
+        if not isinstance(m.get("pfade"), list) or not all(isinstance(p, str) for p in m["pfade"]):
+            raise ValueError(f"модуль {name}: pfade — не список строк")
+        cap = m.get("diff_cap", 0)
+        if type(cap) is not int or cap < 0:
+            raise ValueError(f"модуль {name}: diff_cap — не целое ≥ 0")
+        offen = m.get("offen") or {}
+        if not isinstance(offen, dict) or not all(isinstance(v, list) and all(isinstance(x, str) for x in v) for v in offen.values()):
+            raise ValueError(f"модуль {name}: offen — не объект со списками строк")
+    return fr
 
 
 def current_spec():
-    m = re.search(r"^Read first:.*?(SPEC-[^\s,/]+)\.md", git("show", "HEAD:docs/PROMPT.txt").stdout, re.M)
-    return m.group(1) if m else None
+    m = re.search(r"^Read first:(.*)$", git("show", "HEAD:docs/PROMPT.txt").stdout, re.M)
+    names = [os.path.basename(s.strip()) for s in (m.group(1).split(",") if m else [])]
+    return next((n[:-3] for n in names if re.fullmatch(r"SPEC-[^/]+\.md", n)), None)
 
 
 def owner_list():
@@ -39,15 +65,16 @@ def owner_list():
 def module_of(path, fr):
     best = None
     for name, m in (fr.get("module") or {}).items():
-        for pre in m.get("pfade", []):
-            if (path == pre or (pre.endswith("/") and path.startswith(pre))) and (best is None or len(pre) > best[1]):
-                best = (name, len(pre))
+        for pre in m["pfade"]:
+            stem = pre.rstrip("/")
+            if (path == stem or path.startswith(stem + "/")) and (best is None or len(stem) > best[1]):
+                best = (name, len(stem))
     return best[0] if best else None
 
 
 def item_ids(msg):
-    head = msg.split("\n", 1)[0]
-    return re.findall(r"F\d+(?:\.\d+)?", head.split(":", 1)[0]) if ":" in head else []
+    m = re.match(r"F\d+(?:\.\d+)?(?:[,;\s]+F\d+(?:\.\d+)?)*\s*:", msg.split("\n", 1)[0])
+    return re.findall(r"F\d+(?:\.\d+)?", m.group(0)) if m else []
 
 
 def tl_free(path, own):
@@ -73,14 +100,28 @@ def verdict(paths, msg, fr, spec, own):
     return None
 
 
+def anchor(fr, m=None):
+    """Откуда считать: base модуля, иначе basis файла, иначе последний коммит, менявший frozen.json."""
+    return (m or {}).get("base") or fr.get("basis") or git("log", "-1", "--format=%H", "--", "frozen.json").stdout.strip()
+
+
+def bad_anchor(fr):
+    """Причина, если basis файла или base модуля не называет коммит, иначе None."""
+    named = [("basis", fr.get("basis"))] + [(f"base модуля {name}", m.get("base")) for name, m in (fr.get("module") or {}).items()]
+    return next((f"нет коммита {what} {rev}" for what, rev in named if rev and git("rev-parse", "-q", "--verify", f"{rev}^{{commit}}").returncode), None)
+
+
 def diff_lines(fr, name, *target):
-    """Сумма строк диффа путей модуля от его base: (k, base) или None, если предела нет или base не найден."""
+    """Сумма строк диффа путей модуля от его якоря, бинарный файл — одна строка, пути вне предела (tl_free) не в счёт: (k, якорь) или None, если предела нет."""
     m = fr["module"][name]
-    base = m.get("base") or fr.get("basis")
-    if not m.get("diff_cap") or not base or git("rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode:
+    if "diff_cap" not in m:
         return None
-    rows = [l.split("\t") for l in git("diff", "--numstat", "--no-renames", *target, base, "--", *m.get("pfade", [])).stdout.splitlines()]
-    return sum(int(a) + int(d) for a, d, p in rows if a.isdigit() and module_of(p, fr) == name), base
+    base, total, own = anchor(fr, m), 0, owner_list()
+    for row in git("-c", "core.quotePath=false", "diff", "--numstat", "--no-renames", "-z", *target, base, "--", *m["pfade"]).stdout.split("\0"):
+        cols = row.split("\t", 2)
+        if len(cols) == 3 and module_of(cols[2], fr) == name and not tl_free(cols[2], own):
+            total += 1 if cols[0] == "-" else int(cols[0]) + int(cols[1])
+    return total, base
 
 
 def over_cap(paths, fr, *target):
@@ -99,7 +140,15 @@ def staged_verdict(msg):
     if not fr:
         return None
     paths = [p for p in git("-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--no-renames", "-z").stdout.split("\0") if p]
-    return verdict(paths, msg, fr, current_spec(), owner_list()) or over_cap(paths, fr, "--cached")
+    if git("rev-parse", "-q", "--verify", "MERGE_HEAD").returncode == 0:  # слияние: путь со второй стороны судили там, где его сделали
+        version = lambda rev: git("rev-parse", "-q", "--verify", rev).stdout.strip()
+        paths = [p for p in paths if version(f"MERGE_HEAD:{p}") != version(f":{p}")]
+    own, tl = owner_list(), msg.startswith("Тимлид:")
+    judged = [p for p in paths if module_of(p, fr) and not (tl and tl_free(p, own))]
+    why = bad_anchor(fr)
+    if judged and why:
+        return judged[0], why
+    return verdict(judged, msg, fr, current_spec(), own) or over_cap(judged, fr, "--cached")
 
 
 def main():
@@ -108,20 +157,22 @@ def main():
         os.chdir(top)
     try:
         fr = load()
-    except ValueError:
-        print("FROZEN_DIFF_FAIL frozen.json не JSON")
+    except ValueError as e:
+        print(f"FROZEN_DIFF_FAIL frozen.json {e}")
         return 1
     if fr is None:
         print("FROZEN_DIFF_OK замка нет")
         return 0
-    spec, own, basis = current_spec(), owner_list(), fr.get("basis")
-    if basis and git("rev-parse", "-q", "--verify", f"{basis}^{{commit}}").returncode:
-        print(f"FROZEN_DIFF_FAIL нет коммита basis {basis}")
+    why = bad_anchor(fr)
+    if why:
+        print(f"FROZEN_DIFF_FAIL {why}")
         return 1
-    shas = git("rev-list", "--no-merges", "--reverse", f"{basis}..HEAD").stdout.split() if basis else []
+    spec, own = current_spec(), owner_list()
+    shas = git("rev-list", "--reverse", f"{anchor(fr)}..HEAD").stdout.split()
     for sha in shas:
         msg = git("log", "-1", "--format=%B", sha).stdout
-        paths = [p for p in git("-c", "core.quotePath=false", "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "-z", sha).stdout.split("\0") if p]
+        # -c: у слияния — только пути, изменённые относительно всех родителей; у обычного коммита список тот же
+        paths = [p for p in git("-c", "core.quotePath=false", "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "-c", "-z", sha).stdout.split("\0") if p]
         hit = verdict(paths, msg, fr, spec, own)
         if hit:
             print(f"FROZEN_DIFF_FAIL {sha[:7]} {hit[0]} — {hit[1]}")

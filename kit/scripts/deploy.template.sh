@@ -2,7 +2,7 @@
 # deploy.template.sh — шаблон деплоя (SPEC-v3.4 F3.3, F3.4, F4.1; образец — деплой проекта telefon): скопировать в scripts/deploy.sh, шаг выкатки — свой.
 # Порядок: паспорт модулей → выкатка → строка отката → регрессия закрытых модулей → итог. `DEPLOY_OK` — только после `REGRESS_OK`; строка отката — и в красном исходе: откат нужен именно там.
 #   DEPLOY_CMD   выкатка проекта (пусто — шаг снят: пробы шаблона)
-#   REGRESS_CMD  регрессия закрытых модулей, по умолчанию `make regress`: последняя строка `REGRESS_OK` и код 0, иначе `DEPLOY_FAIL step=regress`
+#   REGRESS_CMD  регрессия закрытых модулей, по умолчанию `make regress`: последняя строка stdout `REGRESS_OK` или `REGRESS_OK <поля>` и код 0, иначе `DEPLOY_FAIL step=regress`; stderr идёт мимо суда
 #   PASSPORT_CMD сверка паспортов, по умолчанию `bin/check-passport`; `<МОДУЛЬ>_OFFEN=SPEC-<n>` открывает модуль текущей SPEC
 #   DEPLOY_LINIE 1 — деплой на линию (сигнал, который чувствует клиент): после `DEPLOY_OK` окно закрывает живая проверка `LIVE_OK` или откат `ROLLBACK_OK` (`bin/check-fenster`)
 # Итог и окно — строками журнала docs/evidence/deploy-window.log. Прежний sha — в служебном каталоге git: `make rollback SHA=<sha>` — scripts/rollback.template.sh.
@@ -35,11 +35,12 @@ if [ -n "${DEPLOY_CMD:-}" ]; then
 fi
 
 # 3. регрессия закрытых модулей
-out=$(eval "${REGRESS_CMD:-make regress}" 2>&1); rc=$?
+out=$(eval "${REGRESS_CMD:-make regress}"); rc=$?
 echo "$out"
-if [ "$rc" != 0 ] || [ "$(tail -1 <<<"$out")" != REGRESS_OK ]; then
-  finish_red regress "rc=$rc"
-fi
+case "$rc:$(tail -1 <<<"$out")" in
+  0:REGRESS_OK|0:REGRESS_OK[[:space:]]*) ;;
+  *) finish_red regress "rc=$rc" ;;
+esac
 
 # 4. итог: строка отката рядом с DEPLOY_OK, следующий деплой откатывается на этот sha
 echo "$ROLLBACK_LINE"

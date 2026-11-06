@@ -455,7 +455,15 @@ def rule_abide(b):
     return [check("abide_rules", n, b["abide_rules"], f"{p}, правил")]
 
 
-RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide]
+def rule_frozen(b):
+    """v3.4, F3.1: CI судит и коммит мимо хука — судья замка, если есть он и frozen.json в HEAD; проект без замка правила не имеет."""
+    if not os.path.isfile("bin/check-frozen-diff") or git("cat-file", "-e", "HEAD:frozen.json").returncode:
+        return []
+    r = subprocess.run([sys.executable, "bin/check-frozen-diff"], capture_output=True, encoding="utf-8", errors="replace")
+    return [("FAIL" if r.returncode else "OK", "frozen-paths", ((r.stdout + r.stderr).strip().splitlines() or ["судья без вывода"])[-1])]
+
+
+RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide, rule_frozen]
 
 
 def run(b):

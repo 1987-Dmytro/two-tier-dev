@@ -11,6 +11,7 @@
 строки v3.3-F5.1…F5.4 и WINDOW_OK; при claude в PATH ещё живой ход справкой.
 Разделы v3.4: frozen (F3: замок, паспорт, регрессия в деплое, апгрейд клона telefon — FROZEN_OK), fenster (F4: окно деплоя, живой канал, канарейка,
 шаблоны — FENSTER_OK); с именем раздела идёт только он, без имени — всё.
+Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — F3.5 не гонялся: строка `F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
 """
 import json, os, re, shutil, subprocess, sys, tempfile, time
 
@@ -116,111 +117,332 @@ def deploy(d, regress="echo REGRESS_OK", env=None, **kw):
     return sh(["bash", "scripts/deploy.sh"], d, env=e)
 
 
+def fz_rc(want, label, got, needle=""):  # сторона пробы: (код want и needle в выводе, «подпись — rc N «строка вывода»»)
+    line = next((l for l in got[1].splitlines() if needle and needle in l), tail(got[1]))
+    return got[0] == want and needle in got[1], f"{label} — rc {got[0]}" + (f" «{line[:130]}»" if line else "")
+
+
+def fz_join(rows):  # стороны пункта: (все зелёные, сырой вывод); красная сторона помечена FAIL
+    return all(r[0] for r in rows), "; ".join(("" if r[0] else "FAIL ") + r[1] for r in rows)
+
+
+def fz_past_hook(d, msg, rel=None, text=None):  # коммит мимо хука (индекс как есть или ещё файл): так CI видит то, чего хук не видел
+    if rel:
+        put(d, rel, text)
+        sh(["git", "add", "--", rel], d)
+    return sh(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", msg], d)
+
+
+def fz_staged(d, msg):  # коммит готового индекса хуками кита: (rc, строка отказа или вывод хука)
+    rc, text = sh(["git", "commit", "-qm", msg], d)
+    return rc, next((l for l in text.splitlines() if l.startswith("commit refused")), text)
+
+
+def fz_side(d, branch, msg, rel):  # ветка с одним коммитом хуками кита; назад на main
+    sh(["git", "switch", "-qc", branch], d)
+    commit(d, msg, rel, "x\n")
+    sh(["git", "switch", "-q", "main"], d)
+
+
+def fz_merge_own(d, branch, rel):  # слияние без коммита и своя правка в индексе
+    sh(["git", "merge", "-q", "--no-ff", "--no-commit", branch], d)
+    put(d, rel, "own\n")
+    sh(["git", "add", "--", rel], d)
+
+
+def fz_budget_line(text):  # строка правила frozen-paths в выводе bin/check-budget; нет правила — пусто
+    return next((l for l in text.splitlines() if re.match(r"(OK|FAIL) +frozen-paths:", l)), "")
+
+
+def fz_budget(label, d, needle):  # сторона: строка правила в выводе bin/check-budget; needle пуст — строки быть не должно
+    line = fz_budget_line(sh(["bin/check-budget"], d)[1])
+    return (needle in line if needle else not line), f"check-budget, {label} — «{line[:120] or 'строки frozen-paths нет'}»"
+
+
+def fz_copy(clone):  # копия клона telefon: сам клон только читается
+    d = tempfile.mkdtemp(prefix="telefon-up-", dir=TMP)
+    shutil.rmtree(d)
+    shutil.copytree(clone, d, symlinks=True)
+    return d
+
+
 def section_frozen():
     sec.clear()
-    lock = {"basis": None, "module": {"demo": {"phase": "SPEC-1", "pfade": ["src/demo/"], "offen": {}}}}
-    # F3.1 — запрет с файлом, offen, предел диффа
+    demo = lambda offen=None, **kw: {"phase": "SPEC-1", "pfade": ["src/demo/"], "offen": offen or {}, **kw}
+    head = lambda d: sh(["git", "rev-parse", "HEAD"], d)[1]
+    judge = lambda d: sh(["bin/check-frozen-diff"], d)
+    body = "".join(f"{i}\n" for i in range(50))
+    # F3.1 — запрет с файлом, offen, предел диффа; судья CI и правило frozen-paths bin/check-budget
+    vb, of, cp, ci = [], [], [], []
+    lock = {"basis": None, "module": {"demo": demo()}}
     d = project(lock)
-    closed = commit(d, "F1.1: правка закрытого модуля", "src/demo/x.py", "x = 1\n")
-    free = commit(d, "F1.1: файл вне модулей", "src/free.py", "x = 1\n")
+    vb += [fz_rc(1, "без SPEC", commit(d, "F1.1: правка закрытого модуля", "src/demo/x.py", "x = 1\n"), "frozen-paths: src/demo/x.py"),
+           fz_rc(0, "вне модулей", commit(d, "F1.1: файл вне модулей", "src/free.py", "x = 1\n"))]
     lock["module"]["demo"]["offen"] = {"SPEC-9": ["*"]}
     set_lock(d, lock)
-    other = commit(d, "F1.1: чужая SPEC открыла", "src/demo/x2.py", "x = 1\n")
+    vb.append(fz_rc(1, "чужая SPEC", commit(d, "F1.1: чужая SPEC открыла", "src/demo/x2.py", "x = 1\n")))
+    put(d, "docs/PROMPT.txt", "Read first: docs/SPEC-9.md\n")  # запрос правлен только на диске: судья читает его из HEAD
+    vb.append(fz_rc(1, "запрос правлен на диске", commit(d, "F1.1: запрос на диске", "src/demo/x2.py", "x = 1\n")))
+    put(d, "docs/PROMPT.txt", "Read first: docs/SPEC-2.md\n")
     lock["module"]["demo"]["offen"] = {"SPEC-2": ["F1"]}
     set_lock(d, lock)
-    opened = commit(d, "F1.1: фича из offen", "src/demo/x3.py", "x = 1\n")
-    wrong = commit(d, "F2.1: фича не из offen", "src/demo/x4.py", "x = 1\n")
-    no_id = commit(d, "правка без id пункта", "src/demo/x5.py", "x = 1\n")
-    base = sh(["git", "rev-parse", "HEAD"], d)[1]
-    lock["module"]["demo"].update(diff_cap=3, base=base)
+    of += [fz_rc(0, "фича из offen", commit(d, "F1.1: фича из offen", "src/demo/x3.py", "x = 1\n")),
+           fz_rc(0, "id через «;» и пробел", commit(d, "F1; F1.2 F1.3: все из offen", "src/demo/x3b.py", "x = 1\n"))]
+    vb += [fz_rc(1, f"«{m}»", commit(d, m, "src/demo/x4.py", "x = 1\n"), "frozen-paths: src/demo/x4.py")
+           for m in ("F2.1: фича не из offen", "правка без id пункта", "F1.1, F2.1: один id не из offen", "F10.1: F10 — не F1", "XF1.1: приклеено", "F1.1.2: три уровня",
+                     'Revert "F1.1: x"', "F1.1 fix: of F2.9", "F1.1 без двоеточия", "F1.1\nF1.2: двоеточие на второй строке")]
+    lock["module"]["demo"].update(diff_cap=3, base=head(d))
     set_lock(d, lock)
-    inside = commit(d, "F1.2: три строки — в пределе", "src/demo/y.py", "1\n2\n3\n")
-    over = commit(d, "F1.2: четвёртая строка — сверх", "src/demo/y2.py", "4\n")
+    cp += [fz_rc(0, "три строки — в пределе", commit(d, "F1.2: три строки — в пределе", "src/demo/y.py", "1\n2\n3\n")),
+           fz_rc(1, "четвёртая сверх", commit(d, "F1.2: четвёртая строка — сверх", "src/demo/y2.py", "4\n"), "дифф 4 строк > diff_cap 3")]
     lock["module"]["inner"] = {"phase": "SPEC-1", "pfade": ["src/demo/inner/"], "offen": {"SPEC-2": ["*"]}}
     set_lock(d, lock)
-    nested = commit(d, "F7.1: длинный префикс — свой модуль открыт", "src/demo/inner/z.py", "z = 1\n")
-    ci_ok = sh(["bin/check-frozen-diff"], d)
-    d2 = project({"basis": None, "module": {"demo": {"phase": "SPEC-1", "pfade": ["src/demo/"], "offen": {}}}})
-    b2 = sh(["git", "rev-parse", "HEAD"], d2)[1]
-    closed_lock = {"basis": b2, "module": {"demo": {"phase": "SPEC-1", "pfade": ["src/demo/"], "offen": {}}}}
-    set_lock(d2, closed_lock)
-    put(d2, "frozen.json", json.dumps({**closed_lock, "module": {"demo": {**closed_lock["module"]["demo"], "offen": {"SPEC-2": ["*"]}}}}))  # замок открыт только на диске
-    on_disk = commit(d2, "F1.1: замок открыт на диске", "src/demo/disk.py", "x = 1\n")
-    put(d2, "frozen.json", json.dumps(closed_lock))
-    put(d2, "src/demo/bypass.py", "x = 1\n")
-    sh(["git", "add", "--", "src/demo/bypass.py"], d2)
-    sh(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "F1.1: мимо хука"], d2)
-    ci_red = sh(["bin/check-frozen-diff"], d2)
-    d3 = project({"basis": None, "module": {}})
-    set_lock(d3, {"basis": None, "module": {}})
-    sh(["git", "-c", "core.hooksPath=/dev/null", "commit", "-q", "--allow-empty", "-m", "пусто"], d3)
-    put(d3, "frozen.json", "{")
-    sh(["git", "add", "--", "frozen.json"], d3)
-    sh(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "битый замок"], d3)
-    broken = commit(d3, "F1.1: битый замок", "src/demo/b.py", "x = 1\n")
-    ci_broken = sh(["bin/check-frozen-diff"], d3)
-    verboten = closed[0] == 1 and "frozen-paths" in closed[1] and "src/demo/x.py" in closed[1] and other[0] == 1 and wrong[0] == 1 and no_id[0] == 1 and free[0] == 0 and on_disk[0] == 1
-    offen = opened[0] == 0 and nested[0] == 0
-    cap = inside[0] == 0 and over[0] == 1 and "дифф 4 строк > diff_cap 3" in over[1]
-    ci = ci_ok[0] == 0 and ci_ok[1].startswith("FROZEN_DIFF_OK") and ci_red[0] == 1 and ci_red[1].startswith("FROZEN_DIFF_FAIL") and "src/demo/bypass.py" in ci_red[1] and broken[0] == 0 and ci_broken[0] == 1
-    probe("F3.1", verboten and offen and cap and ci, f"verboten={'OK' if verboten else 'нет'} offen={'OK' if offen else 'нет'} cap={'OK' if cap else 'нет'} · без SPEC — rc {closed[0]} «{closed[1][:110]}»; "
-          f"чужая SPEC — rc {other[0]}; замок открыт только на диске — rc {on_disk[0]}; id вне offen — rc {wrong[0]} «{wrong[1][:120]}»; без id — rc {no_id[0]}; вне модулей — rc {free[0]} · offen — rc {opened[0]}; длинный префикс — rc {nested[0]} · в пределе — rc {inside[0]}; "
-          f"сверх — rc {over[0]} «{over[1][:120]}» · CI: «{tail(ci_ok[1])}»; коммит мимо хука — rc {ci_red[0]} «{tail(ci_red[1])}»; битый frozen.json: хук пропускает — rc {broken[0]}, CI — rc {ci_broken[0]} «{tail(ci_broken[1])}»")
+    of.append(fz_rc(0, "длинный префикс", commit(d, "F7.1: длинный префикс — свой модуль открыт", "src/demo/inner/z.py", "z = 1\n")))
+    ci.append(fz_rc(0, "зелёный", judge(d), "FROZEN_DIFF_OK"))
+    d = project({"basis": None, "module": {"demo": demo()}})
+    closed_lock = {"basis": head(d), "module": {"demo": demo()}}
+    set_lock(d, closed_lock)
+    put(d, "frozen.json", json.dumps({**closed_lock, "module": {"demo": demo({"SPEC-2": ["*"]})}}))  # замок открыт только на диске
+    vb.append(fz_rc(1, "замок открыт только на диске", commit(d, "F1.1: замок открыт на диске", "src/demo/disk.py", "x = 1\n")))
+    put(d, "frozen.json", json.dumps(closed_lock))
+    sh(["git", "mv", "src/demo/a.py", "src/moved.py"], d)
+    vb.append(fz_rc(1, "git mv из модуля", fz_staged(d, "F9.9: вынос из модуля"), "frozen-paths: src/demo/a.py"))
+    sh(["git", "mv", "src/moved.py", "src/demo/a.py"], d)
+    fz_past_hook(d, "F1.1: мимо хука", "src/demo/bypass.py", "x = 1\n")
+    ci.append(fz_rc(1, "коммит мимо хука", judge(d), "src/demo/bypass.py"))
+    # замка или судьи нет — правила нет; basis null — CI судит от коммита замка, check-budget несёт его итог
+    d = project({"basis": None, "module": {"demo": demo()}}, tools=("check-frozen-diff", "check-budget"))
+    ci.append(fz_budget("замок цел", d, "OK   frozen-paths: FROZEN_DIFF_OK commits=0"))
+    fz_past_hook(d, "F9.9: мимо хука, basis null", "src/demo/x.py", "x\n")
+    ci += [fz_rc(1, "мимо хука, basis null", judge(d), "src/demo/x.py"), fz_budget("коммит мимо хука", d, "FAIL frozen-paths: FROZEN_DIFF_FAIL")]
+    sh(["git", "rm", "-q", "frozen.json"], d)
+    fz_past_hook(d, "Тимлид: замка нет")
+    ci += [fz_budget("без замка", d, ""), fz_rc(0, "без замка", judge(d), "FROZEN_DIFF_OK замка нет")]
+    vb.append(fz_rc(0, "нет замка — правила нет", commit(d, "F9.9: x", "src/demo/y.py", "y\n")))
+    d = project({"basis": None, "module": {"demo": demo()}}, tools=("check-budget",))
+    ci.append(fz_budget("без судьи", d, ""))
+    vb.append(fz_rc(0, "нет файла судьи — правила нет", commit(d, "F9.9: x", "src/demo/y.py", "y\n")))
+    # замок не той формы: CI — красный с причиной, хук — заметка и пропуск
+    d = project({"basis": None, "module": {}})
+    fz_past_hook(d, "битый замок", "frozen.json", "{")
+    put(d, "src/demo/b.py", "x = 1\n")
+    sh(["git", "add", "--", "src/demo/b.py"], d)
+    ci += [fz_rc(0, "битый frozen.json: хук", fz_staged(d, "F1.1: битый замок"), "judge error"), fz_rc(1, "битый frozen.json", judge(d), "FROZEN_DIFF_FAIL frozen.json не JSON")]
+    caps = [json.dumps({"module": {"demo": {"pfade": ["src/demo/"], "diff_cap": c}}}) for c in (-1, "3", True, 1.5, None)]
+    for shape in ("[]", '{"module": []}', '{"module": {"demo": []}}', '{"module": {"demo": {"offen": {}}}}', '{"module": {"demo": {"pfade": "src/demo/"}}}', '{"module": {"demo": {"pfade": [1]}}}', '{"module": {"demo": {"pfade": ["src/demo/"], "offen": "x"}}}',
+                  '{"module": {"demo": {"pfade": ["src/demo/"], "offen": {"SPEC-2": "*"}}}}', '{"module": {"demo": {"pfade": ["src/demo/"], "offen": {"SPEC-2": [1]}}}}', *caps):
+        fz_past_hook(d, "замок не той формы", "frozen.json", shape)
+        ci.append(fz_rc(1, f"замок {shape}", judge(d), "FROZEN_DIFF_FAIL frozen.json"))
+    put(d, "src/demo/c.py", "x = 1\n")
+    sh(["git", "add", "--", "src/demo/c.py"], d)
+    ci.append(fz_rc(0, "замок не той формы: хук", fz_staged(d, "F1.1: замок не той формы"), "judge error"))
+    # pfade: префикс без «/» — тоже каталог, файл — точно; равные длины без «/» — первый модуль
+    d = project({"basis": None, "module": {"demo": demo(pfade=["src/demo", "src/other.py"]), "tie-open": demo({"SPEC-2": ["*"]}, pfade=["src/tie"]), "tie-closed": demo(pfade=["src/tie/"])}})
+    vb += [fz_rc(1, "pfade без «/»: каталог", commit(d, "F9.9: x", "src/demo/x.py", "x\n"), "frozen-paths: src/demo/x.py"),
+           fz_rc(1, "pfade: файл", commit(d, "F9.9: x", "src/other.py", "b = 2\n"), "frozen-paths: src/other.py"),
+           fz_rc(0, "соседний каталог src/demox/", commit(d, "F9.9: x", "src/demox/y.py", "x\n")),
+           fz_rc(0, "соседний файл src/other.py.bak", commit(d, "F9.9: x", "src/other.py.bak", "x\n"))]
+    of.append(fz_rc(0, "равные длины без «/» — первый модуль", commit(d, "F9.9: x", "src/tie/z.py", "x\n")))
+    # текущая SPEC — первая запись с именем SPEC-*.md
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}}, extra={"docs/PROMPT.txt": "Read first: docs/PROCESS-SPEC-1.md, docs/SPEC-1/notes.md, docs/SPEC-2.md, docs/SPEC-3.md\n"})
+    of.append(fz_rc(0, "SPEC — первая запись SPEC-*.md", commit(d, "F9.9: x", "src/demo/x.py", "x\n")))
+    # слияния: путь со второй стороны не судится, своя правка судится; CI — своими путями слияния
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["F1"]})}})
+    fz_side(d, "s1", "F1.1: на стороне", "src/demo/side.py")
+    of.append(fz_rc(0, "слияние со второй стороны, сообщение без id", sh(["git", "merge", "-q", "--no-ff", "-m", "слияние стороны", "s1"], d)))
+    ci.append(fz_rc(0, "слияние со второй стороны", judge(d), "commits=2"))
+    fz_side(d, "s2", "F1.1: вторая сторона", "src/free2.py")
+    fz_merge_own(d, "s2", "src/demo/mine.py")
+    of.append(fz_rc(0, "своя правка в слиянии с id из offen", fz_staged(d, "F1.2: слияние со своей правкой")))
+    fz_side(d, "s3", "F1.1: третья сторона", "src/free3.py")
+    fz_merge_own(d, "s3", "src/demo/evil.py")
+    vb.append(fz_rc(1, "своя правка в слиянии без id", fz_staged(d, "слияние со своей правкой"), "frozen-paths: src/demo/evil.py"))
+    fz_past_hook(d, "слияние мимо хука")
+    ci.append(fz_rc(1, "слияние со своей правкой мимо хука", judge(d), "src/demo/evil.py"))
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}})
+    fz_side(d, "open", "F1.1: пока открыт", "src/demo/x.py")
+    set_lock(d, {"basis": None, "module": {"demo": demo()}})
+    of.append(fz_rc(0, "слияние правки времён открытого модуля, замок закрыт", sh(["git", "merge", "-q", "--no-ff", "-m", "слияние", "open"], d)))
+    sh(["git", "switch", "-qc", "gone"], d)
+    sh(["git", "rm", "-q", "src/demo/a.py"], d)
+    fz_past_hook(d, "удаление на стороне")
+    sh(["git", "switch", "-q", "main"], d)
+    of.append(fz_rc(0, "слияние: пути нет на второй стороне и в индексе", sh(["git", "merge", "-q", "--no-ff", "-m", "слияние", "gone"], d)))
+    # предел: любое имя файла, 0 — предел, бинарный файл — одна строка, якорь base → basis → коммит замка
+    capped = lambda cap: project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]}, diff_cap=cap)}})
+    d, odd = capped(3), 'src/demo/модуль"q\tz.py'
+    cp.append(fz_rc(1, "имя с кириллицей, кавычкой и табом", commit(d, "F1.1: x", odd, body), "дифф 50 строк > diff_cap 3"))
+    fz_past_hook(d, "F1.1: мимо хука", odd, body)
+    ci.append(fz_rc(1, "такое имя мимо хука", judge(d), "дифф 50 строк > diff_cap 3"))
+    d = capped(0)
+    cp.append(fz_rc(1, "diff_cap 0", commit(d, "F1.1: x", "src/demo/z.py", "1\n"), "дифф 1 строк > diff_cap 0"))
+    ci.append(fz_rc(0, "diff_cap 0, дифф пуст", judge(d), "diff=demo 0/0"))
+    fz_past_hook(d, "F1.1: мимо хука", "src/demo/z.py", "1\n")
+    ci.append(fz_rc(1, "diff_cap 0 мимо хука", judge(d), "diff_cap 0"))
+    d = capped(1)
+    cp += [fz_rc(0, "бинарный файл в пределе 1", commit(d, "F1.1: x", "src/demo/blob.bin", "\0\1\2" * 5000)),
+           fz_rc(1, "и ещё строка", commit(d, "F1.1: x", "src/demo/t.py", "1\n"), "дифф 2 строк > diff_cap 1")]
+    d = capped(3)
+    cp += [fz_rc(0, "нет base и basis: от коммита замка 3 строки", commit(d, "F1.1: x", "src/demo/q.py", "1\n2\n3\n")),
+           fz_rc(1, "четвёртая", commit(d, "F1.1: x", "src/demo/q2.py", "4\n"), "дифф 4 строк > diff_cap 3")]
+    ci.append(fz_rc(0, "commits= от коммита замка", judge(d), "commits=1 spec=SPEC-2 diff=demo 3/3"))
+    set_lock(d, {"basis": None, "_": "снова", "module": {"demo": demo({"SPEC-2": ["*"]}, diff_cap=3)}})
+    cp.append(fz_rc(0, "новый коммит замка — новый отсчёт", commit(d, "F1.1: x", "src/demo/q3.py", "1\n2\n3\n")))
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}})
+    first = head(d)
+    fz_past_hook(d, "F1.1: до предела", "src/demo/p.py", "1\n2\n")
+    second = head(d)
+    set_lock(d, {"basis": first, "module": {"demo": demo({"SPEC-2": ["*"]}, diff_cap=3)}})
+    cp.append(fz_rc(1, "basis раньше коммита замка: 2+2 строки", commit(d, "F1.1: x", "src/demo/q.py", "3\n4\n"), "дифф 4 строк > diff_cap 3"))
+    set_lock(d, {"basis": first, "module": {"demo": demo({"SPEC-2": ["*"]}, diff_cap=3, base=second)}})
+    cp.append(fz_rc(0, "base сильнее basis: 2 строки", commit(d, "F1.1: x", "src/demo/q.py", "3\n4\n")))
+    nowhere = "0" * 40
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]}, diff_cap=3, base=nowhere)}})
+    cp += [fz_rc(1, "base не коммит: хук", commit(d, "F1.1: x", "src/demo/x.py", body), "нет коммита base"),
+           fz_rc(0, "при таком замке вне модулей", commit(d, "F1.1: x", "src/free.py", "x\n"))]
+    ci.append(fz_rc(1, "base не коммит", judge(d), "FROZEN_DIFF_FAIL нет коммита base"))
+    d = project({"basis": nowhere, "module": {"demo": demo({"SPEC-2": ["*"]})}})
+    cp.append(fz_rc(1, "basis не коммит: хук", commit(d, "F1.1: x", "src/demo/x.py", "x\n"), "нет коммита basis"))
+    ci.append(fz_rc(1, "basis не коммит", judge(d), "FROZEN_DIFF_FAIL нет коммита basis"))
+    cp += [fz_rc(0, "«Тимлид:» чинит замок", set_lock(d, {"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}})),
+           fz_rc(0, "после починки", commit(d, "F1.1: x", "src/demo/x.py", "x\n"))]
+    (vb_ok, vb_raw), (of_ok, of_raw), (cp_ok, cp_raw), (ci_ok, ci_raw) = fz_join(vb), fz_join(of), fz_join(cp), fz_join(ci)
+    probe("F3.1", vb_ok and of_ok and cp_ok and ci_ok, f"verboten={'OK' if vb_ok else 'нет'} offen={'OK' if of_ok else 'нет'} cap={'OK' if cp_ok else 'нет'} · запрет: {vb_raw} · открыто: {of_raw} · предел: {cp_raw} · CI: {ci_raw}")
     # F3.2 — «Тимлид:» замок кода не обходит (K79)
-    lock = {"basis": None, "module": {"demo": {"phase": "SPEC-1", "pfade": ["src/demo/", "docs/DEMO.md"], "offen": {}}}}
+    lock = {"basis": None, "module": {"demo": demo(pfade=["src/demo/", "docs/DEMO.md"])}}
+    opened = {"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]}, pfade=["src/demo/", "docs/DEMO.md"])}}
     d = project(lock)
-    tl_code = commit(d, "Тимлид: правка кода модуля", "src/demo/t.py", "t = 1\n")
-    tl_docs = commit(d, "Тимлид: статус", "docs/STATUS.md", "s2\n")
-    tl_doc_mod = commit(d, "Тимлид: паспорт модуля", "docs/DEMO.md", "p\n")
-    ex_doc_mod = commit(d, "F1.1: паспорт модуля исполнителем", "docs/DEMO.md", "p2\n")
-    tl_lock = set_lock(d, {**lock, "module": {"demo": {**lock["module"]["demo"], "offen": {"SPEC-2": ["*"]}}}})
-    tl_open = commit(d, "Тимлид: код модуля, SPEC открыла всем", "src/demo/t2.py", "t = 2\n")
-    ok = tl_code[0] == 1 and "src/demo/t.py" in tl_code[1] and tl_docs[0] == 0 and tl_doc_mod[0] == 0 and ex_doc_mod[0] == 1 and tl_lock[0] == 0 and tl_open[0] == 0
-    probe("F3.2", ok, f"tl={'OK' if ok else 'нет'} · «Тимлид:» в код — rc {tl_code[0]} «{tl_code[1][:120]}»; в docs/STATUS.md — rc {tl_docs[0]}; в docs/ модуля — rc {tl_doc_mod[0]}, исполнитель туда же — rc {ex_doc_mod[0]}; "
-          f"замок правит «Тимлид:» — rc {tl_lock[0]}; код при offen * — rc {tl_open[0]}")
+    tl = [fz_rc(1, "«Тимлид:» в код", commit(d, "Тимлид: правка кода модуля", "src/demo/t.py", "t = 1\n"), "src/demo/t.py"),
+          fz_rc(0, "в docs/STATUS.md", commit(d, "Тимлид: статус", "docs/STATUS.md", "s2\n")),
+          fz_rc(0, "в docs/ модуля", commit(d, "Тимлид: паспорт модуля", "docs/DEMO.md", "p\n")),
+          fz_rc(1, "исполнитель туда же", commit(d, "F1.1: паспорт модуля исполнителем", "docs/DEMO.md", "p2\n"))]
+    put(d, "frozen.json", json.dumps(opened))  # один коммит открывает замок и правит код: судит замок из HEAD
+    sh(["git", "add", "--", "frozen.json"], d)
+    tl.append(fz_rc(1, "открыл замок и правит код одним коммитом", commit(d, "Тимлид: открыл и правит", "src/demo/t1.py", "t = 1\n"), "src/demo/t1.py"))
+    sh(["git", "checkout", "-q", "HEAD", "--", "frozen.json"], d)
+    tl += [fz_rc(0, "замок правит «Тимлид:»", set_lock(d, opened)), fz_rc(0, "код при offen *", commit(d, "Тимлид: код модуля, SPEC открыла всем", "src/demo/t2.py", "t = 2\n"))]
+    raw = json.load(open(f"{root}/budgets.json", encoding="utf-8"))
+    raw["defaults"]["owner"] = [e for e in raw["defaults"]["owner"] if e not in ("intent/", "claude/")]  # intent/ и claude/ свободны и вне списка owner
+    owners = json.dumps(raw, ensure_ascii=False)
+    d = project({"basis": None, "module": {"demo": demo(pfade=["intent/INTENT.md", "claude/x.md", "budgets.json"])}}, extra={"budgets.json": owners})
+    tl += [fz_rc(0, "intent/ модуля, не в owner", commit(d, "Тимлид: intent", "intent/INTENT.md", "i\n")),
+           fz_rc(0, "claude/ модуля, не в owner", commit(d, "Тимлид: claude", "claude/x.md", "c\n")),
+           fz_rc(0, "файл из owner в модуле", commit(d, "Тимлид: owner", "budgets.json", owners + "\n")),
+           fz_rc(1, "исполнитель в intent/ модуля", commit(d, "F1.1: intent", "intent/INTENT.md", "i2\n"), "frozen-paths: intent/INTENT.md")]
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]}, pfade=["src/demo/", "docs/DEMO.md"], diff_cap=1)}})
+    fz_past_hook(d, "F1.1: сверх предела", "src/demo/x.py", "1\n2\n3\n")
+    tl += [fz_rc(0, "модуль сверх предела: «Тимлид:» в его docs/", commit(d, "Тимлид: паспорт", "docs/DEMO.md", "p\n")),
+           fz_rc(1, "исполнитель туда же", commit(d, "F1.1: паспорт", "docs/DEMO.md", "p2\n"), "diff_cap 1"),
+           fz_rc(1, "«Тимлид:» в его код", commit(d, "Тимлид: код", "src/demo/y.py", "y\n"), "diff_cap 1")]
+    d = project({"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]}, pfade=["src/demo/", "docs/DEMO.md"], diff_cap=1)}})
+    tl += [fz_rc(0, "«Тимлид:» в docs/ модуля сверх предела", commit(d, "Тимлид: паспорт", "docs/DEMO.md", "p\n" * 10)),
+           fz_rc(0, "и CI: docs/ не в счёт", judge(d), "diff=demo 0/1"),
+           fz_rc(0, "исполнитель после него — в пределах", commit(d, "F1.1: код", "src/demo/x.py", "1\n")),
+           fz_rc(1, "вторая строка кода — сверх", commit(d, "F1.1: код", "src/demo/x2.py", "2\n"), "дифф 2 строк > diff_cap 1")]
+    tl_ok, tl_raw = fz_join(tl)
+    probe("F3.2", tl_ok, f"tl={'OK' if tl_ok else 'нет'} · {tl_raw}")
     # F3.3 — паспорт: расхождение без <МОДУЛЬ>_OFFEN → DEPLOY_FAIL step=passport
-    lock = {"basis": None, "module": {"demo": {"phase": "SPEC-1", "pfade": ["src/demo/"], "offen": {},
-                                               "passport": {"file": "docs/DEMO.md", "fingerprints": {"src": ["src/demo/"], "texte": ["docs/texte.md"]}}}}}
+    passport = {"file": "docs/DEMO.md", "fingerprints": {"src": ["src/demo/"]}}
+    lock = {"basis": None, "module": {"demo": demo(passport={"file": "docs/DEMO.md", "fingerprints": {"src": ["src/demo/"], "texte": ["docs/texte.md"]}})}}
+    check = lambda d, **env: sh(["bin/check-passport"], d, env=dict(GIT_ENV, **env))
+    write = lambda d: sh(["bin/check-passport", "--write"], d)
+    relock = lambda d, **pp: fz_past_hook(d, "Тимлид: паспорт", "frozen.json", json.dumps({"basis": None, "module": {"demo": demo(passport=pp)}}))
     d = project(lock, extra={"docs/texte.md": "текст\n"})
-    written = sh(["bin/check-passport", "--write"], d)
-    same = sh(["bin/check-passport"], d)
-    dep_green = deploy(d)
+    write(d)
+    ps = [fz_rc(0, "совпало", check(d), "PASSPORT_OK"), fz_rc(0, "деплой", deploy(d), "DEPLOY_OK")]
     put(d, "src/demo/a.py", "a = 2\n")
-    red = sh(["bin/check-passport"], d)
+    ps.append(fz_rc(1, "код разошёлся", check(d), "was=src"))
     os.path.exists(f"{d}/rolled-out") and os.remove(f"{d}/rolled-out")
-    dep_red = deploy(d)
-    rolled = os.path.exists(f"{d}/rolled-out")
-    env_open = dict(GIT_ENV, DEMO_OFFEN="SPEC-2")
-    opened = sh(["bin/check-passport"], d, env=env_open)
-    dep_open = deploy(d, env={"DEMO_OFFEN": "SPEC-2"})
-    alien = sh(["bin/check-passport"], d, env=dict(GIT_ENV, DEMO_OFFEN="SPEC-9"))
+    ps.append(fz_rc(1, "деплой", deploy(d), "DEPLOY_FAIL step=passport"))
+    ps.append((not os.path.exists(f"{d}/rolled-out"), f"выкатка {'была' if os.path.exists(f'{d}/rolled-out') else 'не шла'}"))
+    op = [fz_rc(0, "DEMO_OFFEN=SPEC-2", check(d, DEMO_OFFEN="SPEC-2"), "PASSPORT_OFFEN"), fz_rc(0, "деплой", deploy(d, env={"DEMO_OFFEN": "SPEC-2"}), "DEPLOY_OK"), fz_rc(1, "DEMO_OFFEN=SPEC-9", check(d, DEMO_OFFEN="SPEC-9"))]
+    put(d, "docs/PROMPT.txt", "Read first: docs/SPEC-9.md\n")  # запрос правлен только на диске: открывает только запрос из HEAD
+    op += [fz_rc(1, "запрос на диске SPEC-9, DEMO_OFFEN=SPEC-9", check(d, DEMO_OFFEN="SPEC-9"), "PASSPORT_FAIL"), fz_rc(1, "деплой", deploy(d, env={"DEMO_OFFEN": "SPEC-9"}), "DEPLOY_FAIL step=passport")]
+    put(d, "docs/PROMPT.txt", "Read first: docs/SPEC-2.md\n")
+    put(d, "frozen.json", "{")  # замок сломан или удалён только на диске: судит замок из HEAD
+    ps.append(fz_rc(1, "замок битый на диске", check(d), "was=src"))
+    os.remove(f"{d}/frozen.json")
+    ps.append(fz_rc(1, "замок удалён с диска", check(d), "was=src"))
+    put(d, "frozen.json", json.dumps(lock, ensure_ascii=False))
     put(d, "src/demo/a.py", "a = 1\n")
     put(d, "docs/texte.md", "другой текст\n")
-    red_text = sh(["bin/check-passport"], d)
-    ok_pass = same[0] == 0 and same[1].startswith("PASSPORT_OK") and red[0] == 1 and "was=src" in red[1] and dep_red[0] == 1 and "DEPLOY_FAIL step=passport" in dep_red[1] and not rolled and "DEPLOY_OK" in dep_green[1] and red_text[0] == 1 and "was=texte" in red_text[1]
-    ok_open = opened[0] == 0 and opened[1].startswith("PASSPORT_OFFEN") and dep_open[0] == 0 and "DEPLOY_OK" in dep_open[1] and alien[0] == 1
-    probe("F3.3", ok_pass and ok_open, f"pass={'OK' if ok_pass else 'нет'} offen={'OK' if ok_open else 'нет'} · совпало — «{tail(same[1])}», деплой «{tail(dep_green[1])}» · код разошёлся — rc {red[0]} «{tail(red[1])}»; деплой — rc {dep_red[0]} «{tail(dep_red[1])}», "
-          f"выкатка {'была' if rolled else 'не шла'}; тексты разошлись — «{tail(red_text[1])}» · DEMO_OFFEN=SPEC-2 — «{tail(opened[1])}», деплой «{tail(dep_open[1])}»; DEMO_OFFEN=SPEC-9 — rc {alien[0]}")
-    # F3.4 — шаг regress: DEPLOY_OK только после REGRESS_OK
+    ps.append(fz_rc(1, "тексты разошлись", check(d), "was=texte"))
+    put(d, "docs/texte.md", "текст\n")
+    sh(["git", "mv", "src/demo/a.py", "src/demo/b.py"], d)
+    ps.append(fz_rc(1, "переименование в модуле, байты те же", check(d), "was=src"))
+    sh(["git", "mv", "src/demo/b.py", "src/demo/a.py"], d)
+    put(d, "src/demo/a.py", "a = 3\n")
+    write(d)
+    write(d)
+    ps.append(fz_rc(0, "--write дважды", check(d), "PASSPORT_OK"))
+    lines = read(f"{d}/docs/DEMO.md").splitlines()
+    put(d, "docs/DEMO.md", "# Паспорт\n" + "\n".join(sorted(lines, reverse=True)))  # последняя строка — src= и без перевода строки, как сохраняет редактор
+    put(d, "src/demo/a.py", "a = 4\n")
+    ps += [fz_rc(0, "--write, в конце файла нет перевода строки", write(d), "PASSPORT_OK"), fz_rc(0, "сверка после него", check(d), "PASSPORT_OK")]
+    relock(d, file="docs/new/DEMO.md", fingerprints={"src": ["src/demo/"]})
+    ps += [fz_rc(0, "--write, каталога нет", write(d), "PASSPORT_OK"), fz_rc(0, "сверка после него", check(d), "PASSPORT_OK")]
+    relock(d, fingerprints={"src": ["src/demo/"]})
+    ps.append(fz_rc(1, "нет file", check(d), "PASSPORT_FAIL модуль=demo нет file"))
+    relock(d)
+    ps.append(fz_rc(1, "паспорт {}", check(d), "PASSPORT_FAIL модуль=demo нет file"))
+    for label, prints in (("fingerprints пуст", {}), ("пустой список путей", {"src": []}), ("путь без файлов", {"src": ["src/demo-typo/"]})):
+        relock(d, file="docs/HOLLOW.md", fingerprints=prints)
+        ps += [fz_rc(1, label, check(d), "PASSPORT_FAIL модуль=demo"), fz_rc(1, f"--write: {label}", write(d), "PASSPORT_FAIL модуль=demo")]
+    ps.append((not os.path.exists(f"{d}/docs/HOLLOW.md"), f"пустой паспорт {'записан' if os.path.exists(f'{d}/docs/HOLLOW.md') else 'не записан'}"))
+    for shape in ("{", "[]", '{"module": []}', '{"module": {"demo": []}}', '{"module": {"demo": {"pfade": "src/"}}}', '{"module": {"demo": {"pfade": [1]}}}', '{"module": {"demo": {"pfade": [], "diff_cap": -1}}}', '{"module": {"demo": {"pfade": [], "offen": "x"}}}'):
+        fz_past_hook(d, "Тимлид: замок не той формы", "frozen.json", shape)
+        ps.append(fz_rc(1, f"замок {shape} в HEAD", check(d), "PASSPORT_FAIL frozen.json"))
+    ps.append(fz_rc(1, "деплой на нём", deploy(d), "DEPLOY_FAIL step=passport"))
+    sh(["git", "rm", "-q", "frozen.json"], d)
+    fz_past_hook(d, "Тимлид: замка нет")
+    put(d, "frozen.json", json.dumps(lock, ensure_ascii=False))  # только на диске
+    ps.append(fz_rc(0, "замка нет в HEAD, на диске есть", check(d), "PASSPORT_OK нет паспортов"))
+    d = project({"basis": None, "module": {"demo": demo(passport=passport)}})
+    write(d)
+    put(d, "src/demo/a.py", "a = 2\n")
+    sh(["git", "rm", "-q", "docs/PROMPT.txt"], d)
+    fz_past_hook(d, "запроса нет")
+    op.append(fz_rc(1, "нет запроса в HEAD и нет переменной", check(d), "PASSPORT_FAIL модуль=demo was=src"))
+    d = project({"basis": None, "module": {"command-center": demo(passport=passport)}})
+    write(d)
+    put(d, "src/demo/a.py", "a = 2\n")
+    op += [fz_rc(0, "модуль с дефисом, COMMAND_CENTER_OFFEN=SPEC-2", check(d, COMMAND_CENTER_OFFEN="SPEC-2"), "PASSPORT_OFFEN COMMAND_CENTER_OFFEN=SPEC-2"), fz_rc(1, "без переменной", check(d), "PASSPORT_FAIL")]
+    d = project({"basis": None, "module": {"demo": demo(passport=passport)}}, extra={"docs/PROMPT.txt": "Read first: docs/PROCESS-SPEC-1.md, docs/SPEC-1/notes.md, docs/SPEC-2.md, docs/SPEC-3.md\n"})
+    write(d)
+    put(d, "src/demo/a.py", "a = 2\n")
+    op += [fz_rc(0, "SPEC — первая запись SPEC-*.md, DEMO_OFFEN=SPEC-2", check(d, DEMO_OFFEN="SPEC-2"), "PASSPORT_OFFEN"), fz_rc(1, "DEMO_OFFEN=SPEC-1 из чужого имени", check(d, DEMO_OFFEN="SPEC-1"), "PASSPORT_FAIL")]
+    (ps_ok, ps_raw), (op_ok, op_raw) = fz_join(ps), fz_join(op)
+    probe("F3.3", ps_ok and op_ok, f"pass={'OK' if ps_ok else 'нет'} offen={'OK' if op_ok else 'нет'} · паспорт: {ps_raw} · открыто: {op_raw}")
+    # F3.4 — шаг regress: DEPLOY_OK только после REGRESS_OK; судится stdout, stderr идёт мимо
     d = project({"basis": None, "module": {}})
+    red = lambda label, got, step="regress": (got[0] == 1 and f"DEPLOY_FAIL step={step}" in got[1] and "DEPLOY_OK" not in got[1], f"{label} — rc {got[0]} «{tail(got[1])}»")
     a = deploy(d)
     b = deploy(d, regress="echo REGRESS_FAIL grund=x; exit 1")
-    c = deploy(d, regress="echo REGRESS_OK; exit 1")
-    e = deploy(d, regress="echo всё прошло")
     two = sum([a[0] == 0 and "DEPLOY_OK" in a[1] and "REGRESS_OK" in a[1], b[0] == 1 and "DEPLOY_FAIL step=regress" in b[1] and "DEPLOY_OK" not in b[1]])
-    ok = two == 2 and c[0] == 1 and e[0] == 1 and "DEPLOY_OK" not in c[1] + e[1]
-    probe("F3.4", ok, f"regress={two}/2 · REGRESS_OK — rc {a[0]} «{tail(a[1], 2)}» · REGRESS_FAIL — rc {b[0]} «{tail(b[1], 2)}»; код 1 при маркере — rc {c[0]} «{tail(c[1])}»; код 0 без маркера — rc {e[0]} «{tail(e[1])}»")
-    # F3.5 — апгрейд копии клона telefon: замок и хук работают, bin/check-budget проекта зелёный; нет клона — offen (только репо кита)
+    no_regress = {k: v for k, v in GIT_ENV.items() if k not in ("REGRESS_CMD", "DEPLOY_CMD")}
+    note = deploy(d, regress="echo REGRESS_OK; echo note >&2")
+    rg_ok, rg_raw = fz_join([red("код 1 при маркере", deploy(d, regress="echo REGRESS_OK; exit 1")), red("код 0 без маркера", deploy(d, regress="echo всё прошло")),
+                             fz_rc(0, "REGRESS_OK с полями", deploy(d, regress="echo REGRESS_OK stimme=ok bo=ok cc=ok"), "DEPLOY_OK"),
+                             fz_rc(0, "заметка в stderr", note, "DEPLOY_OK"), ("note" in note[1], f"заметка {'прошла' if 'note' in note[1] else 'пропала'}"),
+                             fz_rc(0, "CR на конце", deploy(d, regress="printf 'REGRESS_OK\\r\\n'"), "DEPLOY_OK"), fz_rc(0, "пробел на конце", deploy(d, regress="echo 'REGRESS_OK '"), "DEPLOY_OK"),
+                             red("REGRESS_OKAY", deploy(d, regress="echo REGRESS_OKAY")), red("REGRESS_OK только в stderr", deploy(d, regress="echo итог; echo REGRESS_OK >&2")),
+                             red("REGRESS_OK, затем REGRESS_FAIL", deploy(d, regress="echo REGRESS_OK; echo REGRESS_FAIL x")),
+                             red("нет REGRESS_CMD и Makefile", sh(["bash", "scripts/deploy.sh"], d, env=no_regress)),
+                             red("DEPLOY_CMD=false", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false")), "rollout")])
+    probe("F3.4", two == 2 and rg_ok, f"regress={two}/2 · REGRESS_OK — rc {a[0]} «{tail(a[1], 2)}» · REGRESS_FAIL — rc {b[0]} «{tail(b[1], 2)}» · {rg_raw}")
+    # F3.5 — апгрейд копии клона telefon: замок и хук работают, bin/check-budget проекта зелёный; нет клона или не репо кита — offen и без маркера
     clone = os.environ.get("TELEFON_CLONE", f"{TMP}/telefon-src")
     up = os.path.abspath(f"{root}/bin/two-tier-upgrade")
-    if root != "kit" or not os.path.isdir(f"{clone}/.git"):
+    upgrade = lambda *a: sh([up, *a], os.getcwd(), env=dict(os.environ))
+    skipped = root != "kit" or not os.path.isdir(f"{clone}/.git")
+    if skipped:
         probe("F3.5", True, f"telefon=offen · {'не репо кита' if root != 'kit' else 'клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src (ветка linie-1)'}")
     else:
-        d = tempfile.mkdtemp(prefix="telefon-up-", dir=TMP)
-        shutil.rmtree(d)
-        shutil.copytree(clone, d, symlinks=True)
-        same_branch = sh([up, d], os.getcwd(), env=dict(os.environ))
-        rc_up, text_up = sh([up, "--branch", "kit-v3.4", d], os.getcwd(), env=dict(os.environ))
+        d = fz_copy(clone)
+        head0 = head(d)
+        dash = upgrade("--branch", "-x", d)
+        same_branch = upgrade(d)
+        rc_up, text_up = upgrade("--branch", "kit-v3.4", d)
         lock_ok = json.load(open(f"{d}/frozen.json", encoding="utf-8"))
         src_file = next(p for p in sh(["git", "ls-files", "src/"], d)[1].splitlines() if p.endswith(".py") and "/bo/" not in p and "/cc/" not in p)
         original = open(f"{d}/{src_file}", encoding="utf-8").read()
@@ -229,13 +451,28 @@ def section_frozen():
         c3 = commit(d, "F53.9: пункт фичи из offen", src_file, original + "# проба\n")
         c4 = commit(d, "F9.9: проба docs", "docs/zz-probe.md", "x\n")
         rc_b, text_b = sh(["bin/check-budget"], d, env=dict(os.environ))
+        frozen_line = fz_budget_line(text_b)
+        fz_past_hook(d, "F9.9: мимо хука", src_file, original + "# мимо хука\n")
+        rc_ph, text_ph = sh(["bin/check-budget"], d, env=dict(os.environ))
+        past_line = fz_budget_line(text_ph)
         spec_now = re.search(r"Read first:.*?(SPEC-[^\s,/]+)\.md", open(f"{d}/docs/PROMPT.txt", encoding="utf-8").read())
-        ok = (same_branch[0] == 1 and "--branch" in same_branch[1] and rc_up == 0 and c1[0] == 1 and src_file in c1[1] and c2[0] == 1 and c3[0] == 0 and c4[0] == 0
-              and rc_b == 0 and text_b.splitlines()[-1] == "BUDGET_OK" and list(lock_ok["module"]) == ["telefon", "backoffice", "command-center"])
-        probe("F3.5", ok, f"telefon={'OK' if ok else 'нет'} · копия клона, {spec_now.group(1) if spec_now else '?'}; без --branch при разошедшейся kit-v3 — rc {same_branch[0]}; --branch kit-v3.4 — rc {rc_up} «{tail(text_up)[:90]}»; модули {', '.join(lock_ok['module'])} — замок проекта цел; "
-              f"коммит в код модуля без offen — rc {c1[0]} «{c1[1][:110]}»; «Тимлид:» туда же — rc {c2[0]}; пункт фичи из offen — rc {c3[0]}; в docs/ — rc {c4[0]}; bin/check-budget проекта — rc {rc_b} {tail(text_b)}")
-    print("FROZEN_OK" if all(sec) and len(sec) == 5 else "FROZEN_FAIL", flush=True)
-    return all(sec) and len(sec) == 5
+        shutil.rmtree(d, ignore_errors=True)
+        d = fz_copy(clone)  # замка нет — апгрейд ставит пустой коммитом тимлида
+        sh(["git", "rm", "-q", "frozen.json"], d)
+        fz_past_hook(d, "проба: замка нет")
+        rc_abs, text_abs = upgrade("--branch", "kit-v3.4", d)
+        installed = os.path.isfile(f"{d}/frozen.json") and sh(["git", "ls-files", "frozen.json"], d)[1] == "frozen.json"
+        subject = sh(["git", "log", "-1", "--format=%s", "--", "frozen.json"], d)[1]
+        shutil.rmtree(d, ignore_errors=True)
+        ok = (dash[0] == 2 and "--branch" in dash[1] and same_branch[0] == 1 and "--branch" in same_branch[1] and rc_up == 0 and c1[0] == 1 and src_file in c1[1] and c2[0] == 1 and c3[0] == 0 and c4[0] == 0
+              and rc_b == 0 and text_b.splitlines()[-1] == "BUDGET_OK" and frozen_line.startswith("OK") and "FROZEN_DIFF_OK" in frozen_line and list(lock_ok["module"]) == ["telefon", "backoffice", "command-center"]
+              and rc_ph == 1 and past_line.startswith("FAIL") and "FROZEN_DIFF_FAIL" in past_line and src_file in past_line and rc_abs == 0 and installed and subject.startswith("Тимлид: frozen.json"))
+        probe("F3.5", ok, f"telefon={'OK' if ok else 'нет'} · копия клона, {spec_now.group(1) if spec_now else '?'}; --branch -x — rc {dash[0]}; без --branch при разошедшейся kit-v3 — rc {same_branch[0]}; --branch kit-v3.4 — rc {rc_up} «{tail(text_up)[:90]}»; модули {', '.join(lock_ok['module'])} — замок проекта цел; "
+              f"коммит в код модуля без offen — rc {c1[0]} «{c1[1][:110]}»; «Тимлид:» туда же — rc {c2[0]}; пункт фичи из offen — rc {c3[0]}; в docs/ — rc {c4[0]}; bin/check-budget проекта — rc {rc_b} «{frozen_line[:100]}» {tail(text_b)}; коммит мимо хука: rc {rc_ph} «{past_line[:110]}»; "
+              f"копия без frozen.json: апгрейд — rc {rc_abs}, замок {'поставлен' if installed else 'не поставлен'}, коммит «{subject[:70]}»")
+    green = all(sec) and len(sec) == 5
+    print(("--   frozen: F3.5 не гонялся, маркера FROZEN нет" if skipped else "FROZEN_OK") if green else "FROZEN_FAIL", flush=True)
+    return green
 
 
 LIVE_CFG = {"live": {"word_max_ms": 3500, "word_max_sicher_ms": 5000, "warten_ms": 1000, "channel": "linie", "felder_ganz": ["name"], "stoppwoerter": ["und", "ich"],

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """check-passport [--write] — паспорта закрытых модулей против кода (SPEC-v3.4 F3.3): отпечатки кода, конфига, текстов сверяет деплой.
 
-frozen.json, module.<имя>.passport: {"file": "docs/<МОДУЛЬ>.md", "fingerprints": {"src": [пути], "env": [пути], "texte": [пути]}}. Отпечаток — 12 знаков
-sha256 по отслеживаемым git файлам этих путей (путь и байты файла): значения не печатаются. Паспорт — строки `<ключ>=<отпечаток>` в файле.
+Замок и запрос — из HEAD, как у судьи bin/check-frozen-diff: правка на диске их не меняет. frozen.json, module.<имя>.passport: {"file": "docs/<МОДУЛЬ>.md", "fingerprints": {"src": [пути], "env": [пути], "texte": [пути]}}. Отпечаток — 12 знаков
+sha256 по отслеживаемым git файлам этих путей (путь и байты файла на диске): значения не печатаются. Паспорт — строки `<ключ>=<отпечаток>` в файле.
 Совпало — `PASSPORT_OK модуль=<имя> <ключ>=<отпечаток> …`. Разошлось или паспорта нет — `PASSPORT_FAIL модуль=<имя> was=<ключ> code=<h> passport=<h>`, код 1.
-Переменная `<ИМЯ>_OFFEN=SPEC-<n>` с текущей SPEC (первый SPEC-*.md строки `Read first:` docs/PROMPT.txt) открывает модуль: `PASSPORT_OFFEN …`, код 0;
-другая SPEC не открывает. --write пишет отпечатки в паспорт (по слову оператора, после LIVE_OK). Нет модулей с паспортом — `PASSPORT_OK нет паспортов`.
+Паспорт, который ничего не сверяет (fingerprints пуст, пустой список путей, пути без отслеживаемых файлов) или без file, — `PASSPORT_FAIL модуль=<имя> <причина>`, код 1; --write его не пишет.
+Переменная `<ИМЯ>_OFFEN=SPEC-<n>` с текущей SPEC (первая запись SPEC-*.md по имени файла в строке `Read first:` docs/PROMPT.txt, записи через запятую — как в spec-gate) открывает модуль: `PASSPORT_OFFEN …`, код 0;
+другая SPEC не открывает. --write пишет отпечатки в паспорт (по слову оператора, после LIVE_OK), каталог создаёт. Нет замка в HEAD или модулей с паспортом — `PASSPORT_OK нет паспортов`;
+замок не читается или не той формы (те же правила, что у судьи) — `PASSPORT_FAIL frozen.json <причина>`, код 1.
 """
 import hashlib, json, os, re, subprocess, sys
 
@@ -14,18 +16,69 @@ def git(*args):
     return subprocess.run(["git", *args], capture_output=True, text=True, errors="replace").stdout
 
 
-def current_spec():
+def at_head(path):
+    """Текст файла в HEAD или None, если его там нет."""
+    r = subprocess.run(["git", "show", f"HEAD:{path}"], capture_output=True, text=True, errors="replace")
+    return None if r.returncode else r.stdout
+
+
+def load_modules():
+    """Модули замка из HEAD: {} — замка там нет; не JSON или не та форма — ValueError с причиной."""
+    text = at_head("frozen.json")
+    if text is None:
+        return {}
     try:
-        with open("docs/PROMPT.txt", encoding="utf-8") as f:
-            m = re.search(r"^Read first:.*?(SPEC-[^\s,/]+)\.md", f.read(), re.M)
-    except OSError:
-        return None
-    return m.group(1) if m else None
+        fr = json.loads(text)
+    except ValueError:
+        raise ValueError("не JSON") from None
+    if not isinstance(fr, dict):
+        raise ValueError("не объект")
+    if not isinstance(fr.get("module", {}), dict):
+        raise ValueError("module — не объект")
+    for name, m in fr.get("module", {}).items():
+        if not isinstance(m, dict):
+            raise ValueError(f"модуль {name} — не объект")
+        if not isinstance(m.get("pfade"), list) or not all(isinstance(p, str) for p in m["pfade"]):
+            raise ValueError(f"модуль {name}: pfade — не список строк")
+        cap = m.get("diff_cap", 0)
+        if type(cap) is not int or cap < 0:
+            raise ValueError(f"модуль {name}: diff_cap — не целое ≥ 0")
+        offen = m.get("offen") or {}
+        if not isinstance(offen, dict) or not all(isinstance(v, list) and all(isinstance(x, str) for x in v) for v in offen.values()):
+            raise ValueError(f"модуль {name}: offen — не объект со списками строк")
+    return fr.get("module", {})
 
 
-def fingerprint(paths):
+def current_spec():
+    m = re.search(r"^Read first:(.*)$", at_head("docs/PROMPT.txt") or "", re.M)
+    names = [os.path.basename(s.strip()) for s in (m.group(1).split(",") if m else [])]
+    return next((n[:-3] for n in names if re.fullmatch(r"SPEC-[^/]+\.md", n)), None)
+
+
+def tracked(paths):
+    return sorted(x for x in git("ls-files", "-z", "--", *paths).split("\0") if x)
+
+
+def hollow(pp):
+    """Причина, почему паспорт не той формы или ничего не сверяет, иначе None."""
+    if not isinstance(pp, dict):
+        return "паспорт — не объект"
+    if not pp.get("file") or not isinstance(pp["file"], str):
+        return "нет file"
+    prints = pp.get("fingerprints")
+    if not prints or not isinstance(prints, dict):
+        return "fingerprints пуст"
+    for k, paths in prints.items():
+        if not paths or not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+            return f"was={k} список путей пуст или не список строк"
+        if not tracked(paths):
+            return f"was={k} пути не покрывают ни одного отслеживаемого файла"
+    return None
+
+
+def fingerprint(files):
     h = hashlib.sha256()
-    for p in sorted(x for x in git("ls-files", "-z", "--", *paths).split("\0") if x):
+    for p in files:
         h.update(p.encode() + b"\0")
         try:
             with open(p, "rb") as f:
@@ -49,7 +102,8 @@ def write_passport(path, codes):
         with open(path, encoding="utf-8") as f:
             text = f.read()
     for k in codes:
-        text = re.sub(rf"^{re.escape(k)}=[0-9a-f]{{12}}\s*\n", "", text, flags=re.M)
+        text = re.sub(rf"^{re.escape(k)}=[0-9a-f]{{12}}\s*?(?:\n|\Z)", "", text, flags=re.M)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write("".join(f"{k}={v}\n" for k, v in codes.items()) + text)
 
@@ -62,17 +116,22 @@ def main(argv):
     if top:
         os.chdir(top)
     try:
-        with open("frozen.json", encoding="utf-8") as f:
-            modules = json.load(f).get("module") or {}
-    except (OSError, ValueError):
-        modules = {}
+        modules = load_modules()
+    except ValueError as e:
+        print(f"PASSPORT_FAIL frozen.json {e}")
+        return 1
     spec, red, seen = current_spec(), 0, 0
     for name, m in modules.items():
         pp = m.get("passport")
-        if not pp:
+        if pp is None:
             continue
         seen += 1
-        codes = {k: fingerprint(v) for k, v in (pp.get("fingerprints") or {}).items()}
+        why = hollow(pp)
+        if why:
+            print(f"PASSPORT_FAIL модуль={name} {why}")
+            red += 1
+            continue
+        codes = {k: fingerprint(tracked(v)) for k, v in pp["fingerprints"].items()}
         if argv:
             write_passport(pp["file"], codes)
         have = passport_values(pp["file"])
