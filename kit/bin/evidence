@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""evidence <F> <чек> -- <команда…> — прогон чека с записью в docs/evidence/<F>-<чек>-result.txt (SPEC-v3.4 F1.3).
+
+Первая строка файла — `spec: SPEC-<n>` текущей фазы (первый SPEC строки `Read first:` docs/PROMPT.txt): только такие файлы судит
+spec-gate; вторая — `$ <команда>`; дальше вывод команды как есть, домашний каталог — `~`. На экран — то же, по мере вывода.
+Код выхода — код команды; файл заменяется по её окончании. Нет SPEC или неверные аргументы — код 2, команда не идёт. Команда идёт
+из корня проекта (git toplevel).
+"""
+import os, re, subprocess, sys, tempfile
+
+
+def main(argv):
+    if len(argv) < 4 or argv[2] != "--" or not re.fullmatch(r"F\d+", argv[0]) or not re.fullmatch(r"[\w.-]+", argv[1]):
+        print(__doc__)
+        return 2
+    feature, check, cmd = argv[0], argv[1], argv[3:]
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    if top:
+        os.chdir(top)
+    prompt = ""
+    if os.path.isfile("docs/PROMPT.txt"):
+        with open("docs/PROMPT.txt", encoding="utf-8") as f:
+            prompt = f.read()
+    m = re.search(r"^Read first:.*?(SPEC-[^\s,/]+)\.md", prompt, re.M)
+    if not m:
+        print("evidence: нет SPEC в строке Read first: docs/PROMPT.txt — команда не запущена")
+        return 2
+    os.makedirs("docs/evidence", exist_ok=True)
+    path = f"docs/evidence/{feature}-{check}-result.txt"
+    home = os.path.expanduser("~")
+    fd, tmp = tempfile.mkstemp(prefix=f".{feature}-", dir="docs/evidence", text=True)
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
+        out.write(f"spec: {m.group(1)}\n$ {' '.join(cmd)}\n")
+        env = dict(os.environ, PYTHONUNBUFFERED="1")
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, text=True, errors="replace")
+        except OSError as e:
+            out.write(f"evidence: команда не запустилась ({e.__class__.__name__})\n")
+            print(f"evidence: команда не запустилась ({e.__class__.__name__})")
+            os.remove(tmp)
+            return 127
+        for line in p.stdout:
+            line = line.replace(home, "~")
+            out.write(line)
+            out.flush()
+            sys.stdout.write(line)
+            sys.stdout.flush()
+        rc = p.wait()
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+    print(f"evidence: {path} — rc {rc}")
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

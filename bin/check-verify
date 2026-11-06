@@ -424,7 +424,7 @@ def f44():
     fix = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
     none = h.gate_run(repo, tr, "f44-none")[1]
     base = next(n for n in os.listdir(f"{repo}/docs/evidence") if re.fullmatch(r"verify-[0-9a-f]+\.txt", n))[7:-4]
-    open(f"{repo}/docs/evidence/verify-{base}-F2.txt", "w").write(f"VERDICT: PASS\nFEATURES: F2\n")  # точечный PASS до починки
+    open(f"{repo}/docs/evidence/verify-{base}-F2.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD x\nFEATURES: F2\n")  # точечный PASS до починки
     h.ship(repo, "точечный PASS по F2 до починки", f"docs/evidence/verify-{base}-F2.txt")
     early = h.gate_run(repo, tr, "f44-early")[1]
     open(f"{repo}/docs/evidence/verify-{fix}-F1.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD {fix}\nFEATURES: F1\n")
@@ -439,26 +439,26 @@ def f44():
     # SPEC §5: полный круг NEEDS_WORK с блокирующей по F2 — починка и точечный PASS по F2, второго полного круга нет
     nw, tn = h.gate_fixture(src, launch, full=True, items=True)
     v = next(n for n in os.listdir(f"{nw}/docs/evidence") if n.startswith("verify-"))
-    open(f"{nw}/docs/evidence/{v}", "w").write("VERDICT: NEEDS_WORK\nFEATURES: F1, F2\n\n## Блокирующие\n- **F2: мутация выжила — bin/b: B → b** · чек `bin/b` остался зелёным\n")
+    open(f"{nw}/docs/evidence/{v}", "w").write("VERDICT: NEEDS_WORK\n/verify-phase · docs/SPEC-1.md · HEAD x\nFEATURES: F1, F2\n\n## Блокирующие\n- **F2: мутация выжила — bin/b: B → b** · чек `bin/b` остался зелёным\n")
     h.ship(nw, "вердикт полного круга", f"docs/evidence/{v}")
     nw_none = h.gate_run(nw, tn, "f44-nw-none")[1]
     nwb = next(n for n in os.listdir(f"{nw}/docs/evidence") if re.fullmatch(r"verify-[0-9a-f]+\.txt", n))[7:-4]
-    open(f"{nw}/docs/evidence/verify-{nwb}-F2.txt", "w").write("VERDICT: PASS\nFEATURES: F2\n")  # точечный PASS до починки
+    open(f"{nw}/docs/evidence/verify-{nwb}-F2.txt", "w").write("VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD x\nFEATURES: F2\n")  # точечный PASS до починки
     h.ship(nw, "точечный PASS по F2 до починки", f"docs/evidence/verify-{nwb}-F2.txt")
     open(f"{nw}/bin/b-fix", "w").write("echo B\n")
     h.ship(nw, "F2.2: убить выжившую мутацию", "bin/b-fix")
     fx2 = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=nw, capture_output=True, text=True).stdout.strip()
-    open(f"{nw}/docs/evidence/verify-{fx2}-F2.txt", "w").write(f"VERDICT: PASS\nFEATURES: F2\n")
+    open(f"{nw}/docs/evidence/verify-{fx2}-F2.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD x\nFEATURES: F2\n")
     h.ship(nw, "точечный PASS по F2", f"docs/evidence/verify-{fx2}-F2.txt")
     nw_ok = h.gate_run(nw, tn, "f44-nw-ok")[1]
     os.remove(f"{nw}/docs/evidence/verify-{fx2}-F2.txt"); h.ship(nw, "без точечного после починки", f"docs/evidence/verify-{fx2}-F2.txt")
     nw_stale = h.gate_run(nw, tn, "f44-nw-stale")[1]
-    open(f"{nw}/docs/evidence/verify-{fx2}-F2.txt", "w").write("VERDICT: PASS\nFEATURES: F2\n"); h.ship(nw, "точечный PASS по F2 снова", f"docs/evidence/verify-{fx2}-F2.txt")
+    open(f"{nw}/docs/evidence/verify-{fx2}-F2.txt", "w").write("VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD x\nFEATURES: F2\n"); h.ship(nw, "точечный PASS по F2 снова", f"docs/evidence/verify-{fx2}-F2.txt")
     # точечный NEEDS_WORK: фича, которую он назвал и не блокировал, проверена; блокированная — нет
     open(f"{nw}/bin/b-fix2", "w").write("echo B\n"); open(f"{nw}/bin/a-fix", "w").write("echo A\n")
     h.ship(nw, "F1.1, F2.1: починка обеих", "bin/b-fix2", "bin/a-fix")
     fx3 = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=nw, capture_output=True, text=True).stdout.strip()
-    open(f"{nw}/docs/evidence/verify-{fx3}-F1-F2.txt", "w").write("VERDICT: NEEDS_WORK\nFEATURES: F1, F2\n\n## Блокирующие\n- **F2.1: не подтверждён своим прогоном** — x\n")
+    open(f"{nw}/docs/evidence/verify-{fx3}-F1-F2.txt", "w").write("VERDICT: NEEDS_WORK\n/verify-phase · docs/SPEC-1.md · HEAD x\nFEATURES: F1, F2\n\n## Блокирующие\n- **F2.1: не подтверждён своим прогоном** — x\n")
     h.ship(nw, "точечный NEEDS_WORK по F1, F2", f"docs/evidence/verify-{fx3}-F1-F2.txt")
     mixed = h.gate_run(nw, tn, "f44-mixed")[1]
     f2 = lambda r: next((l[2:] for l in r.get("reason", "").split("\n") if l.startswith("- F2:")), "нет строки F2")

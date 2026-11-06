@@ -82,10 +82,14 @@ def phase_commits():
     return base[:7], out
 
 
-def probes():
-    out = {}
+def probes(spec):
+    """Строка пробы пункта — только из файла своей SPEC: первая строка `spec: SPEC-<n>` (SPEC-v3.4 F1.3)."""
+    out, own = {}, "spec: " + re.sub(r"\.md$", "", os.path.basename(spec or ""))
     for p in sorted(glob.glob("docs/evidence/F*-*-result.txt")):
-        for l in read(p).splitlines():
+        lines = read(p).splitlines()
+        if not lines or lines[0].strip() != own:
+            continue
+        for l in lines:
             m = re.match(r"^(F\d+\.\d+) (.+)$", l.strip())
             if m and m.group(1) not in out and m.group(1).startswith(os.path.basename(p).split("-")[0] + "."):
                 out[m.group(1)] = (p, m.group(2))
@@ -144,7 +148,7 @@ def main(argv):
     os.chdir(git("rev-parse", "--show-toplevel").strip() or ".")
     spec, items = spec_items()
     base, commits = phase_commits()
-    seen = probes()
+    seen = probes(spec)
     known = {it["id"] for it in items}
     for c in commits:  # id не пункт этого SPEC (опечатка F1.10, чужой F9.9) — коммит без пункта
         c["ids"] = [i for i in c["ids"] if i in known]

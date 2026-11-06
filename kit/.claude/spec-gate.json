@@ -1,6 +1,6 @@
 {
   "mode": "active",
-  "caps": { "blocks": 12, "hours": 3, "same_list": 3 },
+  "caps": { "same_list": 3 },
   "jev": { "timeout_ms": 15000 },
   "questions": {
     "item_status": {
