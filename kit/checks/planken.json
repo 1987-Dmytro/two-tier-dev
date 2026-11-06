@@ -28,7 +28,8 @@
     "stoppwoerter": [],
     "fertige_saetze": [],
     "nummer_feld": null,
-    "nummer_frage": null
+    "nummer_frage": null,
+    "ziffern": null
   },
   "canary": {
     "p95_gelb_ms": null,

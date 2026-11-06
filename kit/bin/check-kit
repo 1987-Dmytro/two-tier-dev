@@ -480,9 +480,9 @@ LIVE_CFG = {"live": {"word_max_ms": 3500, "word_max_sicher_ms": 5000, "warten_ms
                      "fertige_saetze": ["Gerne."], "nummer_feld": "rueckruf", "nummer_frage": "nummer.*\\?"}}
 
 
-def live_call(cid, turns, summary=None, caller="…98"):
+def live_call(cid, turns, summary=None, caller="…98", channel="linie"):
     """Синтетический звонок (без людей и номеров): строки журнала и запись. Ход: said, bot, ms, fc, way, llm, hirn, flags (HIRN), chain (KETTE), no_hirn, abbruch, fl."""
-    lines, tr = [f"12:00:00 | INFO | CALL_START call={cid} channel=linie caller={caller}"], [{"role": "bot", "text": "Guten Tag."}]
+    lines, tr = [f"12:00:00 | INFO | CALL_START call={cid} channel={channel} caller={caller}"], [{"role": "bot", "text": "Guten Tag."}]
     for n, x in enumerate(turns, 1):
         tr.append({"role": "caller", "text": x.get("said", "Ja.")})
         if x.get("fl"):
@@ -497,15 +497,16 @@ def live_call(cid, turns, summary=None, caller="…98"):
     return lines, {"call_id": cid, "transcript": tr, "summary": summary or {}}
 
 
-def live_run(d, calls, args=("--n", "1")):
+def live_run(d, calls, args=("--n", "1"), cwd=None):
+    """Звонки в live/ и прогон check-live из cwd (по умолчанию корень фикстуры): no_record — звонок без записи, --planken в args перекрывает планку фикстуры."""
     j, r = [], []
     for c in calls:
-        lines, rec = live_call(**c)
+        lines, rec = live_call(**{k: v for k, v in c.items() if k != "no_record"})
         j += lines
-        r.append(json.dumps(rec, ensure_ascii=False))
+        r += [] if c.get("no_record") else [json.dumps(rec, ensure_ascii=False)]
     put(d, "live/journal.txt", "\n".join(j) + "\n")
     put(d, "live/records.jsonl", "\n".join(r) + "\n")
-    return sh(["bin/check-live", "live/journal.txt", "live/records.jsonl", *args, "--planken", "live/planken.json"], d)
+    return sh([f"{d}/bin/check-live", f"{d}/live/journal.txt", f"{d}/live/records.jsonl", "--planken", f"{d}/live/planken.json", *args], cwd or d)
 
 
 class FakeSmtp:
@@ -545,10 +546,28 @@ class FakeSmtp:
 def section_fenster():
     sec.clear()
     tools = ("check-frozen-diff", "check-passport", "check-fenster", "check-live")
+
+    def fresh():  # свой проект на сценарий: своя история деплоев, своё окно
+        p = project({"basis": None, "module": {}}, tools=tools, extra={"live/planken.json": json.dumps(LIVE_CFG)})
+        shutil.copy2(f"{root}/scripts/rollback.template.sh", f"{p}/scripts/rollback.sh")
+        return p
+
+    def step(p):  # следующий коммит мимо хуков → его короткий sha
+        sh(["git", "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "x"], p)
+        return sh(["git", "rev-parse", "--short", "HEAD"], p)[1]
+
+    def sides_line(item, sides):  # строка пробы: ключи SPEC (все стороны ключа прошли — OK), сырой вывод сторон; не сошлось — их имена
+        words = " ".join(f"{k}={'OK' if all(s[2] for s in sides if s[0] == k) else 'нет'}" for k in dict.fromkeys(s[0] for s in sides))
+        missed = [s[1] for s in sides if not s[2]]
+        probe(item, not missed, f"{words} · " + "; ".join(f"{s[1]} — {s[3]}" for s in sides) + (f" · НЕ СОШЛОСЬ: {', '.join(missed)}" if missed else ""))
+    raw = lambda r, n=1, width=100: f"rc {r[0]} «{tail(r[1], n, width)}»"
+    window = lambda p, *a: sh(["bin/check-fenster", *a], p)
+    undo = lambda p, sha, **kw: sh(["bash", "scripts/rollback.sh"], p, env=dict(GIT_ENV, SHA=sha, **kw))
+    prints = lambda r: next((l[len("rollback: "):] for l in r[1].splitlines() if l.startswith("rollback: ")), "")  # команда из строки отката
+    says = lambda r, sha: prints(r) == f"make rollback SHA={sha}"
     # F4.1 — строка отката; окно: DEPLOY_OK на линию без LIVE_OK/ROLLBACK_OK — красное
-    d = project({"basis": None, "module": {}}, tools=tools, extra={"live/planken.json": json.dumps(LIVE_CFG)})
-    shutil.copy2(f"{root}/scripts/rollback.template.sh", f"{d}/scripts/rollback.sh")
-    fen = lambda: sh(["bin/check-fenster"], d)
+    d = fresh()
+    fen = lambda: window(d)
     empty = fen()
     a1 = deploy(d, DEPLOY_LINIE=1)
     r1 = fen()
@@ -573,13 +592,92 @@ def section_fenster():
     zeile = ("rollback: none" in a1[1] and f"rollback: make rollback SHA={sha1}" in a2[1] and "DEPLOY_OK" in a2[1] and "rollback: make rollback" in fail_line[1] and "DEPLOY_FAIL step=regress" in fail_line[1])
     rot = r1[0] == 1 and r1[1].startswith("FENSTER_ROT") and r2[0] == 1 and twice[0] == 1
     gruen = empty[0] == 0 and g1[0] == 0 and g2[0] == 0 and g3[0] == 0 and "linie=0" in a0[1] and live_ok[1].splitlines()[-1] == "LIVE_OK" and "ROLLBACK_OK" in back[1] and os.path.exists(f"{d}/rolled-back") and bad[0] == 1 and gone[0] == 1
-    probe("F4.1", zeile and rot and gruen, f"zeile={'OK' if zeile else 'нет'} fenster_rot={'OK' if rot else 'нет'} · первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт строку отката «{tail(fail_line[1], 2)}» · "
-          f"без живой проверки — rc {r1[0]} «{tail(r1[1])[:70]}»; LIVE_OK — rc {g1[0]} «{tail(g1[1])}»; откат «{tail(back[1])}» — rc {g2[0]}; linie=0 — rc {g3[0]}; два деплоя на окно — rc {twice[0]}; SHA мусор — rc {bad[0]}, нет коммита — rc {gone[0]}; журнала нет — rc {empty[0]}")
+    # история отката: повтор деплоя (E6), красный деплой (S8), откат (S9)
+    h = fresh()
+    s0 = step(h)
+    deploy(h)
+    h_only = deploy(h)
+    s1 = step(h)
+    h_next, h_same = deploy(h), deploy(h)
+    step(h)
+    h_red = deploy(h, regress="exit 1")
+    step(h)
+    h_after_red = deploy(h)
+    undo(h, s1)
+    s4 = step(h)
+    h_after_undo = deploy(h)
+    undo(h, s1)
+    sh(["git", "checkout", "-q", s1], h)
+    h_same_undone = deploy(h)
+    undo(h, sh(["git", "rev-parse", s4], h)[1])  # полный SHA: в истории тот же короткий, что у деплоя
+    sh(["git", "checkout", "-q", s4], h)
+    h_full = deploy(h)
+    # окно: без DEPLOY_LINIE (S10), значение не 0 и не 1 (E10), красная выкатка (S7), упавший откат (S0), короткий SHA (S12), строка дословно (E17, S11), каталог запуска и явный путь (E4), метки в строке (E16, S4)
+    w = fresh()
+    w0 = sh(["git", "rev-parse", "--short", "HEAD"], w)[1]
+    plain = deploy(w)
+    plain_win = window(w)
+    os.remove(f"{w}/rolled-out")
+    refused = [deploy(w, regress="touch arg-regress; echo REGRESS_OK", PASSPORT_CMD="touch arg-passport", DEPLOY_LINIE=v) for v in ("true", "01", " 1", "2")]
+    no_step = not any(os.path.exists(f"{w}/{f}") for f in ("arg-passport", "rolled-out", "arg-regress"))
+    refused_win = window(w)
+    step(w)
+    rollout = sh(["bash", "scripts/deploy.sh"], w, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false"))
+    opened = deploy(w, DEPLOY_LINIE=1)
+    open_root, open_sub = window(w), sh([f"{w}/bin/check-fenster"], f"{w}/src")
+    no_file, is_dir = window(w, "нет.log"), window(w, "docs")
+    with open(f"{w}/bytes.log", "wb") as f:
+        f.write(b"\xff\xfe\n")
+    junk = window(w, "bytes.log")
+    outside = sh([f"{w}/bin/check-fenster"], tempfile.mkdtemp(prefix="check-kit-nogit-", dir=TMP))
+    stand = read(f"{w}/.git/deploy-stand")
+    failed = undo(w, w0, ROLLBACK_CMD="false")
+    failed_win, stand_after = window(w), read(f"{w}/.git/deploy-stand")
+    too_short = undo(w, w0[:4])
+    rollback_text = read(f"{root}/scripts/rollback.template.sh")
+    target = re.search(r"Цель Makefile проекта:\s*(rollback:.*)", rollback_text)
+    put(w, "Makefile", (target[1] if target else "rollback: ; @false") + "\n")
+    via_make = sh(["bash", "-c", prints(opened)], w, env=dict(GIT_ENV, ROLLBACK_CMD='echo "$ROLLBACK_SHA" > rolled-to'))
+    rolled_to = read(f"{w}/rolled-to").strip() if os.path.exists(f"{w}/rolled-to") else ""
+    closed = window(w)
+
+    def by_log(text):
+        put(w, "l.log", text)
+        return window(w, "l.log")
+    one = "DEPLOY_OK sha=abc1234 linie=1 rollback=none\n"
+    logs = [("BOM", "\ufeff" + one, 1), ("префикс времени", "05:30:00 " + one, 1), ("префикс без пробела", "[05:30:00]" + one, 1), ("LIVE_OK с префиксом", "05:30:00 " + one + "05:40:00 LIVE_OK sha=abc1234\n", 0),
+            ("ROLLBACK_OK с префиксом", one + "05:40:00 ROLLBACK_OK sha=abc1233\n", 0), ("S4 ROLLBACK_FAIL", one + "ROLLBACK_FAIL sha=abc1233 rc=1\n", 1), ("LIVE_FAIL", one + "LIVE_FAIL x\n", 1), ("linie=0 с префиксом", "05:30:00 DEPLOY_OK sha=abc1234 linie=0 rollback=none\n", 0)]
+    log_runs = [(n, by_log(text), want) for n, text, want in logs]
+    sides_line("F4.1", [("zeile", "строка отката", zeile, f"первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт её «{tail(fail_line[1], 2)}»"),
+                        ("zeile", "S7 красная выкатка", rollout[0] == 1 and says(rollout, w0) and "DEPLOY_FAIL step=rollout" in rollout[1], raw(rollout, 2)),
+                        ("zeile", "E6 единственный sha второй раз", prints(h_only) == "none" and "rollback=none" in h_only[1], raw(h_only, 2)),
+                        ("zeile", "следующий деплой", says(h_next, s0) and f"rollback={s0}" in h_next[1], raw(h_next, 2)),
+                        ("zeile", "E6 тот же sha второй раз", says(h_same, s0) and f"DEPLOY_OK sha={s1} linie=0 rollback={s0}" in h_same[1], raw(h_same, 2)),
+                        ("zeile", "S8 красный деплой не цель отката", h_red[0] == 1 and says(h_red, s1) and says(h_after_red, s1), f"{raw(h_red, 2)} → {raw(h_after_red, 2)}"),
+                        ("zeile", "S9 откат двигает историю", says(h_after_undo, s1), raw(h_after_undo, 2)),
+                        ("zeile", "откат дописывает, не затирает", says(h_same_undone, s4), raw(h_same_undone, 2)),
+                        ("zeile", "откат полным SHA, деплой того же коммита", says(h_full, s1), raw(h_full, 2)),
+                        ("zeile", "E17 S11 строка дословно через Makefile шапки", via_make[0] == 0 and f"ROLLBACK_OK sha={w0}" in via_make[1] and rolled_to == w0 and closed[0] == 0, f"{raw(via_make)}, ROLLBACK_SHA совпал — {rolled_to == w0}, окно — {raw(closed)}"),
+                        ("zeile", "S12 SHA из 4 знаков", too_short[0] == 1 and "ROLLBACK_FAIL" in too_short[1], raw(too_short)),
+                        ("zeile", "SHA мусор и нет коммита", bad[0] == 1 and gone[0] == 1, f"rc {bad[0]}, rc {gone[0]}"),
+                        ("zeile", "E11 шапка отката", "любой существующий коммит" in rollback_text and "подсказка оператору" in rollback_text, "названо" if "подсказка оператору" in rollback_text else "нет"),
+                        ("fenster_rot", "окно", rot and gruen, f"без живой проверки — rc {r1[0]} «{tail(r1[1])[:70]}»; LIVE_OK — rc {g1[0]} «{tail(g1[1])}»; откат «{tail(back[1])}» — rc {g2[0]}; linie=0 — rc {g3[0]}; два деплоя на окно — rc {twice[0]}; журнала нет — rc {empty[0]}"),
+                        ("fenster_rot", "S10 без DEPLOY_LINIE", "linie=0" in plain[1] and plain_win[0] == 0, f"{raw(plain)} → {raw(plain_win)}"),
+                        ("fenster_rot", "E10 DEPLOY_LINIE не 0 и не 1", all(r[0] == 1 and "DEPLOY_FAIL step=args" in r[1] and "DEPLOY_OK" not in r[1] for r in refused) and no_step and refused_win[0] == 0, f"{raw(refused[0])}, шагов не было — {no_step}"),
+                        ("fenster_rot", "S0 упавший откат", failed[0] == 1 and "ROLLBACK_FAIL" in failed[1] and failed_win[0] == 1 and stand_after == stand, f"{raw(failed)} → {raw(failed_win)}, история та же — {stand_after == stand}"),
+                        ("fenster_rot", "E4 из подкаталога", open_root[0] == 1 and open_sub[0] == 1 and "FENSTER_ROT" in open_sub[1], f"корень {raw(open_root)}, src {raw(open_sub)}"),
+                        ("fenster_rot", "E4 явный путь", all(r[0] == 2 and r[1].startswith("FENSTER_ROT журнал=") for r in (no_file, is_dir, junk)), f"нет файла {raw(no_file)}, каталог {raw(is_dir)}, битые байты {raw(junk)}"),
+                        ("fenster_rot", "вне репозитория", outside[0] == 2 and "FENSTER_ROT" in outside[1], raw(outside)),
+                        *[("fenster_rot", f"журнал: {n}", r[0] == want and ("FENSTER_ROT sha=abc1234" in r[1] if want else "FENSTER_GRUEN" in r[1]), raw(r, 1, 30)) for n, r, want in log_runs]])
     # F4.2 — фикстуры решений 389–393: своя сторона на каждое определение
     q_name, q_num = "Wie heissen Sie?", "Unter welcher Nummer erreiche ich Sie?"
     named = {"name": "Max Muster"}
     long_guard = {"said": "Ja.", "bot": "Verstanden.", "ms": 4200, "flags": " hedge=1"}
     c = lambda *turns, **k: [{"cid": k.get("cid", "x"), "turns": list(turns), "summary": k.get("summary")}]
+    gut = lambda cid, ms=2000: {"cid": cid, "turns": [{"bot": "Gut.", "ms": ms}]}
+    n1 = ("--n", "1")
+    put(d, "live/planken-z.json", json.dumps({"live": {**LIVE_CFG["live"], "ziffern": "\\d|\\b(?:null|eins|sieben|fuenf)\\b"}}))
+    worte = (*n1, "--planken", f"{d}/live/planken-z.json")
     cases = [("зелёный звонок", c({"bot": "Gut.", "ms": 1800}), "LIVE_OK", ("--n", "1")),
              ("389 один звонок при --n 2", c({"bot": "Gut."}), "LIVE_FAIL anrufe=1<2", ("--n", "2")),
              ("390 вопрос об уже названном", c({"bot": q_name}, {"said": "Max Muster.", "bot": "Und wie heissen Sie?"}, summary=named), "wiederholt=1", ("--n", "1")),
@@ -600,20 +698,80 @@ def section_fenster():
              ("ход диктовки вне выборки", c({"bot": q_num}, {"said": "0 1 7 2", "bot": "Danke.", "ms": 6000}), "LIVE_OK", ("--n", "1")),
              ("wortlaute — отчёт, не судится", c({"bot": "Gut.", "fl": 3}), "wortlaute=3", ("--n", "1")),
              ("журнал без HIRN", c({"bot": "Gut.", "no_hirn": True}), "journal_ohne_HIRN", ("--n", "1")),
-             ("чужой хвост номера", [{"cid": "a", "turns": [{"bot": "Gut."}], "caller": "…11"}], "keine_anrufe", ("--n", "1", "--anrufer", "98"))]
+             ("чужой хвост номера", [{"cid": "a", "turns": [{"bot": "Gut."}], "caller": "…11"}], "keine_anrufe", ("--n", "1", "--anrufer", "98")),
+             ("S2 звонок без записи", [{**gut("x"), "no_record": True}], "x: keine_aufzeichnung", n1),
+             ("S3 только канал stand", [{**gut("x"), "channel": "stand"}], "keine_anrufe", n1),
+             ("S5 старый красный, новый зелёный", [gut("alt", 3600), gut("neu", 1800)], "LIVE_OK", n1),
+             ("S5 старый зелёный, новый красный", [gut("alt", 1800), gut("neu", 3600)], "neu: word_max=3600>3500", n1),
+             ("S6 без --n один звонок", [gut("x")], "LIVE_FAIL anrufe=1<2", ()),
+             ("S6 без --n два звонка", [gut("a"), gut("b")], "LIVE_OK", ()),
+             ("S13 spaet=1 — предохранитель", c({"bot": "Gut.", "ms": 4200, "flags": " spaet=1"}), "sicherungen=1/1", n1),
+             ("S14 hedge=0 — не предохранитель", c({"bot": "Gut.", "ms": 4200, "flags": " hedge=0"}), "word_max=4200>3500", n1),
+             ("S15 wartend только при weg=json", c({"bot": "Gut.", "ms": 4200, "way": "strom", "fc": 2500, "llm": 900}), "word_max=4200>3500", n1),
+             ("S16 wartend ровно на warten_ms", c({"bot": "Gut.", "ms": 4200, "way": "json", "fc": 1900, "llm": 900}), "wartend=1/1", n1),
+             ("S17 готовая фраза одна", c({"bot": "Gerne.", "ms": 4200, "fc": 500, "hirn": 3000}), "word_max=4200>3500", n1),
+             ("S18 word_max ровно на планке", c({"bot": "Gut.", "ms": 3500}), "LIVE_OK", n1),
+             ("word_max_sicher ровно на планке", c({**long_guard, "ms": 5000}), "LIVE_OK", n1),
+             ("S19 имя целиком на чужой вопрос", c({"bot": "Worum geht es?"}, {"said": "Max Muster.", "bot": q_name}, summary=named), "wiederholt=1", n1),
+             ("S20 номер из 3 цифр", c({"bot": q_num}, {"said": "0 1 7", "bot": q_num}), "wiederholt=1", n1),
+             ("номер из 2 цифр не назван", c({"bot": q_num}, {"said": "0 1", "bot": q_num}), "LIVE_OK", n1),
+             ("E2 звонок без реплики", c(), "x: turns=0", n1),
+             ("E14 latency_ms не число", c({"bot": "Gut.", "ms": "schnell"}), "LIVE_OK", n1),
+             ("E14 рядом красный ход", c({"bot": "Gut.", "ms": "schnell"}, {"bot": "Gut.", "ms": 3600}), "word_max=3600>3500", n1),
+             ("E5 цифры словами без ключа", c({"bot": q_num}, {"said": "null eins sieben", "bot": q_num}), "LIVE_OK", n1),
+             ("E5 цифры словами, ключ ziffern", c({"bot": q_num}, {"said": "null eins sieben", "bot": q_num}), "wiederholt=1", worte),
+             ("E5 ключ судит нормализованный ответ", c({"bot": q_num}, {"said": "Null Fünf Sieben", "bot": q_num}), "wiederholt=1", worte),
+             ("E5 ключ, две цифры словами", c({"bot": q_num}, {"said": "null eins", "bot": q_num}), "LIVE_OK", worte)]
     results = [(name, live_run(d, calls, args), want) for name, calls, want, args in cases]
-    report_only = ("wartend=1/1", "klang=1/1", "wortlaute=3")  # отчёт: звонок зелёный
+    report_only = ("wartend=1/1", "klang=1/1", "wortlaute=3", "sicherungen=1/1")  # отчёт: звонок зелёный
     hits = [(n, r, w) for n, r, w in results if w in r[1] and (r[1].splitlines()[-1] == "LIVE_OK" and r[0] == 0 if w == "LIVE_OK" or w in report_only else "LIVE_FAIL" in r[1] and r[0] == 1)]
     empty_keys = sh(["bin/check-live", "live/journal.txt", "live/records.jsonl", "--planken", os.path.abspath(f"{root}/checks/planken.json")], d)
-    missed = [f"{n}: rc {r[0]} «{tail(r[1], 2, 120)}» ≠ {w}" for n, r, w in results if (n, r, w) not in hits]
-    probe("F4.2", not missed and empty_keys[0] == 2 and "LIVE_FAIL planken=" in empty_keys[1],
-          f"fixturen={len(hits)}/{len(results)} · " + "; ".join(f"{n} — {tail(r[1], 1, 70)}" for n, r, _ in results[:4]) + " · …; " + "; ".join(f"{n} — {tail(r[1], 2, 120)}" for n, r, _ in results[11:15])
-          + f" · ключи шаблона пусты — rc {empty_keys[0]} «{tail(empty_keys[1])[:60]}»" + (f" · НЕ СОШЛОСЬ: {'; '.join(missed)}" if missed else ""))
-    # F4.3 — канарейка: письмо OK|GELB|ROT, эталон красный → ROT, итог ≤ 60 с
+    # стороны вне таблицы: usage (E1), нет файлов и битые байты (E14), битый ключ (E5), окно и каталог запуска (E1, E2, E4), шапка судьи (E3, E15)
+    low = [live_run(d, [gut("x")], ("--n", v)) for v in ("0", "-1")]
+    no_files = [sh(["bin/check-live", j_, r_, "--planken", "live/planken.json"], d) for j_, r_ in (("нет.txt", "live/records.jsonl"), ("live/journal.txt", "нет.jsonl"))]
+    live_run(d, [gut("x")])
+    for rel in ("live/journal.txt", "live/records.jsonl"):
+        with open(f"{d}/{rel}", "ab") as f:
+            f.write(b"\xff\xfe\n")
+    junk_files = sh(["bin/check-live", "live/journal.txt", "live/records.jsonl", *n1, "--planken", "live/planken.json"], d)
+
+    def bad_ziffern(value):
+        put(d, "live/planken-bad.json", json.dumps({"live": {**LIVE_CFG["live"], "ziffern": value}}))
+        return live_run(d, [gut("x")], (*n1, "--planken", f"{d}/live/planken-bad.json"))
+    bad_re = [bad_ziffern("("), bad_ziffern(5)]
+    v = fresh()
+    deploy(v, DEPLOY_LINIE=1)
+    low_open = (live_run(v, [gut("x", 9000)], ("--n", "-1")), window(v))
+    mute_open = (live_run(v, [{"cid": "a", "turns": []}, {"cid": "b", "turns": []}], ()), window(v))
+    from_sub, sub_closed = live_run(v, [gut("x")], cwd=f"{v}/src"), window(v)
+    no_deploy = fresh()
+    no_window = live_run(no_deploy, [gut("x")])
+    live_text = read(f"{root}/bin/check-live")
+    template_live = json.loads(read(f"{root}/checks/planken.json"))["live"]
+    extras = [("ключи шаблона пусты", empty_keys[0] == 2 and "LIVE_FAIL planken=" in empty_keys[1], raw(empty_keys, 1, 60)),
+              ("E5 пустой ключ live.ziffern в шаблоне кита", root != "kit" or ("ziffern" in template_live and template_live["ziffern"] is None), "есть" if "ziffern" in template_live else "нет"),
+              ("E1 --n меньше 1", all(r[0] == 2 and "LIVE_FAIL" in r[1] and "LIVE_OK" not in r[1] for r in low) and low_open[0][0] == 2 and low_open[1][0] == 1, f"{raw(low[0])}, {raw(low[1])}, окно — {raw(low_open[1], 1, 30)}"),
+              ("E2 без реплик окно открыто", mute_open[0][0] == 1 and "a: turns=0" in mute_open[0][1] and "b: turns=0" in mute_open[0][1] and mute_open[1][0] == 1, f"{raw(mute_open[0])}, окно — {raw(mute_open[1], 1, 30)}"),
+              ("E14 нет журнала, нет записей", all(r[0] == 2 and r[1].startswith("LIVE_FAIL") and "Traceback" not in r[1] for r in no_files), f"{raw(no_files[0])}, {raw(no_files[1])}"),
+              ("битые байты в журнале и записях", junk_files[0] == 0 and junk_files[1].splitlines()[-1] == "LIVE_OK", raw(junk_files)),
+              ("E5 битый ключ ziffern", all(r[0] == 2 and "LIVE_FAIL planken=live.ziffern" in r[1] for r in bad_re), f"{raw(bad_re[0])}, {raw(bad_re[1])}"),
+              ("E4 строка закрытия у корня git", from_sub[0] == 0 and from_sub[1].splitlines()[-1] == "LIVE_OK" and sub_closed[0] == 0 and not os.path.exists(f"{v}/src/docs"), f"из src {raw(from_sub)}, окно — {raw(sub_closed)}"),
+              ("журнала окна нет — строка его не создаёт", no_window[0] == 0 and no_window[1].splitlines()[-1] == "LIVE_OK" and not os.path.exists(f"{no_deploy}/docs/evidence/deploy-window.log"), raw(no_window)),
+              ("E3 E15 шапка судьи", "LIVE_SEIT" in live_text and "не пересекаются" in live_text, "названо" if "LIVE_SEIT" in live_text else "нет")]
+    missed = [f"{n}: rc {r[0]} «{tail(r[1], 2, 120)}» ≠ {w}" for n, r, w in results if (n, r, w) not in hits] + [n for n, ok, _ in extras if not ok]
+    probe("F4.2", not missed,
+          f"fixturen={len(hits) + sum(bool(x[1]) for x in extras)}/{len(results) + len(extras)} · " + "; ".join(f"{n} — {tail(r[1], 1, 70)}" for n, r, _ in results[:4]) + " · …; " + "; ".join(f"{n} — {tail(r[1], 2, 120)}" for n, r, _ in results[11:15])
+          + " · …; " + "; ".join(f"{n} — rc {r[0]} {tail(r[1], 1, 60)}" for n, r, _ in results[21:]) + " · " + "; ".join(f"{n} — {x}" for n, _, x in extras) + (f" · НЕ СОШЛОСЬ: {'; '.join(missed)}" if missed else ""))
+    # F4.3 — канарейка: письмо OK|GELB|ROT, эталон красный → ROT, весь процесс ≤ 60 с
     smtp = FakeSmtp()
     cn = tempfile.mkdtemp(prefix="check-kit-canary-", dir=TMP)
     shutil.copy2(f"{root}/scripts/canary.template.py", f"{cn}/canary.py")
     put(cn, "planken.json", json.dumps({"canary": {"p95_gelb_ms": 3200, "word_max_rot_ms": 6000, "timeout_s": 2}}))
+
+    def plank(**over):  # файл планки: поля поверх рабочих
+        name = f"p{len(os.listdir(cn))}.json"
+        put(cn, name, json.dumps({"canary": {"p95_gelb_ms": 3200, "word_max_rot_ms": 6000, "timeout_s": 2, **over}}))
+        return name
 
     def canary(cmd, planken="planken.json", port=None):
         before = len(smtp.subjects)
@@ -621,22 +779,45 @@ def section_fenster():
         env = dict(GIT_ENV, CANARY_CMD=cmd, CANARY_PLANKEN=planken, CANARY_SMTP=f"127.0.0.1:{port or smtp.port}", CANARY_PROJEKT="Fixtur")
         rc, text = sh(["python3", "canary.py"], cn, env=env)
         return rc, text, smtp.subjects[before:], time.monotonic() - t0
-    mess = lambda p95=2000, wm=3000, rot=0: f"bash -c 'echo CANARY_MESS p95={p95} word_max={wm} rot={rot}'"
-    gruen, gelb = canary(mess()), canary(mess(p95=4000))
-    rot1, rot2, rot3 = canary(mess(rot=2)), canary(mess(wm=7000)), canary("bash -c 'echo неразобранный вывод'")
-    hang = canary("sleep 20")
+    ml = lambda p95=2000, wm=3000, rot=0: f"CANARY_MESS p95={p95} word_max={wm} rot={rot}"
+    mess = lambda **k: f"bash -c 'echo {ml(**k)}'"
+    two = lambda a, b: f"bash -c 'echo {a}; echo {b}'"
     put(cn, "empty.json", open(f"{root}/checks/planken.json", encoding="utf-8").read())
-    keys = canary(mess(), planken="empty.json")
+    red_cases = [("rot>0", mess(rot=2), "rot", None), ("S1 rot=1", mess(rot=1), "rot", None), ("word_max выше", mess(wm=7000), "word_max", None), ("word_max на мс выше", mess(wm=6001), "word_max", None),
+                 ("без строки", "bash -c 'echo неразобранный вывод'", "stand", None), ("E8 код 3 при зелёной строке", f"bash -c 'echo {ml()}; exit 3'", "stand", None),
+                 ("E8 rot во второй строке", two(ml(), ml(rot=5)), "rot", None), ("rot в первой строке", two(ml(rot=5), ml()), "rot", None),
+                 ("word_max во второй строке", two(ml(), ml(wm=7000)), "word_max", None), ("word_max в первой строке", two(ml(wm=7000), ml()), "word_max", None), ("битая строка рядом с зелёной", two(ml(), "CANARY_MESS p95=x"), "stand", None),
+                 ("E7 пустая команда", "", "stand", None), ("команда из пробелов", "  ", "stand", None), ("незакрытая кавычка", "bash -c 'echo", "stand", None), ("нет такой команды", "/нет/такой/команды", "stand", None),
+                 ("E7 timeout_s строкой", mess(), "planken", plank(timeout_s="30")), ("timeout_s true", mess(), "planken", plank(timeout_s=True)), ("timeout_s пустой строкой", mess(), "planken", plank(timeout_s="")), ("порог p95 строкой", mess(), "planken", plank(p95_gelb_ms="3200")),
+                 ("порог word_max строкой", mess(), "planken", plank(word_max_rot_ms="x")), ("порог true", mess(), "planken", plank(word_max_rot_ms=True)), ("пустые ключи", mess(), "planken", "empty.json"), ("нет файла планки", mess(), "planken", "нет.json")]
+    green_cases = [("в планке", mess(), "OK"), ("p95 выше", mess(p95=4000), "GELB"), ("p95 на мс выше", mess(p95=3201), "GELB"), ("S21 word_max ровно на планке", mess(wm=6000), "OK"), ("S22 p95 ровно на планке", mess(p95=3200), "OK"),
+                   ("S23 строка не первая", f"bash -c 'echo запуск; echo {ml()}'", "OK"), ("E8 худший p95 во второй строке", two(ml(), ml(p95=4000)), "GELB"), ("худший p95 в первой строке", two(ml(p95=4000), ml()), "GELB"), ("две зелёные строки", two(ml(), ml()), "OK")]
+    red_runs = [(n, canary(cmd, planken=p or "planken.json"), g) for n, cmd, g, p in red_cases]
+    green_runs = [(n, canary(cmd), s) for n, cmd, s in green_cases]
+    hang = canary("sleep 20")
     dead = canary(mess(), port=1)
     smtp.close()
-    cap = sh(["python3", "-c", "import importlib.util as u; s = u.spec_from_file_location('c', 'canary.py'); m = u.module_from_spec(s); s.loader.exec_module(m); print(m.MAX_S, m.thresholds()[2])"], cn,
-             env=dict(GIT_ENV, CANARY_PLANKEN="too-long.json")) if not put(cn, "too-long.json", json.dumps({"canary": {"p95_gelb_ms": 1, "word_max_rot_ms": 1, "timeout_s": 300}})) else (1, "")
+    import socket
+    mute = socket.socket()
+    mute.bind(("127.0.0.1", 0))
+    mute.listen(5)  # соединение принято ядром, сервер молчит
+    silent = canary("sleep 20", port=mute.getsockname()[1])
+    mute.close()
+    show_cap = "import importlib.util as u; s = u.spec_from_file_location('c', 'canary.py'); m = u.module_from_spec(s); s.loader.exec_module(m); print(m.MAX_S, m.SMTP_S, m.thresholds()[2])"
+    caps = [sh(["python3", "-c", show_cap], cn, env=dict(GIT_ENV, CANARY_PLANKEN=p))[1] for p in (plank(timeout_s=300), plank(timeout_s=None))]
     timer, service = read(f"{root}/deploy/canary.timer"), read(f"{root}/deploy/canary.service")
-    units = "OnCalendar=" in timer and "Persistent=true" in timer and "Type=oneshot" in service and "scripts/canary.py" in service
-    ok_rot = all(x[0] == 1 and x[2] and x[2][0].endswith("Kontrolle: ROT") and "CANARY_ROT" in x[1] for x in (rot1, rot2, rot3, hang)) and "grund=timeout" in hang[1] and hang[3] < 10 and "grund=planken" in keys[1] and keys[0] == 1
-    ok_gruen = gruen[0] == 0 and gruen[2] == ["Fixtur Kontrolle: OK"] and "CANARY_OK" in gruen[1] and gelb[0] == 0 and gelb[2] == ["Fixtur Kontrolle: GELB"] and "GELB p95>3200" in gelb[1] and units and cap[1] == "60 60" and dead[0] == 0 and "CANARY_BRIEF_FEHLER" in dead[1]
-    probe("F4.3", ok_rot and ok_gruen, f"rot={'OK' if ok_rot else 'нет'} gruen={'OK' if ok_gruen else 'нет'} · в планке — rc {gruen[0]} «{tail(gruen[1])}», тема «{gruen[2]}»; p95 выше — «{tail(gelb[1])}», тема «{gelb[2]}» · rot>0 — rc {rot1[0]} «{tail(rot1[1])}», тема «{rot1[2]}»; "
-          f"word_max — «{tail(rot2[1])[:60]}»; без строки — «{tail(rot3[1])[:50]}»; повис — rc {hang[0]} «{tail(hang[1])[:60]}» за {hang[3]:.0f} с; пустые ключи — «{tail(keys[1])[:50]}» · потолок {cap[1]} с; письмо не ушло — rc {dead[0]} «{tail(dead[1])[:40]}»; таймер и служба {'есть' if units else 'нет'}")
+    limit = re.search(r"^TimeoutStartSec=(\d+)\s*$", service, re.M)
+    units = bool(re.search(r"^OnCalendar=(?:daily|\*-\*-\* \d\d:\d\d)", timer, re.M)) and "Persistent=true" in timer and "Type=oneshot" in service and "scripts/canary.py" in service and bool(limit) and int(limit[1]) > 60
+    is_rot = lambda x, grund: x[0] == 1 and x[2] == ["Fixtur Kontrolle: ROT"] and f"CANARY_ROT grund={grund}" in x[1] and "Traceback" not in x[1]
+    is_green = lambda x, state: x[0] == 0 and x[2] == [f"Fixtur Kontrolle: {state}"] and "CANARY_OK" in x[1] and ("GELB p95>3200" in x[1]) == (state == "GELB")
+    brief = lambda x: f"rc {x[0]} «{tail(x[1], 1, 70)}» {x[2]}"
+    sides_line("F4.3", [*[("rot", n, is_rot(x, g), brief(x)) for n, x, g in red_runs],
+                        ("rot", "повис", is_rot(hang, "timeout") and hang[3] < 10, f"{brief(hang)} за {hang[3]:.0f} с"),
+                        *[("gruen", n, is_green(x, s), brief(x)) for n, x, s in green_runs],
+                        ("gruen", "письмо не ушло", dead[0] == 0 and "CANARY_BRIEF_FEHLER" in dead[1], raw(dead, 1, 40)),
+                        ("gruen", "S24 E9 прогон повис, SMTP молчит", silent[0] == 1 and "grund=timeout" in silent[1] and "CANARY_BRIEF_FEHLER" in silent[1] and silent[3] < 20, f"{raw(silent, 2, 110)} за {silent[3]:.0f} с"),
+                        ("gruen", "E9 потолок: прогон + письмо", caps == ["60 10 49", "60 10 49"], f"MAX_S SMTP_S прогон при timeout_s 300 — {caps[0]}, при пустом — {caps[1]}"),
+                        ("gruen", "E13 таймер раз в день, служба дольше потолка", units, f"TimeoutStartSec={limit[1] if limit else 'нет'}")])
     # F4.4 — шаблоны SPEC §5 и GATE п. 0: без строки --templates красный
     green_t = sh([os.path.abspath(f"{root}/bin/check-budget"), "--templates"], root if root != "kit" else ".", env=dict(os.environ))
     copies, reds = tempfile.mkdtemp(prefix="check-kit-tpl-", dir=TMP), {}
@@ -658,9 +839,47 @@ def section_fenster():
     template_copy(no_gate)
     os.remove(f"{no_gate}/docs/GATE.template.md")
     reds["нет GATE"] = sh(["bin/check-budget", "--templates"], no_gate, env=dict(os.environ))
-    ok_t = green_t[0] == 0 and green_t[1].splitlines()[-1] == "BUDGET_OK"
-    ok_r = all(r[0] == 1 and "BUDGET_FAIL" in r[1] and ("FAIL contract" in r[1] or "FAIL templates" in r[1]) for r in reds.values())
-    probe("F4.4", ok_t and ok_r, f"templates={'OK' if ok_t else 'нет'} rot={'OK' if ok_r else 'нет'} · кит — {tail(green_t[1])} · без строки: " + ", ".join(f"{k} — rc {r[0]}" for k, r in reds.items())
+
+    sample = f"{copies}/sample"
+    template_copy(sample)
+    control = sh(["bin/check-budget", "--templates"], sample, env=dict(os.environ))  # без правки копия зелёная: красное ниже — от правки
+
+    def edited(name, rel, edit):  # правка одного шаблона → прогон --templates → шаблон на месте
+        text = read(f"{sample}/{rel}")
+        put(sample, rel, edit(text))
+        reds[name] = sh(["bin/check-budget", "--templates"], sample, env=dict(os.environ))
+        put(sample, rel, text)
+        return reds[name]
+    spec_t, gate_t = "docs/SPEC.template.md", "docs/GATE.template.md"
+    # S25–S27: каждая фраза договора снята отдельно, строка остаётся; список — здесь, не из CONTRACT
+    phrases = [(spec_t, p) for p in ("Регрессия модуля при закрытии", "`DEPLOY_OK` только после `REGRESS_OK`", "Правило закрытия", "гейт не закрывается с красным", "Окно деплоя", "`LIVE_OK`", "Паспорт модуля", "`DEPLOY_FAIL step=passport`")] \
+        + [(gate_t, p) for p in ("контрольный прогон", "гейт не закрывается с красным", "`bin/check-fenster`", "`FENSTER_GRUEN")]
+    no_phrase = [(p, edited(f"{rel[5:9]}: {p}", rel, lambda t, p=p: t.replace(p, ""))) for rel, p in phrases]
+    named_ok = all(any(l.startswith("FAIL contract") and p in l for l in r[1].splitlines()) for p, r in no_phrase)
+    # E12: фраза жива только в §5 вне комментария, строка 0 — в таблице вне комментария
+    five = ("- Регрессия модуля", "- Правило закрытия", "- Окно деплоя", "- Паспорт модуля")
+
+    def in_comment(t):
+        ls = t.split("\n")
+        at = [k for k, l in enumerate(ls) if l.startswith(five)]
+        return "\n".join(ls[:at[0]] + ["<!--"] + ls[at[0]:at[-1] + 1] + ["-->"] + ls[at[-1] + 1:])
+
+    def to_section6(t):
+        ls = t.split("\n")
+        rest = [l for l in ls if not l.startswith(five)]
+        at = next(k for k, l in enumerate(rest) if l.startswith("## 6"))
+        return "\n".join(rest[:at + 1] + [l for l in ls if l.startswith(five)] + rest[at + 1:])
+    edited("E12 строки §5 в комментарии", spec_t, in_comment)
+    edited("E12 строки §5 в §6", spec_t, to_section6)
+    edited("E12 незакрытый комментарий в §5", spec_t, lambda t: re.sub(r"^(## 5\b.*)$", r"\1\n<!--", t, flags=re.M))
+    edited("T5 правило закрытия обращено", spec_t, lambda t: t.replace("гейт не закрывается с красным", "гейт закрывается с красным"))
+    edited("E12 строка 0 в комментарии", gate_t, lambda t: re.sub(r"^(\| 0 \|.*)$", r"<!-- \1 -->", t, flags=re.M))
+    edited("E12 строка 0 вне таблицы", gate_t, lambda t: re.sub(r"^\| 0 \|", "- | 0 |", t, flags=re.M))
+    edited("S25 строка 0 без команды", gate_t, lambda t: t.replace("`bin/check-fenster`", "`<команда>`"))
+    edited("S28 строка 0 ждёт FENSTER_ROT", gate_t, lambda t: t.replace("`FENSTER_GRUEN …`", "`FENSTER_ROT …`"))
+    ok_t = green_t[0] == 0 and green_t[1].splitlines()[-1] == "BUDGET_OK" and control[0] == 0
+    ok_r = all(r[0] == 1 and "BUDGET_FAIL" in r[1] and ("FAIL contract" in r[1] or "FAIL templates" in r[1]) for r in reds.values()) and named_ok
+    probe("F4.4", ok_t and ok_r, f"templates={'OK' if ok_t else 'нет'} rot={'OK' if ok_r else 'нет'} · кит — {tail(green_t[1])}, копия без правки — {tail(control[1])} · красных {sum(r[0] == 1 for r in reds.values())}/{len(reds)}, без красной стороны: {', '.join(k for k, r in reds.items() if r[0] != 1) or 'нет'}, снятая фраза названа в FAIL — {named_ok} · без строки: " + ", ".join(f"{k} — rc {r[0]}" for k, r in reds.items())
           + f"; «{next((l for l in reds['окно'][1].splitlines() if l.startswith('FAIL')), '')[:110]}»")
     print("FENSTER_OK" if all(sec) and len(sec) == 4 else "FENSTER_FAIL", flush=True)
     return all(sec) and len(sec) == 4

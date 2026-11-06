@@ -962,8 +962,8 @@ TEMPLATES = {  # шаблон кита → куда его кладёт прим
 
 
 CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из шаблонов — фразы, без которых шаблон её не ведёт
-    "docs/SPEC.template.md": ["Регрессия модуля при закрытии", "`DEPLOY_OK` только после `REGRESS_OK`", "Правило закрытия", "Окно деплоя", "`LIVE_OK`", "Паспорт модуля", "`DEPLOY_FAIL step=passport`"],  # v3.4, F4.4
-    "docs/GATE.template.md": ["| 0 |", "контрольный прогон", "гейт не закрывается с красным", "`bin/check-fenster`"],
+    "docs/SPEC.template.md": ["Регрессия модуля при закрытии", "`DEPLOY_OK` только после `REGRESS_OK`", "Правило закрытия", "гейт не закрывается с красным", "Окно деплоя", "`LIVE_OK`", "Паспорт модуля", "`DEPLOY_FAIL step=passport`"],  # v3.4, F4.4: живой текст §5
+    "docs/GATE.template.md": ["| 0 |", "контрольный прогон", "гейт не закрывается с красным", "`bin/check-fenster`", "`FENSTER_GRUEN"],  # v3.4, F4.4: строка 0 таблицы
     "docs/PROMPT.template.txt": ["bin/verify-phase", "VERDICT: PASS", "its blocking findings fixed in this session",
                                  "Workflow agents edit only inside their own worktrees", "never push to main",
                                  "spec-gate", "`STOP: <id>`", "launch-line argument"],
@@ -973,6 +973,16 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
     "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase",
                   "## Rules for every commit", "abide check", ".abide/rubric.json"],
 }
+
+
+def contract_text(f, text):
+    """Где читаются фразы договора (v3.4, F4.4): SPEC — живой текст §5, GATE — строка таблицы «| 0 |»; HTML-комментарий — не текст. Прочие шаблоны — весь файл."""
+    live = re.sub(r"<!--.*?(?:-->|\Z)", "", text, flags=re.S)
+    if f == "docs/SPEC.template.md":
+        return next(iter(re.findall(r"^## 5\b.*?(?=^## |\Z)", live, re.M | re.S)), "")
+    if f == "docs/GATE.template.md":
+        return next((l for l in live.splitlines() if l.startswith("| 0 |")), "")
+    return text
 
 
 def templates():
@@ -986,7 +996,8 @@ def templates():
     if not b:
         return report(out)
     for f, words in CONTRACT.items():
-        miss = [w for w in words if w not in read(f"{root}/{f}")]
+        text = contract_text(f, read(f"{root}/{f}"))
+        miss = [w for w in words if w not in text]
         out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words)}, нет — {'; '.join(miss) or 'ничего'}"))
     slash = re.compile("/" + "goal" + r"\b")  # v3.2: фазу запускает стартовый запрос — команды в ките не остаётся (строка не ловит сама себя)
     hits = []

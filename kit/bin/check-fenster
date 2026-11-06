@@ -1,29 +1,37 @@
 #!/usr/bin/env python3
 """check-fenster [<журнал>] — окно деплоя (SPEC-v3.4 F4.1): каждый `DEPLOY_OK … linie=1` журнала docs/evidence/deploy-window.log закрыт строкой `LIVE_OK` или
-`ROLLBACK_OK` до следующего деплоя (один деплой на окно); `linie=0` окна не открывает. Незакрытый — `FENSTER_ROT sha=<sha> — …`, код 1; все закрыты —
-`FENSTER_GRUEN деплоев на линию <k>`. Нет журнала — деплоев не было, зелёный. Этот чек зовёт гейт фазы: пункт окна.
+`ROLLBACK_OK` до следующего деплоя (один деплой на окно); `linie=0` окна не открывает, `ROLLBACK_FAIL` не закрывает. Метка считается в любом месте строки: BOM или префикс времени деплой не прячут.
+Незакрытый — `FENSTER_ROT sha=<sha> — …`, код 1; все закрыты — `FENSTER_GRUEN деплоев на линию <k>`. Журнал по умолчанию — от корня git, вердикт не зависит от каталога запуска; его нет — деплоев не было, зелёный.
+Вне репозитория, явный путь без файла, каталог вместо журнала, битые байты — `FENSTER_ROT журнал=<путь> — …`, код 2. Этот чек зовёт гейт фазы: пункт окна.
 """
-import os, sys
+import os, re, subprocess, sys
 
 
 def main(argv):
     path = argv[0] if argv else "docs/evidence/deploy-window.log"
+    if not argv:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        if top.returncode:
+            print(f"FENSTER_ROT журнал={path} — вне репозитория корня git нет")
+            return 2
+        os.chdir(top.stdout.strip())
     try:
         with open(path, encoding="utf-8") as f:
             lines = f.read().splitlines()
-    except OSError:
+    except (OSError, ValueError) as e:  # нечитаемое — не зелёное; только журнала по умолчанию может не быть
+        if argv or not isinstance(e, FileNotFoundError):
+            print(f"FENSTER_ROT журнал={path} — {type(e).__name__}")
+            return 2
         lines = []
     opened, red, n = None, [], 0
     for line in lines:
-        w = line.split()
-        if not w:
-            continue
-        if w[0] == "DEPLOY_OK":
+        if re.search(r"\bDEPLOY_OK\b", line):
             if opened:
                 red.append(opened)
-            opened = next((x[4:] for x in w if x.startswith("sha=")), "?") if "linie=1" in w else None
+            sha = re.search(r"\bsha=(\S+)", line)
+            opened = (sha[1] if sha else "?") if re.search(r"\blinie=1\b", line) else None
             n += opened is not None
-        elif w[0] in ("LIVE_OK", "ROLLBACK_OK"):
+        elif re.search(r"\b(?:LIVE_OK|ROLLBACK_OK)\b", line):
             opened = None
     if opened:
         red.append(opened)

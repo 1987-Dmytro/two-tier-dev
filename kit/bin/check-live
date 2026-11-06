@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """check-live <журнал> <записи.jsonl> [--n 2] [--anrufer <хвост номера>] [--planken <файл>] — живая проверка канала клиента (SPEC-v3.4 F4.2; шаблон — образец судьи
 живых звонков проекта telefon, решения 389–393): на звонок строка `LIVE call= turns= stumm= wiederholt= wortlaute= word_max= sicherungen=k/n spaet=k/n wartend=k/n klang=k/n`,
-затем `LIVE_OK` или `LIVE_FAIL <причины>` (код 1). Числа и слова судьи — ключ `live` файла checks/planken.json; пустой ключ — `LIVE_FAIL planken=<ключ>`, код 2.
+затем `LIVE_OK` или `LIVE_FAIL <причины>` (код 1). Числа и слова судьи — ключ `live` файла checks/planken.json; пустой ключ — `LIVE_FAIL planken=<ключ>`, код 2; --n меньше 1, нет журнала или записей — `LIVE_FAIL <причина>`, код 2. `LIVE_OK` дописывает строку в журнал окна деплоя у корня git, из какого бы каталога ни шёл чек.
   журнал: `CALL_START call=<id> channel=<канал> caller=…98`, `HIRN call= n= first_clause_ms= … weg=json|strom [hedge=1] [spaet=1] [abbruch=1]`, `KETTE call= [hirn=] sum= llm= [nachfrage=1] [leer=1]`,
     `BACKCHANNEL fl:…`, `CALL_END call=`; записи — JSONL: call_id, transcript [{role: bot|caller, text, latency_ms}], summary {поле: значение}.
-  Звонков меньше --n — красное (389: один зелёный звонок не LIVE_OK). turns — реплики звонящего.
+  Журнал — звонки после деплоя: срез делает сам проект (образец telefon — `LIVE_SEIT` в checks/check_live.sh), судья старые звонки от новых не отличает. Звонки на линии не пересекаются: строки звонка — до следующего `CALL_START`, как в образце.
+  Звонков меньше --n — красное (389: один зелёный звонок не LIVE_OK). turns — реплики звонящего; звонок без реплики — не живая проверка, причина `turns=0`.
   stumm — ход с `HIRN n`, после реплики которого нет строки бота (ход, снятый речью, HIRN не пишет).
   wiederholt (390) — вопрос бота (последнее предложение с «?») о поле, уже названном звонящим: поле — по `felder` (регулярное выражение вопроса → поле), «названо» — значение сводки в ответе на
-    вопрос об этом поле; номер (`nummer_feld`) — от 3 цифр или маска, повтор только сразу за диктовкой. wortlaute — `BACKCHANNEL fl:` звонка, отчёт, не судится.
-  word_max — максимум `latency_ms` строк бота без хода диктовки (реплика сразу после `nummer_frage`) и ходов `KETTE … nachfrage=1|leer=1`; судится `word_max_ms`.
+    вопрос об этом поле; номер (`nummer_feld`) — от 3 цифр или маска, повтор только сразу за диктовкой; цифра — регулярное выражение `ziffern` по нормализованному ответу (строчные, ü → ue: «fuenf»), по умолчанию `\\d`. wortlaute — `BACKCHANNEL fl:` звонка, отчёт, не судится.
+  word_max — максимум `latency_ms` строк бота (нечисловое значение пропускается) без хода диктовки (реплика сразу после `nummer_frage`) и ходов `KETTE … nachfrage=1|leer=1`; судится `word_max_ms`.
   sicherungen (389, 390) — ходы с предохранителем (`hedge≥1`, `spaet=1`); их худшее слово — word_max_sicher, судится `word_max_sicher_ms`. spaet — `HIRN spaet=1` из всех HIRN, отчёт.
   wartend (392) — ход без предохранителя, где ответ ждал экстрактор: `weg=json`, first_clause минус llm той же строки KETTE ≥ `warten_ms`; судится как предохранитель.
   klang (393) — ход «готовая фраза + синтез» (`fertige_saetze`) судится по первому звуку: sum − (hirn − first_clause).
@@ -40,7 +41,7 @@ def field_of(text, cfg):
 
 def named(field, answer, summary, cfg, whole=False):
     if field == cfg.get("nummer_feld"):
-        return bool(re.search(r"[…*]", answer)) or len(re.findall(r"\d", answer)) >= 3
+        return bool(re.search(r"[…*]", answer)) or len(re.findall(cfg.get("ziffern") or r"\d", norm(answer))) >= 3
     value, stop = summary.get(field), set(cfg.get("stoppwoerter") or [])
     words = set(re.findall(r"\w+", norm(answer))) - stop
     parts = [t for t in re.split(r"[\W_]+", norm(str(value))) if len(t) > 1 and t not in stop]
@@ -97,7 +98,7 @@ def metrics(call, lines, rec, cfg):
     excluded = [int(m[1]) for z in chain for m in [re.search(r" sum=(\d+) .* (?:nachfrage|leer)=1", z)] if m]
     ask_number = re.compile(cfg.get("nummer_frage") or r"(?!)", re.I | re.S)
     lat = [(n, b["latency_ms"], b.get("text") or "", bool(ask_number.search(t["before"])))
-           for n, t in enumerate(turns, 1) for b in t["bot"] if b.get("latency_ms") is not None]
+           for n, t in enumerate(turns, 1) for b in t["bot"] if type(b.get("latency_ms")) in (int, float)]
     for x in excluded:  # по одному на метку: обычный ход с тем же числом мс остаётся в выборке
         p = next((p for p in lat if p[1] == x and not p[3]), None)
         if p:
@@ -140,6 +141,8 @@ def causes(k, cfg):
         out.append(f"word_max={k['word_max']}>{cfg['word_max_ms']}")
     if k["word_max_sicher"] > cfg["word_max_sicher_ms"]:
         out.append(f"word_max_sicher={k['word_max_sicher']}>{cfg['word_max_sicher_ms']}")
+    if not k["turns"]:
+        out.append("turns=0")  # звонящий не сказал ни слова — живой проверки не было
     if k["turns"] and not k["hirn"]:
         out.append("journal_ohne_HIRN")  # ход нельзя отличить от снятого речью — stumm не судится
     return out
@@ -160,6 +163,9 @@ def main(argv):
     a.add_argument("--anrufer")
     a.add_argument("--planken", default="checks/planken.json")
     o = a.parse_args(argv)
+    if o.n < 1:
+        print(f"LIVE_FAIL --n={o.n}<1")
+        return 2
     try:
         with open(o.planken, encoding="utf-8") as f:
             cfg = json.load(f).get("live") or {}
@@ -167,19 +173,27 @@ def main(argv):
         print(f"LIVE_FAIL planken={o.planken}")
         return 2
     empty = [k for k in NEEDED if not isinstance(cfg.get(k), (int, float))] + ([] if cfg.get("felder") else ["felder"])
+    try:
+        re.compile(cfg.get("ziffern") or "")
+    except (re.error, TypeError):
+        empty.append("ziffern")
     if empty:
         print(f"LIVE_FAIL planken=live.{','.join(empty)}")
         return 2
-    with open(o.journal, encoding="utf-8") as f:
-        lines = f.read().splitlines()
-    recs = {}
-    with open(o.aufzeichnungen, encoding="utf-8") as f:
-        for z in f:
-            try:
-                r = json.loads(z)
-                recs[r["call_id"]] = r
-            except (ValueError, KeyError, TypeError):
-                pass  # битая строка — звонок без записи ниже, не молчание
+    try:
+        with open(o.journal, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+        recs = {}
+        with open(o.aufzeichnungen, encoding="utf-8", errors="replace") as f:
+            for z in f:
+                try:
+                    r = json.loads(z)
+                    recs[r["call_id"]] = r
+                except (ValueError, KeyError, TypeError):
+                    pass  # битая строка — звонок без записи ниже, не молчание
+    except OSError as e:
+        print(f"LIVE_FAIL datei={e.filename}")
+        return 2
     ids = [m[1] for z in lines for m in [START.search(z)]
            if m and m[2] == (cfg.get("channel") or "linie") and (not o.anrufer or (m[3] or "").endswith(o.anrufer))]
     if not ids:
@@ -198,8 +212,10 @@ def main(argv):
         print(f"LIVE_FAIL {'; '.join(why)}")
         return 1
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
-    if os.path.isfile("docs/evidence/deploy-window.log"):  # журнал окна деплоя: строка закрывает окно (bin/check-fenster)
-        with open("docs/evidence/deploy-window.log", "a", encoding="utf-8") as f:
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    window = os.path.join(top, "docs/evidence/deploy-window.log")
+    if os.path.isfile(window):  # журнал окна деплоя: строка закрывает окно (bin/check-fenster)
+        with open(window, "a", encoding="utf-8") as f:
             f.write(f"LIVE_OK sha={sha}\n")
     print("LIVE_OK")
     return 0
