@@ -93,3 +93,4 @@
 {"ts": "2026-11-06T13:31:26Z", "decision": "skip", "judge": "abide", "rule": null, "files": [".claude/launch.settings.json", "CHANGELOG.md", "docs/PROCESS.md", "docs/PROMPT.txt", "docs/SPEC-v3.4.md", "docs/STATUS.md", "docs/drafts/kit-fixes-v3.4.md"], "score": null, "note": "abide check error TYPESAFE_AI_API_KEY", "diff": "f6689ac4c9f32771", "ms": 1121}
 {"ts": "2026-11-06T14:38:55Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/spec-gate.jsonl"], "score": 0.06, "diff": "75a7491fab1f0bdf", "ms": 3015}
 {"ts": "2026-11-06T14:47:23Z", "decision": "pass", "judge": "abide", "rule": "no-print-credential", "files": ["kit/bin/evidence"], "score": 0.24, "diff": "ad12298d45b6c2cc", "ms": 3142}
+{"ts": "2026-11-06T15:00:58Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F1-check-harness-result.txt"], "score": 0.19, "diff": "7718124954a4cb7d", "ms": 5330}

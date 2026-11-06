@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""check-passport [--write] — паспорта закрытых модулей против кода (SPEC-v3.4 F3.3): отпечатки кода, конфига, текстов сверяет деплой.
+
+frozen.json, module.<имя>.passport: {"file": "docs/<МОДУЛЬ>.md", "fingerprints": {"src": [пути], "env": [пути], "texte": [пути]}}. Отпечаток — 12 знаков
+sha256 по отслеживаемым git файлам этих путей (путь и байты файла): значения не печатаются. Паспорт — строки `<ключ>=<отпечаток>` в файле.
+Совпало — `PASSPORT_OK модуль=<имя> <ключ>=<отпечаток> …`. Разошлось или паспорта нет — `PASSPORT_FAIL модуль=<имя> was=<ключ> code=<h> passport=<h>`, код 1.
+Переменная `<ИМЯ>_OFFEN=SPEC-<n>` с текущей SPEC (первый SPEC-*.md строки `Read first:` docs/PROMPT.txt) открывает модуль: `PASSPORT_OFFEN …`, код 0;
+другая SPEC не открывает. --write пишет отпечатки в паспорт (по слову оператора, после LIVE_OK). Нет модулей с паспортом — `PASSPORT_OK нет паспортов`.
+"""
+import hashlib, json, os, re, subprocess, sys
+
+
+def git(*args):
+    return subprocess.run(["git", *args], capture_output=True, text=True, errors="replace").stdout
+
+
+def current_spec():
+    try:
+        with open("docs/PROMPT.txt", encoding="utf-8") as f:
+            m = re.search(r"^Read first:.*?(SPEC-[^\s,/]+)\.md", f.read(), re.M)
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
+def fingerprint(paths):
+    h = hashlib.sha256()
+    for p in sorted(x for x in git("ls-files", "-z", "--", *paths).split("\0") if x):
+        h.update(p.encode() + b"\0")
+        try:
+            with open(p, "rb") as f:
+                h.update(f.read())
+        except OSError:
+            h.update(b"\0deleted")
+    return h.hexdigest()[:12]
+
+
+def passport_values(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return dict(re.findall(r"^(\w+)=([0-9a-f]{12})\s*$", f.read(), re.M))
+    except OSError:
+        return {}
+
+
+def write_passport(path, codes):
+    text = ""
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    for k in codes:
+        text = re.sub(rf"^{re.escape(k)}=[0-9a-f]{{12}}\s*\n", "", text, flags=re.M)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("".join(f"{k}={v}\n" for k, v in codes.items()) + text)
+
+
+def main(argv):
+    if argv not in ([], ["--write"]):
+        print(__doc__)
+        return 2
+    top = git("rev-parse", "--show-toplevel").strip()
+    if top:
+        os.chdir(top)
+    try:
+        with open("frozen.json", encoding="utf-8") as f:
+            modules = json.load(f).get("module") or {}
+    except (OSError, ValueError):
+        modules = {}
+    spec, red, seen = current_spec(), 0, 0
+    for name, m in modules.items():
+        pp = m.get("passport")
+        if not pp:
+            continue
+        seen += 1
+        codes = {k: fingerprint(v) for k, v in (pp.get("fingerprints") or {}).items()}
+        if argv:
+            write_passport(pp["file"], codes)
+        have = passport_values(pp["file"])
+        fields = " ".join(f"{k}={v}" for k, v in codes.items())
+        was = next((k for k, v in codes.items() if have.get(k) != v), None)
+        if was is None:
+            print(f"PASSPORT_OK модуль={name} {fields}")
+            continue
+        var = re.sub(r"\W", "_", name).upper() + "_OFFEN"
+        detail = f"модуль={name} was={was} code={codes[was]} passport={have.get(was, 'нет')}"
+        if spec and os.environ.get(var) == spec:
+            print(f"PASSPORT_OFFEN {var}={spec} {detail}")
+            continue
+        print(f"PASSPORT_FAIL {detail}")
+        red += 1
+    if not seen:
+        print("PASSPORT_OK нет паспортов")
+    return 1 if red else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
