@@ -3,7 +3,8 @@
 //
 // Code only, $0, no network. The phase SPEC (first `Read first:` of the start prompt) has feature lines (`- **F<n>` … `чек: `cmd` →
 // `MARKER``) and under each its items (`  - `F<n>.<k>` …`). The set: per feature a file docs/evidence/F<n>-*-result.txt whose first
-// line is `spec: SPEC-<n>` of this SPEC (bin/evidence writes it; a file of another SPEC does not count, SPEC-v3.4 F1.3) with the
+// line is `spec: SPEC-<n>` of this SPEC (bin/evidence writes it; a file of another SPEC does not count and is only named as a hint
+// while the feature's own set is incomplete, SPEC-v3.4 F1.3) with the
 // marker on a line of its own and, per item, a line «F<n>.<k> <raw output of its probe>» in one of the feature's evidence files; the
 // branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова» section) names what is done, the operator's
 // next step and when, and was rewritten — in this session when the session committed anything beyond evidence, else in this phase
@@ -16,7 +17,8 @@
 // filters as git applies them) holds the turn by its name. Logs that checks and hooks append (docs/evidence/*.jsonl) and the phase
 // report are not part of the set.
 // A STOP line counts only from the pushed HEAD (SPEC-v3.3 F1.5): a new line `STOP: <id>` with a reason of SPEC §4 and, within
-// the next three lines, a question (?) and a resume line ends the turn once. It is new when its text from «STOP:» on starts neither
+// the next three lines (not on the STOP line itself; LF or CRLF), a question (a ? with no word, =, & or % right after it, so not one
+// inside a URL) and a resume line ends the turn once. It is new when its text from «STOP:» on starts neither
 // like a STOP line of the PROGRESS committed before the session nor like a stop already honored (the log keeps their marks): its
 // first 60 characters, or all of a shorter line — an edited tail, «— снят» at the end or a bullet in front keep a line old.
 // The full set → SPEC_GATE_OK and the turn ends; otherwise the end of the turn is blocked and the reason is the list of what is
@@ -237,15 +239,18 @@ function decide(input, root, cfg, log) {
     const atH = evHead.filter(mine).map(n => [n, lines(atHead(root, `docs/evidence/${n}`))]).filter(ofSpec)
     const onD = evDisk.filter(mine).map(n => [n, lines(read(path.join(evDir, n)))]).filter(ofSpec)
     const names = [...new Set([...evHead, ...evDisk].filter(mine))]
-    for (const n of names.filter(n => !atH.some(x => x[0] === n) && !onD.some(x => x[0] === n))) missing.push(`${f.id}: docs/evidence/${n} is not of ${specName} — its first line is not «spec: ${specName}», its lines do not count`)
     const where = test => [atH.find(([, ls]) => ls.some(test))?.[0], onD.find(([, ls]) => ls.some(test))?.[0]]
     const [hit, disk] = where(l => [f.marker, `${f.id} ${f.marker}`].includes(l))
     if (!names.length) { missing.push(`${f.id}: no docs/evidence/${f.id}-*-result.txt${f.items.length ? ` — items ${f.items.join(', ')} without a probe line` : ''}`); continue }
-    if (!hit) missing.push(disk ? `${f.id}: the line ${f.marker} is in docs/evidence/${disk} on disk only, not in HEAD` : `${f.id}: no line ${f.marker} in docs/evidence/${names.join(', docs/evidence/')}`)
+    const gaps = []
+    if (!hit) gaps.push(disk ? `${f.id}: the line ${f.marker} is in docs/evidence/${disk} on disk only, not in HEAD` : `${f.id}: no line ${f.marker} in docs/evidence/${names.join(', docs/evidence/')}`)
     for (const id of f.items) {  // the probe line of an item: its id, a space and the raw output of its probe
       const [h, d] = where(l => l.startsWith(`${id} `) && l.length > id.length + 1)
-      if (!h) missing.push(d ? `${id}: its probe line is in docs/evidence/${d} on disk only, not in HEAD` : `${id}: no probe line «${id} <raw output>» in docs/evidence/${names.join(', docs/evidence/')} at HEAD`)
+      if (!h) gaps.push(d ? `${id}: its probe line is in docs/evidence/${d} on disk only, not in HEAD` : `${id}: no probe line «${id} <raw output>» in docs/evidence/${names.join(', docs/evidence/')} at HEAD`)
     }
+    // a file of another SPEC holds nothing by itself: next to a complete own set it is not named at all
+    if (gaps.length) for (const n of names.filter(n => !atH.some(x => x[0] === n) && !onD.some(x => x[0] === n))) missing.push(`${f.id}: docs/evidence/${n} is not of ${specName} — its first line is not «spec: ${specName}», its lines do not count`)
+    missing.push(...gaps)
   }
   if (!feats.length) missing.push(`${specPath}: no feature lines «- **F<n> …»`)
   const sha = git(root, 'rev-parse', 'HEAD')
@@ -276,8 +281,8 @@ function decide(input, root, cfg, log) {
   for (const m of fresh(disk).filter(m => !atHeadStops.some(h => canon(h[0]) === canon(m[0])))) {
     missing.push(`«${canon(m[0]).slice(0, 60)}» is in docs/PROGRESS.md on disk only: a STOP counts from the pushed HEAD — commit and push it`)
   }
-  const plines = progress.split('\n')
-  const formed = m => { const i = plines.indexOf(m[0]); const near = plines.slice(i, i + 4).join('\n'); return i >= 0 && near.includes('?') && /resume|продолж/i.test(near) }
+  const plines = progress.split(/\r?\n/)  // m[0] carries no \r: in a CRLF file the lines must not either
+  const formed = m => { const i = plines.indexOf(m[0]); const near = plines.slice(i + 1, i + 4).join('\n'); return i >= 0 && /\?(?![\w=&%])/.test(near) && /resume|продолж/i.test(near) }
   for (const m of atHeadStops.filter(m => !reasons.includes(m[1]))) missing.push(`«STOP: ${m[1]}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
   for (const m of atHeadStops.filter(m => reasons.includes(m[1]) && !formed(m))) missing.push(`«STOP: ${m[1]}» has no question (?) and resume line within the next three lines`)
   const valid = atHeadStops.filter(m => reasons.includes(m[1]) && formed(m))

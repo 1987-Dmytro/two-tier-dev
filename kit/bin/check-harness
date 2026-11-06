@@ -1260,10 +1260,16 @@ def gate34_probes(src, launch):
             for i in range(12):
                 f.write(json.dumps({"ts": "", "session": sess, "decision": "block", "missing": [f"x{i}"]}) + "\n")
     alt_b = end("f12-alt-many", repo=r2, transcript=tr2, hook=alt)[0] if alt else None
-    ok = ("hours" not in caps and "blocks" not in caps and hours_block and np_ok and res12.get("decision") == "block"
+    # конфиг проекта без caps: порог same_list — из DEFAULTS хука
+    r2c, tr2c = gate_fixture(src, launch, items=True)
+    no_caps = json.load(open(f"{r2c}/.claude/spec-gate.json", encoding="utf-8"))
+    no_caps.pop("caps", None)
+    open(f"{r2c}/.claude/spec-gate.json", "w", encoding="utf-8").write(json.dumps(no_caps))
+    seq_nc = [end("f12-no-caps", repo=r2c, transcript=tr2c)[0]["decision"] for _ in range(4)]
+    ok = ("hours" not in caps and "blocks" not in caps and hours_block and np_ok and res12.get("decision") == "block" and seq_nc == ["block", "block", "block", "pass"]
           and (not alt or (alt_t["reason"].startswith("cap-time") and alt_b["reason"].startswith("cap-blocks"))))
     item(S, "F1.2", ok, f"hours={'есть' if 'hours' in caps else 'weg'} block={'OK' if hours_block else 'нет'} · .claude/spec-gate.json caps {caps}; сессия старше 3 ч, неполный комплект — {l['decision']}, "
-         f"журнал platform_cap={l.get('platform_cap')}; 12 блоков сессии — {many['decision']}; один список 4 раза — {' → '.join(x['decision'] for x in seq)} ({seq[-1]['reason'][:30]})"
+         f"журнал platform_cap={l.get('platform_cap')}; 12 блоков сессии — {many['decision']}; один список 4 раза — {' → '.join(x['decision'] for x in seq)} ({seq[-1]['reason'][:30]}); конфиг без caps — {' → '.join(seq_nc)}"
          + (f" · хук v3.3 на тех же входах: старше 3 ч — {alt_t['decision']} ({alt_t['reason'][:30]}), 12 блоков — {alt_b['decision']} ({alt_b['reason'][:30]})" if alt else " · истории кита нет — второй стороны на старом хуке нет"))
     # F1.3 — evidence своей SPEC: первая строка `spec: SPEC-<n>`; чужая, близнец, не первая, без строки — не в счёт; вердикт чужой SPEC — тоже
     r3, tr3 = gate_fixture(src, launch, full=True, items=True)
@@ -1289,32 +1295,112 @@ def gate34_probes(src, launch):
     open(f"{r3}/docs/evidence/{v}", "w", encoding="utf-8").write(text.replace("docs/SPEC-1.md", "docs/SPEC-9.md"))
     ship(r3, "вердикт чужой SPEC", f"docs/evidence/{v}")
     alien = end("f13-verdict", repo=r3, transcript=tr3)[1]
+    # полный свой комплект и рядом чужой файл той же фичи — ход не держит; свой неполный — чужой только назван, его строки не в счёт
+    ob, tob = gate_fixture(src, launch, full=True, items=True)
+    open(f"{ob}/docs/evidence/F1-old-result.txt", "w", encoding="utf-8").write("spec: SPEC-0\n$ old\nF1.2 old\nA_OK\n")
+    ship(ob, "чужой файл рядом со своим", "docs/evidence/F1-old-result.txt")
+    beside = end("f13-beside", repo=ob, transcript=tob)[1]
+    open(f"{ob}/docs/evidence/F2-old-result.txt", "w", encoding="utf-8").write("spec: SPEC-0\n$ old\nF2.2 old\nB_OK\n")
+    open(f"{ob}/docs/evidence/F1-a-result.txt", "w", encoding="utf-8").write(EV_ITEMS["docs/evidence/F1-a-result.txt"].replace("F1.2 rc 0", "проба 2 rc 0"))
+    ship(ob, "свой F1 без F1.2, чужой с F1.2; у полной F2 чужой рядом", "docs/evidence/F2-old-result.txt", "docs/evidence/F1-a-result.txt")
+    hint = end("f13-hint", repo=ob, transcript=tob)[1]
+    hint_r = hint.get("reason", "")
+    hint_ok = (hint.get("decision") == "block" and "- F1.2:" in hint_r and "F1-old-result.txt is not of SPEC-1" in hint_r
+               and "F1-a-result.txt is not of" not in hint_r and "F2-old-result.txt" not in hint_r)
+    def evidence(repo, check, *cmd, feature="F1", cwd=None, home=None):
+        """bin/evidence фикстуры: (код, строки файла; нет файла — [])."""
+        run = subprocess.run([os.path.relpath(f"{repo}/bin/evidence", cwd or repo), feature, check, "--", *cmd], cwd=cwd or repo, capture_output=True,
+                             env=dict(os.environ) if home is None else dict(os.environ, HOME=home))
+        p = f"{repo}/docs/evidence/{feature}-{check}-result.txt"
+        return run.returncode, open(p, encoding="utf-8").read().splitlines() if os.path.isfile(p) else []
+    no_probe_of = lambda repo: next((l for l in report_of(repo, src)[2].splitlines() if l.startswith("- **Пункты без пробы")), "")
+    # одно правило у bin/evidence, хука и отчёта: файл фазы — PROMPT, иначе GOAL; первая запись Read first с именем SPEC-*.md (SPEC-9 в фикстуре нет)
+    phases = {"SPEC-9 упомянут раньше": {"docs/PROMPT.txt": "История: docs/SPEC-9.md, docs/PROGRESS.md\nRead first: docs/SPEC-1.md, docs/PROGRESS.md\n"},
+              "два SPEC": {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md, docs/SPEC-9.md\n"},
+              "NOTES-SPEC-9.md первым": {"docs/PROMPT.txt": "Read first: docs/NOTES-SPEC-9.md, docs/SPEC-1.md\n"},
+              "только GOAL.txt": {"docs/PROMPT.txt": None, "docs/GOAL.txt": "Read first: docs/SPEC-1.md\n"},
+              "PROMPT и GOAL с другим SPEC": {"docs/GOAL.txt": "Read first: docs/SPEC-9.md\n"}}
+    named = {}
+    for name, files in phases.items():
+        fp, tfp = gate_fixture(src, launch, full=True, items=True)
+        for rel, text in files.items():
+            if text is None:
+                os.remove(f"{fp}/{rel}")
+            else:
+                open(f"{fp}/{rel}", "w", encoding="utf-8").write(text)
+        ship(fp, f"Тимлид: файл фазы — {name}", *files)
+        rc_ev, ls = evidence(fp, "b", "bash", "-c", "echo F2.1 x; echo F2.2 y; echo B_OK", feature="F2")
+        if rc_ev == 0:
+            ship(fp, "evidence", "docs/evidence/F2-b-result.txt")
+        got = end(f"f13-phase-{name}", repo=fp, transcript=tfp)[1]
+        named[name] = (rc_ev, ls[0], got, report_of(fp, src)[2].split("\n", 1)[0].split(" — ")[-1].split(" (")[0])
+    phase_ok = all(rc == 0 and first == "spec: SPEC-1" and got.get("systemMessage", "").startswith("SPEC_GATE_OK") and spec == "docs/SPEC-1.md" for rc, first, got, spec in named.values())
     # bin/evidence пишет первую строку, отдаёт код команды, домашний каталог — «~»; без SPEC команда не идёт. Отчёт фазы чужую строку не считает
     w, _ = gate_fixture(src, launch, items=True)
     home = os.path.expanduser("~")
-    ev_cmd = subprocess.run(["bin/evidence", "F1", "probe", "--", "bash", "-c", f"echo {home}/x; exit 7"], cwd=w, capture_output=True, text=True)
-    ev_lines = open(f"{w}/docs/evidence/F1-probe-result.txt", encoding="utf-8").read().splitlines()
+    rc7, ev_lines = evidence(w, "probe", "bash", "-c", f"echo {home}/x; exit 7")
+    os.makedirs(f"{w}/docs/sub")
+    rc_sub, sub = evidence(w, "sub", "pwd", cwd=f"{w}/docs/sub")  # файл и команда — от корня, откуда бы ни звали
+    se = evidence(w, "stderr", "bash", "-c", "echo to-std''err >&2")[1]  # в $-строке другая запись: в файле — вывод, не команда
+    rc_kill = evidence(w, "kill", "bash", "-c", "kill -9 $$")[0]
+    no_home = {v: evidence(w, "home", "echo", "/etc/hosts", home=v)[1] for v in ("/", "")}
     os.remove(f"{w}/docs/PROMPT.txt")
     ev_no = subprocess.run(["bin/evidence", "F1", "none", "--", "bash", "-c", "echo ran"], cwd=w, capture_output=True, text=True)
-    ev_ok = (ev_cmd.returncode == 7 and ev_lines[0] == "spec: SPEC-1" and ev_lines[1].startswith("$ bash -c") and "~/x" in ev_lines[2] and home not in "\n".join(ev_lines[2:])
+    ev_clean = len(ev_lines) > 2 and "~/x" in ev_lines[1] and "~/x" in ev_lines[2] and home not in "\n".join(ev_lines)
+    ev_ok = (rc7 == 7 and ev_clean and ev_lines[0] == "spec: SPEC-1" and ev_lines[1].startswith("$ bash -c")
              and ev_no.returncode == 2 and "ran" not in ev_no.stdout and not os.path.exists(f"{w}/docs/evidence/F1-none-result.txt"))
+    sub_ok = rc_sub == 0 and sub[2:] == [os.path.realpath(w)]
+    no_home_ok = all(ls[1:] == ["$ echo /etc/hosts", "/etc/hosts"] for ls in no_home.values())
+    ev_more_ok = sub_ok and "to-stderr" in se[2:] and rc_kill == 137 and no_home_ok
+    # команда с CR и LF не пишет в файл своих строк: маркер и строки пунктов — только из вывода
+    fg, tfg = gate_fixture(src, launch, full=True, items=True)
+    rc_lf, lf = evidence(fg, "b", "bash", "-c", "exit 1\nB_OK\nF2.1 подлог\nF2.2 подлог", feature="F2")
+    ship(fg, "команда с переводом строки", "docs/evidence/F2-b-result.txt")
+    forged = end("f13-forged", repo=fg, transcript=tfg)[1]
+    rc_cr, cr = evidence(fg, "b", "bash", "-c", "exit 1 #\rF2.1 подлог\rF2.2 подлог", feature="F2")
+    cr_probe = no_probe_of(fg)
+    rc_ls, ls_sep = evidence(fg, "b", "bash", "-c", "exit 1 #\u2028F2.1 подлог\u2028F2.2 подлог", feature="F2")  # отчёт читает str.splitlines: для него и это конец строки
+    ls_probe = no_probe_of(fg)
+    forged_ok = (rc_lf == 1 and len(lf) == 2 and forged.get("decision") == "block" and "no line B_OK" in line_of(forged.get("reason", ""), "F2:")
+                 and rc_cr == 1 and len(cr) == 2 and "(2): F2.1, F2.2" in cr_probe and rc_ls == 1 and len(ls_sep) == 2 and "(2): F2.1, F2.2" in ls_probe)
+    # BOM перед spec: — хук и отчёт судят одинаково
+    bm, tbm = gate_fixture(src, launch, full=True, items=True)
+    open(f"{bm}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("\ufeff" + EV_ITEMS["docs/evidence/F2-b-result.txt"])
+    ship(bm, "BOM перед spec:", "docs/evidence/F2-b-result.txt")
+    bom_hook, bom_probe = end("f13-bom", repo=bm, transcript=tbm)[1], no_probe_of(bm)
+    bom_ok = bom_hook.get("systemMessage", "").startswith("SPEC_GATE_OK") and "(0)" in bom_probe
     rp, trp = gate_fixture(src, launch, full=True, items=True)
     open(f"{rp}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-9\n" + body)
-    rep_lines = report_of(rp, src)[2].splitlines()
-    no_probe = next((l for l in rep_lines if l.startswith("- **Пункты без пробы")), "")
+    no_probe = no_probe_of(rp)
+    open(f"{rp}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-10\n" + body)
+    twin_probe = no_probe_of(rp)
+    open(f"{rp}/docs/evidence/F1-x-result.txt", "w", encoding="utf-8").write("spec: SPEC-1\nF2.1 строка чужой фичи\n")
+    alien_probe = no_probe_of(rp)
     ok = (own.get("systemMessage", "").startswith("SPEC_GATE_OK") and all(foreign.values()) and back.get("systemMessage", "").startswith("SPEC_GATE_OK")
           and alien.get("decision") == "block" and "no full /verify-phase round" in alien.get("reason", "") and (not alt or alt_res.get("systemMessage", "").startswith("SPEC_GATE_OK"))
-          and ev_ok and "F2.1" in no_probe and "F1.1" not in no_probe)
+          and ev_ok and "F2.1" in no_probe and "F1.1" not in no_probe and "(2): F2.1, F2.2" in twin_probe and "(2): F2.1, F2.2" in alien_probe
+          and beside.get("systemMessage", "").startswith("SPEC_GATE_OK") and hint_ok and phase_ok and ev_more_ok and forged_ok and bom_ok)
     item(S, "F1.3", ok, f"fremd={'missing' if all(foreign.values()) else 'засчитан'} eigen={'OK' if own.get('systemMessage', '').startswith('SPEC_GATE_OK') else 'нет'} · своя — «{short(own)[:60]}»; чужие: "
          + ", ".join(f"{k} — {'block' if x else 'НЕ block'}" for k, x in foreign.items()) + f"; «{last_reason[:100]}»; вердикт docs/SPEC-9.md — {alien.get('decision')}: «{line_of(alien.get('reason', ''), 'no full')[:70]}»"
          + (f" · хук v3.3 на spec: SPEC-9 — «{short(alt_res)[:40]}»" if alt else "")
-         + f" · bin/evidence: rc команды {ev_cmd.returncode}, первая строка «{ev_lines[0]}», домашний каталог — «{ev_lines[2]}»; без SPEC — rc {ev_no.returncode}, команда не шла · bin/phase-report на spec: SPEC-9 — «{no_probe[:50]}»")
+         + f" · свой полон, чужой рядом в коммите — «{short(beside)[:30]}»; свой без F1.2, чужой с F1.2 — {hint.get('decision')}: «{line_of(hint_r, 'F1:')[:60]}», «{line_of(hint_r, 'F1.2')[:40]}»; у полной F2 чужой не назван — {'да' if 'F2-old-result.txt' not in hint_r else 'нет'}"
+         + " · файл фазы: " + "; ".join(f"{k} — «{first}» rc {rc}, хук «{short(got)[:12]}», отчёт {spec}" for k, (rc, first, got, spec) in named.items())
+         + f" · bin/evidence: rc команды {rc7}, первая строка «{ev_lines[0] if ev_lines else 'нет файла'}», домашний каталог в $-строке и выводе вычищен — {'да' if ev_clean else 'нет'}; без SPEC — rc {ev_no.returncode}, команда не шла"
+         + f"; из docs/sub идёт от корня — {'да' if sub_ok else 'нет'}; stderr в файле — {'да' if 'to-stderr' in se[2:] else 'нет'}; убита сигналом 9 — rc {rc_kill}; HOME / и пуст, вывод как есть — {'да' if no_home_ok else 'нет'}"
+         + f"; LF в команде — rc {rc_lf}, строк файла {len(lf)}, {forged.get('decision')}: «{line_of(forged.get('reason', ''), 'F2:')[:40]}»; CR — строк {len(cr)}, «{cr_probe[:40]}»; U+2028 — строк {len(ls_sep)}, «{ls_probe[:40]}»"
+         + f"; BOM перед spec: — хук «{short(bom_hook)[:12]}», отчёт «{bom_probe[:30]}»"
+         + f" · bin/phase-report на spec: SPEC-9 — «{no_probe[:50]}»; на spec: SPEC-10 — «{twin_probe[:50]}»; строка F2.1 в файле F1 — «{alien_probe[:50]}»")
     # F1.4 — STOP-TL: с вопросом и Resume → stop; без вопроса → missing; SPEC без §4 — STOP_IDS
     no4 = re.sub(r"\n## 4\..*", "\n", GATE_SPEC_ITEMS, flags=re.S)
-    def stop_case(name, spec, text, old=False):  # своя фикстура на прогон: стоп отпускает ход один раз, в любой сессии
+    def stop_case(name, spec, text, old=False, push=True, nl="\n"):  # своя фикстура на прогон: стоп отпускает ход один раз, в любой сессии
         repo, trx = gate_fixture(src, launch, items=True, spec=spec)
-        open(f"{repo}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + text)
-        ship(repo, name, "docs/PROGRESS.md")
+        pg = open(f"{repo}/docs/PROGRESS.md", encoding="utf-8").read() + "\n" + text
+        open(f"{repo}/docs/PROGRESS.md", "w", encoding="utf-8", newline="").write(pg.replace("\n", nl))
+        if push:
+            ship(repo, name, "docs/PROGRESS.md")
+        else:
+            for x in (("add", "--", "docs/PROGRESS.md"), ("commit", "-qm", name)):
+                subprocess.run(["git", *x], cwd=repo, env=GIT_ENV, capture_output=True, text=True, check=True)
         hook = old_hook(src, repo) if old else None
         return None if old and not hook else end(f"f14-{name}", repo=repo, transcript=trx, hook=hook)
     a, _, _ = stop_case("in-4", SPEC_TL, STOP_TL)
@@ -1322,10 +1408,26 @@ def gate34_probes(src, launch):
     oldd = stop_case("default-alt", no4, STOP_TL, old=True)
     b, resb, _ = stop_case("no-question", SPEC_TL, "STOP: STOP-TL «Leg 1» — плечо построено.\n")
     c, resc, _ = stop_case("not-in-4", GATE_SPEC_ITEMS, STOP_TL)
+    unp, resu, _ = stop_case("unpushed", SPEC_TL, STOP_TL, push=False)
+    crlf, _, _ = stop_case("crlf", SPEC_TL, STOP_TL, nl="\r\n")
+    # форма стопа: три строки после строки STOP; вопрос — ? без буквы, =, & или % сразу за ним, ? в адресе — не вопрос; resume — /resume|продолж/i
+    form_block = {"Resume без вопроса": "STOP: STOP-TL Leg\nResume: продолжай\n", "вопрос без Resume": "STOP: STOP-TL Leg\nВопрос тимлиду: принять?\n",
+                  "Resume на строке +4": "STOP: STOP-TL Leg\nа\nб\nВопрос: принять?\nResume: продолжай\n",
+                  "только строка STOP, ? в адресе": "STOP: STOP-TL продолжение см. https://x.example/a?b=1\n", "только строка STOP с вопросом": "STOP: STOP-TL плечо построено, продолжать?\n",
+                  "? только в адресе, Resume ниже": "STOP: STOP-TL Leg\nсм. https://x.example/a?b=1\nResume: продолжай\n",
+                  "? в адресах с =, & и %": "STOP: STOP-TL Leg\nсм. https://x.example/a?=1 https://x.example/b?&c https://x.example/d?%20e\nResume: продолжай\n"}
+    form_stop = {"Resume на строке +3": "STOP: STOP-TL Leg\nВопрос: принять?\nа\nResume: go\n", "«Продолжай» без слова Resume": "STOP: STOP-TL Leg\nВопрос: принять?\nПродолжай по SPEC-1 с F2\n",
+                 "вопрос жирным": "STOP: STOP-TL Leg\n**Принять?**\nResume: go\n", "вопрос в кавычках": "STOP: STOP-TL Leg\nВопрос: «принять?»\nResume: go\n"}
+    held = {k: stop_case(f"form-{k}", SPEC_TL, t)[:2] for k, t in form_block.items()}
+    freed = {k: stop_case(f"form-{k}", SPEC_TL, t)[0] for k, t in form_stop.items()}
+    form_ok = all(x["decision"] == "block" and "no question" in y.get("reason", "") for x, y in held.values()) and all(x["decision"] == "stop" for x in freed.values())
     ok = (a["decision"] == "stop" and a["reason"] == "STOP-TL" and d["decision"] == "stop" and b["decision"] == "block" and "no question" in resb.get("reason", "")
-          and c["decision"] == "block" and "is not a stop of SPEC §4" in resc.get("reason", "") and (not oldd or oldd[0]["decision"] == "block"))
+          and c["decision"] == "block" and "is not a stop of SPEC §4" in resc.get("reason", "") and (not oldd or oldd[0]["decision"] == "block")
+          and unp["decision"] == "block" and "is not pushed" in resu.get("reason", "") and crlf["decision"] == "stop" and crlf["reason"] == "STOP-TL" and form_ok)
     item(S, "F1.4", ok, f"stop_tl={'OK' if a['decision'] == 'stop' and d['decision'] == 'stop' else 'нет'} · §4 с STOP-TL, вопрос и Resume, запушен — {a['decision']} ({a['reason']}); SPEC без §4, STOP_IDS — {d['decision']}"
-         + (f" (хук v3.3 — {oldd[0]['decision']})" if oldd else "") + f"; без вопроса — {b['decision']}: «{line_of(resb.get('reason', ''), '«STOP')[:70]}»; §4 без STOP-TL — {c['decision']}")
+         + (f" (хук v3.3 — {oldd[0]['decision']})" if oldd else "") + f"; без вопроса — {b['decision']}: «{line_of(resb.get('reason', ''), '«STOP')[:70]}»; §4 без STOP-TL — {c['decision']}"
+         + f"; закоммичен без push — {unp['decision']}: «{line_of(resu.get('reason', ''), 'branch')[:30]}»; весь файл с CRLF — {crlf['decision']}"
+         + " · форма: " + "; ".join(f"{k} — {x['decision']}" for k, (x, _) in held.items()) + "; " + "; ".join(f"{k} — {x['decision']}" for k, x in freed.items()))
     # F1.5 — 10 концов хода формы Stop input вкладки Code = ожидаемым; те же входы на хуке v3.3; счёт журнала telefon на старом хуке
     r5, t5 = gate_fixture(src, launch, items=True)
     f5, tf5 = gate_fixture(src, launch, full=True, items=True)

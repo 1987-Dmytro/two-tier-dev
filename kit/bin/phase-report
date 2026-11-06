@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """phase-report [--no-jev] — отчёт фазы кодом (SPEC-v3.3 F1.4–F1.6, F2.6): docs/evidence/phase-report.md.
 
-  · матрица «пункт × коммиты, проба, наблюдение»: пункты `F<n>.<k>` SPEC фазы (первый `Read first:` docs/PROMPT.txt), коммиты фазы
-    после merge-base с main с id пункта в начале сообщения, строка пробы `F<n>.<k> <сырой вывод>` в docs/evidence/F<n>-*-result.txt;
+  · матрица «пункт × коммиты, проба, наблюдение»: пункты `F<n>.<k>` SPEC фазы (первый SPEC строки `Read first:` файла фазы — docs/PROMPT.txt,
+    иначе docs/GOAL.txt), коммиты фазы после merge-base с main с id пункта в начале сообщения, строка пробы `F<n>.<k> <сырой вывод>`
+    в docs/evidence/F<n>-*-result.txt;
   · три списка: пункты без коммитов, коммиты без пункта (кроме «Тимлид:»), пункты без пробы;
   · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
     отказы и отклонённые — поимённо, их читает тимлид;
@@ -49,7 +50,8 @@ def cell(s, n=160):
 
 
 def spec_items():
-    rf = (re.search(r"^Read first:(.*)$", read("docs/PROMPT.txt"), re.M) or [None, ""])[1]
+    phase = "docs/PROMPT.txt" if os.path.isfile("docs/PROMPT.txt") else "docs/GOAL.txt"  # тот же файл фазы, что у хука
+    rf = (re.search(r"^Read first:(.*)$", read(phase), re.M) or [None, ""])[1]
     spec = next((p.strip() for p in rf.split(",") if re.search(r"(^|/)SPEC-[^/]+\.md$", p.strip())), None)
     items, feat = [], None
     for l in read(spec).splitlines() if spec else []:
@@ -83,11 +85,11 @@ def phase_commits():
 
 
 def probes(spec):
-    """Строка пробы пункта — только из файла своей SPEC: первая строка `spec: SPEC-<n>` (SPEC-v3.4 F1.3)."""
+    """Строка пробы пункта — только из файла своей SPEC: первая строка `spec: SPEC-<n>`, BOM перед ней не мешает, как в хуке (SPEC-v3.4 F1.3)."""
     out, own = {}, "spec: " + re.sub(r"\.md$", "", os.path.basename(spec or ""))
     for p in sorted(glob.glob("docs/evidence/F*-*-result.txt")):
         lines = read(p).splitlines()
-        if not lines or lines[0].strip() != own:
+        if not lines or lines[0].strip().lstrip("\ufeff").strip() != own:
             continue
         for l in lines:
             m = re.match(r"^(F\d+\.\d+) (.+)$", l.strip())

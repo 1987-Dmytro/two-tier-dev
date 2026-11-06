@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """evidence <F> <чек> -- <команда…> — прогон чека с записью в docs/evidence/<F>-<чек>-result.txt (SPEC-v3.4 F1.3).
 
-Первая строка файла — `spec: SPEC-<n>` текущей фазы (первый SPEC строки `Read first:` docs/PROMPT.txt): только такие файлы судит
-spec-gate; вторая — `$ <команда>`; дальше вывод команды как есть, домашний каталог — `~`. На экран — то же, по мере вывода.
-Код выхода — код команды; файл заменяется по её окончании. Нет SPEC или неверные аргументы — код 2, команда не идёт. Команда идёт
-из корня проекта (git toplevel).
+Первая строка файла — `spec: SPEC-<n>` текущей фазы (правило хука и отчёта: файл фазы docs/PROMPT.txt, иначе docs/GOAL.txt; в его строке
+`Read first:` — первая запись через запятую с именем файла SPEC-*.md): только такие файлы судит spec-gate; вторая — `$ <команда>` одной
+строкой (CR, LF и прочие концы строк в ней экранированы); дальше вывод команды как есть. Домашний каталог в обеих — `~`; HOME пуст
+или `/` — не вычищается ничего. На экран — то же, по мере вывода. Код выхода — код команды, убитая сигналом n — 128+n; файл заменяется
+по её окончании. Нет SPEC или неверные аргументы — код 2, команда не идёт. Команда идёт из корня проекта (git toplevel).
 """
 import os, re, subprocess, sys, tempfile
 
@@ -18,19 +19,25 @@ def main(argv):
     if top:
         os.chdir(top)
     prompt = ""
-    if os.path.isfile("docs/PROMPT.txt"):
-        with open("docs/PROMPT.txt", encoding="utf-8") as f:
-            prompt = f.read()
-    m = re.search(r"^Read first:.*?(SPEC-[^\s,/]+)\.md", prompt, re.M)
-    if not m:
-        print("evidence: нет SPEC в строке Read first: docs/PROMPT.txt — команда не запущена")
+    for phase in ("docs/PROMPT.txt", "docs/GOAL.txt"):
+        if os.path.isfile(phase):
+            with open(phase, encoding="utf-8") as f:
+                prompt = f.read()
+            break
+    rf = (re.search(r"^Read first:(.*)$", prompt, re.M) or [None, ""])[1]
+    spec = next((p.strip() for p in rf.split(",") if re.search(r"(^|/)SPEC-[^/]+\.md$", p.strip())), None)
+    if not spec:
+        print("evidence: нет SPEC в строке Read first: docs/PROMPT.txt, иначе docs/GOAL.txt — команда не запущена")
         return 2
     os.makedirs("docs/evidence", exist_ok=True)
     path = f"docs/evidence/{feature}-{check}-result.txt"
-    home = os.path.expanduser("~")
+    home = os.path.expanduser("~").rstrip("/")  # HOME пуст или «/» — домашнего каталога нет, вычищать нечего
+    scrub = lambda s: s.replace(home, "~") if home else s
     fd, tmp = tempfile.mkstemp(prefix=f".{feature}-", dir="docs/evidence", text=True)
     with os.fdopen(fd, "w", encoding="utf-8") as out:
-        out.write(f"spec: {m.group(1)}\n$ {' '.join(cmd)}\n")
+        # одной строкой: команда не допишет в файл своих строк — экранировано всё, что str.splitlines отчёта считает концом строки
+        shown = re.sub(r"[\r\n\x0b\x0c\x1c-\x1e\x85\u2028\u2029]", lambda c: ascii(c.group())[1:-1], scrub(" ".join(cmd)))
+        out.write(f"spec: {os.path.basename(spec)[:-3]}\n$ {shown}\n")
         env = dict(os.environ, PYTHONUNBUFFERED="1")
         try:
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, text=True, errors="replace")
@@ -40,12 +47,14 @@ def main(argv):
             os.remove(tmp)
             return 127
         for line in p.stdout:
-            line = line.replace(home, "~")
+            line = scrub(line)
             out.write(line)
             out.flush()
             sys.stdout.write(line)
             sys.stdout.flush()
         rc = p.wait()
+        if rc < 0:  # убита сигналом n — код как в оболочке
+            rc = 128 - rc
     os.chmod(tmp, 0o644)
     os.replace(tmp, path)
     print(f"evidence: {path} — rc {rc}")
