@@ -1,0 +1,9 @@
+[Unit]
+Description=<проект> — Kontrolllauf (Kanarienvogel, SPEC-v3.4 F4.3): Referenzlauf durch den echten Ablauf, Ergebnis per Mail
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/<проект>
+EnvironmentFile=/etc/<проект>/env
+ExecStart=/usr/bin/python3 scripts/canary.py
+TimeoutStartSec=90

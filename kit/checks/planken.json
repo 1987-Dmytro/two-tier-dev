@@ -22,9 +22,13 @@
     "word_max_ms": null,
     "word_max_sicher_ms": null,
     "warten_ms": null,
+    "channel": null,
     "felder": {},
+    "felder_ganz": [],
     "stoppwoerter": [],
-    "fertige_saetze": []
+    "fertige_saetze": [],
+    "nummer_feld": null,
+    "nummer_frage": null
   },
   "canary": {
     "p95_gelb_ms": null,

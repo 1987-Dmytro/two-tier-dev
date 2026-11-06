@@ -763,6 +763,8 @@ TEMPLATES = {  # шаблон кита → куда его кладёт прим
 
 
 CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из шаблонов — фразы, без которых шаблон её не ведёт
+    "docs/SPEC.template.md": ["Регрессия модуля при закрытии", "`DEPLOY_OK` только после `REGRESS_OK`", "Правило закрытия", "Окно деплоя", "`LIVE_OK`", "Паспорт модуля", "`DEPLOY_FAIL step=passport`"],  # v3.4, F4.4
+    "docs/GATE.template.md": ["| 0 |", "контрольный прогон", "гейт не закрывается с красным", "`bin/check-fenster`"],
     "docs/PROMPT.template.txt": ["bin/verify-phase", "VERDICT: PASS", "its blocking findings fixed in this session",
                                  "Workflow agents edit only inside their own worktrees", "never push to main",
                                  "spec-gate", "`STOP: <id>`", "launch-line argument"],
@@ -777,7 +779,7 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
 def templates():
     """Пример — шаблон как есть, только номер фазы, пин и Read first подставлены; плейсхолдеры <…> остаются."""
     root = "kit" if os.path.isdir("kit/docs") else "."
-    missing = [t for t in TEMPLATES if not os.path.isfile(f"{root}/{t}")]
+    missing = [t for t in list(TEMPLATES) + list(CONTRACT) if not os.path.isfile(f"{root}/{t}")]
     if missing:
         return report([("FAIL", "templates", f"нет шаблонов {missing}")])
     b, out = load_budgets(f"{root}/budgets.json")

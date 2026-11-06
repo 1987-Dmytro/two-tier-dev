@@ -238,9 +238,195 @@ def section_frozen():
     return all(sec) and len(sec) == 5
 
 
+LIVE_CFG = {"live": {"word_max_ms": 3500, "word_max_sicher_ms": 5000, "warten_ms": 1000, "channel": "linie", "felder_ganz": ["name"], "stoppwoerter": ["und", "ich"],
+                     "felder": {"nummer": "rueckruf", "heiss|\\bname\\b": "name", "\\bort\\b": "ort", "worum geht": "anliegen"},
+                     "fertige_saetze": ["Gerne."], "nummer_feld": "rueckruf", "nummer_frage": "nummer.*\\?"}}
+
+
+def live_call(cid, turns, summary=None, caller="…98"):
+    """Синтетический звонок (без людей и номеров): строки журнала и запись. Ход: said, bot, ms, fc, way, llm, hirn, flags (HIRN), chain (KETTE), no_hirn, abbruch, fl."""
+    lines, tr = [f"12:00:00 | INFO | CALL_START call={cid} channel=linie caller={caller}"], [{"role": "bot", "text": "Guten Tag."}]
+    for n, x in enumerate(turns, 1):
+        tr.append({"role": "caller", "text": x.get("said", "Ja.")})
+        if x.get("fl"):
+            lines += [f"12:00:0{n} | INFO | BACKCHANNEL fl:FL{i}" for i in range(x["fl"])]
+        if not x.get("no_hirn"):
+            lines.append(f"12:00:0{n} | INFO | HIRN call={cid} n={n} first_clause_ms={x.get('fc', 500)} anfragen=1 weg={x.get('way', 'strom')} ttft_ms=300{x.get('flags', '')}" + (" abbruch=1" if x.get("abbruch") else ""))
+        if x.get("bot") is not None:
+            ms = x.get("ms", 2000)
+            tr.append({"role": "bot", "text": x["bot"], "latency_ms": ms})
+            lines.append(f"12:00:0{n} | INFO | KETTE call={cid} hirn={x.get('hirn', 400)} stt=100 sum={ms} llm={x.get('llm', 300)} text=ok{x.get('chain', '')}")
+    lines.append(f"12:00:59 | INFO | CALL_END call={cid}")
+    return lines, {"call_id": cid, "transcript": tr, "summary": summary or {}}
+
+
+def live_run(d, calls, args=("--n", "1")):
+    j, r = [], []
+    for c in calls:
+        lines, rec = live_call(**c)
+        j += lines
+        r.append(json.dumps(rec, ensure_ascii=False))
+    put(d, "live/journal.txt", "\n".join(j) + "\n")
+    put(d, "live/records.jsonl", "\n".join(r) + "\n")
+    return sh(["bin/check-live", "live/journal.txt", "live/records.jsonl", *args, "--planken", "live/planken.json"], d)
+
+
+class FakeSmtp:
+    """Локальный SMTP пробы: темы писем — в self.subjects."""
+    def __init__(self):
+        import socketserver, threading
+        subjects = self.subjects = []
+
+        class H(socketserver.StreamRequestHandler):
+            def handle(self):
+                self.wfile.write(b"220 fixture\r\n")
+                data = False
+                for raw in self.rfile:
+                    line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                    if data:
+                        if line == ".":
+                            data = False
+                            self.wfile.write(b"250 ok\r\n")
+                        elif line.startswith("Subject: "):
+                            subjects.append(line[9:])
+                    elif line.upper().startswith("DATA"):
+                        data = True
+                        self.wfile.write(b"354 go\r\n")
+                    elif line.upper().startswith("QUIT"):
+                        self.wfile.write(b"221 bye\r\n")
+                        return
+                    else:
+                        self.wfile.write(b"250 ok\r\n")
+        self.srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), H)
+        self.port = self.srv.server_address[1]
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.srv.shutdown()
+
+
 def section_fenster():
-    print("FENSTER_FAIL раздел ещё не построен", flush=True)
-    return False
+    sec.clear()
+    tools = ("check-frozen-diff", "check-passport", "check-fenster", "check-live")
+    # F4.1 — строка отката; окно: DEPLOY_OK на линию без LIVE_OK/ROLLBACK_OK — красное
+    d = project({"basis": None, "module": {}}, tools=tools, extra={"live/planken.json": json.dumps(LIVE_CFG)})
+    shutil.copy2(f"{root}/scripts/rollback.template.sh", f"{d}/scripts/rollback.sh")
+    fen = lambda: sh(["bin/check-fenster"], d)
+    empty = fen()
+    a1 = deploy(d, DEPLOY_LINIE=1)
+    r1 = fen()
+    green_call = [{"cid": "ok-1", "turns": [{"said": "Hallo.", "bot": "Worum geht es?", "ms": 1800}]}]
+    live_ok = live_run(d, green_call)
+    g1 = fen()
+    commit(d, "F1.1: следующий коммит", "src/n.py", "n = 1\n")
+    sha1 = re.search(r"sha=(\w+)", a1[1]).group(1)
+    a2 = deploy(d, DEPLOY_LINIE=1)
+    r2 = fen()
+    bad = sh(["bash", "scripts/rollback.sh"], d, env=dict(GIT_ENV, SHA="zzz"))
+    gone = sh(["bash", "scripts/rollback.sh"], d, env=dict(GIT_ENV, SHA="0000000"))
+    back = sh(["bash", "scripts/rollback.sh"], d, env=dict(GIT_ENV, SHA=sha1, ROLLBACK_CMD="touch rolled-back"))
+    g2 = fen()
+    a0 = deploy(d, DEPLOY_LINIE=0)
+    g3 = fen()
+    deploy(d, DEPLOY_LINIE=1)
+    deploy(d, DEPLOY_LINIE=1)
+    live_run(d, green_call)
+    twice = fen()
+    fail_line = deploy(d, regress="exit 1")
+    zeile = ("rollback: none" in a1[1] and f"rollback: make rollback SHA={sha1}" in a2[1] and "DEPLOY_OK" in a2[1] and "rollback: make rollback" in fail_line[1] and "DEPLOY_FAIL step=regress" in fail_line[1])
+    rot = r1[0] == 1 and r1[1].startswith("FENSTER_ROT") and r2[0] == 1 and twice[0] == 1
+    gruen = empty[0] == 0 and g1[0] == 0 and g2[0] == 0 and g3[0] == 0 and "linie=0" in a0[1] and live_ok[1].splitlines()[-1] == "LIVE_OK" and "ROLLBACK_OK" in back[1] and os.path.exists(f"{d}/rolled-back") and bad[0] == 1 and gone[0] == 1
+    probe("F4.1", zeile and rot and gruen, f"zeile={'OK' if zeile else 'нет'} fenster_rot={'OK' if rot else 'нет'} · первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт строку отката «{tail(fail_line[1], 2)}» · "
+          f"без живой проверки — rc {r1[0]} «{tail(r1[1])[:70]}»; LIVE_OK — rc {g1[0]} «{tail(g1[1])}»; откат «{tail(back[1])}» — rc {g2[0]}; linie=0 — rc {g3[0]}; два деплоя на окно — rc {twice[0]}; SHA мусор — rc {bad[0]}, нет коммита — rc {gone[0]}; журнала нет — rc {empty[0]}")
+    # F4.2 — фикстуры решений 389–393: своя сторона на каждое определение
+    q_name, q_num = "Wie heissen Sie?", "Unter welcher Nummer erreiche ich Sie?"
+    named = {"name": "Max Muster"}
+    long_guard = {"said": "Ja.", "bot": "Verstanden.", "ms": 4200, "flags": " hedge=1"}
+    c = lambda *turns, **k: [{"cid": k.get("cid", "x"), "turns": list(turns), "summary": k.get("summary")}]
+    cases = [("зелёный звонок", c({"bot": "Gut.", "ms": 1800}), "LIVE_OK", ("--n", "1")),
+             ("389 один звонок при --n 2", c({"bot": "Gut."}), "LIVE_FAIL anrufe=1<2", ("--n", "2")),
+             ("390 вопрос об уже названном", c({"bot": q_name}, {"said": "Max Muster.", "bot": "Und wie heissen Sie?"}, summary=named), "wiederholt=1", ("--n", "1")),
+             ("390 «Wie bitte» не названо", c({"bot": q_name}, {"said": "Wie bitte?", "bot": q_name}, summary=named), "LIVE_OK", ("--n", "1")),
+             ("390 номер сразу за диктовкой", c({"bot": q_num}, {"said": "0 1 7 2", "bot": q_num}), "wiederholt=1", ("--n", "1")),
+             ("390 номер позже законен", c({"bot": q_num}, {"said": "0 1 7 2", "bot": "Danke."}, {"said": "Ja.", "bot": q_num}), "LIVE_OK", ("--n", "1")),
+             ("stumm: ход без ответа", c({"bot": "Gut."}, {"said": "Hallo?", "bot": None}), "stumm=1", ("--n", "1")),
+             ("ход, снятый речью, не stumm", c({"bot": "Gut."}, {"said": "Hallo?", "bot": None, "abbruch": True}), "LIVE_OK", ("--n", "1")),
+             ("word_max без предохранителя", c({"bot": "Gut.", "ms": 3600}), "word_max=3600>3500", ("--n", "1")),
+             ("389 предохранитель в коридоре", c(long_guard), "LIVE_OK", ("--n", "1")),
+             ("389 предохранитель сверх коридора", c({**long_guard, "ms": 5200}), "word_max_sicher=5200>5000", ("--n", "1")),
+             ("392 wartend: ждал экстрактор", c({"bot": "Gut.", "ms": 4200, "way": "json", "fc": 2500, "llm": 900}), "wartend=1/1", ("--n", "1")),
+             ("392 не wartend: разница мала", c({"bot": "Gut.", "ms": 4200, "way": "json", "fc": 1500, "llm": 900}), "word_max=4200>3500", ("--n", "1")),
+             ("393 klang: готовая фраза", c({"bot": "Gerne. Wie gehts?", "ms": 4200, "fc": 500, "hirn": 3000}), "klang=1/1", ("--n", "1")),
+             ("393 без готовой фразы", c({"bot": "Gut. Wie gehts?", "ms": 4200, "fc": 500, "hirn": 3000}), "word_max=4200>3500", ("--n", "1")),
+             ("ход дозапроса вне выборки", c({"bot": "Gut.", "ms": 6000, "chain": " nachfrage=1"}), "LIVE_OK", ("--n", "1")),
+             ("пустой ход вне выборки", c({"bot": "Gut.", "ms": 6000, "chain": " leer=1"}), "LIVE_OK", ("--n", "1")),
+             ("ход диктовки вне выборки", c({"bot": q_num}, {"said": "0 1 7 2", "bot": "Danke.", "ms": 6000}), "LIVE_OK", ("--n", "1")),
+             ("wortlaute — отчёт, не судится", c({"bot": "Gut.", "fl": 3}), "wortlaute=3", ("--n", "1")),
+             ("журнал без HIRN", c({"bot": "Gut.", "no_hirn": True}), "journal_ohne_HIRN", ("--n", "1")),
+             ("чужой хвост номера", [{"cid": "a", "turns": [{"bot": "Gut."}], "caller": "…11"}], "keine_anrufe", ("--n", "1", "--anrufer", "98"))]
+    results = [(name, live_run(d, calls, args), want) for name, calls, want, args in cases]
+    report_only = ("wartend=1/1", "klang=1/1", "wortlaute=3")  # отчёт: звонок зелёный
+    hits = [(n, r, w) for n, r, w in results if w in r[1] and (r[1].splitlines()[-1] == "LIVE_OK" and r[0] == 0 if w == "LIVE_OK" or w in report_only else "LIVE_FAIL" in r[1] and r[0] == 1)]
+    empty_keys = sh(["bin/check-live", "live/journal.txt", "live/records.jsonl", "--planken", os.path.abspath(f"{root}/checks/planken.json")], d)
+    missed = [f"{n}: rc {r[0]} «{tail(r[1], 2, 120)}» ≠ {w}" for n, r, w in results if (n, r, w) not in hits]
+    probe("F4.2", not missed and empty_keys[0] == 2 and "LIVE_FAIL planken=" in empty_keys[1],
+          f"fixturen={len(hits)}/{len(results)} · " + "; ".join(f"{n} — {tail(r[1], 1, 70)}" for n, r, _ in results[:4]) + " · …; " + "; ".join(f"{n} — {tail(r[1], 2, 120)}" for n, r, _ in results[11:15])
+          + f" · ключи шаблона пусты — rc {empty_keys[0]} «{tail(empty_keys[1])[:60]}»" + (f" · НЕ СОШЛОСЬ: {'; '.join(missed)}" if missed else ""))
+    # F4.3 — канарейка: письмо OK|GELB|ROT, эталон красный → ROT, итог ≤ 60 с
+    smtp = FakeSmtp()
+    cn = tempfile.mkdtemp(prefix="check-kit-canary-", dir=TMP)
+    shutil.copy2(f"{root}/scripts/canary.template.py", f"{cn}/canary.py")
+    put(cn, "planken.json", json.dumps({"canary": {"p95_gelb_ms": 3200, "word_max_rot_ms": 6000, "timeout_s": 2}}))
+
+    def canary(cmd, planken="planken.json", port=None):
+        before = len(smtp.subjects)
+        t0 = time.monotonic()
+        env = dict(GIT_ENV, CANARY_CMD=cmd, CANARY_PLANKEN=planken, CANARY_SMTP=f"127.0.0.1:{port or smtp.port}", CANARY_PROJEKT="Fixtur")
+        rc, text = sh(["python3", "canary.py"], cn, env=env)
+        return rc, text, smtp.subjects[before:], time.monotonic() - t0
+    mess = lambda p95=2000, wm=3000, rot=0: f"bash -c 'echo CANARY_MESS p95={p95} word_max={wm} rot={rot}'"
+    gruen, gelb = canary(mess()), canary(mess(p95=4000))
+    rot1, rot2, rot3 = canary(mess(rot=2)), canary(mess(wm=7000)), canary("bash -c 'echo неразобранный вывод'")
+    hang = canary("sleep 20")
+    put(cn, "empty.json", open(f"{root}/checks/planken.json", encoding="utf-8").read())
+    keys = canary(mess(), planken="empty.json")
+    dead = canary(mess(), port=1)
+    smtp.close()
+    cap = sh(["python3", "-c", "import importlib.util as u; s = u.spec_from_file_location('c', 'canary.py'); m = u.module_from_spec(s); s.loader.exec_module(m); print(m.MAX_S, m.thresholds()[2])"], cn,
+             env=dict(GIT_ENV, CANARY_PLANKEN="too-long.json")) if not put(cn, "too-long.json", json.dumps({"canary": {"p95_gelb_ms": 1, "word_max_rot_ms": 1, "timeout_s": 300}})) else (1, "")
+    timer, service = read(f"{root}/deploy/canary.timer"), read(f"{root}/deploy/canary.service")
+    units = "OnCalendar=" in timer and "Persistent=true" in timer and "Type=oneshot" in service and "scripts/canary.py" in service
+    ok_rot = all(x[0] == 1 and x[2] and x[2][0].endswith("Kontrolle: ROT") and "CANARY_ROT" in x[1] for x in (rot1, rot2, rot3, hang)) and "grund=timeout" in hang[1] and hang[3] < 10 and "grund=planken" in keys[1] and keys[0] == 1
+    ok_gruen = gruen[0] == 0 and gruen[2] == ["Fixtur Kontrolle: OK"] and "CANARY_OK" in gruen[1] and gelb[0] == 0 and gelb[2] == ["Fixtur Kontrolle: GELB"] and "GELB p95>3200" in gelb[1] and units and cap[1] == "60 60" and dead[0] == 0 and "CANARY_BRIEF_FEHLER" in dead[1]
+    probe("F4.3", ok_rot and ok_gruen, f"rot={'OK' if ok_rot else 'нет'} gruen={'OK' if ok_gruen else 'нет'} · в планке — rc {gruen[0]} «{tail(gruen[1])}», тема «{gruen[2]}»; p95 выше — «{tail(gelb[1])}», тема «{gelb[2]}» · rot>0 — rc {rot1[0]} «{tail(rot1[1])}», тема «{rot1[2]}»; "
+          f"word_max — «{tail(rot2[1])[:60]}»; без строки — «{tail(rot3[1])[:50]}»; повис — rc {hang[0]} «{tail(hang[1])[:60]}» за {hang[3]:.0f} с; пустые ключи — «{tail(keys[1])[:50]}» · потолок {cap[1]} с; письмо не ушло — rc {dead[0]} «{tail(dead[1])[:40]}»; таймер и служба {'есть' if units else 'нет'}")
+    # F4.4 — шаблоны SPEC §5 и GATE п. 0: без строки --templates красный
+    green_t = sh([os.path.abspath(f"{root}/bin/check-budget"), "--templates"], root if root != "kit" else ".", env=dict(os.environ))
+    copies, reds = tempfile.mkdtemp(prefix="check-kit-tpl-", dir=TMP), {}
+
+    def template_copy(dst):  # только то, что читает --templates: проект может быть большим
+        os.makedirs(dst)
+        for top in ("docs", "bin", ".claude", ".abide"):
+            shutil.copytree(f"{root}/{top}", f"{dst}/{top}", ignore=shutil.ignore_patterns("__pycache__", "archive", "evidence"), symlinks=True)
+        for f in ("CLAUDE.md", "REVIEW.md", "budgets.json"):
+            shutil.copy2(f"{root}/{f}", f"{dst}/{f}")
+    for name, rel, needle in (("регрессия", "docs/SPEC.template.md", "Регрессия модуля при закрытии"), ("закрытие", "docs/SPEC.template.md", "Правило закрытия"), ("окно", "docs/SPEC.template.md", "Окно деплоя"),
+                              ("паспорт", "docs/SPEC.template.md", "Паспорт модуля"), ("GATE п. 0", "docs/GATE.template.md", "| 0 |")):
+        c_ = f"{copies}/{len(reds)}"
+        template_copy(c_)
+        text = read(f"{c_}/{rel}")
+        put(c_, rel, "\n".join(l for l in text.split("\n") if needle not in l))
+        reds[name] = sh(["bin/check-budget", "--templates"], c_, env=dict(os.environ))
+    no_gate = f"{copies}/no-gate"
+    template_copy(no_gate)
+    os.remove(f"{no_gate}/docs/GATE.template.md")
+    reds["нет GATE"] = sh(["bin/check-budget", "--templates"], no_gate, env=dict(os.environ))
+    ok_t = green_t[0] == 0 and green_t[1].splitlines()[-1] == "BUDGET_OK"
+    ok_r = all(r[0] == 1 and "BUDGET_FAIL" in r[1] and ("FAIL contract" in r[1] or "FAIL templates" in r[1]) for r in reds.values())
+    probe("F4.4", ok_t and ok_r, f"templates={'OK' if ok_t else 'нет'} rot={'OK' if ok_r else 'нет'} · кит — {tail(green_t[1])} · без строки: " + ", ".join(f"{k} — rc {r[0]}" for k, r in reds.items())
+          + f"; «{next((l for l in reds['окно'][1].splitlines() if l.startswith('FAIL')), '')[:110]}»")
+    print("FENSTER_OK" if all(sec) and len(sec) == 4 else "FENSTER_FAIL", flush=True)
+    return all(sec) and len(sec) == 4
 
 
 def run_sections(names):
