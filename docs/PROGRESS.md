@@ -1,7 +1,9 @@
 # PROGRESS — two-tier-dev, SPEC-v3.4 «кит под вкладкой Code» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — плечо 1 закрыто, идёт плечо 2
-**Сделано:** плечо 1: шаг 0, F1–F4 (судья конца хода, линты, замок и паспорт, окно и канарейка), мутации, `/code-review` (10 находок, 7 починены `6b089d2`, названы 3: F1.5 — реплей формы Stop input, вечный `shell` в фоне, срез журнала `bin/check-live`), окно 5 ч снято (`1e31e90`), graphify в ките (`9538f7c`–`ee7a5a8`), решения 396, 397. Голый `bin/check-harness` — все маркеры OK. Круг `verify-phase`: F4 — PASS на `be5c7a5`, F1 — PASS на `62f123a`; F2, F3 — NEEDS_WORK на `be5c7a5` только из-за `ENV_FAIL` F1, блокирующих по своим пунктам нет. **Следующий шаг оператора:** нет — слово на плечо 2 дано 07.11. **Когда закончим:** плечо 2 — строкой `STOP: STOP-TL «Leg 2»` в этом файле.
+## Голова — плечо 2: стройка и ревью закрыты, живые прогоны ждут входа
+**Сделано:** плечо 1 и слово на плечо 2 (`STOP-TL «Leg 1»` снят 07.11). F5, F6, F7, F8 и пункты PLAN F3.4, F2.1 закоммичены и запушены; ревью четырьмя независимыми проверяющими (42 находки, 14 блокирующих) и `/code-review` (10) разобраны: блокирующие починены, кроме evidence F6 и пока не закрытой F5.3 (ниже). Без модели зелёные и сняты: `bin/check-budget` (`--lints`, `--templates`), `bin/check-kit` (`FROZEN_OK`, `FENSTER_OK`, `PAAR_OK`), `bin/check-docs`, `bin/check-gate`; evidence F2–F5 — этого кода, F5.3 `offen`. **Не проверено на финальном коде:** `bin/check-verify`, `bin/gate-v3.4`, голый `bin/check-harness`, `--desktop`, круги F5–F8: вход CLI истёк.
+**Следующий шаг оператора:** `STOP-INPUT` ниже — вход CLI, команды модов; тимлиду — строки профиля и таблицы.
+**Когда закончим:** evidence F1, F6, F7, F8, круги `F5 F7` и `F6 F8`, отчёт фазы, `bin/gate-v3.4`, `make ci` — затем `STOP-TL «Leg 2»`.
 
 ## Done
 - Шаг 0 (`5944469`): `git mv` PROGRESS → `docs/archive/PROGRESS-v3.3-2026-11-06.md`, evidence и вердикты v3.3 → `docs/archive/evidence-v3.3/`; `docs/PLAN-v3.4.md`.
@@ -9,14 +11,27 @@
 - **F2 Lints der Spec** (`189418a`, `80e0e2e`, `6b089d2`): `bin/check-budget --lints` → `BUDGET_LINT_OK` — `docs/evidence/F2-budget-result.txt`.
 - **F3 Geschlossene Module** (`0adcfe5`, `2ba0dcb`, `6b089d2`): `bin/check-kit frozen` → `FROZEN_OK` — `docs/evidence/F3-check-kit-result.txt`.
 - **F4 Fenster & Kanarienvogel** (`598b336`, `e6c1958`, `6b089d2`): `bin/check-kit fenster` → `FENSTER_OK` — `docs/evidence/F4-check-kit-result.txt`.
+- **F5 Paar & Metriken** (`b2fbce2`, `d2b7961`, `cc59bf6`): `bin/check-kit paar` → `PAAR_OK`, F5.3 `offen` до второго круга на ≥ 2.1.318 — `docs/evidence/F5-check-kit-result.txt`.
+- **F6 Desktop** (`10875bd`, `1a9ca35`, `cc59bf6`), **F7 Risk & Evals** (`749c6e9`, `d2b7961`, `cc59bf6`), **F8 Dokumente, Mods & Gate** (`e145112`, `acadf13`, `1a9ca35`, `cc59bf6`): код — да; evidence — после входа.
+- PLAN «К плечу 2»: F3.4 (`5acb911`, `c8b6649`), F2.1 (`b2fbce2`, `d2b7961`), F5.5 (`b2fbce2`).
 
 ## Next — один айтем
-1. **F5 → F6 (F6.2–F6.4, остаток F6.1) → F7 → F8**, PLAN «К плечу 2»; `/code-review`, круг `verify-phase` F5 F6 F7 и F8, отчёт фазы, `bin/gate-v3.4`.
+1. После входа: голый `bin/check-harness` и `--desktop`, evidence F1, F6, F7, F8; круги `F5 F7` и `F6 F8`; `bin/phase-report`, `bin/gate-v3.4`, `make ci`; `STOP-TL «Leg 2»`.
 
-## Open stop — STOP-TL «Leg 1»
-STOP: STOP-TL «Leg 1» — плечо 1 построено, круг сделан: F1 и F4 PASS, F2 и F3 без своих блокирующих; голый `bin/check-harness`, `make ci` зелёные.
-Вопрос тимлиду: читать плечо 1 сейчас или вместе с плечом 2 на `STOP-TL «Leg 2»`?
-Resume: «Продолжай по SPEC-v3.4 с F5» — слово оператора на плечо 2 дано 07.11, сессия идёт дальше сама.
+## Open stop — STOP-INPUT «Leg 2 — вход CLI, профиль, моды»
+STOP: STOP-INPUT «Leg 2 — вход CLI, профиль, моды» — вложенные `claude -p` не идут (вход CLI истёк), а `--desktop` и голый харнесс красны от профиля тимлида, названного на снятый `limits`.
+Вопрос оператору и тимлиду: всё из списка ниже сделано, и как решены записи реестра плагинов — оставить `true` у модов или `false`?
+Resume: Продолжай по SPEC-v3.4 с evidence F1, F6, F7, F8: вход дан, реестр — решение оператора.
+
+**Оператору, по порядку** (скрипты этого не делают: правило 4):
+1. `claude auth login`.
+2. `claude plugin uninstall limits@two-tier-mods --scope user`, затем `claude plugin marketplace update two-tier-mods`, затем `claude plugin install window-guard@two-tier-mods --scope user` и `claude plugin install phase-start@two-tier-mods --scope user`. Записи уровня user у обоих модов уже есть (побочный эффект, Notes), `enabledPlugins` — ещё нет.
+3. После правки тимлида: `cp .claude/launch.settings.json .claude/settings.local.json`, новая сессия вкладки.
+
+**Тимлиду, файлы его:**
+- `.claude/launch.settings.json`: `limits@two-tier-mods` → `false`, добавить `window-guard@two-tier-mods` и `phase-start@two-tier-mods` → `true`; в `skillOverrides` — `"graphify": "off"`, `"anthropic-skills:artifact-emulator": "off"` (или строка таблицы).
+- `docs/PROCESS.md`: строку `limits` → две строки, как `kit/docs/PROCESS.template.md:23-24`; список `enabledPlugins` в профиле; строка `graphify`.
+- Слово одной строкой: F7.2 — класс и счёт второй строкой вердикта, в SPEC первой; F6.1 — `graph=нет` на клоне без графа, в SPEC `graph=OK`; F6.3 — нет файла профиля = `WARN`; F5.2 — звено вендора судится по слову «вендор» (в 3 SPEC telefon его нет ни в одной из 20 строк посадки); F7.1 — считать ли `LIVE_OK` и `make deploy` деплоем на линию (в 7 SPEC telefon токена нет); SPEC §5 (5) «45 %» устарел после 396; `docs/evals/` и `bin/check-gate` сверх запроса; `docs/README.md` ещё называет v3.3 текущей.
 
 ## Notes
 - Старт: CLI 2.1.316, вкладка Code; стартовый контекст (S2): SPEC 23 516 + kit-fixes 14 494 + `CLAUDE.md` 2 873 — 40 883 из 50 000 знаков; стартовый запрос 3 972.
