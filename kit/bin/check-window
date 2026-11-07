@@ -4,7 +4,8 @@
 Числа: один ход `claude -p` на Haiku во временном каталоге /tmp/two-tier-v3 (без ANTHROPIC_API_KEY, SPEC_GATE=off, 120 с),
 событие rate_limit_event, поле rate_limit_info.unifiedWindows.seven_day (недокументированное — исключение C2): доля 0..1 × 100; другие окна события не судятся.
 Порог — budgets.json корня проекта (git toplevel): defaults, в репо кита без ключа — kit/budgets.json, иначе 85;
-project только ужесточает. Неделя > window_seven_day_pct — «WINDOW: refuse», rc 1; равно — проходит, «WINDOW: start», rc 0. Числа не сняты — отказ с причиной, rc 1.
+project только ужесточает. Неделя > window_seven_day_pct — «WINDOW: refuse», rc 1; равно — проходит, «WINDOW: start», rc 0. Числа не сняты — отказ с причиной, rc 1: нет события, нет или пусто поле unifiedWindows, ошибка claude, seven_day без числа.
+В unifiedWindows нет ключа seven_day (решение 396, SPEC-v3.4 F5.5: судится одна неделя) — «WINDOW_WARN seven_day=fehlt», неделя не судится, «WINDOW: start», rc 0: тариф уже снимал окно этим способом, и строка запуска падать от этого не должна.
 --override — rc 0 всегда, обход печатается. --repair — прежний флаг плеча починки: его порог был у окна 5 ч, теперь без действия; строка запуска проекта с ним не падает. CHECK_WINDOW_EVENTS=<файл> — строки stream-json вместо живого хода
 (подставленные значения проб), CHECK_WINDOW_RC — код выхода claude к ним. Данных аккаунта не печатает.
 """
@@ -81,7 +82,9 @@ def parse(text, rc, err):
         return None, f"ошибка claude (rc {rc}): {clean(str((res or {}).get('result') or err))}"
     if ev is None:
         return None, "нет события rate_limit_event"
-    return None, "нет поля unifiedWindows в событии" if not w else "нет окна seven_day в unifiedWindows"
+    if not w:
+        return None, "нет поля unifiedWindows в событии"
+    return None, None if "seven_day" not in w else "окно seven_day без числа utilization"  # (None, None) — ключа нет: F5.5
 
 
 def at(ts):
@@ -105,8 +108,10 @@ if nums:
     p7, r7 = nums
     print(f"неделя {p7:g} % (порог {t7} %, сброс {at(r7)})")
     why = f"неделя {p7:g} % > {t7} % — ждать сброса до {at(r7)}" if p7 > t7 else None
-else:
+elif why:
     why = f"окна не сняты: {why}"
+else:
+    print("WINDOW_WARN seven_day=fehlt — неделя не судится")
 if "--override" in args:
     print(f"WINDOW: обход флагом --override — {'был бы отказ: ' + why if why else 'был бы старт'}")
     sys.exit(0)

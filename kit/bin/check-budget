@@ -49,6 +49,7 @@ DAY, MONTH = r"(?:0[1-9]|[12]\d|3[01])", r"(?:0[1-9]|1[0-2])"
 # v3.4, F2.2: строка поправки объёма в §0 SPEC — одной строкой, решение непустое, дата — 06.11.2026, 06.11 или 2026-11-06
 AMEND = re.compile(rf"Поправка[ \t]+[^\s:<>][^:\n<>]*:[ \t]*слово оператора[ \t]+(?:{DAY}\.{MONTH}(?:\.\d{{4}})?|\d{{4}}-{MONTH}-{DAY})(?!\.?\d)")
 EVIDENCE = re.compile(r"(?<![\w./-])docs/evidence/[^\s`,;()]+")  # v3.4, F2.1: путь в ячейке «измерено у нас»; ../docs/evidence/ — уже не он
+PAIR_LINE = re.compile(r"^PAIR_(?:OK|FAIL) diff_p50=-?\d+ diff_p95=-?\d+", re.M)  # v3.4, F5.2: итог checks/paired_stand.sh в файле звена вендора
 LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
 
 
@@ -242,26 +243,38 @@ def landing_rows(text):
     return rows
 
 
+def evidence_text(p):  # текст файла распределения; BOM и пробелы — не текст, битые байты lint не роняют
+    with open(p, encoding="utf-8", errors="replace") as f:
+        return f.read().replace("\ufeff", "").strip()
+
+
 def rule_planka(b):
     """v3.4, F2.1: планка без файла распределения — красная до выдачи SPEC (SPEC-v3.4 §1); выданная SPEC — файл тимлида, у неё WARN; на обрезанной истории
-    выдачу не определить — тоже WARN. Ячейка годна: «ранняя» своим первым словом или непустой файл в docs/evidence/ (путь, glob), а вне пути — n=<число ≥ 1>
-    и числа p50/p95: «p50 1180, p95 2300» или «p50/p95 1180/2300», между именем и числом может стоять =, : или ≈."""
+    выдачу не определить — тоже WARN. Ячейка годна: «ранняя» своим первым словом или файл в docs/evidence/ (путь, glob; непустой по тексту, симлинк наружу каталога — нет), а вне пути — n=<число ≥ 1>
+    и числа p50/p95: «p50 1180, p95 2300» или «p50/p95 1180/2300», между именем и числом может стоять =, : или ≈.
+    F5.2: строка со словом «вендор» в ячейке звена судится парой: «ранняя» или слово pair вне пути и файл со строкой итога checks/paired_stand.sh; n и p50/p95 её не заменяют."""
     ph = phase()
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec, prompt = ph[2], ph[4]
-    rows, bad = landing_rows(read(spec)), []
+    rows, bad, home = landing_rows(read(spec)), [], os.path.realpath("docs/evidence") + os.sep
     for name, cell in rows:
         if re.match(r"[^\w<]*ранняя\b", cell, re.I):  # своё первое слово: «<файл … или «ранняя»>» и «не ранняя» — не пометка
             continue
         f = EVIDENCE.search(cell)
         path = f.group(0).rstrip(".:!…»”\"'") if f else ""  # * и ? в конце — glob
         found = [p for p in glob.glob(path) if os.path.isfile(p)]
+        inside = [p for p in found if os.path.realpath(p).startswith(home)]  # симлинк наружу docs/evidence/ — не файл распределения
+        texts = [evidence_text(p) for p in inside]
         rest = EVIDENCE.sub(" ", cell)
         n = re.search(r"\bn\s*=\s*(\d+)\b", rest)
         pct = re.search(r"\bp50\s*[=:≈]?\s*\d", rest, re.I) and re.search(r"\bp95\s*[=:≈]?\s*\d", rest, re.I) or re.search(r"\bp50\s*/\s*p95\s*[=:≈]?\s*[\d.,]+\s*/\s*\d", rest, re.I)
-        why = "нет docs/evidence/<файл>" if not os.path.normpath(path).startswith("docs/evidence/") else f"нет файла {path}" if not found \
-            else f"пустой файл {path}" if not any(map(os.path.getsize, found)) else "нет n=" if not (n and int(n.group(1))) else "нет p50/p95" if not pct else None
+        source = "нет docs/evidence/<файл>" if not os.path.normpath(path).startswith("docs/evidence/") else f"нет файла {path}" if not found \
+            else f"симлинк наружу docs/evidence/ — {path}" if not inside else f"пустой файл {path}" if not any(texts) else None
+        if "вендор" in name.lower():  # F5.2: абсолютный перцентиль стенда звено вендора не судит — нужен результат пары
+            why = "звено вендора: нет pair и нет «ранняя»" if not re.search(r"\bpair\b", rest) else source or (None if any(map(PAIR_LINE.search, texts)) else f"звено вендора: нет строки PAIR_OK|PAIR_FAIL в {path}")
+        else:
+            why = source or ("нет n=" if not (n and int(n.group(1))) else "нет p50/p95" if not pct else None)
         if why:
             bad.append(f"«{name[:40]}»: {why}")
     if not rows:
@@ -272,6 +285,11 @@ def rule_planka(b):
     weight, note = ("WARN", " (история git обрезана: выдана ли SPEC — не определить)") if shallow \
         else ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) else ("FAIL", "")
     return [(weight, "planka-source", f"{spec}: планок {len(rows)}, без файла распределения и без «ранняя» — {'; '.join(bad)}{note}")]
+
+
+def amendments(t):  # строки «Поправка …» в §0 SPEC (F2.2); их же считает bin/phase-report (F5.4)
+    sec0 = re.search(r"^## 0\.[^\n]*\n(.*?)(?=^## |\Z)", t, re.S | re.M)
+    return len(AMEND.findall(sec0.group(1))) if sec0 else 0
 
 
 def rule_scope(b):
@@ -288,9 +306,6 @@ def rule_scope(b):
     was, now = ids(text if base is None else base), ids(text)
     new = [f for i, f in enumerate(now) if now[:i + 1].count(f) > was.count(f)]
 
-    def amendments(t):
-        sec0 = re.search(r"^## 0\.[^\n]*\n(.*?)(?=^## |\Z)", t, re.S | re.M)
-        return len(AMEND.findall(sec0.group(1))) if sec0 else 0
     k = amendments(text)
     paid = max(k - amendments(text if base is None else base), 0)  # строка, что была на выдаче, за новую фичу не платит
     if len(new) > paid:
@@ -733,6 +748,12 @@ def lints():
         subprocess.run(["git", "clone", "-q", "--depth", "1", "file://" + os.getcwd(), "cut"], env=GIT_ENV, capture_output=True, check=True)
         os.chdir("cut")
         return rule_planka(_b)
+
+    def linked(target, rel="docs/evidence/l.txt", extra={}):  # симлинк в фикстуре, как его оставил бы проект: цель — от каталога ссылки
+        def go(_b):
+            os.symlink(target, rel)
+            return rule_planka(_b)
+        return run_side({**s(f"`{rel}`, n=12, p50 1, p95 2"), "docs/PROGRESS.md": "x\n", **extra}, None, go)
     r1 = pk("≈ 2 ч")
     changed = pk("≈ 2 ч", commits=work + [("Тимлид: поправка SPEC", {"docs/SPEC-1.md": lint_fixture_spec("≈ 3 ч")}, [])])
     rot, rot_text = judge([
@@ -741,6 +762,11 @@ def lints():
         ("каталог вместо файла", "FAIL", "нет файла docs/evidence/sub", pk("`docs/evidence/sub`, n=1, p50 1, p95 2", {"docs/evidence/sub/a.txt": "x\n"})),
         ("glob без совпадений", "FAIL", "нет файла docs/evidence/verify-*", pk("`docs/evidence/verify-*`, n=2, p50 1, p95 2")),
         ("пустой файл", "FAIL", "пустой файл docs/evidence/e.txt", pk("`docs/evidence/e.txt`, n=12, p50 1, p95 2", {"docs/evidence/e.txt": ""})),
+        ("файл из пробелов", "FAIL", "пустой файл docs/evidence/w.txt", pk("`docs/evidence/w.txt`, n=12, p50 1, p95 2", {"docs/evidence/w.txt": " \n\t\n"})),
+        ("файл из BOM и пробелов", "FAIL", "пустой файл docs/evidence/w.txt", pk("`docs/evidence/w.txt`, n=12, p50 1, p95 2", {"docs/evidence/w.txt": "\ufeff \n"})),
+        ("симлинк наружу docs/evidence/", "FAIL", "симлинк наружу docs/evidence/ — docs/evidence/l.txt", linked("../PROGRESS.md")),
+        ("симлинк с абсолютной целью", "FAIL", "симлинк наружу", linked("/etc/hosts")),
+        ("симлинк каталога наружу", "FAIL", "симлинк наружу", run_side({**s("`docs/evidence/d/a.txt`, n=12, p50 1, p95 2"), "docs/other/a.txt": "x\n"}, None, lambda _b: (os.symlink("../other", "docs/evidence/d"), rule_planka(_b))[1])),
         ("путь выходит из docs/evidence/", "FAIL", no_file, pk("`docs/evidence/../PROGRESS.md`, n=3, p50 1, p95 2", {"docs/PROGRESS.md": "x\n"})),
         ("путь ../docs/evidence/", "FAIL", no_file, pk("`../docs/evidence/x.txt`, n=3, p50 1, p95 2")),
         ("без n", "FAIL", no_n, pk("`docs/evidence/x.txt`, p50 1, p95 2")),
@@ -784,6 +810,9 @@ def lints():
         ("n = 12, P50, P95", "OK", "планок 1", pk("`docs/evidence/x.txt`, n = 12, P50 1, P95 2")),
         ("glob с файлом", "OK", "планок 1", pk("`docs/evidence/verify-*`, n=2, p50 1, p95 2", {"docs/evidence/verify-a.txt": "x\n"})),
         ("glob: один файл из двух не пуст", "OK", "планок 1", pk("`docs/evidence/e*`, n=2, p50 1, p95 2", {"docs/evidence/e1.txt": "", "docs/evidence/e2.txt": "x\n"})),
+        ("glob: файл из пробелов и файл с текстом", "OK", "планок 1", pk("`docs/evidence/e*`, n=2, p50 1, p95 2", {"docs/evidence/e1.txt": " \n", "docs/evidence/e2.txt": "x\n"})),
+        ("битые байты в файле", "OK", "планок 1", run_side(s("`docs/evidence/b.bin`, n=2, p50 1, p95 2"), None, lambda _b: (open("docs/evidence/b.bin", "wb").write(b"\xff\xfe x"), rule_planka(_b))[1])),
+        ("симлинк внутри docs/evidence/", "OK", "планок 1", linked("x.txt")),
         ("точка после пути", "OK", "планок 1", pk("см. docs/evidence/x.txt. n=12, p50 1, p95 2")),
         ("путь в кавычках", "OK", "планок 1", pk("«docs/evidence/x.txt», n=12, p50 1, p95 2")),
         ("ранняя", "OK", "планок 1", pk("— ранняя, файла нет")),
@@ -983,18 +1012,21 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
 }
 
 
-def contract_text(f, text):
-    """Где читаются фразы договора (v3.4, F4.4): SPEC — живой текст §5, GATE — строка таблицы «| 0 |»; HTML-комментарий — не текст. Прочие шаблоны — весь файл."""
+CONTRACT_S2 = ["пара одного часа", "<звено вендора"]  # v3.4, F5.2: строка звена вендора — живой текст §2 шаблона SPEC
+
+
+def contract_text(f, text, sec=5):
+    """Где читаются фразы договора (v3.4, F4.4, F5.2): SPEC — живой текст раздела sec, GATE — строка таблицы «| 0 |»; HTML-комментарий — не текст. Прочие шаблоны — весь файл."""
     live = re.sub(r"<!--.*?(?:-->|\Z)", "", text, flags=re.S)
     if f == "docs/SPEC.template.md":
-        return next(iter(re.findall(r"^## 5\b.*?(?=^## |\Z)", live, re.M | re.S)), "")
+        return next(iter(re.findall(rf"^## {sec}\b.*?(?=^## |\Z)", live, re.M | re.S)), "")
     if f == "docs/GATE.template.md":
         return next((l for l in live.splitlines() if l.startswith("| 0 |")), "")
     return text
 
 
 def templates():
-    """Пример — шаблон как есть, только номер фазы, пин и Read first подставлены; плейсхолдеры <…> остаются, кроме ячейки планки: незаполненная — FAIL planka-source (F2.1),
+    """Пример — шаблон как есть, только номер фазы, пин и Read first подставлены; плейсхолдеры <…> остаются, кроме ячеек планки и звена вендора: незаполненная — FAIL planka-source (F2.1, F5.2),
     в примере — «ранняя»."""
     root = "kit" if os.path.isdir("kit/docs") else "."
     missing = [t for t in list(TEMPLATES) + list(CONTRACT) if not os.path.isfile(f"{root}/{t}")]
@@ -1006,7 +1038,9 @@ def templates():
     for f, words in CONTRACT.items():
         text = contract_text(f, read(f"{root}/{f}"))
         miss = [w for w in words if w not in text]
-        out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words)}, нет — {'; '.join(miss) or 'ничего'}"))
+        s2 = CONTRACT_S2 if f == "docs/SPEC.template.md" else []
+        miss += [w for w in s2 if w not in contract_text(f, read(f"{root}/{f}"), 2)]
+        out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words) + len(s2)}, нет — {'; '.join(miss) or 'ничего'}"))
     slash = re.compile("/" + "goal" + r"\b")  # v3.2: фазу запускает стартовый запрос — команды в ките не остаётся (строка не ловит сама себя)
     hits = []
     kit_paths = [os.path.join(d, f) for top in (".claude", "bin") for d, _, fs in os.walk(f"{root}/{top}") for f in fs]
@@ -1028,7 +1062,8 @@ def templates():
                     + ("; ".join(old) if old else "prompt_chars, docs/PROMPT.txt в owner, схемы GOAL нет")))
     pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
     subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),
-            ("<первые 12 знаков git hash-object>", pin), ("<файл, n, p50/p95 — или «ранняя»>", "ранняя")]
+            ("<первые 12 знаков git hash-object>", pin), ("<файл, n, p50/p95 — или «ранняя»>", "ранняя"),
+            ("<pair — пара одного часа: docs/evidence/<файл со строкой PAIR_…> — или «ранняя»>", "ранняя")]
     fs = {}
     for t, dst in TEMPLATES.items():
         text = read(f"{root}/{t}")

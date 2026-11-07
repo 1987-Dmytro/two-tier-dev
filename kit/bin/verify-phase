@@ -18,10 +18,14 @@
    первая строка — VERDICT: PASS или VERDICT: NEEDS_WORK, строка FEATURES: — фичи вердикта: не те, что просили, — вердикта нет,
    exit 1. Лимит на всё, клон и гейт включительно, — 1800 с: истёк — VERIFY_TIMEOUT,
    вердикта нет, exit 3. В вывод — счётчики, модели, коды выхода и пути от /tmp/two-tier-v3.
+5. Замер (K78, SPEC-v3.4 F5.3): прогон, дошедший до гейта или воркфлоу, и прогон, упёршийся в лимит, — строка `verify-phase: K78 …` и строка JSON в docs/evidence/verify-runs.jsonl: версия CLI (system/init
+   claude_code_version), фичи, секунды лаунчера и воркфлоу (task_notification usage.duration_ms), шелл-команды и команды в фоне (task_started: task_type local_bash, is_backgrounded; task_updated:
+   patch.is_backgrounded — agent-sdk/typescript), итог. Только счётчики; читает `bin/check-kit paar`.
 """
 import json, os, re, signal, subprocess, sys, tempfile, time
 
 TMP = "/tmp/two-tier-v3"
+JOURNAL = "docs/evidence/verify-runs.jsonl"
 ALLOW = ["Workflow(verify-phase)", "Bash(bin/check-*)", "Bash(bin/gate-*)", "Bash(make ci)"]
 PROMPT = ("Launch the saved workflow verify-phase with the Workflow tool, {args}. When it completes, reply with "
           "the single word done and use no tools.")
@@ -58,6 +62,32 @@ def run(cmd, cwd, env, limit, log, init_check=False):
                     sys.exit(f"verify-phase: apiKeySource {init.get('apiKeySource')} — не подписка, прогон остановлен")
             time.sleep(1)
         return p.returncode
+
+
+def stream(log):
+    """События stream-json; строка, обрезанная убитым процессом, — пропуск."""
+    out = []
+    with open(log, encoding="utf-8", errors="replace") as f:
+        for l in f:
+            try:
+                out.append(json.loads(l)) if l.startswith("{") else None
+            except ValueError:
+                pass
+    return out
+
+
+def journal(features, ev=(), note=None):
+    """K78: строка прогона в журнал и в вывод. note None — лимит истёк (итог timeout), иначе итог — status уведомления воркфлоу, его нет — none."""
+    cli = next((e.get("claude_code_version") for e in ev if e.get("subtype") == "init"), None)
+    bash = {e.get("task_id"): bool(e.get("is_backgrounded")) for e in ev if e.get("subtype") == "task_started" and e.get("task_type") == "local_bash"}
+    moved = {e.get("task_id") for e in ev if e.get("subtype") == "task_updated" and (e.get("patch") or {}).get("is_backgrounded") is True and bash.get(e.get("task_id")) is False}
+    ms = ((note or {}).get("usage") or {}).get("duration_ms")
+    rec = {"cli": cli, "features": features, "sec": round(time.monotonic() - T0), "wf_sec": round(ms / 1000) if isinstance(ms, (int, float)) else None,
+           "bash": len(bash), "fon": sum(bash.values()) + len(moved), "moved": len(moved), "status": "timeout" if note is None else note.get("status") or "none"}
+    os.makedirs(os.path.dirname(JOURNAL), exist_ok=True)
+    with open(JOURNAL, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    print("verify-phase: K78 " + " ".join(f"{k}={rec[k]}" for k in ("cli", "sec", "wf_sec", "bash", "fon", "moved", "status")))
 
 
 def timeout(stage):
@@ -133,6 +163,7 @@ def main(argv):
     if gate:
         rc = run([gate], clone, env, limit, f"{d}/gate.log")
         if rc is None:
+            journal(ids or known)
             timeout(f"гейт {gate}")
         markers = [l for l in open(f"{d}/gate.log", encoding="utf-8", errors="replace").read().splitlines() if re.fullmatch(r"(F\d+ )?[A-Z0-9_]+_OK", l)]
         print(f"verify-phase: гейт {gate} — rc {rc}, маркеров {len(markers)}: {' · '.join(markers) or 'нет'} ({time.monotonic() - T0:.0f} с)")
@@ -147,9 +178,10 @@ def main(argv):
            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--add-dir", d, "--allowedTools", *ALLOW,
            "--max-turns", "3", "--output-format", "stream-json", "--verbose"]
     rc = run(cmd, clone, env, limit, f"{d}/run.jsonl", init_check=True)
+    ev = stream(f"{d}/run.jsonl")
     if rc is None:
+        journal(ids or known, ev)
         timeout("воркфлоу /verify-phase")
-    ev = [json.loads(l) for l in open(f"{d}/run.jsonl", encoding="utf-8") if l.startswith("{")]
     wid = next((e.get("task_id") for e in ev if e.get("subtype") == "task_started" and e.get("workflow_name") == "verify-phase"), None)
     note = next((e for e in ev if e.get("subtype") == "task_notification" and e.get("task_id") == wid), {})  # у агентов свои фоновые задачи
     f = note.get("output_file", "")
@@ -163,6 +195,7 @@ def main(argv):
     print(f"verify-phase: claude -p rc {rc}; воркфлоу {note.get('status') or 'не запущен'}; агентов {len(agents)}: "
           f"{', '.join(f'{m} ×{n}' for m, n in models.items()) or 'нет'}; проверяющие {', '.join(checkers) or 'нет'}; "
           f"токенов {out.get('totalTokens')}; {time.monotonic() - T0:.0f} с")
+    journal(ids or known, ev, note)
     report = res.get("report", "")
     if report.split("\n", 1)[0] not in ("VERDICT: PASS", "VERDICT: NEEDS_WORK"):
         print("verify-phase: воркфлоу не вернул отчёт — вердикта нет")

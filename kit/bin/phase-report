@@ -8,6 +8,8 @@
   · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
     отказы и отклонённые — поимённо, их читает тимлид;
   · пропуски spec-gate — строки docs/evidence/spec-gate.jsonl с решением pass и причиной (кап, no-progress, ошибка, AGENT_STOP, фон);
+  · метрики ретро (SPEC-v3.4 F5.4): кругов до PASS — по вердиктам этой SPEC docs/evidence/verify-<sha>[-F<n>…].txt в порядке истории; откатов деплоя — строки ROLLBACK_OK
+    против деплоев на линию в docs/evidence/deploy-window.log; поправок объёма — строки «Поправка» §0 SPEC. Данных нет — нули;
   · ячейка Jev в тени: один вопрос `choice` на пункт — пункт против сырого вывода его пробы (`questions.item_status` в
     .claude/spec-gate.json): подтверждает / противоречит / молчит; ошибка и таймаут — статус, rc не меняют. Метки копятся
     строками docs/evidence/jev-labels.jsonl. В Jev уходят только текст пунктов и строки проб.
@@ -96,6 +98,39 @@ def probes(spec):
             if m and m.group(1) not in out and m.group(1).startswith(os.path.basename(p).split("-")[0] + "."):
                 out[m.group(1)] = (p, m.group(2))
     return out
+
+
+def rounds(spec):
+    """Круги фич (F5.4): ({фича: кругов до первого прохода}, {фича без прохода: кругов}). Порядок — история git, на одном sha полный круг раньше точечного. Фича прошла, как считает spec-gate:
+    круг её называет и это PASS или NEEDS_WORK с разобранным списком блокирующих, где её нет. Вердикт другой SPEC и файл без вердикта — не круг."""
+    seq, found = git("rev-list", "--topo-order", "--reverse", "HEAD").split(), []
+    for p in glob.glob("docs/evidence/verify-*.txt"):
+        m = re.fullmatch(r"verify-([0-9a-f]{7,40})((?:-F\d+)*)\.txt", os.path.basename(p))
+        text = read(p)
+        head, feats = text.split("\n", 1)[0].strip(), re.search(r"^FEATURES:[ \t]*(.*)$", text, re.M)
+        whose = re.search(r"^/verify-phase · (\S+) · ", text, re.M)
+        if m and feats and head in ("VERDICT: PASS", "VERDICT: NEEDS_WORK") and whose and os.path.basename(whose[1]) == os.path.basename(spec or ""):
+            blocks = re.search(r"\n## (?:Блокирующие|Blocking)[^\n]*\n(.*?)(?=\n## |\Z)", text, re.S)
+            blocking = set(re.findall(r"^- \*\*(F\d+)", blocks[1], re.M)) if blocks else set()
+            at = next((i for i, c in enumerate(seq) if c.startswith(m[1])), -1)
+            found.append((at, bool(m[2]), m[0], head == "VERDICT: PASS", blocking, re.findall(r"F\d+", feats[1])))
+    took, going = {}, {}
+    for _, _, _, passed, blocking, feats in sorted(found, key=lambda r: r[:3]):
+        for f in feats:
+            if f not in took:
+                going[f] = going.get(f, 0) + 1
+                if passed or (blocking and f not in blocking):
+                    took[f] = going.pop(f)
+    return took, going
+
+
+def amend_count(spec):  # счёт «Поправка» — правилом самого scope-growth: bin/check-budget рядом
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True  # кэш рядом с bin/ не нужен
+    loader = importlib.machinery.SourceFileLoader("check_budget", os.path.join(os.path.dirname(os.path.realpath(__file__)), "check-budget"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("check_budget", loader))
+    loader.exec_module(mod)
+    return mod.amendments(read(spec)) if spec else 0
 
 
 def jev(items, seen):
@@ -189,6 +224,15 @@ def main(argv):
     L += ["", "## Пропуски spec-gate", "", f"Решений хука: {len(gate)} — блоков {sum(g.get('decision') == 'block' for g in gate)}, "
           f"OK {sum(g.get('decision') == 'ok' for g in gate)}, стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.", ""]
     L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- нет"]
+    took, going = rounds(spec)
+    n_rounds = max(took.values(), default=0)
+    deploy_log = read("docs/evidence/deploy-window.log").splitlines()
+    n_back = sum(1 for l in deploy_log if re.search(r"\bROLLBACK_OK\b", l))
+    n_line = sum(1 for l in deploy_log if re.search(r"\bDEPLOY_(?:OK|FAIL)\b", l) and re.search(r"\blinie=1\b", l))  # красная выкатка на линии — тоже деплой на линию (check-fenster)
+    n_amend = amend_count(spec)
+    detail = "; ".join(x for x in (", ".join(f"{f} {k}" for f, k in sorted(took.items(), key=lambda x: int(x[0][1:]))),
+                                   "без PASS: " + ", ".join(f"{f} — {k}" for f, k in sorted(going.items(), key=lambda x: int(x[0][1:]))) if going else "") if x)
+    L += ["", "## Метрики ретро", "", f"- Кругов до PASS: {n_rounds}" + (f" ({detail})" if detail else ""), f"- Откатов деплоя: {n_back} из {n_line}", f"- Поправок объёма: {n_amend}"]
     counts = {}
     for v in status.values():
         k = v.split()[0].rstrip(":")
@@ -197,7 +241,7 @@ def main(argv):
     with open("docs/evidence/phase-report.md", "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
     print(f"phase-report: docs/evidence/phase-report.md — пунктов {len(items)}, с пробой {len(items) - len(no_probe)}, без коммитов {len(no_commit)}, "
-          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}; Jev — {jev_note}")
+          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}; кругов до PASS {n_rounds}, откатов {n_back} из {n_line}, поправок {n_amend}; Jev — {jev_note}")
     return 0
 
 
