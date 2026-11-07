@@ -1,9 +1,10 @@
 #!/bin/sh
 # post-commit — граф кода Graphify после коммита. core.hooksPath глушит .git/hooks, поэтому `graphify hook install` при ките молчит: граф пересобирает этот хук.
 # Только если граф уже есть (первую сборку делает bin/two-tier-init или `graphify update .`) и CLI стоит. `graphify update .` — AST, без модели и сети, пишет только в graphify-out/.
-# В фоне: коммит не ждёт, ошибка коммит не держит; возраст графа судит bin/check-harness (HARNESS_WARN graph-age).
+# В фоне: коммит не ждёт, ошибка коммит не держит. После сборки — отметка graphify-out/.built-head (sha, для которого собран граф): по ней bin/check-harness судит возраст (HARNESS_WARN graph-age).
 [ -f graphify-out/graph.json ] || exit 0
 command -v graphify >/dev/null 2>&1 || exit 0
 [ -f graphify-out/.gitignore ] || echo '*' > graphify-out/.gitignore
-(graphify update . </dev/null >/dev/null 2>&1 &)
+head=$(git rev-parse HEAD 2>/dev/null) || exit 0
+( { graphify update . && echo "$head" > graphify-out/.built-head; } </dev/null >/dev/null 2>&1 & )
 exit 0

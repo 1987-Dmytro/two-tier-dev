@@ -135,10 +135,12 @@ def upgrade(target):
         if os.path.isfile(T("docs/PROCESS.md")) and "/" + "goal" in read(T("docs/PROCESS.md")):  # строка не ловит саму себя в no-goal
             tl_todo.append("`docs/PROCESS.md` — строка запуска по `docs/PROCESS.template.md` кита: `--setting-sources project,local` "
                            "и стартовый запрос аргументом после `--`, без команды " + "/" + "goal")
-        hooks_dir = T(git("rev-parse", "--git-path", "hooks").stdout.strip())  # core.hooksPath .githooks глушит хуки .git/hooks: граф кода перестаёт пересобираться молча
+        hooks_dir = os.path.join(T(git("rev-parse", "--git-common-dir").stdout.strip()), "hooks")  # не --git-path: тот идёт по core.hooksPath; .git/hooks при нём молчат — граф кода перестаёт пересобираться молча
         silent = sorted(h for h in os.listdir(hooks_dir) if not h.endswith(".sample")) if os.path.isdir(hooks_dir) else []
         if silent:
             tl_todo.append(f"хуки `.git/hooks` молчат при `core.hooksPath .githooks`: {', '.join(f'`{h}`' for h in silent)} — нужное перенести в `.githooks/`; граф кода пересобирает `.githooks/post-commit` кита")
+        if git("ls-files", "--", "graphify-out").stdout.strip():
+            tl_todo.append("`graphify-out/` в git: хук кита пересобирает граф после каждого коммита, и дерево станет грязным — снять с учёта (`git rm -r --cached graphify-out`, файлы остаются) и внести в `.gitignore`; решает тимлид")
         if not os.path.isfile(T("graphify-out/graph.json")):
             tl_todo.append("граф кода: `graphify update .` — первая сборка (AST, без модели и сети), дальше его пересобирает `.githooks/post-commit`; нет CLI — `pip install graphifyy && graphify install`")
         try:  # budgets.json проекта апгрейд не пишет: новые записи owner и ключи кита — тимлиду

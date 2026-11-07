@@ -13,7 +13,7 @@
 | без Chrome | флаг | `--no-chrome` | да | встроенный `claude-in-chrome` в сессии исполнителя выключен | строка запуска | — |
 | Ponytail | плагин | `ponytail@ponytail` | да | база | `/plugin install ponytail@ponytail` | строка таблицы |
 | Context7 | MCP | `context7` | да | база: доки библиотек | `--mcp-config` строки запуска, stdio `npx -y @upstash/context7-mcp` | из строки запуска |
-| Graphify | скилл | `graphify` | да | база, где корпус больше grep-удобного: граф кода `graphify-out/` (вне git) — первую сборку делает `bin/two-tier-init` или `graphify update .`, дальше его пересобирает `.githooks/post-commit` (AST, без модели и сети), старый граф — `HARNESS_WARN graph-age`; скилл приходит через `--add-dir /tmp/two-tier-v3/skills` | подготовка запуска; CLI — `pip install graphifyy && graphify install` | — |
+| Graphify | скилл | `graphify` | да | база, где корпус больше grep-удобного: граф кода `graphify-out/` (вне git) — первую сборку делает `bin/two-tier-init` или `graphify update .`, дальше его пересобирает `.githooks/post-commit` (AST, без модели и сети), граф не для HEAD (отметка `graphify-out/.built-head`) — `HARNESS_WARN graph-age`; скилл приходит через `--add-dir /tmp/two-tier-v3/skills` | подготовка запуска; CLI — `pip install graphifyy && graphify install` | — |
 | pr-review-toolkit | плагин | `pr-review-toolkit@claude-plugins-official` | да | база: ревью диффа ветки | `claude plugin install pr-review-toolkit@claude-plugins-official` | строка таблицы |
 | pyright-lsp | плагин | `pyright-lsp@claude-plugins-official` | да | Python: `bin/check-*` | — | когда в фазе нет Python |
 | typesafe | плагин | `typesafe@typesafe-ai` | нет | по задаче: фаза пишет вызовы Jev | `claude plugin install typesafe@typesafe-ai` | строка таблицы |

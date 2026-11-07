@@ -99,7 +99,7 @@ GATE_SPEC_ITEMS = """# SPEC-1 — фикстура spec-gate с пунктами
 """
 EV_ITEMS = {"docs/evidence/F1-a-result.txt": "spec: SPEC-1\n$ bin/a\nF1.1 rc 0 · A напечатано\nF1.2 rc 0 · A_OK после проверок\nA_OK\n",
             "docs/evidence/F2-b-result.txt": "spec: SPEC-1\n$ bin/b\nF2.1 rc 0 · B напечатано\nF2.2 красный образец — rc 1, отказ · зелёный — rc 0\nB_OK\n"}
-SECTIONS = {"env": ("ENV", "HARNESS", "HOOKS"), "items": ("ITEMS", "GATE_HOOK"), "commit": ("COMMIT",)}
+SECTIONS = {"env": ("ENV", "HARNESS", "HOOKS"), "items": ("ITEMS", "GATE_HOOK"), "commit": ("COMMIT",), "graph": ()}  # graph — справка и HARNESS_WARN graph-age, без маркера
 SRC_ARG = None
 
 
@@ -877,38 +877,49 @@ MODE_FIXTURE = """## Environment
 
 
 def graph_age(root="."):
-    """(статус, текст) графа кода против HEAD (F6.1): граф старше коммита HEAD — WARN, не красное: его пересобирает .githooks/post-commit в фоне; графа нет — статуса нет."""
-    p = os.path.join(root, "graphify-out/graph.json")
-    head = subprocess.run(["git", "-C", root, "log", "-1", "--format=%ct"], capture_output=True, text=True).stdout.strip()
-    if not os.path.isfile(p) or not head:
+    """(статус, текст) графа кода против HEAD (F6.1). Отметка graphify-out/.built-head — sha, для которого граф собрал .githooks/post-commit: не HEAD
+    или её нет — WARN, не красное (сборка идёт в фоне; коммит без правок кода граф не переписывает, поэтому время файла не мерило); графа или коммитов нет — статуса нет."""
+    g = os.path.join(root, "graphify-out")
+    head = subprocess.run(["git", "-C", root, "rev-parse", "-q", "--verify", "HEAD"], capture_output=True, text=True).stdout.strip()
+    if not os.path.isfile(f"{g}/graph.json") or not head:
         return None, "графа нет (graphify-out/graph.json) или нет коммитов"
-    age = int(head) - int(os.path.getmtime(p))
-    return ("WARN", f"граф старше HEAD на {age} с; собрать: graphify update .") if age > 0 else ("OK", "граф не старше HEAD")
+    built = open(f"{g}/.built-head", encoding="utf-8").read().strip() if os.path.isfile(f"{g}/.built-head") else ""
+    if built == head:
+        return "OK", f"граф собран для HEAD {head[:7]}"
+    return "WARN", (f"граф собран для {built[:7]}, HEAD {head[:7]}" if built else "нет отметки сборки graphify-out/.built-head") + "; собрать: sh .githooks/post-commit"
 
 
 def graph_lines(root="."):
-    """Строки вывода о графе: статус и текст; граф старше HEAD — ещё `HARNESS_WARN graph-age`."""
+    """Строки вывода о графе: статус и текст; граф не для HEAD — ещё `HARNESS_WARN graph-age`."""
     status, text = graph_age(root)
     return [f"{status or '--':4} graph: {text}"] + (["HARNESS_WARN graph-age"] if status == "WARN" else [])
 
 
 def graph_age_probes():
-    """Стороны graph_age на фикстуре: нет графа, старше HEAD, ровно HEAD, новее."""
+    """Стороны graph_age на фикстуре (git без настроек пользователя): нет коммитов, нет графа, отметка = HEAD, другая, нет отметки."""
     os.makedirs(TMP, exist_ok=True)
     d = tempfile.mkdtemp(prefix="graph-age-", dir=TMP)
-    git = lambda *a: subprocess.run(["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a], capture_output=True, text=True)
-    git("init", "-q")
-    git("commit", "-q", "--allow-empty", "-m", "x")
-    t = int(git("log", "-1", "--format=%ct").stdout.strip())
-    got = [("нет графа", None, graph_age(d)[0])]
-    os.makedirs(f"{d}/graphify-out")
-    open(f"{d}/graphify-out/graph.json", "w").write("{}")
-    for name, delta, want in (("старше HEAD", -100, "WARN"), ("ровно HEAD", 0, "OK"), ("новее HEAD", 100, "OK")):
-        os.utime(f"{d}/graphify-out/graph.json", (t + delta, t + delta))
-        got.append((name, want, graph_age(d)[0]))
-        warned = "HARNESS_WARN graph-age" in graph_lines(d)
-        got.append((f"{name}: строка HARNESS_WARN", want == "WARN", warned))
-    shutil.rmtree(d, ignore_errors=True)
+    env = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
+    git = lambda *a: subprocess.run(["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a], capture_output=True, text=True, env=env)
+    got = []
+    try:
+        git("init", "-q")
+        os.makedirs(f"{d}/graphify-out")
+        open(f"{d}/graphify-out/graph.json", "w").write("{}")
+        got.append(("граф есть, коммитов нет", None, graph_age(d)[0]))
+        git("commit", "-q", "--allow-empty", "-m", "x")
+        head = git("rev-parse", "HEAD").stdout.strip()
+        for name, stamp, want in (("отметка = HEAD", head, "OK"), ("отметка другого коммита", "0" * 40, "WARN"), ("нет отметки", None, "WARN")):
+            if stamp is None:
+                os.remove(f"{d}/graphify-out/.built-head")
+            else:
+                open(f"{d}/graphify-out/.built-head", "w").write(stamp + "\n")
+            got.append((name, want, graph_age(d)[0]))
+            got.append((f"{name}: строка HARNESS_WARN", want == "WARN", "HARNESS_WARN graph-age" in graph_lines(d)))
+        os.remove(f"{d}/graphify-out/graph.json")
+        got.append(("нет графа", None, graph_age(d)[0]))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
     return got
 
 
@@ -1759,7 +1770,6 @@ def main():
     print(f"источник харнеса: {src}; строка запуска: {proc}; launch settings: {launch}; разделы: {', '.join(want)}")
     if "env" in want:
         say("ENV", "OK" if self_test() else "FAIL", "self-test", "фикстуры обеих сторон сверки")
-        print("\n".join(graph_lines()), flush=True)
         line = static(src, proc, launch)
         ran = False
         if line:
@@ -1783,6 +1793,8 @@ def main():
             gate_probes(src, launch, lenv, args)
     if "commit" in want:
         commit_probes(src)
+    if "graph" in want:
+        print("\n".join(graph_lines()), flush=True)
     for sec, ss in out.items():
         print(f"{sec}_FAIL" if "FAIL" in ss else f"{sec}_OK")
     return 1 if any("FAIL" in ss for ss in out.values()) else 0
