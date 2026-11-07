@@ -12,6 +12,7 @@
 - **Поправка 397: слово оператора 07.11** (исполнителю напрямую, ≈ 08:50; коммиты `9538f7c`–`ee7a5a8`): Graphify входит в кит — `.githooks/post-commit` пересобирает граф, отметка `graphify-out/.built-head`, возраст графа по ней (F6.1 сделан в плече 1); §1 «Graphify — не ставится» снята для кита. Фич — 8, пунктов — 36.
 - **Поправка 398: слово оператора 07.11** (18:08, чату тимлида): окна без ограничений — `window_seven_day_pct`/`window_repair_pct` = 100 в `budgets.json` корня и кита, `check-window` и мод `window-guard` печатают и не отказывают (пороги 40/85/70 из Named закрыты); профиль v3.4 — `window-guard`, `phase-start` вкл., `limits` в архив, скилл `graphify` off для кита; `/phase resume` — только по слову «Resume как в PROGRESS»; Graphify для telefon SPEC-11 — по полной (исследование тимлида). Фич — 8, пунктов — 36.
 - **Поправка 399: слово оператора 07.11** (18:29, чату тимлида: «не перегружать систему MCP, плагинами и инструкциями; один механизм от идеи до рабочего решения»): в v3.4 входит мод M1 `spec-board` — фича F9, плечо 3 после `STOP-TL «Leg 2»`; M4 `guard-rail` и M5 `claim-audit` закрыты (вошло → вышло: запреты — хуки кита, счётчик отказов — F6.4, судья заявления — Belay в тени); Graphify для SPEC-11 — два места с замером (приёмка тимлида; один шаг PLAN-11 по графу, счётчик — лог запросов), без хука-подсказки и strict. Фич — 9, пунктов — 38.
+- **Решение 400 (07.11, чтение плеча 2):** явная метка `risk:` у фичи сильнее слов — `risk: low` при словах деплоя → OK с пометкой, без метки и со словами → как прежде; F3, F4, F7 — `risk: low` (кит строит инструменты деплоя, не деплоит); `deploy_words` — только действия (`make deploy`, «деплой на линию», «окно деплоя», «деплой на номер»), `vendor_words` без `API`; `planka-source` после правки SPEC тимлидом — FAIL без WARN (тимлид пишет «ранняя» или даёт файл).
 - **Одно вошло — одно вышло:** сняты K30 (счётчик OTel), P1-4 для `spec-gate` (`onFailure` не действует на Stop), `ultrareview` как шаг пути (352 → по слову), кап `blocks 12` — остаётся документацией (платформа 8).
 
 ## 1. Дизайн высокого уровня
@@ -38,16 +39,16 @@
   - `F2.2` `scope-growth`: новая `- **F<n>` против фич на коммите `docs/PROMPT.txt` без строки «Поправка <решение>: слово оператора <дата>» → FAIL; со строкой → `поправок: k` — `F2.2 ohne=FAIL mit=k` там же
   - `F2.3` `checks/planken.json` (шаблон ключей; владелец — тимлид с приёмки): коридоры/исключения/A/B; числа коридора в SPEC при ключе → `BUDGET_WARN planken-inline`; ключ без файла → FAIL — `F2.3 inline=WARN ohne=FAIL` там же
   - `F2.4` тест с меткой `flaky` красный → строка `FLAKY`, гейт зелёный; без метки → блок — `F2.4 flaky=OK ohne=block` там же
-- **F3 Geschlossene Module** · замок путей, паспорт, регрессия в деплое · готово: F3.1–F3.5 · чек: `bin/check-kit` → `FROZEN_OK` · служит: S7, S8 · after: —
+- **F3 Geschlossene Module** · замок путей, паспорт, регрессия в деплое · risk: low · готово: F3.1–F3.5 · чек: `bin/check-kit` → `FROZEN_OK` · служит: S7, S8 · after: —
   - `F3.1` `kit/frozen.json` + `frozen-paths`: коммит в замороженный путь без SPEC → отказ с файлом; с `offen` → OK; дифф > `diff_cap` → отказ — `F3.1 verboten=OK offen=OK cap=OK` в `F3-check-kit-result.txt`
   - `F3.2` «Тимлид:» в код замороженного пути → отказ (K79); в `docs/` → OK — `F3.2 tl=OK` там же
   - `F3.3` паспорт модуля (`bin/check-passport`): расхождение отпечатка без `<MODUL>_OFFEN` → `DEPLOY_FAIL step=passport`; с ним → OK — `F3.3 pass=OK offen=OK` там же
   - `F3.4` `deploy.template.sh` шаг `regress`: `REGRESS_FAIL` → `DEPLOY_FAIL step=regress`; `REGRESS_OK` → `DEPLOY_OK` — `F3.4 regress=2/2` там же
-  - `F3.5` `two-tier-upgrade` на клоне telefon: замок и хук работают, `check-budget` зелёный — `F3.5 telefon=OK` там же
-- **F4 Fenster & Kanarienvogel** · живой канал и утренняя канарейка · готово: F4.1–F4.4 · чек: `bin/check-kit` → `FENSTER_OK` · служит: S7 · after: F3
+  - `F3.5` `two-tier-upgrade` на клоне telefon: замок и хук живы, `check-budget` зелёный — `F3.5 telefon=OK`
+- **F4 Fenster & Kanarienvogel** · живой канал и утренняя канарейка · risk: low · готово: F4.1–F4.4 · чек: `bin/check-kit` → `FENSTER_OK` · служит: S7 · after: F3
   - `F4.1` деплой печатает `rollback: make rollback SHA=<prev>`; гейт: `DEPLOY_OK` на линию без `LIVE_OK`/`ROLLBACK_OK` после → пункт окна красный — `F4.1 zeile=OK fenster_rot=OK` в `F4-check-kit-result.txt`
   - `F4.2` `bin/check-live` шаблон (образец telefon): `LIVE … stumm wiederholt wortlaute word_max sicherungen wartend klang` → `LIVE_OK|FAIL`; фикстуры 390–393 — `F4.2 fixturen=<k>/<k>` там же
-  - `F4.3` канарейка: `canary.timer/service` + скрипт-образец, пороги из `planken.json`, письмо `OK|GELB|ROT`, итог ≤ 60 с; эталон красный → `ROT` — `F4.3 rot=OK gruen=OK` там же
+  - `F4.3` канарейка: `canary.timer/service` + скрипт, пороги из `planken.json`, письмо `OK|GELB|ROT`, итог ≤ 60 с; эталон красный → `ROT` — `F4.3 rot=OK gruen=OK`
   - `F4.4` шаблоны SPEC §5 (окно, правило закрытия, регрессия, паспорт) и GATE п. 0; без них `check-budget --templates` красный — `F4.4 templates=OK rot=OK` там же
 - **F5 Paar einer Stunde & Messungen** · планка вендора — разницей; окна · готово: F5.1–F5.5 · чек: `bin/check-kit` → `PAAR_OK` · служит: S8 · after: F2
   - `F5.1` `checks/paired_stand.sh`: база/новый ×2, правило до прогона, `PAIR_OK|PAIR_FAIL diff_p50 diff_p95`; один код → OK; +600 мс → FAIL — `F5.1 gleich=OK rot=FAIL` в `F5-check-kit-result.txt`
@@ -60,16 +61,16 @@
   - `F6.2` `blockWritesOutsideWorkingDirectories: true` в шаблоне (CLI ≥ 2.1.314), парный прогон: вне → отказ; внутри → OK — `F6.2 aussen=verboten innen=OK` там же
   - `F6.3` `effortLevel`/`ultracode` проекта (2.1.317), `CLAUDE_CODE_SUBAGENT_*` в `env`; `--desktop` сверяет `system/init` с Environment, иное → красный; deny: `docs/STATUS.md` → отказ, `kit/CLAUDE.md` → правка — `F6.3 init=gleich deny=2/2` там же
   - `F6.4` `PermissionDenied`-хук → `docs/evidence/denials.jsonl` (счётчики); 3 отказа → 3 строки — `F6.4 denials=3/3` там же
-- **F7 Abnahme-Tiefe** · приёмка по ярусу риска · готово: F7.1–F7.4 · чек: `bin/check-verify` → `VERIFY_OK` · служит: S3, S8 · after: F2
-  - `F7.1` метка `risk: low|high` у фичи; `high` → полный круг и ≥ 2 мутанта; `low` → точечный; деплой на линию без `high` → `BUDGET_FAIL risk-tier` — `F7.1 high=voll lint=OK` в `F7-check-verify-result.txt`
+- **F7 Abnahme-Tiefe** · приёмка по ярусу риска · risk: low · готово: F7.1–F7.4 · чек: `bin/check-verify` → `VERIFY_OK` · служит: S3, S8 · after: F2
+  - `F7.1` метка `risk: low|high` у фичи; `high` → полный круг и ≥ 2 мутанта; `low` → точечный; выкатка на линию без `high` → `BUDGET_FAIL risk-tier` — `F7.1 high=voll lint=OK` в `F7-check-verify-result.txt`
   - `F7.2` `verify-phase.js`: прошлый вердикт подаётся; повтор → «повтор»; класс дефекта и счёт первой строкой — `F7.2 prior=OK klasse=OK` там же
   - `F7.3` `docs/evals/`: мутант паузы отката F53 telefon; проверяющий ловит → `EVAL_OK 1/1` — `F7.3 eval=1/1` там же
   - `F7.4` K80: гейт на detached HEAD → `GATE_SKIP`; чек, меняющий `docs/evidence/`, печатает `evidence geändert` — `F7.4 detached=SKIP` там же
 - **F8 Dokumente, Mods & Gate v3.4** · пустое репо и клон telefon · готово: F8.1–F8.5 · чек: `bin/gate-v3.4` → `GATE_OK` · служит: S1, S5 · after: F7
-  - `F8.1` CHANGELOG v3.4 (строка на поле с источником; снятые K30, P1-4, ultrareview, кап 12); LAUNCH, README, `dev-system.ru.md` — `F8.1 docs=4` в `F8-gate-result.txt`
+  - `F8.1` CHANGELOG v3.4 (строка на поле с источником; снятое строкой); LAUNCH, README, `dev-system.ru.md` — `F8.1 docs=4` в `F8-gate-result.txt`
   - `F8.2` шаблоны кита = шаблонам telefon после ретро (SPEC §2–§5, PROCESS (ae)–(ah)); `--templates` зелёный — `F8.2 templates=OK` там же
   - `F8.3` мод M2 `window-guard` (вбирает `limits`): окна против `budgets.json`, deny выше порога, `/window override`; `plugin validate` — `F8.3 deny=OK` там же
-  - `F8.4` мод M3 `phase-start`: `/phase` (PROMPT, ветка, `$.prompt.submit`), `/resume`, `/halt`; чужая ветка → отказ — `F8.4 phase=OK`
+  - `F8.4` мод M3 `phase-start`: `/phase` (PROMPT, ветка, `$.prompt.submit`), `/phase resume`, `/phase halt`; чужая ветка → отказ — `F8.4 phase=OK`
   - `F8.5` `gate-v3.4` на проекте из `two-tier-init` → маркеры F1–F7 + v3.3; клон telefon после апгрейда зелёный — `F8.5 leer=OK telefon=OK`
 - **F9 Spec-board (M1)** · пульт фазы: «где мы» без чтения PROGRESS · готово: F9.1–F9.2 · чек: `bin/check-kit mods` → `MODS_OK` · служит: S1, S5 · after: F8
   - `F9.1` мод `mods/spec-board`: `/board` — панель: пункты `F<n>.<k>` × строка пробы в `docs/evidence/*-result.txt` (зелёный · красный · нет строки), маркер фичи, решение `spec-gate.jsonl`, вердикт `verify-*.txt`, открытый `STOP:`; итог строкой `$.ui.status`; перерисовка после `tool.call` и по часам; данные — файлы, что судит `spec-gate`; модели и сети нет — фикстура 2/1/1, снять строку → 1/1/2 — `F9.1 board=2/1/1 nach=1/1/2` в `F9-check-kit-result.txt`

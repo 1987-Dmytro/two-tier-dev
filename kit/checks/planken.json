@@ -51,17 +51,13 @@
     "Jev",
     "TypeSafe",
     "OpenAI",
-    "Anthropic",
-    "API"
+    "Anthropic"
   ],
   "deploy_words": [
     "make deploy",
-    "DEPLOY_OK",
-    "LIVE_OK",
-    "ROLLBACK_OK",
+    "деплой на линию",
     "окно деплоя",
-    "Fenster",
-    "на линию",
-    "на номер"
+    "деплой на номер",
+    "Deploy auf die Linie"
   ]
 }
