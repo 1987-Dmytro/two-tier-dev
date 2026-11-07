@@ -895,8 +895,8 @@ def defaults(init, pid):
 
 def modes(rows, configs, init=None):
     """Режим плагина «да» из колонки «фича или чек» против pluginConfigs launch settings (нет записи — userConfig мода по
-    умолчанию): «тень» — shadow (true или значение), `hint`, `auto`, … — значение опции, «N %» — числовое значение;
-    расхождение — FAIL с именем (SPEC-v3.2 F4)."""
+    умолчанию): «тень» — shadow (true или значение), `hint`, `auto`, … — значение опции, «N %» — числовое значение; у плагина без опций число — не режим:
+    порог window-guard — число budgets.json, настроек у мода нет (решение 398); расхождение — FAIL с именем (SPEC-v3.2 F4)."""
     bad = []
     for _, form, ids, on, cell in rows:
         if form != "плагин" or not on:
@@ -910,6 +910,8 @@ def modes(rows, configs, init=None):
                 opts, src = defaults(init, pid), "по умолчанию мода"
             vals = list(opts.values())
             for w in want:
+                if type(w) is int and not opts:
+                    continue
                 if not ((opts.get("shadow") is True or "shadow" in vals) if w == "shadow" else w in vals):
                     bad.append(f"режим {pid}: в таблице «{'тень' if w == 'shadow' else w}», {src} — "
                                f"{json.dumps(opts, ensure_ascii=False) if opts else 'нет pluginConfigs и значений мода по умолчанию'}")
@@ -922,6 +924,7 @@ MODE_FIXTURE = """## Environment
 | Jev Belay | плагин | `jev-belay@jev-belay` | да | второй судья — тень (только журнал) | — | — |
 | Compact Adviser | плагин | `compact-adviser@compact-adviser` | да | режим `hint` | — | — |
 | handoff | плагин | `handoff@two-tier-mods` | да | хендофф на 70 % окна | — | — |
+| window-guard | плагин | `window-guard@two-tier-mods` | да | порог 100 % — число budgets.json | — | — |
 | commit-commands | плагин | `commit-commands@claude-plugins-official` | нет | тень — строка «нет» не сверяется | — | — |
 
 ## Деньги
@@ -999,7 +1002,8 @@ def self_test():
               ("тень в таблице, shadow false", green | {"jev-belay@jev-belay": {"options": {"shadow": False}}}, "jev-belay@jev-belay: в таблице «тень»"),
               ("hint в таблице, auto в настройках", green | {"compact-adviser@compact-adviser": {"options": {"mode": "auto"}}}, "compact-adviser@compact-adviser: в таблице «hint»"),
               ("70 % в таблице, 60 в настройках", green | {"handoff@two-tier-mods": {"options": {"threshold": 60}}}, "handoff@two-tier-mods: в таблице «70»"),
-              ("нет pluginConfigs плагина", {k: v for k, v in green.items() if k != "jev-belay@jev-belay"}, "нет pluginConfigs")]
+              ("нет pluginConfigs плагина", {k: v for k, v in green.items() if k != "jev-belay@jev-belay"}, "нет pluginConfigs"),
+              ("число у плагина с опциями, другое значение", green | {"window-guard@two-tier-mods": {"options": {"threshold": 50}}}, "window-guard@two-tier-mods: в таблице «100»")]
     os.makedirs(TMP, exist_ok=True)
     man = tempfile.mkdtemp(prefix="modes-", dir=TMP)
     os.makedirs(f"{man}/ok/.claude-plugin")
