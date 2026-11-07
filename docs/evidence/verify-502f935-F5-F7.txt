@@ -1,0 +1,20 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 5
+FEATURES: F5, F7
+/verify-phase · docs/SPEC-v3.4.md · HEAD 502f935 · проверяющие claude-sonnet-5-5 (фич 2 из 9, опровергателей 0) · судья claude-opus-5-5
+
+По F5 и F7 свежий прогон зелёный, маркер в выводе есть (bin/check-kit paar → PAAR_OK, gate.log F7 VERIFY_OK). Файлы docs/evidence/F5-check-kit-result.txt и F7-check-verify-result.txt на месте и несут свои маркеры. Каждый пункт F5.1–F5.5 и F7.1–F7.4 подтверждён своей командой проверяющего и её сырым выводом, включая границы +300/+301 и живой eval rollback-pause. Обе мутации (abs в judge() и exit 1 на detached HEAD) покраснели. Блокирующих кандидатов, переживших опровержение, нет, оставшиеся находки — устойчивость к входам и формулировки вне пунктов «готово».
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F5.5: bin/check-window выдаёт отказ (WINDOW: refuse, rc 1), когда unifiedWindows пуст ({}) или null. Это описано в docstring как задуманное, но формулировку «окно без ключа → WARN» можно прочитать шире.
+- F5.5: bin/check-window принимает utilization=true как 100 % и отрицательные значения (-0.5 → «неделя -50 %») и отвечает start. Проверки типа и диапазона нет.
+- F5.3: три из четырёх строк docs/evidence/verify-runs.jsonl внесены вручную (backfill: true, без поля limit). Код журнала снял замер только частично, сторону ≥ 2.1.318 мерили на 2.1.319.
+- F7.4: kit/bin/verify-phase выводит имена изменённых файлов evidence в git-кавычках, поэтому не-ASCII имена идут восьмеричными эскейпами. bin/evidence печатает настоящее имя.
+- F7.2: класс дефекта и счёт стоят второй строкой (КЛАССЫ: …), первая строка — VERDICT. Так задумано: первая строка — контракт парсера, порядок описан в docstring, но от буквы SPEC «первой строкой» это расходится.
+
+## По фичам
+- F5: чек `bin/check-kit paar` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутация kit/checks/paired_stand.sh: judge(): ok = d50 <= max50 and d95 <= max95 changed to use abs(d50), abs(d95), so a new code that is much faster than the base fails. Confirmed behaviourally as a real change by the red check. → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F7: чек `grep -n '^F7 ' /tmp/two-tier-v3/verify-502f935-q7vgbhik/gate.log; grep -c '^VERIFY_OK$' docs/evidence/F7-check-verify-result.txt` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация bin/gate-v3.4: detached-HEAD branch: GATE_SKIP then `exit 0` changed to `exit 1` (false red on detached HEAD) → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
