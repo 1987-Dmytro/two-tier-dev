@@ -155,3 +155,4 @@
 {"ts": "2026-11-07T21:04:46Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/PROGRESS.md"], "score": null, "note": "abide check error CHECK_TIMEOUT", "diff": "019c037422f5e2c1", "ms": 9061}
 {"ts": "2026-11-07T21:28:58Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/SPEC-v3.4.md", "docs/STATUS.md", "docs/reviews/V3.4-review.md", "kit/checks/planken.json"], "score": null, "note": "abide check error TYPESAFE_AI_API_KEY", "diff": "6e37c571c829664e", "ms": 1143}
 {"ts": "2026-11-07T21:33:07Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/reviews/V3.4-review.md"], "score": null, "note": "abide check error TYPESAFE_AI_API_KEY", "diff": "2a13c63c28823379", "ms": 1090}
+{"ts": "2026-11-07T21:34:23Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/spec-gate.jsonl"], "score": 0.08, "diff": "a2de822b1bf0d245", "ms": 1952}

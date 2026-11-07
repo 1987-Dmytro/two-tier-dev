@@ -99,6 +99,7 @@ it, and it enters first as a hook (D10). Dates are the days the rule entered the
 | lints `planka-source`, `scope-growth`, `planken-inline`, `frozen-paths` | `window_five_hour_pct`, numbers of a corridor in the SPEC text; no functional link for the first |
 | lint `risk-tier`, the prior verdict in `{features, prior, risk}` | `ultrareview` as a path step: depth comes from the tier |
 | mods `window-guard`, `phase-start` | `mods/limits`, absorbed by `window-guard`, in `docs/archive/mods-limits` |
+| mod `spec-board` (F9, decision 399) | the mods M4 `guard-rail` and M5 `claim-audit`, closed before they were built: bans are kit hooks, refusals are counted by F6.4, the claim judge is Belay in the shadow |
 
 - **Decision 398 (the team lead's word after reading leg 2, 07.11).** No limits on the windows: `window_seven_day_pct` is 100 in the kit and in the built-in fallback of `bin/check-window`, which prints the numbers; the refusal mechanism is probed on a substituted 85, and on the kit's own 100 a week of 99 % starts.
   - `planka-source` (F5.2): a vendor link is the word «вендор» in the link cell or a word of `vendor_words` (`checks/planken.json`) in the link or tool cell, as a whole word in any case. Measured on the telefon clone: the link cell alone finds none of its two real vendors (Google Speech, Gemini sit in the tool cell). `API` also hits an in-house API on SPEC-2: the list is the team lead's.
@@ -130,6 +131,11 @@ Mods, `claude plugin validate`. One in, one out: `limits` leaves the marketplace
   - `./register.ts calls: $.clock.after, $.command.register, $.fs.read (via readOr), $.fs.write (via halt), $.process.run (via currentBranch), $.prompt.submit (via submit), $.session.root, $.ui.toast (via submit)`
 
   `/phase` sends `docs/PROMPT.txt` as the person's own words on the branch it names, and refuses on another with both names; `/phase resume` sends the Resume line of the open STOP; `/phase halt` writes `AGENT_STOP` in the project and says how to lift it. `/resume` is a built-in, so these are arguments. `/phase resume` refuses a Resume line with an unfilled `<…>` or `|` alternatives and asks for the answer; `/phase halt` writes `AGENT_STOP` in the start directory, which the kill switch reads. `claude plugin test mods/phase-start` — 38 pass, 0 fail. Sources: [mods api](https://code.claude.com/docs/en/plugins/mods/api#start-a-turn-from-a-background-job), [commands](https://code.claude.com/docs/en/commands).
+- `spec-board` 0.1.0 (`mods/spec-board`), «Validation passed» (F9, decision 399):
+  - `./register.tsx hooks: session.start, session.attach, tool.call, command.run{command=board}, ui.render{component=Pane, requestId=spec-board}`
+  - `./register.tsx calls: $.clock.every, $.command.register, $.fs.list (via collect), $.fs.read (via readOr), $.session.repo (via collect), $.session.root (via collect), $.session.surfaces (via isPersons), $.state.get, $.state.set, $.ui.open, $.ui.resolve, $.ui.status (via refresh)`
+
+  `/board` opens a pane: the items `F<n>.<k>` of the phase SPEC against the probe lines of `docs/evidence/*-result.txt` of that SPEC (green · red — FAIL, BAD or offen · no line), the feature markers, the last `spec-gate` decision, the newest verdict of the SPEC and the open `STOP`; the same summary on the status line, redrawn after each tool call of the main loop and every minute. The data are the files `spec-gate` judges, read from disk: no model, no network. A `claude -p` run and a subagent's calls draw nothing. Off in the kit profile until the operator installs it (`claude plugin install spec-board@two-tier-mods --scope user`).
 
 ## v3.3 — 2026-10-10 — the judge stands on the claim, not on the action: a commit is judged by code and `abide check`, the end of a turn by the items of the spec, the leg by one acceptance round
 - **Three claims, three judges** (D5–D7, S8). «A piece is done» is a commit: `kit/.githooks/commit-msg` refuses by code — rules

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-kit [<корень>] [frozen|fenster|graph|paar] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
+"""check-kit [<корень>] [frozen|fenster|graph|paar|mods] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
 (вердикт — /verify-phase из свежего клона, лимит 30 мин) и plan-phase, evaluator без правок, воркфлоу verify-phase и его лаунчер.
 
 Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
@@ -11,6 +11,8 @@
 строки v3.3-F5.1…F5.4 и WINDOW_OK; при claude в PATH ещё живой ход справкой.
 Разделы v3.4: frozen (F3: замок, паспорт, регрессия в деплое, апгрейд клона telefon — FROZEN_OK), fenster (F4: окно деплоя, живой канал, канарейка,
 шаблоны — FENSTER_OK), graph (Graphify: `.githooks/post-commit`, первая сборка bin/two-tier-init, отчёт апгрейда, живой прогон при CLI в PATH — GRAPH_OK), paar (F5: пара одного часа, планка звена вендора, журнал bin/verify-phase, метрики bin/phase-report, окно без ключа недели — PAAR_OK); с именем раздела идёт только он, без имени — всё.
+mods (F9: мод mods/spec-board — `claude plugin validate|test`, названные тесты фикстуры 2/1/1 и 1/1/2, -p и подагенты без рисования, без модели и
+сети, строка в marketplace, строка шаблона Environment и профиль кита — MODS_OK); не репо кита или нет claude в PATH — строки `F9.<k> offen`, маркера нет, код 0.
 Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — F3.5 не гонялся: строка `F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
 F5.3 закрывается замером: n ≥ 2 на обеих сторонах пары ≤2.1.316 и ≥2.1.318 в docs/evidence/verify-runs.jsonl; меньше или журнала нет — строка `F5.3 offen n=<k> fon=<m>`, PAAR_OK печатается (SPEC-v3.4 §4). Судит и считается только дошедший прогон (status completed): дольше своего лимита (limit строки; в старой строке его нет — лимит bin/verify-phase) — FAIL; упавший запуск — не замер, VERIFY_TIMEOUT — счётчик timeout=<k>.
 """
@@ -18,7 +20,7 @@ import json, os, re, shutil, subprocess, sys, tempfile, time
 
 out = []
 TMP = "/tmp/two-tier-v3"
-SECTIONS = ("frozen", "fenster", "graph", "paar")
+SECTIONS = ("frozen", "fenster", "graph", "paar", "mods")
 GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.invalid",
                GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
 for k in ("TYPESAFE_API_KEY", "TYPESAFE_AI_API_KEY"):  # суд abide фикстурам не нужен: без ключа он — пропуск
@@ -1490,8 +1492,58 @@ def section_paar():
 
 
 
+SPEC_BOARD = "mods/spec-board"
+BOARD_TESTS = {  # названные тесты мода — стороны пунктов F9 (имя теста несёт число, assert в тесте его держит)
+    "F9.1": ["fixture: board=2/1/1 in the status line and the pane, on every surface", "a probe line removed: board=1/1/2 after the next tool call",
+             "an evidence file of another SPEC does not count: its F2.2 line stays no line", "redrawn by the clock: a minute later the board reads the files again"],
+    "F9.2": ["claude -p draws nothing: no status line, no pane, /board answers its line", "a subagent tool call does not redraw",
+             "a host that attaches a surface later draws from then on"],
+}
+
+
+def section_mods():
+    """F9: мод spec-board в репо кита. validate и test — настоящий CLI на папке мода; F9.1 — названные тесты фикстуры (2/1/1, снять строку — 1/1/2), F9.2 — validate,
+    число тестов, -p и подагенты без рисования, в коде мода нет $.model, $.net и fetch, строка marketplace, строка шаблона Environment и профиль кита согласны."""
+    sec.clear()
+    if not os.path.isdir(SPEC_BOARD) or not os.path.isfile("mods/.claude-plugin/marketplace.json"):
+        for i in ("F9.1", "F9.2"):
+            print(f"{i} offen · не репо кита: нет {SPEC_BOARD}", flush=True)
+        print("--   mods: не репо кита — маркера MODS нет", flush=True)
+        return True
+    if not shutil.which("claude"):
+        for i in ("F9.1", "F9.2"):
+            print(f"{i} offen · claude нет в PATH (CI) — validate и test не гонялись", flush=True)
+        print("--   mods: claude нет в PATH — маркера MODS нет", flush=True)
+        return True
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    v = sh(["claude", "plugin", "validate", SPEC_BOARD], ".", env=env, timeout=180)
+    t = sh(["claude", "plugin", "test", SPEC_BOARD], ".", env=env, timeout=300)
+    npass, nfail = re.search(r"^\s*(\d+) pass$", t[1], re.M), re.search(r"^\s*(\d+) fail$", t[1], re.M)
+    passed = lambda name: f"(pass) {name}" in t[1]
+    tested = t[0] == 0 and npass and nfail and nfail.group(1) == "0"
+    miss = {i: [n for n in names if not passed(n)] for i, names in BOARD_TESTS.items()}
+    nums = [re.search(r"board=(\d+/\d+/\d+)", n).group(1) for n in BOARD_TESTS["F9.1"][:2]]
+    probe("F9.1", tested and not miss["F9.1"], f"board={nums[0] if passed(BOARD_TESTS['F9.1'][0]) else 'нет'} nach={nums[1] if passed(BOARD_TESTS['F9.1'][1]) else 'нет'} · "
+          f"claude plugin test {SPEC_BOARD}: rc {t[0]}, {npass.group(1) if npass else '?'} pass, {nfail.group(1) if nfail else '?'} fail; названных тестов F9.1 "
+          f"{len(BOARD_TESTS['F9.1']) - len(miss['F9.1'])} из {len(BOARD_TESTS['F9.1'])}" + (f"; не прошли — {'; '.join(miss['F9.1'])}" if miss["F9.1"] else ""))
+    code = "\n".join(read(f"{SPEC_BOARD}/hooks/{f}") for f in sorted(os.listdir(f"{SPEC_BOARD}/hooks")) if not f.endswith((".test.tsx", ".test.ts", ".json")))
+    net = [w for w in ("$.model", "$.net", "fetch(", "$.agent") if w in code]
+    market = [p.get("name") for p in json.loads(read("mods/.claude-plugin/marketplace.json")).get("plugins", [])]
+    row = next((l for l in read(f"{root}/docs/PROCESS.template.md").splitlines() if "`spec-board@two-tier-mods`" in l), "")
+    on = json.loads(read(f"{root}/.claude/launch.settings.json")).get("enabledPlugins", {}).get("spec-board@two-tier-mods")
+    agree = bool(row) and isinstance(on, bool) and ("| да |" in row) == on
+    ok = v[0] == 0 and "Validation passed" in v[1] and tested and not miss["F9.2"] and not net and "spec-board" in market and agree
+    probe("F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass.group(1) if npass else '?'} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "
+          f"названных тестов F9.2 {len(BOARD_TESTS['F9.2']) - len(miss['F9.2'])} из {len(BOARD_TESTS['F9.2'])}" + (f" (не прошли — {'; '.join(miss['F9.2'])})" if miss["F9.2"] else "")
+          + f"; модель и сеть в коде мода — {', '.join(net) or 'нет'}; marketplace — {'есть' if 'spec-board' in market else 'нет'}; "
+          f"строка шаблона Environment — {'«да»' if '| да |' in row else '«нет»' if row else 'нет строки'}, профиль кита — {on}{'' if agree else ' (не согласны)'}")
+    green = all(sec) and len(sec) == 2
+    print("MODS_OK" if green else "MODS_FAIL", flush=True)
+    return green
+
+
 def run_sections(names):
-    return all([{"frozen": section_frozen, "fenster": section_fenster, "graph": section_graph, "paar": section_paar}[n]() for n in names])
+    return all([{"frozen": section_frozen, "fenster": section_fenster, "graph": section_graph, "paar": section_paar, "mods": section_mods}[n]() for n in names])
 
 
 if want:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gate-v3.4 — гейт кита v3.4 (SPEC-v3.4 F7.4, F8.5). Без ветки — GATE_SKIP, rc 0: чеки кита ждут ветку, красный там был бы ложным (K80);
 # git не читает HEAD (не репо, битый .git, нет git в PATH) — GATE_FAIL reason=no-repo, rc 1. Сам гейт на заглушках чеков судит bin/check-gate в make ci.
-# Кит на пустом репо: свой t4 во /tmp/two-tier-v3 от bin/two-tier-init; маркеры F1–F7 фазы с номером фичи, уцелевшие маркеры v3.3 и v3.2,
+# Кит на пустом репо: свой t4 во /tmp/two-tier-v3 от bin/two-tier-init; маркеры F1–F7 и F9 (мод spec-board — корень ветки) фазы с номером фичи, уцелевшие маркеры v3.3 и v3.2,
 # копия клона telefon (TELEFON_CLONE или /tmp/two-tier-v3/telefon-src) после bin/two-tier-upgrade --branch kit-v3.4 и её bin/check-budget,
 # строка на пункт F8.1–F8.5, GATE_OK — только после всех проверок; лог без маркера — GATE_FAIL с именем. offen разрешён один — F5.3 (SPEC §4);
 # нет клона — telefon=offen, красный. Суд проекта — t4: голый корень этого репо красен в --desktop до правки профиля тимлидом, гейт его не гоняет.
@@ -127,7 +127,7 @@ mark() {  # mark <F> <маркер> <лог…>: в каждом логе rc 0 �
   if [ -z "$why" ]; then echo "$f $m"; else echo "$f FAIL: $m — $why"; fail "$m ($why)"; fi
 }
 offen() {  # offen <лог…>: строки `F<n>.<k> offen` и `F<n>.<k> ключ=offen`, кроме F5.3 (SPEC §4) и F3.5 проекта, который не репо кита
-  grep -HE '^F[0-9]+\.[0-9]+ ([a-z_]+=)?offen( |$)' "$@" 2>/dev/null | sed "s#^$LOGS/##" | grep -vE '^[^:]+\.log:F5\.3 offen|^kit-t4\.log:F3\.5 telefon=offen · не репо кита'
+  grep -HE '^F[0-9]+\.[0-9]+ ([a-z_]+=)?offen( |$)' "$@" 2>/dev/null | sed "s#^$LOGS/##" | grep -vE '^[^:]+\.log:F5\.3 offen|^kit-t4\.log:F3\.5 telefon=offen · не репо кита|^kit-t4\.log:F9\.[12] offen · не репо кита'
 }
 # красные образцы самой разметки: лог без маркера при rc 1 и rc 0, маркер при rc 1 — FAIL с именем; чужой offen — виден, F5.3 — разрешён
 printf 'OK   x\n' | tee "$LOGS/red-a.log" > "$LOGS/red-b.log"; printf 'RED_OK\n' > "$LOGS/red-c.log"; echo 1 | tee "$LOGS/red-a.rc" > "$LOGS/red-c.rc"; echo 0 > "$LOGS/red-b.rc"
@@ -145,6 +145,7 @@ mark F4 FENSTER_OK kit-t4 kit-repo
 mark F5 PAAR_OK kit-t4 kit-repo
 mark F6 HARNESS_OK desktop-t4
 mark F7 VERIFY_OK verify
+mark F9 MODS_OK kit-repo
 mark v3.4 GRAPH_OK kit-t4 kit-repo
 mark v3.3 ITEMS_OK items-t4
 mark v3.3 COMMIT_OK commit-t4

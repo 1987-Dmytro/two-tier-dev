@@ -2236,8 +2236,9 @@ def desktop_write(src, launch):
          f"Bash полем не покрыт (settings-reference: команды оболочки поле не ограничивает): файл вне из Bash — до поля {yes(off['bash'])}, с полем {yes(on['bash'])}")
 
 
-def tab_side(src, launch, name, extra=(), local=True, strip=False):
-    """Прокси вкладки: копия, профиль как .claude/settings.local.json, источники настроек по умолчанию (как у вкладки), auto. Проба effort — свой хук копии (hooks: `effort.level`).
+def tab_side(src, launch, name, extra=(), local=True, strip=False, model=None):
+    """model — где лежит CLAUDE_CODE_SUBAGENT_MODEL профиля (находка 400): project — в env .claude/settings.json копии, process — в окружении процесса, иначе — в env профиля.
+    Прокси вкладки: копия, профиль как .claude/settings.local.json, источники настроек по умолчанию (как у вкладки), auto. Проба effort — свой хук копии (hooks: `effort.level`).
     strip — сторона «до»: профиль без полей F6.3, deny без `Edit(/docs/STATUS.md)`."""
     dst = deploy(src, launch)
     profile = json.load(open(launch, encoding="utf-8"))
@@ -2250,6 +2251,11 @@ def tab_side(src, launch, name, extra=(), local=True, strip=False):
         for cfg in (profile, settings):
             if "deny" in cfg.get("permissions", {}):
                 cfg["permissions"]["deny"] = [r for r in cfg["permissions"]["deny"] if r != "Edit(/docs/STATUS.md)"]
+    value = profile.get("env", {}).get(SUBAGENT_MODEL) if model else None
+    if value:
+        profile["env"].pop(SUBAGENT_MODEL)
+        if model == "project":
+            settings.setdefault("env", {})[SUBAGENT_MODEL] = value
     open(f"{dst}/.claude/hooks/effort-probe.py", "w").write(EFFORT_HOOK)
     probe = {"hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/effort-probe.py"]}]}
     settings["hooks"].setdefault("PreToolUse", []).append({"matcher": "*", **probe})
@@ -2260,7 +2266,7 @@ def tab_side(src, launch, name, extra=(), local=True, strip=False):
     os.makedirs(f"{dst}/kit", exist_ok=True)
     open(f"{dst}/docs/STATUS.md", "w").write("old\n")
     open(f"{dst}/kit/CLAUDE.md", "w").write("old\n")
-    init, res, _, _, ev = control(dst, {}, ["--permission-mode", "auto", "--no-session-persistence", *extra], name, PROMPT_TAB, turns=8)
+    init, res, _, _, ev = control(dst, {SUBAGENT_MODEL: value} if model == "process" and value else {}, ["--permission-mode", "auto", "--no-session-persistence", *extra], name, PROMPT_TAB, turns=8)
     log = [json.loads(l) for l in open(f"{dst}/effort.jsonl", encoding="utf-8")] if os.path.isfile(f"{dst}/effort.jsonl") else []
     level = lambda sub: next((r["level"] for r in reversed(log) if r["agent"] == sub), None)
     return {"init": init, "main": level(False), "sub": level(True), "status": open(f"{dst}/docs/STATUS.md", encoding="utf-8").read(), "kit": open(f"{dst}/kit/CLAUDE.md", encoding="utf-8").read(),
@@ -2300,6 +2306,13 @@ def desktop_profile(src, proc, launch):
         bad.append(f"{SUBAGENT_MODEL} {env.get(SUBAGENT_MODEL)} через --settings: подагент {flag['models']}")
     if after["models"] != [env.get(SUBAGENT_MODEL)]:
         print(f"HARNESS_WARN subagent-model-local settings.local={','.join(after['models']) or '—'} --settings={','.join(flag['models']) or '—'}", flush=True)
+    if env.get(SUBAGENT_MODEL):  # находка 400: env профиля в settings.local и модель подагента — те же прокси, ещё две стороны: env проекта и окружение процесса
+        project, process = tab_side(src, launch, "tab-model-project", model="project"), tab_side(src, launch, "tab-model-process", model="process")
+        m = lambda s: ",".join(s["models"]) or "—"
+        want = env[SUBAGENT_MODEL]
+        verdict = "не переключает" if after["models"] != [want] and flag["models"] == [want] else "переключает" if after["models"] == [want] else "не определить: и --settings не переключил"
+        print(f"HARNESS_NOTE subagent-model {want}: env в settings.local — {m(after)} (без env — {m(before)}), через --settings — {m(flag)}, "
+              f"env в .claude/settings.json проекта — {m(project)}, окружение процесса — {m(process)}: env settings.local {verdict}", flush=True)
     refused, edited, written = after["refused"] and after["status"] == "old\n", "new" in after["kit"] and "old" not in after["kit"], before["status"] != "old\n"
     bad += [] if written else ["без правила Edit(/docs/STATUS.md) файл не записан: отказ — не от правила"]
     ok = not diff and not bad and refused and edited and sides_ok(views) and sides_ok(kinds) and sides_ok(files)

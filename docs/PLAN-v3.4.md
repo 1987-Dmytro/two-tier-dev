@@ -17,6 +17,7 @@
 - **F5:** `kit/checks/paired_stand.sh`, `kit/docs/SPEC.template.md` §2, `kit/bin/check-budget` (вендор), `kit/bin/verify-phase`, `kit/bin/phase-report`, `kit/bin/check-window`, `kit/bin/check-kit` (раздел `paar`, метки v3.3 → `v3.3-F5.*`).
 - **F6:** `kit/bin/check-harness` (`--desktop`), `kit/.claude/settings.json`, `kit/.claude/launch.settings.json`, `kit/.claude/hooks/permission-denied.mjs`.
 - **F7:** `kit/.claude/workflows/verify-phase.js` + копия в `.claude/workflows/`, `bin/check-verify`, `kit/bin/check-budget` (`risk-tier`), `docs/evals/`, `kit/bin/evidence` и чеки (`evidence geändert`), `GATE_SKIP` в гейте.
+- **F9:** `mods/spec-board/` (мод, тесты, контракт), `mods/.claude-plugin/marketplace.json`, `kit/bin/check-kit` (раздел `mods`), `bin/gate-v3.4`, строка шаблона PROCESS и профиль кита.
 - **F8:** `CHANGELOG.md`, `docs/LAUNCH.md` (= `kit/docs/LAUNCH.md`), `README.md`, `docs/dev-system.ru.md`, шаблоны кита, `mods/window-guard/`, `mods/phase-start/`, `mods/.claude-plugin/marketplace.json`, `bin/gate-v3.4`, `bin/check-docs`, `git mv bin/gate-v3.3` → `docs/archive/gate-v3.3/`.
 - Не создаётся: `.claude/settings.json` в корне; файлы тимлида (`budgets.json`, PROCESS, рубрика, `CLAUDE.md`) — их правки строкой в `## Notes`; корневой `frozen.json` (кит не замораживает себя).
 
@@ -68,6 +69,11 @@
 - **F8.4** `claude plugin validate|test mods/phase-start`: `/phase` на ветке SPEC → запрос уходит → чужая ветка → отказ; `/resume`, `/halt` по тестам мода.
 - **F8.5** `gate-v3.4` на проекте из `two-tier-init`: маркеры F1–F7 + v3.3 → лог без маркера → FAIL разметки; клон telefon после апгрейда зелёный, нет клона — `offen`.
 
+### F9 — `bin/evidence F9 check-kit -- bin/check-kit mods` → `MODS_OK`
+- **F9.1** `claude plugin test mods/spec-board`: фикстура 2/1/1 в строке статуса и панели (terminal, desktop) → снять строку пробы → 1/1/2 после вызова; файл чужой SPEC не в счёт; часы — минута.
+- **F9.2** `claude plugin validate` зелёный, тестов n; `-p` и подагенты не рисуют, хост с поверхностью позже — рисует; в коде мода нет `$.model`, `$.net`, `fetch`; строка шаблона Environment и профиль кита согласны («нет»/false до слова, «да»/true после установки у пользователя).
+- **Находка 400** (`--desktop`, прокси как F6.3): `CLAUDE_CODE_SUBAGENT_MODEL` в env профиля как settings.local против `--settings`, без env, env проекта, окружения процесса → строка `HARNESS_NOTE subagent-model` в F6 и CHANGELOG.
+
 ## Порядок
 `шаг 0 → F1 → F2 → F3 → F4 → ревью и мутации → починка → /code-review → bin/verify-phase F1 F2 F3, F4 → STOP-TL «Leg 1» → слово оператора → F5 → F6 → F7 → F8 → STOP-TL «Leg 2»`.
 - F2 раньше F3: `planken.json` и `IF_ABSENT` читает апгрейд. F3 раньше F4: шаблон деплоя. F1 первым: хук судит остальное.
@@ -96,6 +102,7 @@
 | F6 | `bin/check-harness --desktop` | `HARNESS_OK` | `F6-check-harness-result.txt` |
 | F7 | `bin/check-verify` | `VERIFY_OK` | `F7-check-verify-result.txt` |
 | F8 | `bin/gate-v3.4` | `GATE_OK` | `F8-gate-result.txt` |
+| F9 | `bin/check-kit mods` | `MODS_OK` | `F9-check-kit-result.txt` |
 
 ## Отклонения от SPEC и документации
 1. Метка типа в документации hooks: `cloud session`, `MCP task` — с пробелом; неизвестный тип — сырой дискриминант: всё, что не `monitor`/`workflow`/`shell`, идёт в суд комплекта.
@@ -138,13 +145,6 @@
 - **F3 «Тимлид:» мимо хука:** коммит с этой строкой мимо хука, который правит и `frozen.json`, и код модуля, CI судит уже новым замком. Хук такой коммит отказывает; строка «Тимлид:» — доверие, CI его не проверит.
 - **F3 слияние с двух сторон:** чистое автослияние файла закрытого модуля, правленного с обеих сторон, судится как своя правка слияния: строже, чем нужно, но молча такой файл не пройдёт.
 
-## К плечу 2 (решение 396, без новых пунктов)
-- **F3.4:** `exit N` в `DEPLOY_CMD` → строка `DEPLOY_FAIL step=rollout` (и строка отката); сторона `DEPLOY_CMD="exit 3"` — rc 1, `rc=3` в строке, с `DEPLOY_LINIE=1` окно открыто.
-- **F2.1:** файл распределения непустой по тексту (файл из пробелов — FAIL), не симлинк наружу `docs/evidence/` (FAIL); обе стороны — на фикстуре.
-- **F5.5:** `WINDOW_WARN seven_day=fehlt` — по отсутствующему ключу недели (поправка 396), ключ есть — OK.
-
 ## Журнал прогонов (бюджет стохастики — SPEC §4)
 Строка на прогон стохастической пробы: сторона · исход.
-- голый `bin/check-harness`, раздел commit (v3.3 F2.4/F2.5 — живой суд abide), 07.11: на `9af1453` — F2.4 «заметка» 4 пробы без заметки, F2.5 `no-writes-outside-repo` без оценки · красный; раздел отдельно — F2.4 зелёный (заметка 0.78 с 3-й пробы), F2.5 без двух оценок · красный; на `ee7a5a8` — F2.5 зелёный, F2.4 «заметка» 4 пробы без заметки · красный; вывод меняется — не STOP-NP.
-- голый `bin/check-harness` на `b1f2285` (решение 397): все маркеры OK, `COMMIT_WARN abide: печать ключа без ответа (CHECK_TIMEOUT)` · зелёный.
-- голый `bin/check-harness` на `ee7a5a8`, повтор: F2.4 «заметка» 4 пробы без заметки, F2.5 `no-secret-values` без оценки · красный; abide напрямую на образце — 0.97 за 1,2 с ×3.
+- голый `bin/check-harness`, раздел commit (v3.3 F2.4/F2.5 — живой суд abide), 07.11: `9af1453`, `ee7a5a8` ×2 — «заметка» 0/4, правило без оценки · красный; `b1f2285` (397) · зелёный, `COMMIT_WARN`; `4b7c87e` — пропуск на повторе диффа · красный (починено `280433b`); `280433b` · зелёный.

@@ -27,7 +27,7 @@ case "${0##*/} $*" in
   "check-harness env") printf '%s\n' ENV_OK HARNESS_OK HOOKS_OK ;;
   "check-harness --desktop") echo HARNESS_OK ;;
   "check-verify ") echo VERIFY_OK ;;
-  "check-kit ") printf '%s\n' KIT_OK WINDOW_OK FENSTER_OK GRAPH_OK PAAR_OK HANDOFF_OK FROZEN_OK ${STUB_OFFEN:+"$STUB_OFFEN"} ;;
+  "check-kit ") printf '%s\n' KIT_OK WINDOW_OK FENSTER_OK GRAPH_OK PAAR_OK HANDOFF_OK FROZEN_OK MODS_OK ${STUB_OFFEN:+"$STUB_OFFEN"} ;;
   "check-budget ") printf '%s\n' "OK   abide_rules: .abide/rubric.json, правил 4/8" BUDGET_OK ;;
   "check-budget --lints") echo BUDGET_LINT_OK ;;
   "check-budget --templates") echo BUDGET_OK ;;
