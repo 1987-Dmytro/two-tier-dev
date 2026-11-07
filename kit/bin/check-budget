@@ -320,16 +320,20 @@ def amendments(t):  # строки «Поправка …» в §0 SPEC (F2.2); 
 
 def rule_risk(b):
     """v3.4, F7.1: фича с деплоем на линию (токен или слово deploy_words в её строке или пунктах, решение 398) — только с `risk: high` в строке фичи: иначе красная до выдачи SPEC;
-    выданная SPEC, идущая фаза (слова списка меняются на ходу, построенную фичу красным не вернуть) или обрезанная история — WARN."""
+    выданная SPEC, идущая фаза (слова списка меняются на ходу, построенную фичу красным не вернуть) или обрезанная история — WARN.
+    Решение 400: явная метка сильнее слов — `risk: low` в строке фичи, у которой только слова списка, — OK с пометкой «low: слова деплоя»; токен шаблона деплоя — выкатка, ему нужна `high`."""
     ph = phase()
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec, prompt = ph[2], ph[4]
     words = planken_words("deploy_words")
     deployed = [(f, ls) for f, ls in blocks(read(spec).splitlines()) if any(DEPLOY_LINE.search(l) or words and words.search(l) for l in ls)]
-    bad = [f for f, ls in deployed if not re.search(r"·\s*risk:\s*high\b", ls[0])]
+    label = lambda ls: (re.search(r"·\s*risk:\s*(high|low)\b", ls[0]) or [None, None])[1]
+    low = [f for f, ls in deployed if label(ls) == "low" and not any(DEPLOY_LINE.search(l) for l in ls)]
+    bad = [f for f, ls in deployed if label(ls) != "high" and f not in low]
     if not bad:
-        return [("OK", "risk-tier", f"{spec}: фич с деплоем на линию (токен или deploy_words): {len(deployed)}, у всех risk: high")]
+        return [("OK", "risk-tier", f"{spec}: фич с деплоем на линию (токен или deploy_words): {len(deployed)}, "
+                                    + (f"risk: high — {len(deployed) - len(low)}; low: слова деплоя — {' '.join(low)}" if low else "у всех risk: high"))]
     shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
     weight, note = ("WARN", " (история git обрезана: выдана ли SPEC — не определить)") if shallow \
         else ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) or in_flight(spec, prompt) else ("FAIL", "")
@@ -694,6 +698,9 @@ def fixtures(b, defaults):
     add("risk", "файл не объект: токен судит", "FAIL", {**risk("", "`linie=1`"), PLANKEN: "[1]"}, rule_risk)
     add("risk", "файл не JSON: слово не судит", "OK", {**risk("", "`make deploy`"), PLANKEN: "{"}, rule_risk)
     add("risk", "файл не JSON: токен судит", "FAIL", {**risk("", "`linie=1`"), PLANKEN: "{"}, rule_risk)
+    add("risk", "слова деплоя и risk: low — метка сильнее слов (400)", "OK", words(risk(" · risk: low", "`make deploy`"), ["make deploy"]), rule_risk)
+    add("risk", "токен и risk: low — выкатке нужна high", "FAIL", words(risk(" · risk: low", "`make deploy` `linie=1`"), ["make deploy"]), rule_risk)
+    add("risk", "risk: low только в пункте — не метка", "FAIL", words(risk("", "`make deploy` · risk: low"), ["make deploy"]), rule_risk)
     add("intent", "пин = hash-object", "OK", phase_fs(), rule_intent)
     add("intent", "пин ≠ hash-object", "FAIL", phase_fs(pin="0123456789ab"), rule_intent)
     add("intent", "пина нет", "FAIL", phase_fs(pin="<hash>"), rule_intent)

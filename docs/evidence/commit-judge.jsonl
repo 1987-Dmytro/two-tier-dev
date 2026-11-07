@@ -152,3 +152,6 @@
 {"ts": "2026-11-07T20:01:00Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F1-check-harness-result.txt"], "score": 0.29, "diff": "80a3519a60272e39", "ms": 12080}
 {"ts": "2026-11-07T20:27:08Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F5-check-kit-result.txt"], "score": 0.06, "diff": "0df36b5fdb03d0d4", "ms": 1725}
 {"ts": "2026-11-07T21:01:12Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/phase-report.md"], "score": 0.13, "diff": "09e51e5dcb697b32", "ms": 2631}
+{"ts": "2026-11-07T21:04:46Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/PROGRESS.md"], "score": null, "note": "abide check error CHECK_TIMEOUT", "diff": "019c037422f5e2c1", "ms": 9061}
+{"ts": "2026-11-07T21:28:58Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/SPEC-v3.4.md", "docs/STATUS.md", "docs/reviews/V3.4-review.md", "kit/checks/planken.json"], "score": null, "note": "abide check error TYPESAFE_AI_API_KEY", "diff": "6e37c571c829664e", "ms": 1143}
+{"ts": "2026-11-07T21:33:07Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/reviews/V3.4-review.md"], "score": null, "note": "abide check error TYPESAFE_AI_API_KEY", "diff": "2a13c63c28823379", "ms": 1090}

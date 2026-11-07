@@ -752,11 +752,15 @@ def f71(s, h, crep):
         ("linie=10, DEPLOY_LINIE=0, xlinie=1 — не токены", 0, "нет", side(head, "  - `F1.1` `linie=10` `DEPLOY_LINIE=0` `xlinie=1`")),
         # решение 398: деплой на линию — и слово deploy_words файла тимлида; без ключа или файла судит только токен
         ("слово make deploy в пункте", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` `make deploy` печатает X")),
-        ("слово LIVE_OK в пункте", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` `bin/x` печатает `LIVE_OK`")),
+        ("слово «деплой на номер» в пункте", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` деплой на номер")),
         ("фраза «деплой на линию»", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` деплой на линию")),
         ("слово в строке фичи", 1, "BUDGET_FAIL risk-tier F1", side(head + " · окно деплоя", neutral)),
         ("слово с risk: high", 0, "нет", side(head + " · risk: high", "  - `F1.1` `make deploy` печатает X")),
-        ("часть слова — не слово", 0, "нет", side(head, "  - `F1.1` `DEPLOY_OKAY` `XLIVE_OK` remake deploys")),
+        ("часть слова — не слово", 0, "нет", side(head, "  - `F1.1` `DEPLOY_OKAY` remake deploys")),
+        # решение 400: явная метка сильнее слов; токен — выкатка, ему нужна high
+        ("слова деплоя и risk: low", 0, "нет", side(head + " · risk: low", "  - `F1.1` `make deploy` печатает X")),
+        ("токен и risk: low", 1, "BUDGET_FAIL risk-tier F1", side(head + " · risk: low", item_d)),
+        ("risk: low только в пункте", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` `make deploy` · risk: low")),
         ("нет ключа: слово не судит", 0, "нет", side(head, "  - `F1.1` `make deploy` деплой на линию", planken="{}")),
         ("нет ключа: токен судит", 1, "BUDGET_FAIL risk-tier F1", side(head, item_d, planken="{}")),
         ("свой список заменяет список кита", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` `ship it`", planken='{"deploy_words": ["ship it"]}')),
@@ -771,7 +775,8 @@ def f71(s, h, crep):
     ]
     lint = all(r[0] == rc and r[2] == want and (want != "нет" or r[1].startswith("OK")) for _, rc, want, r in sides)
     counted = {n: r[1] for n, _, _, r in sides}  # строка OK называет, что посчитано
-    lint = lint and "фич с деплоем на линию (токен или deploy_words): 1, " in counted["risk: high в строке"] and "фич с деплоем на линию (токен или deploy_words): 0, " in counted["без токена"]
+    lint = lint and "фич с деплоем на линию (токен или deploy_words): 1, " in counted["risk: high в строке"] and "фич с деплоем на линию (токен или deploy_words): 0, " in counted["без токена"] \
+        and "low: слова деплоя — F1" in counted["слова деплоя и risk: low"]
     cur = subprocess.run([f"{REPO}/bin/check-budget"], cwd=REPO, capture_output=True, text=True)
     cur_line = line(cur.stdout, r"^\w+ +risk-tier:")
     lint = lint and cur_line.startswith(("OK", "WARN"))  # текущая SPEC: выданной или идущей метки ставит тимлид — WARN; FAIL — дефект рассчёта «идёт»

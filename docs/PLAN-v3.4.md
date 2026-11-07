@@ -57,7 +57,7 @@
 - **F6.3** `system/init` = таблице Environment → ok → подставное иное значение → красный; настоящий `.claude/settings.local.json`: нет → `HARNESS_WARN tab-profile profil=fehlt`, rc 0; та же суть → строки нет; иное → красный `tab-profile`; MCP «да» с 0 инструментов и статусом не connected и не pending → красный; deny: `docs/STATUS.md` → отказ, `kit/CLAUDE.md` → правка.
 - **F6.4** три входа PermissionDenied формы документации → 3 строки счётчиков без `tool_input` → битый вход → 0 строк, rc 0.
 ### F7 — `bin/evidence F7 check-verify -- bin/check-verify` → `VERIFY_OK`
-- **F7.1** `risk: high` → полный круг, ≥ 2 мутанта, `risk: low` → точечный → деплой на линию (токен или слово `deploy_words`, 398) без `high` → `BUDGET_FAIL risk-tier`; нет ключа — только токен; идущая фаза с правкой тимлида → WARN, черновик и правка на диске → FAIL.
+- **F7.1** `risk: high` → полный круг, ≥ 2 мутанта, `risk: low` → точечный → деплой на линию (токен или слово `deploy_words`, 398) без `high` → `BUDGET_FAIL risk-tier`; нет ключа — только токен; идущая фаза с правкой тимлида → WARN, черновик и правка на диске → FAIL; `risk: low` при одних словах → OK «low: слова деплоя», при токене → FAIL (400).
 - **F7.2** заглушки воркфлоу: прошлый вердикт в запросе, повторная находка → «повтор», класс и счёт — второй строкой вердикта (первая остаётся `VERDICT: …`) → без прошлого — без пометки.
 - **F7.3** `docs/evals/` мутант паузы отката: проверяющий ловит → `EVAL_OK 1/1` → снятый мутант → не `EVAL_OK`.
 - **F7.4** detached HEAD → `GATE_SKIP reason=detached` → на ветке прежний маркер; чек, сменивший файл evidence, печатает `evidence geändert <файл>`, не сменивший — молчит.
