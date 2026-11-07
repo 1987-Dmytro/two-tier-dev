@@ -34,3 +34,11 @@
 {"ts":"2026-11-06T20:08:25.891Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":88}
 {"ts":"2026-11-06T20:41:53.013Z","session":"cf839055","mode":"active","decision":"stop","reason":"STOP-INPUT","missing":[],"stops":["60:3a31085697d5"],"bg":[],"platform_cap":8,"stop_hook_active":false,"ms":859}
 {"ts":"2026-11-06T20:52:45.843Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":165}
+{"ts":"2026-11-06T21:02:02.962Z","session":"cf839055","mode":"active","decision":"stop","reason":"STOP-INPUT","missing":[],"stops":["60:213053aa0be7"],"bg":[],"platform_cap":8,"stop_hook_active":false,"ms":755}
+{"ts":"2026-11-07T07:35:31.982Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":88}
+{"ts":"2026-11-07T07:39:42.628Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":120}
+{"ts":"2026-11-07T07:46:35.600Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":108}
+{"ts":"2026-11-07T07:48:42.991Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":94}
+{"ts":"2026-11-07T07:56:33.686Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell,workflow","missing":[],"stops":[],"bg":["shell","workflow"],"platform_cap":8,"stop_hook_active":false,"ms":107}
+{"ts":"2026-11-07T08:32:48.257Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":107}
+{"ts":"2026-11-07T08:48:48.600Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":116}

@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3.4 «кит под вкладкой Code» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — плечо 1, F1–F4 построены, F1 ждёт Chromium нужной ревизии
-**Сделано:** шаг 0 и F1–F4: судья конца хода, линты, замок и паспорт, окно и канарейка; мутации разобраны и починены; `/code-review`: 10 находок, 7 починены (`6b089d2`), названы 3: F1.5 — реплей формы Stop input, вечный `shell` в фоне, срез журнала `bin/check-live`. Окно 5 ч снято словом оператора (`1e31e90`), `make ci` зелёный. Круг `verify-phase` на `be5c7a5`: F4 — PASS; F1 F2 F3 — NEEDS_WORK, одна блокирующая: `ENV_FAIL` голого `bin/check-harness`. Решение 396 (`7c34be5`): таблица PROCESS зелёная, осталась одна красная строка — проба `jev-browser`. **Следующий шаг оператора:** команда в строке стопа ниже. **Когда закончим:** плечо 1 — голый `bin/check-harness`, точечный `bin/verify-phase F1`, затем строка `STOP: STOP-TL «Leg 1»`.
+## Голова — плечо 1, F1–F4 построены, graphify в ките, F1 ждёт решения по abide
+**Сделано:** шаг 0 и F1–F4: судья конца хода, линты, замок и паспорт, окно и канарейка; мутации разобраны и починены; `/code-review`: 10 находок, 7 починены (`6b089d2`), названы 3: F1.5 — реплей формы Stop input, вечный `shell` в фоне, срез журнала `bin/check-live`. Окно 5 ч снято (`1e31e90`). Круг `verify-phase` на `be5c7a5`: F4 — PASS; F1 F2 F3 — NEEDS_WORK из-за `ENV_FAIL`. Решение 396: таблица и Chromium 1254 поправлены — `ENV_OK`. Graphify встроен в кит по слову оператора (`9538f7c`–`ee7a5a8`, `GRAPH_OK`, CI зелёный). **Следующий шаг оператора:** ответ на вопрос стопа ниже. **Когда закончим:** плечо 1 — точечный `bin/verify-phase F1`, затем строка `STOP: STOP-TL «Leg 1»`.
 
 ## Done
 - Шаг 0 (`5944469`): `git mv` PROGRESS → `docs/archive/PROGRESS-v3.3-2026-11-06.md`, evidence и вердикты v3.3 → `docs/archive/evidence-v3.3/`; `docs/PLAN-v3.4.md`.
@@ -11,12 +11,12 @@
 - **F4 Fenster & Kanarienvogel** (`598b336`, `e6c1958`, `6b089d2`): `bin/check-kit fenster` → `FENSTER_OK` — `docs/evidence/F4-check-kit-result.txt`.
 
 ## Next — один айтем
-1. **Голый `bin/check-harness`, точечный `bin/verify-phase F1`** после Chromium: вердикт в `docs/evidence/`.
+1. **Точечный `bin/verify-phase F1`** после ответа оператора по `COMMIT_FAIL`: вердикт в `docs/evidence/`.
 
 ## Open stop — STOP-INPUT
-STOP: STOP-INPUT «Leg 1 — Chromium 1254»: голый `bin/check-harness` rc 1, `ENV_FAIL`, единственная красная строка — `FAIL jev-browser: по задаче: bin/check-ui — check-ui: rc 1; steps None, passed None, statuses none, assert —; Jev calls None, tokens None, None ms in the run, 1.5 s in all`. Причина: `jev-browser@0.1.2` идёт на `playwright-core 1.65.0`, ему нужен Chromium ревизии 1254, в домашнем кэше — 1243 и 1248.
-Вопрос оператору: поставишь нужную ревизию командой `npx -y playwright@1.65.0 install chromium` (сухой прогон: `chromium-1254`, `chromium_headless_shell-1254`, `ffmpeg-1013`; уровень пользователя, исполнителю нельзя)?
-Resume: «Продолжай по SPEC-v3.4: Chromium 1254 стоит — голый bin/check-harness, точечный круг F1, затем STOP-TL».
+STOP: STOP-INPUT «Leg 1 — живой abide в commit»: голый `bin/check-harness` на `ee7a5a8` — `ENV_OK`, `HARNESS_OK`, `HOOKS_OK`, `GATE_HOOK_OK`, `ITEMS_OK`, красный один `COMMIT_FAIL`: `F2.4 FAIL: … заметка (4 проб.) — rc 0 «»` и `F2.5 FAIL: … no-secret-values —`. Это живой суд abide в пробах v3.3, код плеча их не трогал; четыре прогона — красное каждый раз в другом месте, напрямую abide отвечает за 1,2 с (журнал — PLAN).
+Вопрос оператору: принять `COMMIT_FAIL` как стохастику живого abide и идти в точечный `bin/verify-phase F1` или прогнать голый `bin/check-harness` ещё раз позже?
+Resume: «Продолжай по SPEC-v3.4: COMMIT принят — точечный круг F1, затем STOP-TL» или «Продолжай по SPEC-v3.4: ещё прогон голого bin/check-harness, затем круг F1».
 
 ## Notes
 - Старт: CLI 2.1.316, вкладка Code; стартовый контекст (S2): SPEC 23 516 + kit-fixes 14 494 + `CLAUDE.md` 2 873 — 40 883 из 50 000 знаков; стартовый запрос 3 972.
