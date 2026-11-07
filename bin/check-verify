@@ -671,7 +671,7 @@ def lint_base():
 def lint_side(base, *spec_lines, issue=False, cut=False, planken=None, tl_edit=None):
     """Настоящий bin/check-budget на копии проекта, зелёной во всём, кроме судимого (F7.1): (rc, строка risk-tier, BUDGET_ …).
     issue — SPEC выдана (HEAD впереди коммита запроса); cut — клон глубины 1; planken — свой текст checks/planken.json (иначе список кита);
-    tl_edit — правка SPEC тимлидом: flight — коммитом после работы исполнителя, draft — коммитом до неё, dirty — после работы, без коммита."""
+    tl_edit — правка SPEC тимлидом: flight — коммитом после работы исполнителя, draft — коммитом до неё, dirty — после работы, без коммита, merge — draft и затем слияние ветки."""
     d = tempfile.mkdtemp(prefix="verify-lint-", dir=TMP)
     shutil.copytree(base, d, symlinks=True, dirs_exist_ok=True)
     g = lambda *a: subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True, text=True)
@@ -682,7 +682,7 @@ def lint_side(base, *spec_lines, issue=False, cut=False, planken=None, tl_edit=N
     if issue or cut or tl_edit:
         g("add", "--", *g("ls-files", "-o", "--exclude-standard", "-z").stdout.split("\0")[:-1])
         g("commit", "-qm", "Тимлид: выдача")
-        if tl_edit != "draft":
+        if tl_edit not in ("draft", "merge"):
             open(f"{d}/work.txt", "w").write("x\n")
             g("add", "--", "work.txt")
             g("commit", "-qm", "F1.1: работа")
@@ -691,6 +691,11 @@ def lint_side(base, *spec_lines, issue=False, cut=False, planken=None, tl_edit=N
             if tl_edit != "dirty":
                 g("add", "--", "docs/SPEC-1.md")
                 g("commit", "-qm", "Тимлид: правка")
+            if tl_edit == "merge":
+                g("switch", "-qc", "side")
+                g("commit", "--allow-empty", "-qm", "Тимлид: сбоку")
+                g("switch", "-q", "-")
+                g("merge", "-q", "--no-ff", "-m", "Merge branch 'side'", "side")
     cwd = d
     if cut:
         g("clone", "-q", "--depth", "1", f"file://{d}", f"{d}/cut")
@@ -752,6 +757,7 @@ def f71(s, h, crep):
         ("правка тимлида в идущей фазе", 0, "BUDGET_WARN risk-tier F1", side(head, item_d, tl_edit="flight")),
         ("правка тимлида до работы исполнителя", 1, "BUDGET_FAIL risk-tier F1", side(head, item_d, tl_edit="draft")),
         ("правка на диске в идущей фазе", 1, "BUDGET_FAIL risk-tier F1", side(head, item_d, tl_edit="dirty")),
+        ("слияние ветки — не работа исполнителя", 1, "BUDGET_FAIL risk-tier F1", side(head, item_d, tl_edit="merge")),
     ]
     lint = all(r[0] == rc and r[2] == want and (want != "нет" or r[1].startswith("OK")) for _, rc, want, r in sides)
     counted = {n: r[1] for n, _, _, r in sides}  # строка OK называет, что посчитано

@@ -1453,7 +1453,9 @@ def section_paar():
     def wnd_stream(*windows, cwd=None):  # несколько событий rate_limit_event подряд
         put(fk, "w.jsonl", "".join(json.dumps({"type": "rate_limit_event", "rate_limit_info": {"status": "allowed", "unifiedWindows": w}}) + "\n" for w in windows) + json.dumps({"type": "result", "is_error": False, "result": "ok"}) + "\n")
         return sh([win_tool], cwd or w_d, env=dict(GIT_ENV, CHECK_WINDOW_EVENTS=f"{fk}/w.jsonl", CHECK_WINDOW_RC="0"))
-    kit_99 = wnd_stream(week(99), cwd=w_kit)
+    own_pct = kit_budgets["defaults"].get("window_seven_day_pct", 100)  # порог проекта после апгрейда свой: budgets.json апгрейд не правит
+    at_own = wnd_stream(week(own_pct), cwd=w_kit)
+    no_key = wnd_stream(week(99), cwd=fresh(extra={"budgets.json": json.dumps({**kit_budgets, "defaults": {k_: v_ for k_, v_ in kit_budgets["defaults"].items() if k_ != "window_seven_day_pct"}})}))
     hidden = wnd_stream(week(99), {"seven_day_opus": {"utilization": 0.1}})
     keyless_first = wnd_stream({"seven_day_opus": {"utilization": 0.1}}, week(99))
     last_week = wnd_stream(week(99), week(5))
@@ -1465,7 +1467,8 @@ def section_paar():
         ("fehlt", "только окно 5 ч, 99 %", fehlt_b[0] == 0 and warn in fehlt_b[1] and last(fehlt_b[1]) == "WINDOW: start", w_brief(fehlt_b)),
         ("fehlt", "ключа нет, --override", fehlt_o[0] == 0 and warn in fehlt_o[1] and "был бы старт" in fehlt_o[1], w_brief(fehlt_o)),
         ("fehlt", "ключ есть, 84 %", g84[0] == 0 and warn not in g84[1] and last(g84[1]) == "WINDOW: start", w_brief(g84)),
-        ("fehlt", "порог кита 100 %, неделя 99 %", kit_99[0] == 0 and "порог: неделя 100 %" in kit_99[1] and warn not in kit_99[1] and last(kit_99[1]) == "WINDOW: start", w_brief(kit_99)),
+        ("fehlt", "свой порог, неделя ровно на нём", at_own[0] == 0 and f"порог: неделя {own_pct} %" in at_own[1] and warn not in at_own[1] and last(at_own[1]) == "WINDOW: start", w_brief(at_own)),
+        ("fehlt", "ключа порога нет, неделя 99 %", no_key[0] == 0 and "порог: неделя 100 % (window_seven_day_pct, встроенный)" in no_key[1] and last(no_key[1]) == "WINDOW: start", w_brief(no_key)),
         ("fehlt", "ключ есть, 86 %", refused(g86, "неделя 86 % > 85 %"), w_brief(g86)),
         ("fehlt", "неделя 99 %, за ней событие без ключа", refused(hidden, "неделя 99 % > 85 %"), w_brief(hidden)),
         ("fehlt", "событие без ключа, за ним неделя 99 %", refused(keyless_first, "неделя 99 % > 85 %"), w_brief(keyless_first)),
@@ -1655,12 +1658,13 @@ gone = [x for x in V34_RETIRED if x in kd]
 a = wrun("bin/check-window", events(64), n=3)
 b = wrun("bin/check-window", events(64), {"window_seven_day_pct": 60}, n=3)
 c = wrun("bin/check-window", events(86), {"window_seven_day_pct": 90}, n=3)
-k = wrun("bin/check-window", events(99), defaults=kd, n=3)  # порог кита: окна без ограничений, решение 398
-wsay(kd.get("window_seven_day_pct") == 100 and k[0] == 0 and "100 % (window_seven_day_pct, budgets.json defaults)" in k[1] and "WINDOW: start" in k[1]
+own_pct = kd.get("window_seven_day_pct", 100)
+k = wrun("bin/check-window", events(own_pct), defaults=kd, n=3)  # свой порог: неделя ровно на нём — старт; порог кита — 100 %, решение 398; проект после апгрейда держит свой
+wsay((root != "kit" or own_pct == 100) and k[0] == 0 and f"порог: неделя {own_pct} %" in k[1] and "WINDOW: start" in k[1]
      and not gone and a[0] == 0 and "85 % (window_seven_day_pct, budgets.json defaults)" in a[1]
      and b[0] == 1 and "60 % (window_seven_day_pct, budgets.json project)" in b[1] and "неделя 64 % > 60 %" in b[1]
      and c[0] == 1 and "project.window_seven_day_pct=90 ослабляет — взят 85" in c[1] and "неделя 86 % > 85 %" in c[1], "v3.3-F5.4",
-     f"defaults {root}/budgets.json: window_seven_day_pct {kd.get('window_seven_day_pct')}, ключей окна 5 ч — {len(gone)} · порог кита, 99 %: rc {k[0]} «{k[1]}» · подставлен 85, 64 %, project {{}}: rc {a[0]} «{a[1]}» · "
+     f"defaults {root}/budgets.json: window_seven_day_pct {kd.get('window_seven_day_pct')}, ключей окна 5 ч — {len(gone)} · свой порог {own_pct} %, ровно на нём: rc {k[0]} «{k[1]}» · подставлен 85, 64 %, project {{}}: rc {a[0]} «{a[1]}» · "
      f"64 %, project 60: rc {b[0]} «{b[1]}» · 86 %, project 90: rc {c[0]} «{c[1]}»")
 shutil.rmtree(fx, ignore_errors=True)
 if shutil.which("claude"):

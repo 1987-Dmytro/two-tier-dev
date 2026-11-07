@@ -300,15 +300,17 @@ def f81_doc(doc, text):
     return [f"{doc}: {w}" for w in NEED81[doc] if w not in text] + [f"{doc}: мёртвая {d}" for d in links_paths(doc, text)[2]]
 
 
+SPEC_NOW = (re.search(r"SPEC-[^,\s/]+\.md", read("docs/PROMPT.txt")) or [""])[0]
+
+
 def f81_index(text):
     """docs/README.md: строка «the current phase» называет SPEC стартового запроса (решение 398); пусто — годен."""
-    spec = re.search(r"SPEC-[^,\s/]+\.md", read("docs/PROMPT.txt")).group(0)
-    return [] if any("the current phase" in l and f"`{spec}`" in l for l in text.splitlines()) else [f"docs/README.md: текущая фаза не {spec}"]
+    return [] if SPEC_NOW and any("the current phase" in l and f"`{SPEC_NOW}`" in l for l in text.splitlines()) else [f"docs/README.md: текущая фаза не {SPEC_NOW or 'SPEC запроса'}"]
 
 
 g34 = f81_log(CL)
 g_index = f81_index(read("docs/README.md"))
-r_index = f81_index(read("docs/README.md").replace("`SPEC-v3.4.md` · `PLAN-v3.4.md` · `PROGRESS.md` — the current phase", "`SPEC-v3.3.md` · `PLAN-v3.3.md` · `PROGRESS.md` — the current phase"))
+r_index = f81_index(read("docs/README.md").replace(f"`{SPEC_NOW}`", "`SPEC-0.md`"))
 g_docs = {d: f81_doc(d, read(d)) for d in NEED81}
 n_docs = (not g34) + sum(not v for v in g_docs.values())
 

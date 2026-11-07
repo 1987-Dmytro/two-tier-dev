@@ -229,7 +229,7 @@ def issued(spec, prompt):
 def in_flight(spec, prompt):
     """Фаза идёт: после последнего коммита запроса есть коммит исполнителя (не «Тимлид:»), на диске запрос и SPEC чисты. Поправка тимлида на ходу такую SPEC в черновик не возвращает."""
     at = git("log", "-1", "--format=%H", "--", prompt).stdout.strip()
-    subjects = git("log", "--format=%s", f"{at}..HEAD").stdout.splitlines() if at else []
+    subjects = git("log", "--no-merges", "--format=%s", f"{at}..HEAD").stdout.splitlines() if at else []
     return any(not s.startswith("Тимлид:") for s in subjects) and not git("status", "--porcelain", "--", spec, prompt).stdout.strip()
 
 
@@ -258,7 +258,7 @@ def landing_rows(text):
         cells = [c.strip() for c in re.split(r"(?<!\\)\|", re.sub(r"^\||(?<!\\)\|$", "", l.strip()))]
         if col is None:
             col = next((i for i, c in enumerate(cells) if "измерено у нас" in c.lower()), None)
-            tool = next((i for i, c in enumerate(cells) if "инструмент" in c.lower()), None)
+            tool = next((i for i, c in enumerate(cells) if "инструмент" in c.lower() and i != col), None)
         elif not all(c and not c.strip("-:") for c in cells) and not (re.fullmatch(r"\*\*.+\*\*", cells[0]) and not "".join(cells[1:2])):
             rows.append((cells[0], cells[col] if col < len(cells) else "", cells[tool] if tool is not None and tool < len(cells) else ""))
     return rows
