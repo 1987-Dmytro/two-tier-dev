@@ -147,3 +147,4 @@
 {"ts": "2026-11-07T17:57:05Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.29, "diff": "0baa978ed21c218a", "ms": 4880}
 {"ts": "2026-11-07T18:10:49Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["bin/check-docs", "bin/check-verify", "kit/bin/check-budget", "kit/bin/check-kit", "kit/docs/PROCESS.template.md"], "score": null, "note": "abide check error CHECK_TIMEOUT", "diff": "d1909e6f4aa3f1ce", "ms": 12732}
 {"ts": "2026-11-07T19:00:20Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/check-verify"], "score": 0.16, "diff": "a3f3d86efc9c3e64", "ms": 3577}
+{"ts": "2026-11-07T19:23:23Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/evidence/jev.jsonl", "docs/evidence/spec-gate.jsonl", "kit/bin/check-harness"], "score": null, "note": "abide check error CHECK_TIMEOUT", "diff": "7974a61b89e7ee6f", "ms": 10602}

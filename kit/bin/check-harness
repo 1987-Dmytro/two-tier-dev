@@ -568,7 +568,7 @@ def commit_probes(src):
                 why = []
             else:
                 why = [] if first[0] == 1 and "no-print-credential" in first[1] and "bin/p.py" in first[1] else ["нет отказа ≥ 0,8 на печати ключа"]
-                why += [] if again[0] == 0 and "rejected" in again[1] else ["повтор диффа не прошёл"]
+                why += [] if again[0] == 0 and ("rejected" in again[1] or "abide check — skip" in again[1]) else ["повтор диффа не прошёл"]  # пропуск на повторе — тоже не ответ судьи
             why += [] if err[0] == 0 and "skip" in err[1] else ["ошибка адреса — не пропуск"]
             why += [] if slow[0] == 0 and "over 1 s" in slow[1] else ["таймаут — не пропуск"]
             why += [] if edge["0.80"][0] == 1 and "refused once" in edge["0.80"][1] else ["граница 0.80 — не отказ"]
@@ -580,18 +580,22 @@ def commit_probes(src):
         k = note_count(notes)
         if "abide check — skip" in first[1]:
             warns.append(f"печать ключа без ответа ({first[1].split('error ')[-1][:30] if 'error ' in first[1] else first[1][-30:]})")
+        if "abide check — skip" in again[1]:
+            warns.append(f"повтор диффа без ответа ({again[1].split('error ')[-1][:30] if 'error ' in again[1] else again[1][-30:]})")
         if not k:  # живая модель на пограничных образцах — калибровка, не механизм: WARN с числами
             warns.append(f"заметка {k}/{len(notes)}")
         # оба состояния на входах заглушки: судья пропустил печать ключа (как граница 0.49) — FAIL; ни одной заметки из 4 — WARN
         fake_wrong = judge_wrong(edge["0.49"], again, err, slow, edge)
         fake_k = note_count([edge["0.49"]] * 4)
         mute_first = judge_wrong(err, again, err, slow, edge)  # судья не ответил на печать ключа (ошибка адреса) — не FAIL
-        states_ok = "нет отказа ≥ 0,8 на печати ключа" in fake_wrong and fake_k == 0 and not mute_first and "skip" in err[1]
+        mute_again = judge_wrong(edge["0.80"], err, err, slow, edge)  # судья не ответил на повтор (ошибка адреса) — не FAIL
+        red_again = judge_wrong(edge["0.80"], edge["0.80"], err, slow, edge)  # повтор снова отказан — FAIL
+        states_ok = "нет отказа ≥ 0,8 на печати ключа" in fake_wrong and fake_k == 0 and not mute_first and "skip" in err[1] and "повтор диффа не прошёл" not in mute_again and "повтор диффа не прошёл" in red_again
         item(S, "F2.4", not wrong and states_ok, f"печать ключа — rc {first[0]} «{first[1][:110]}»; тот же дифф ещё раз — rc {again[0]} «{again[1][:80]}»; "
              f"заметка (живая модель, {len(notes)} проб.) — {'есть' if k else 'нет → COMMIT_WARN'}, rc {note[0]} «{note[1][:80]}»; ошибка адреса — rc {err[0]} «{err[1][:60]}»; таймаут 1 с — rc {slow[0]} «{slow[1][:60]}»; "
              f"границы заглушкой: " + ", ".join(f"{k_} — rc {v[0]}{' отказ' if 'refused' in v[1] else ' заметка' if 'note' in v[1] else ' проход'}" for k_, v in edge.items())
              + f"; неверных ответов судьи — {'; '.join(wrong) or 'нет'} · состояния: судья пропустил печать ключа (заглушка 0.49) — {'FAIL: ' + fake_wrong[0] if fake_wrong else 'нет FAIL'}; "
-             f"ни одной заметки из 4 — {'WARN заметка 0/4' if fake_k == 0 else 'нет WARN'}; судья не ответил на печать ключа (ошибка адреса) — {'WARN, не FAIL' if not mute_first else 'FAIL'}")
+             f"ни одной заметки из 4 — {'WARN заметка 0/4' if fake_k == 0 else 'нет WARN'}; судья не ответил на печать ключа (ошибка адреса) — {'WARN, не FAIL' if not mute_first else 'FAIL'}; на повтор — {'WARN, не FAIL' if 'повтор диффа не прошёл' not in mute_again else 'FAIL'}; повтор снова отказан — {'FAIL' if 'повтор диффа не прошёл' in red_again else 'нет FAIL'}")
     # F2.5 — рубрика: правил не больше abide_rules (8) и красный образец каждого ≥ 0,8; фикстуры обеих сторон
     try:
         bj = json.load(open("budgets.json", encoding="utf-8"))

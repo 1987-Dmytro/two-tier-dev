@@ -1,0 +1,65 @@
+spec: SPEC-v3.4
+$ bin/gate-v3.4
+gate-v3.4: ветка v3.4, HEAD 4b7c87e
+F8: bin/two-tier-init t4 — файлов кита 56 (в git 56), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate34-G5DmeQ
+init: (t4) bin/check-budget — rc 0
+tel-up: (корень ветки) bin/two-tier-upgrade --branch kit-v3.4 /tmp/two-tier-v3/telefon-up-ExWLez/repo — rc 0
+tel-budget: (копия клона) bin/check-budget — rc 0
+lints-t4: (t4) bin/check-budget --lints — rc 0
+gate-test: (t4) bin/gate-test bin/check-spend --self-test — rc 0
+jev: (t4) bin/jev --self-test — rc 0
+templates: (t4) bin/check-budget --templates — rc 0
+templates-repo: (корень ветки) bin/check-budget --templates — rc 0
+owner: (t4) bin/check-budget --self-test intent owner — rc 0
+commit-t4: (t4) bin/check-harness commit — rc 0
+env-t4: (t4) bin/check-harness env — rc 0
+upgrade: (корень ветки) bin/two-tier-upgrade --self-test — rc 0
+spend: (корень ветки) bin/check-spend — rc 0
+verify: (корень ветки) bin/check-verify — rc 0
+kit-t4: (t4) bin/check-kit — rc 0
+desktop-t4: (t4) bin/check-harness --desktop — rc 0
+items-t4: (t4) bin/check-harness items — rc 0
+kit-repo: (корень ветки) bin/check-kit — rc 0
+docs: (корень ветки) bin/check-docs — rc 0
+validate-window-guard: (корень ветки) env -u ANTHROPIC_API_KEY claude plugin validate mods/window-guard — rc 0
+test-window-guard: (корень ветки) env -u ANTHROPIC_API_KEY claude plugin test mods/window-guard — rc 0
+validate-phase-start: (корень ветки) env -u ANTHROPIC_API_KEY claude plugin validate mods/phase-start — rc 0
+test-phase-start: (корень ветки) env -u ANTHROPIC_API_KEY claude plugin test mods/phase-start — rc 0
+F1 GATE_HOOK_OK
+F2 BUDGET_LINT_OK
+F2.4 TEST_OK bin/check-spend --self-test
+F3 FROZEN_OK
+F4 FENSTER_OK
+F5 PAAR_OK
+    desktop-t4: HARNESS_WARN write-block-wider additional=1
+    desktop-t4: HARNESS_WARN tab-profile profil=fehlt — нет .claude/settings.local.json, оператор копирует профиль: cp .claude/launch.settings.json .claude/settings.local.json
+    desktop-t4: HARNESS_WARN subagent-model-local settings.local=claude-opus-5-5 --settings=claude-sonnet-5-5
+F6 HARNESS_OK
+F7 VERIFY_OK
+v3.4 GRAPH_OK
+v3.3 ITEMS_OK
+    commit-t4: COMMIT_WARN abide: заметка 0/4
+v3.3 COMMIT_OK
+v3.3 ENV_OK
+v3.3 WINDOW_OK
+v3.3 DOCS_OK
+v3.2 JEV_OK
+v3.2 HARNESS_OK
+v3.2 HOOKS_OK
+v3.2 KIT_OK
+v3.2 HANDOFF_OK
+v3.2 OWNER_OK
+    templates: WARN intent: intent/INTENT.md: маркеров неясности 1
+    templates-repo: WARN intent: intent/INTENT.md: маркеров неясности 1
+v3.2 BUDGET_OK
+v3.2 SPEND_OK
+v3.2 UPGRADE_OK
+F8.1 docs=4 · CHANGELOG: полей с источником и до/после 12, снятых строкой 8, вошло → вышло 14, строки Unreleased и моды в записи; README.md, docs/LAUNCH.md, docs/dev-system.ru.md: слов фазы 55; docs/README.md называет текущей SPEC запроса; расхождения — нет · красный образец: без строки поля — поле PermissionDenied; вошло без вышло PermissionDenied; источник без якоря — источник без якоря {features, prior, risk}; без строки снятого — снятое P1-4; без ячейки «вышло» — вошло без вышло risk-tier; без блока мода — не в записи `phase-start` 0.1.0; мод phase-start без строк validate; LAUNCH без поля — docs/LAUNCH.md: blockWritesOutsideWorkingDirectories; README с мёртвой ссылкой — README.md: мёртвая docs/no-such-file.md; указатель со старой фазой — docs/README.md: текущая фаза не SPEC-v3.4.md
+F8.2 templates=OK · bin/check-budget --templates: rc 0, копия кита без правки rc 0; шаблон SPEC §2–§5 против telefon: строк 55, без пары в ките 0, названных дельт 7 (planka-source, строка вендора, planken, scope-growth, flaky; вопрос и resume — в трёх строках; метка risk:; строка пункта: bin/evidence, spec:; судья кита — bin/check-frozen-diff); только в ките — строка звена вендора; (ae)–(ah) в PROCESS telefon и в шаблоне кита — 4/4; строки Environment: limits снята, window-guard и phase-start «да», в launch settings кита не включены — нет · красный образец: копия кита без фразы договора — красных с именем фразы 10/10; шаблон без строки доводки против telefon — без пары: - Фаза доводки (Nachlese) не меняет механизм закрытого модул; профиль без модов — не включены 2
+F8.3 deny=OK · claude plugin validate mods/window-guard: rc 0, «Validation passed»; claude plugin test mods/window-guard: rc 0, 38 pass, 0 fail; названных тестов 5 из 5
+F8.4 phase=OK · claude plugin validate mods/phase-start: rc 0, «Validation passed»; claude plugin test mods/phase-start: rc 0, 38 pass, 0 fail; названных тестов 4 из 4
+GATE_WARN abide-live: печать ключа — rc 1 «commit refused once by abide check — rule no-print-credential (0.98): tools/show-key.sh. Fix it, or commit the same diff again to keep it: the second time passes as «rejected» for the team lead to read.» журнал: refuse abide no-print-credential 0.98; длина ключа — rc 0 «abide check — skip: abide check error CHECK_TIMEOUT» журнал: skip abide None None
+F8.5 leer=OK telefon=OK · t4 от bin/two-tier-init: файлов кита 56 из 56, core.hooksPath .githooks; маркеров красных 0 ‖ v3.3 F7.3 без модели: t4 — rc 0 «OK   abide_rules: .abide/rubric.json, правил 4/8» BUDGET_OK; без рубрики — печать ключа rc 0 «abide check — skip: no rubric or no staged file» журнал: skip abide None None, rc 1 «FAIL abide_rules: нет .abide/rubric.json — abide check в хуке коммита пропускает суд модели: база рубрики — из кита (bin/two-tier-init, two-tier-upgrade), коммитом «Тимлид: …»» BUDGET_FAIL: 1; база — правил 4 из 4 корня; id, тексты, вопросы и образцы — как в корне; копия с переписанным вопросом и без правила — правил 3 из 4 корня; не как в корне — no-print-credential, evidence-anonymized; scope — no-secret-values **/*, no-print-credential **/*, evidence-anonymized docs/evidence/**, no-writes-outside-repo **/*; GATE_WARN abide-live: печать ключа — rc 1 «commit refused once by abide check — rule no-print-credential (0.98): tools/show-key.sh. Fix it, or commit the same diff again to keep it: the second time passes as «rejected» for the team lead to read.» журнал: refuse abide no-print-credential 0.98; длина ключа — rc 0 «abide check — skip: abide check error CHECK_TIMEOUT» журнал: skip abide None None ‖ копия клона: two-tier-upgrade --branch kit-v3.4 — rc 0; bin/check-budget — rc 0 «BUDGET_OK»; F3.5 telefon=OK ‖ bin/gate-v3.3 — в docs/archive/gate-v3.3/ ‖ F5.3 offen n=1 fon=5; другого offen — нет ‖ красный образец: лог без маркера при rc 1 и rc 0, маркер при rc 1 — FAIL 3/3, «F0 FAIL: RED_OK — red-b: нет RED_OK»; offen F6.3 и F3.5 рядом с F5.3 — чужих 2
+gate-v3.4: 560 с; логи — /tmp/two-tier-v3/gate34-G5DmeQ
+GATE_OK
+evidence geändert docs/evidence/F6-check-harness-result.txt
