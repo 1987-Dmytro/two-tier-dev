@@ -886,6 +886,12 @@ def graph_age(root="."):
     return ("WARN", f"граф старше HEAD на {age} с; собрать: graphify update .") if age > 0 else ("OK", "граф не старше HEAD")
 
 
+def graph_lines(root="."):
+    """Строки вывода о графе: статус и текст; граф старше HEAD — ещё `HARNESS_WARN graph-age`."""
+    status, text = graph_age(root)
+    return [f"{status or '--':4} graph: {text}"] + (["HARNESS_WARN graph-age"] if status == "WARN" else [])
+
+
 def graph_age_probes():
     """Стороны graph_age на фикстуре: нет графа, старше HEAD, ровно HEAD, новее."""
     os.makedirs(TMP, exist_ok=True)
@@ -900,6 +906,8 @@ def graph_age_probes():
     for name, delta, want in (("старше HEAD", -100, "WARN"), ("ровно HEAD", 0, "OK"), ("новее HEAD", 100, "OK")):
         os.utime(f"{d}/graphify-out/graph.json", (t + delta, t + delta))
         got.append((name, want, graph_age(d)[0]))
+        warned = "HARNESS_WARN graph-age" in graph_lines(d)
+        got.append((f"{name}: строка HARNESS_WARN", want == "WARN", warned))
     shutil.rmtree(d, ignore_errors=True)
     return got
 
@@ -947,7 +955,7 @@ def self_test():
         print(f"{'ok ' if good else 'BAD'} modes · {name}: {'; '.join(bad) or 'расхождений нет'}")
     for name, want, status in graph_age_probes():
         ok &= status == want
-        print(f"{'ok ' if status == want else 'BAD'} graph-age · {name}: {status or 'статуса нет'}")
+        print(f"{'ok ' if status == want else 'BAD'} graph-age · {name}: {status if status not in (None, True, False) else {None: 'статуса нет', True: 'есть', False: 'нет'}[status]}")
     print(f"фикстура таблицы: строк {len(rows)}; {'; '.join(f'{f}: {len(ids)}' for _, f, ids, _, _ in rows[:3])} …")
     for name, init, l, w, want in cases:
         bad, _ = compare(rows, init, l, w)
@@ -1751,8 +1759,7 @@ def main():
     print(f"источник харнеса: {src}; строка запуска: {proc}; launch settings: {launch}; разделы: {', '.join(want)}")
     if "env" in want:
         say("ENV", "OK" if self_test() else "FAIL", "self-test", "фикстуры обеих сторон сверки")
-        status, text = graph_age()
-        print(f"{status or '--':4} graph: {text}" + ("\nHARNESS_WARN graph-age" if status == "WARN" else ""), flush=True)
+        print("\n".join(graph_lines()), flush=True)
         line = static(src, proc, launch)
         ran = False
         if line:
