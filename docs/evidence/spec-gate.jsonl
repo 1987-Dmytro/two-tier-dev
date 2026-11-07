@@ -42,3 +42,10 @@
 {"ts":"2026-11-07T07:56:33.686Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell,workflow","missing":[],"stops":[],"bg":["shell","workflow"],"platform_cap":8,"stop_hook_active":false,"ms":107}
 {"ts":"2026-11-07T08:32:48.257Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":107}
 {"ts":"2026-11-07T08:48:48.600Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":116}
+{"ts":"2026-11-07T09:02:01.779Z","session":"cf839055","mode":"active","decision":"stop","reason":"STOP-INPUT","missing":[],"stops":["60:9be213c3eced"],"bg":[],"platform_cap":8,"stop_hook_active":false,"ms":695}
+{"ts":"2026-11-07T09:19:07.427Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell,workflow","missing":[],"stops":[],"bg":["shell","workflow"],"platform_cap":8,"stop_hook_active":false,"ms":125}
+{"ts":"2026-11-07T09:35:23.137Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:workflow","missing":[],"stops":[],"bg":["workflow"],"platform_cap":8,"stop_hook_active":false,"ms":108}
+{"ts":"2026-11-07T09:47:09.215Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":121}
+{"ts":"2026-11-07T09:50:45.343Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":108}
+{"ts":"2026-11-07T09:52:58.137Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":111}
+{"ts":"2026-11-07T09:55:33.850Z","session":"cf839055","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":105}

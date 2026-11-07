@@ -87,7 +87,7 @@
 
 | Фича | Команда | Маркер | Evidence |
 |---|---|---|---|
-| F1 | `bin/check-harness items` | `GATE_HOOK_OK` | `F1-check-harness-result.txt` |
+| F1 | `bin/check-harness` (голый: все разделы) | `GATE_HOOK_OK` | `F1-check-harness-result.txt` |
 | F2 | `bin/check-budget --lints` | `BUDGET_LINT_OK` | `F2-budget-result.txt` |
 | F3 | `bin/check-kit frozen` | `FROZEN_OK` | `F3-check-kit-result.txt` |
 | F4 | `bin/check-kit fenster` | `FENSTER_OK` | `F4-check-kit-result.txt` |
@@ -137,4 +137,5 @@
 ## Журнал прогонов (бюджет стохастики — SPEC §4)
 Строка на прогон стохастической пробы: сторона · исход.
 - голый `bin/check-harness`, раздел commit (v3.3 F2.4/F2.5 — живой суд abide), 07.11: на `9af1453` — F2.4 «заметка» 4 пробы без заметки, F2.5 `no-writes-outside-repo` без оценки · красный; раздел отдельно — F2.4 зелёный (заметка 0.78 с 3-й пробы), F2.5 без двух оценок · красный; на `ee7a5a8` — F2.5 зелёный, F2.4 «заметка» 4 пробы без заметки · красный; вывод меняется — не STOP-NP.
+- голый `bin/check-harness` на `b1f2285` (решение 397): все маркеры OK, `COMMIT_WARN abide: печать ключа без ответа (CHECK_TIMEOUT)` · зелёный.
 - голый `bin/check-harness` на `ee7a5a8`, повтор: F2.4 «заметка» 4 пробы без заметки, F2.5 `no-secret-values` без оценки · красный; abide напрямую на образце — 0.97 за 1,2 с ×3.
