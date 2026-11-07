@@ -3,7 +3,7 @@
 # Цель Makefile проекта:   rollback: ; @SHA=$(SHA) scripts/rollback.sh
 # Строку `rollback: make rollback SHA=<sha>` печатает деплой; итог — `ROLLBACK_OK sha=… sekunden=…` (закрывает окно в docs/evidence/deploy-window.log) или `ROLLBACK_FAIL …`.
 # SHA — любой существующий коммит (от 7 знаков): строка, напечатанная деплоем, — подсказка оператору, не замок; окно закрывает любой `ROLLBACK_OK`. Успешный откат снимает из истории deploy-stand всё, что шло после этого sha (sha не из истории — дописывает): следующий деплой откатывается на него, а не на отозванное.
-#   ROLLBACK_CMD  выкатка этого sha; регрессия отката не нужна: sha уже проходил её (пусто — шаг снят: пробы шаблона)
+#   ROLLBACK_CMD  выкатка этого sha, в подоболочке; регрессия отката не нужна: sha уже проходил её (пусто — шаг снят: пробы шаблона)
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 LOG=docs/evidence/deploy-window.log
@@ -14,7 +14,7 @@ fail() { echo "ROLLBACK_FAIL $*"; exit 1; }
 git rev-parse --verify -q "$sha^{commit}" >/dev/null || fail "sha=$sha — такого коммита нет"
 if [ -n "${ROLLBACK_CMD:-}" ]; then
   export ROLLBACK_SHA=$sha
-  eval "$ROLLBACK_CMD" || fail "sha=$sha rc=$?"
+  ( eval "$ROLLBACK_CMD" ) || fail "sha=$sha rc=$?"  # в подоболочке: exit N в команде не минует строку итога
 fi
 stand=$(git rev-parse --git-path deploy-stand)
 short=$(git rev-parse --short "$sha")  # короткий, как у деплоя: полный SHA тот же коммит не спрячет

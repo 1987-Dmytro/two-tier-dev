@@ -124,7 +124,8 @@ os.mkdir(f"{TOP}/telefon/.git")
 git(F, "init", "-q", "-b", "main")
 git(F, "add", "--", "kit", "bin", ".abide", "docs")
 git(F, "commit", "-qm", "фикстура")
-gate_env = dict(PATH=f"{TOP}/stubs:{ENV['PATH']}", TELEFON_CLONE=f"{TOP}/telefon")
+gate_env = dict(PATH=f"{TOP}/stubs:{ENV['PATH']}", TELEFON_CLONE=f"{TOP}/telefon", GATE_TMP=f"{TOP}/tmp")
+os.mkdir(f"{TOP}/tmp")
 
 
 def stubbed(repo, **env):
@@ -145,6 +146,7 @@ with ThreadPoolExecutor() as ex:  # гейты рядом: один идёт 10�
 say(rc == 0 and o[-1:] == ["GATE_OK"] and any(l.startswith("F8.5 leer=OK telefon=OK") for l in o), "заглушки, все маркеры", text)
 say(rc2 == 1 and "GATE_OK" not in o2 and "JEV_OK (jev: нет JEV_OK)" in o2[-1] and o2[-1].startswith("GATE_FAIL: "), "заглушки, лог без маркера JEV_OK", text2)
 say(rc3 == 1 and "GATE_OK" not in o3 and o3[-1:] == ["GATE_FAIL: 1 — F8.5 leer=FAIL telefon=OK"], "заглушки, файл кита вне git", text3)
+say(not [n for n in os.listdir(f"{TOP}/tmp") if n.startswith(("t34-", "f73-"))], "заглушки, гейт снял свои проекты", f"t34-* и f73-* под GATE_TMP: {len([n for n in os.listdir(TOP + '/tmp') if n.startswith(('t34-', 'f73-'))])}")
 say(rc4 == 1 and "GATE_OK" not in o4 and o4[-1:] == ["GATE_FAIL: 1 — F8.5 leer=OK telefon=OK offen"], "заглушки, чужой offen", text4)
 say(rc5 == 1 and "GATE_OK" not in o5 and o5[-1:] == ["GATE_FAIL: 1 — F8.5 leer=OK telefon=OK"] and any("НЕ в архиве" in l for l in o5), "заглушки, гейта v3.3 нет в архиве", text5)
 say(rc6 == 1 and "GATE_OK" not in o6 and o6[-1:] == ["GATE_FAIL: 1 — F8.5 leer=OK telefon=offen"], "заглушки, клона telefon нет", text6)

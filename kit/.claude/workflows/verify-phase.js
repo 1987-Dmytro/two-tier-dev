@@ -12,7 +12,7 @@ export const meta = {
 
 // two-tier-dev v3.3 (SPEC-v3.1 F4, SPEC-v3.3 F4.1–F4.3). The script touches no files and reads no clock: the launcher bin/verify-phase
 // clones, runs the gate (log in $VERIFY_GATE_LOG), enforces the limit and writes the returned report.
-// args — the launcher's object {features, prior} (SPEC-v3.4 F7.2): features — the F<n> ids of a point round, prior — F<n> → its prior verdict {file, verdict, blocking, more};
+// args — the launcher's object {features, prior, risk} (SPEC-v3.4 F7.2): features — the F<n> ids of a point round, prior — F<n> → its prior verdict {file, verdict, blocking, more};
 // the ids alone also do (an array, or a string that carries them); absent — every feature (F4.1).
 // The label `· risk: high|low` on the feature line sets the depth (SPEC-v3.4 F7.1): high — the full depth and at least 2 mutations; low — the fresh check and the items only; none — the full depth, one mutation.
 // Code blocks after the judge: a dead verifier, a red check, a surviving mutation (F4.2), too few mutations at risk high, an item without the checker own run (F4.3).
@@ -29,7 +29,7 @@ const A = input && typeof input === 'object' && !Array.isArray(input) ? input : 
 const ids = (Array.isArray(A.features) ? A.features.join(' ') : typeof A.features === 'string' ? A.features : '').match(/\bF\d+\b/g)
 const ASKED = ids ? [...new Set(ids)] : null
 const priorOf = id => { const p = (A.prior || {})[id]; return p ? { ...p, blocking: p.blocking || [], more: p.more || [] } : null }
-const tier = f => (/·\s*risk:\s*(low|high)\b/.exec(f.line) || [])[1] || null  // the feature line only: an item may quote the label
+const tier = f => (A.risk || {})[f.id] || (/·\s*risk:\s*(low|high)\b/.exec(f.line) || [])[1] || null  // from the launcher, it read the SPEC; else the feature line only: an item may quote the label
 
 phase('Scope')
 const scope = await agent(

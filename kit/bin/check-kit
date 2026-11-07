@@ -677,6 +677,7 @@ def section_fenster():
     outside = sh([f"{w}/bin/check-fenster"], tempfile.mkdtemp(prefix="check-kit-nogit-", dir=TMP))
     stand = read(f"{w}/.git/deploy-stand")
     failed = undo(w, w0, ROLLBACK_CMD="false")
+    failed_exit = undo(w, w0, ROLLBACK_CMD="exit 3")
     failed_win, stand_after = window(w), read(f"{w}/.git/deploy-stand")
     too_short = undo(w, w0[:4])
     rollback_text = read(f"{root}/scripts/rollback.template.sh")
@@ -731,6 +732,7 @@ def section_fenster():
                         ("fenster_rot", "красная выкатка на линии держит окно", ro_red[0] == 1 and "DEPLOY_FAIL step=rollout" in ro_red[1] and "linie=1" in ro_red[1] and ro_win[0] == 1 and "FENSTER_ROT" in ro_win[1], f"{raw(ro_red)} → {raw(ro_win)}"),
                         ("fenster_rot", "S10 без DEPLOY_LINIE", "linie=0" in plain[1] and plain_win[0] == 0, f"{raw(plain)} → {raw(plain_win)}"),
                         ("fenster_rot", "E10 DEPLOY_LINIE не 0 и не 1", all(r[0] == 1 and "DEPLOY_FAIL step=args" in r[1] and "DEPLOY_OK" not in r[1] for r in refused) and no_step and refused_win[0] == 0, f"{raw(refused[0])}, шагов не было — {no_step}"),
+                        ("fenster_rot", "ROLLBACK_CMD=exit 3", failed_exit[0] == 1 and "ROLLBACK_FAIL" in failed_exit[1] and "rc=3" in failed_exit[1], raw(failed_exit)),
                         ("fenster_rot", "S0 упавший откат", failed[0] == 1 and "ROLLBACK_FAIL" in failed[1] and failed_win[0] == 1 and stand_after == stand, f"{raw(failed)} → {raw(failed_win)}, история та же — {stand_after == stand}"),
                         ("fenster_rot", "E4 из подкаталога", open_root[0] == 1 and open_sub[0] == 1 and "FENSTER_ROT" in open_sub[1], f"корень {raw(open_root)}, src {raw(open_sub)}"),
                         ("fenster_rot", "E4 явный путь", all(r[0] == 2 and r[1].startswith("FENSTER_ROT журнал=") for r in (no_file, is_dir, junk)), f"нет файла {raw(no_file)}, каталог {raw(is_dir)}, битые байты {raw(junk)}"),
@@ -1202,6 +1204,9 @@ def section_paar():
     no_file = pair(plan="")
     no_sha = pair(sha="0" * 40)
     stand_red = pair(body=stand + "exit 7\n")
+    d_ign = fresh(extra={"checks/planken.json": limits(), "stand.sh": 'test -f .env && test -f dep/lib || exit 9\ncat values.txt\n', "values.txt": base_vals, ".gitignore": ".env\ndep/\n"})
+    put(d_ign, ".env", "x\n"), put(d_ign, "dep/lib", "x\n")
+    ignored = subprocess.run(["/bin/bash", script, sh(["git", "rev-parse", "HEAD"], d_ign)[1], "--", "sh", "stand.sh"], cwd=d_ign, env=GIT_ENV, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
     tokens = pair("rms=9000\nms=1000.5\nms=abc\nxms=7\n")
     empty = pair("")
     vfy = subprocess.run(["/bin/bash", "-c", "echo $BASH_VERSION"], capture_output=True, text=True).stdout.strip()
@@ -1213,6 +1218,7 @@ def section_paar():
         ("gleich", "один код", is_pair(same, 0, "PAIR_OK diff_p50=0 diff_p95=0 ") and order == alternating, f"{brief(same)}, прогоны {' '.join(same[2])}, bash {vfy.split('(')[0]}"),
         ("gleich", "правило до первого прогона", same[4] == "1" and "PAIR_RULE diff_p50 ≤ 300 мс, diff_p95 ≤ 500 мс" in same[1], f"PAIR_RULE в выводе при первом прогоне: {same[4] or 'нет'}"),
         ("gleich", "ровно порог", is_pair(edge, 0, "PAIR_OK diff_p50=300 diff_p95=300 "), brief(edge)),
+        ("gleich", "игнорируемое git видят обе стороны", ignored.returncode == 0 and last(ignored.stdout).startswith("PAIR_OK diff_p50=0 diff_p95=0 ") and os.path.isfile(f"{d_ign}/dep/lib"), f"rc {ignored.returncode} «{last(ignored.stdout)[:90]}»"),
         ("gleich", "новый быстрее", is_pair(faster, 0, "PAIR_OK diff_p50=-600 diff_p95=-600 "), brief(faster)),
         ("gleich", "nearest rank", is_pair(rank, 0, "PAIR_OK ") and "neu_p50=100 " in last(rank[1]) and "neu_p95=300 " in last(rank[1]) and "n=10/4" in last(rank[1]), last(rank[1])[:110]),
         ("gleich", "каталог базы снят", clean_gone and bool(same[3]), f"каталогов базы осталось {sum(os.path.exists(x) for x in same[3])}"),

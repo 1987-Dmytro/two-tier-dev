@@ -23,8 +23,10 @@ done
 
 mkdir -p /tmp/two-tier-v3/skills/.claude/skills  # скилл graphify для --add-dir строки запуска шаблона — так его готовит оператор
 [ -d ~/.claude/skills/graphify ] && ln -sfn ~/.claude/skills/graphify /tmp/two-tier-v3/skills/.claude/skills/graphify
-T4=$(mktemp -d /tmp/two-tier-v3/t34-XXXXXX)
-LOGS=$(mktemp -d /tmp/two-tier-v3/gate34-XXXXXX)
+TT=${GATE_TMP:-/tmp/two-tier-v3}  # свой корень — bin/check-gate: заглушки не оставляют каталогов
+T4=$(mktemp -d "$TT/t34-XXXXXX")
+LOGS=$(mktemp -d "$TT/gate34-XXXXXX")
+trap 'rm -rf "$T4" "${P73:-}"' EXIT  # проекты снимаются, логи остаются
 CLONE=${TELEFON_CLONE:-/tmp/two-tier-v3/telefon-src}
 git init -q "$T4"
 n=$("$REPO/bin/two-tier-init" "$T4" | grep -c 'wrote:')
@@ -43,7 +45,7 @@ telefon() {  # копия клона: сам клон только читает�
 }
 TU=""
 if [ -d "$CLONE/.git" ]; then
-  TU=$(mktemp -d /tmp/two-tier-v3/telefon-up-XXXXXX)/repo
+  TU=$(mktemp -d "$TT/telefon-up-XXXXXX")/repo
   telefon &
 fi
 run items-t4 "$T4" bin/check-harness items &
@@ -65,7 +67,7 @@ run spend "$REPO" bin/check-spend
 
 # v3.3 F7.3 — проект от bin/two-tier-init без ручных шагов: база рубрики на месте и равна рубрике корня, без неё bin/check-budget красный и суда
 # модели нет — код. Отказ живой модели на печати ключа — калибровка, не механизм (решение 397): промах — строка WARN с числами.
-P73=$(mktemp -d /tmp/two-tier-v3/f73-XXXXXX)
+P73=$(mktemp -d "$TT/f73-XXXXXX")
 for p in kit bare; do git init -q "$P73/$p" && "$REPO/bin/two-tier-init" "$P73/$p" >/dev/null; done
 rm -f "$P73/bare/.abide/rubric.json"
 c73() {  # c73 <проект> <файл> <строка скрипта>: коммит одного нового файла хуками кита — rc, строка хука и запись журнала судей; отказан — файл вне индекса

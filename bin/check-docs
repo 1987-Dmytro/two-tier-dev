@@ -263,7 +263,7 @@ item("F6.4", ok, green, not r64, f"записи без строк мода — �
 
 # ── v3.4 (SPEC-v3.4 F8) ──────────────────────────────────────────────────────────────────────────────────────────────────────
 FIELDS34 = ["background_tasks", "platform_cap", "permissions.blockWritesOutsideWorkingDirectories", "effortLevel", "ultracode",
-            "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_SUBAGENT_EFFORT", "PermissionDenied", "{features, prior}", "unifiedWindows", "enabledPlugins", "post-commit"]
+            "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_SUBAGENT_EFFORT", "PermissionDenied", "{features, prior, risk}", "unifiedWindows", "enabledPlugins", "post-commit"]
 RETIRED34 = ["K30", "P1-4", "ultrareview", "blocks 12", "caps.hours", "window_five_hour_pct", "window_repair_pct", "mods/limits"]
 IN34 = ["background_tasks", "PermissionDenied", "blockWritesOutsideWorkingDirectories", "effortLevel", "ultracode", "CLAUDE_CODE_SUBAGENT_MODEL",
         "CLAUDE_CODE_SUBAGENT_EFFORT", "planka-source", "scope-growth", "planken-inline", "frozen-paths", "risk-tier", "window-guard", "phase-start"]
@@ -319,7 +319,7 @@ r_dead = f81_doc("README.md", rd + "\n[пропавший](docs/no-such-file.md)
 item("F8.1", n_docs == 4 and not g34,
      f"docs={n_docs} · CHANGELOG: полей с источником и до/после {len(FIELDS34)}, снятых строкой {len(RETIRED34)}, вошло → вышло {len(IN34)}, строки Unreleased и моды в записи; "
      f"README.md, docs/LAUNCH.md, docs/dev-system.ru.md: слов фазы {sum(map(len, NEED81.values()))}; расхождения — {'; '.join(g34 + [x for v in g_docs.values() for x in v]) or 'нет'}",
-     "поле PermissionDenied" in r_field and "источник без якоря {features, prior}" in r_anchor and "снятое P1-4" in r_ret and "вошло без вышло risk-tier" in r_out and "не в записи `phase-start` 0.1.0" in r_mod
+     "поле PermissionDenied" in r_field and "источник без якоря {features, prior, risk}" in r_anchor and "снятое P1-4" in r_ret and "вошло без вышло risk-tier" in r_out and "не в записи `phase-start` 0.1.0" in r_mod
      and r_word == ["docs/LAUNCH.md: blockWritesOutsideWorkingDirectories"] and r_dead == ["README.md: мёртвая docs/no-such-file.md"],
      f"без строки поля — {'; '.join(r_field)}; источник без якоря — {'; '.join(r_anchor)}; без строки снятого — {'; '.join(r_ret)}; без ячейки «вышло» — {'; '.join(r_out)}; без блока мода — {'; '.join(r_mod)}; "
      f"LAUNCH без поля — {'; '.join(r_word)}; README с мёртвой ссылкой — {'; '.join(r_dead)}")

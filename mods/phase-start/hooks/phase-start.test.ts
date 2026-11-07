@@ -213,6 +213,22 @@ test('a prompt the engine refuses says so in a toast', async ($, on) => {
   expect(seen.toasts[0]).toContain('not sent')
 })
 
+test('/phase twice in one session: the second is refused, one submit', async ($, on) => {
+  const seen = seat(on, {})
+  await phase($, seen)
+  const { text } = await phase($, seen)
+  expect(seen.sent.length).toBe(1)
+  expect(text).toContain('refused')
+})
+
+test('/phase resume twice with the same line: the second is refused, one submit', async ($, on) => {
+  const seen = seat(on, {})
+  await phase($, seen, 'resume')
+  const { text } = await phase($, seen, 'resume')
+  expect(seen.sent.length).toBe(1)
+  expect(text).toContain('refused')
+})
+
 test('/phase resume with an open stop: the Resume line goes as the user', async ($, on) => {
   const seen = seat(on, {})
   const { text } = await phase($, seen, 'resume')

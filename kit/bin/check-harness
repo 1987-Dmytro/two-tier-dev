@@ -2007,7 +2007,17 @@ def tab_profile(local, launch):
     """F6.3: настоящий файл профиля вкладки против launch: None — файла нет (свежий клон: файл вне git), иначе ключи верхнего уровня, что расходятся по смыслу (разобранный JSON); значения не отдаются."""
     if not os.path.isfile(local):
         return None
-    have, want = (json.load(open(p, encoding="utf-8")) for p in (local, launch))
+    try:
+        have = json.load(open(local, encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["файл не JSON"]
+    if not isinstance(have, dict):
+        return ["файл не объект JSON"]
+
+    def core(s):  # правила «не спрашивать» и каталоги сессии вкладка дописывает в этот файл сама: профиль — остальное
+        perm = {k: v for k, v in s.get("permissions", {}).items() if k not in ("allow", "additionalDirectories")}
+        return {**{k: v for k, v in s.items() if k != "permissions"}, **({"permissions": perm} if perm else {})}
+    have, want = core(have), core(json.load(open(launch, encoding="utf-8")))
     return sorted(k for k in set(have) | set(want) if k not in have or k not in want or have[k] != want[k])
 
 
@@ -2017,7 +2027,7 @@ def additional_dirs(src, launch):
     for p in (os.path.expanduser("~/.claude/settings.json"), f"{src}/.claude/settings.json", f"{os.path.dirname(launch)}/settings.local.json"):
         try:
             dirs |= set(json.load(open(p, encoding="utf-8")).get("permissions", {}).get("additionalDirectories", []))
-        except (OSError, ValueError):
+        except (OSError, ValueError, AttributeError):
             pass
     return len(dirs)
 
@@ -2060,7 +2070,13 @@ def tab_profile_probes(src, launch):
            ("та же суть, иной порядок ключей и пробелы: строки нет", "rc 0; ; F6.3 offen; graph=нет; утечек 0", side(json.dumps(dict(reversed(list(profile.items()))), indent=4))),
            ("иное по смыслу: красный с именами ключей, без значений; каталог из local — числом",
             "rc 1; HARNESS_WARN write-block-wider additional=1; F6.3 tab-profile: .claude/settings.local.json не как .claude/launch.settings.json, ключи: effortLevel, extraKey, permissions; graph=нет; утечек 0",
-            side(json.dumps({**profile, "effortLevel": hidden, "extraKey": hidden, "permissions": {**profile.get("permissions", {}), "additionalDirectories": ["/nested-dir-d"]}})))]
+            side(json.dumps({**profile, "effortLevel": hidden, "extraKey": hidden, "permissions": {**profile.get("permissions", {}), "additionalDirectories": ["/nested-dir-d"], "deny": [hidden]}}))),
+           ("вкладка дописала разрешение: строки нет", "rc 0; ; F6.3 offen; graph=нет; утечек 0",
+            side(json.dumps({**profile, "permissions": {**profile.get("permissions", {}), "allow": ["Bash(ls:*)"]}}))),
+           ("битый файл: красный с именем, без трассировки", "rc 1; ; F6.3 tab-profile: .claude/settings.local.json не как .claude/launch.settings.json, ключи: файл не JSON; graph=нет; утечек 0",
+            side('{"effortLevel": ')),
+           ("файл не объект: красный с именем", "rc 1; ; F6.3 tab-profile: .claude/settings.local.json не как .claude/launch.settings.json, ключи: файл не объект JSON; graph=нет; утечек 0",
+            side("[1]"))]
     shutil.rmtree(dst, ignore_errors=True)
     shutil.rmtree(path, ignore_errors=True)
     return got

@@ -322,6 +322,7 @@ STUB = {
     "high_skip": scen(scope=LABELED, verify_F1=ver("F1", mutants=[("a", "red"), ("b", "skipped")]), verify_F2=LOW0),
     "high_green": scen(scope=LABELED, verify_F1=ver("F1", mutants=[("a", "red"), ("b", "green")]), verify_F2=LOW0),
     "item_label": scen(scope=ITEM_ONLY),
+    "risk_args": scen({"risk": {"F1": "high", "F2": "low"}}, verify_F1=ver("F1", mutants=[("a", "red")]), verify_F2=LOW0),
     "prior_rep": scen(was(SURVIVED), verify_F1=ver("F1", "green")),
     "prior_item": scen(was("- **F1.2: не подтверждён своим прогоном** — x"), verify_F1=ver("F1", holds=False)),
     "prior_more": scen({"features": ["F1"], "prior": {"F1": {**was("- **F1.1: не подтверждён своим прогоном** — x")["prior"]["F1"], "more": ["- **F1.2: не подтверждён своим прогоном** — ключ"]}}}, verify_F1=ver("F1", holds=False)),
@@ -396,6 +397,18 @@ def launcher_prior(d, go):
         m = re.search(r"with args set to the JSON object (\{.*\}) \(an object value", prompt, re.S)
         return json.loads(m.group(1)) if rc == 0 and m else {"rc": rc, "last": last, "prompt": prompt[:60]}
 
+    spec = open(f"{d}/docs/SPEC-1.md", encoding="utf-8").read()
+    label_line = next(l for l in spec.splitlines() if l.startswith("- **F1"))
+    labelled = spec.replace(label_line, label_line + " · risk: high", 1) + "\n  - цитата `- **F2 x · risk: low` в тексте — не метка\n"
+    open(f"{d}/docs/SPEC-1.md", "w", encoding="utf-8").write(labelled)
+    g("add", "--", "docs/SPEC-1.md")
+    g("commit", "-qm", "метка")
+    risk_all, risk_f2 = args_of("F1, F2"), args_of("F2", "F2")
+    open(f"{d}/docs/SPEC-1.md", "w", encoding="utf-8").write(spec)
+    g("add", "--", "docs/SPEC-1.md")
+    g("commit", "-qm", "без метки")
+    if risk_all != {"risk": {"F1": "high"}} or risk_f2 != {"features": ["F2"]}:
+        return False, f"лаунчер, метка риска из SPEC: без списка → {risk_all}; F2 → {risk_f2}"
     item = "- **F1.2: не подтверждён своим прогоном** — x"
     commit("verify-aaaaaaa-F1.txt", verdict_text("NEEDS_WORK", "F1", item))
     point, other_feat, full = args_of("F1", "F1"), args_of("F2", "F2"), args_of("F1, F2")
@@ -690,7 +703,10 @@ def f71(s, h, crep):
     # метка в тексте пункта — не метка: SPEC-v3.4 F7.1 цитирует её
     item = full(prompt("item_label", "verify:F1")) and "at least 2" not in prompt("item_label", "verify:F1") and verdict("item_label") == "PASS"
     short = {k: line(rep(k), r"risk high — мутантов") for k in ("high_one", "high_dup", "high_skip")}
-    few = verdict("high_two") == "PASS" and "risk high" not in line(rep("high_two"), r"^- \*\*F1") and short["high_one"].startswith("- **F1: risk high — мутантов 1 из 2**") \
+    # метка из args лаунчера, а не со слов агента Scope: строки без метки, глубина и код те же
+    by_args = "at least 2 distinct" in prompt("risk_args", "verify:F1") and minimum("risk_args", "verify:F1") == 2 and minimum("risk_args", "verify:F2") == 0 \
+        and "мутантов 1 из 2" in line(rep("risk_args"), r"risk high — мутантов") and verdict("risk_args") == "NEEDS_WORK"
+    few = by_args and verdict("high_two") == "PASS" and "risk high" not in line(rep("high_two"), r"^- \*\*F1") and short["high_one"].startswith("- **F1: risk high — мутантов 1 из 2**") \
         and all(verdict(k) == "NEEDS_WORK" and "мутантов 1 из 2" in short[k] for k in short)
     surv = verdict("high_green") == "NEEDS_WORK" and "**F1: мутация выжила — bin/slug: b**" in rep("high_green") and "risk high —" not in rep("high_green")
     fi, fl = line(by_feature(crep), r"^- F1: "), line(by_feature(crep), r"^- F2: ")

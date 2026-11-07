@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # paired_stand.sh <база-sha> -- <стенд> [аргументы…] — пара одного часа (SPEC-v3.4 F5.1, K76; образец — парные прогоны проекта telefon): планка на звене вендора судится разницей база/новый, а не абсолютным перцентилем одного стенда.
-# База — `git archive <sha>` во временном каталоге /tmp/two-tier-v3 (снимается на выходе), новый код — рабочее дерево. Стенд идёт в корне своего дерева попеременно: база, новый, база, новый; выборка — токены `ms=<целое>` его stdout, stderr идёт мимо суда.
+# База — `git archive <sha>` во временном каталоге /tmp/two-tier-v3 (снимается на выходе), новый код — рабочее дерево; игнорируемое git база видит симлинками, условия сторон те же. Стенд идёт в корне своего дерева попеременно: база, новый, база, новый; выборка — токены `ms=<целое>` его stdout, stderr идёт мимо суда.
 # Правило — checks/planken.json, pair.max_diff_p50_ms и pair.max_diff_p95_ms (файл тимлида): чисел нет — `PAIR_FAIL` без единого прогона; есть — строка `PAIR_RULE` до первого прогона.
 # Разница = новый − база, перцентили — nearest rank; новый быстрее базы — не провал. Итог — `PAIR_OK|PAIR_FAIL diff_p50=<мс> diff_p95=<мс> …`, код 0|1; красный или пустой прогон — `PAIR_FAIL`. Интервал часа кодом не судится: его держит чередование. bash 3.2: так идёт /bin/bash на macOS.
 set -uo pipefail
@@ -72,6 +72,10 @@ WORK=$(mktemp -d /tmp/two-tier-v3/paired-stand-XXXXXX) || fail "нет врем�
 trap 'rm -rf "$WORK"' EXIT
 mkdir "$WORK/basis"
 git archive "$SHA" | tar -x -C "$WORK/basis" || fail "git archive базы ${SHA:0:7}"
+while IFS= read -r -d '' f; do  # зависимости, .env и кэши вне git — те же у обеих сторон
+  f=${f%/}
+  mkdir -p "$WORK/basis/$(dirname "$f")" && ln -s "$TOP/$f" "$WORK/basis/$f" 2>/dev/null
+done < <(git ls-files -z --others --ignored --exclude-standard --directory)
 
 echo "PAIR_RULE diff_p50 ≤ $MAX50 мс, diff_p95 ≤ $MAX95 мс · база ${SHA:0:7} · прогоны: база, новый, база, новый"
 for k in 1 2; do

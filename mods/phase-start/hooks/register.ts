@@ -54,6 +54,7 @@ async function halt($: EngineInterface, root: string): Promise<string> {
 
 export const register: Register = on => {
   let startDir: string | undefined
+  const sent = new Set<string>()  // immediate идёт и посреди хода: повтор той же команды не должен прийти словами оператора второй раз
 
   on('session.start', async ($, e, next) => {
     startDir = await $.session.root()
@@ -81,9 +82,13 @@ export const register: Register = on => {
       const line = resumeOf((await readOr($, `${root}/docs/PROGRESS.md`)) ?? '')
       if (!line) return refuse('no open STOP with a Resume line in docs/PROGRESS.md')
       if (/<[^<>]+>|\|/.test(line)) return refuse(`the Resume line has an unfilled <…> or | alternatives; type your answer to it: ${line}`)
+      if (sent.has(line)) return refuse(`this Resume line already went in this session; type it if you mean it again: ${line}`)
+      sent.add(line)
       $.clock.after(0, () => submit($, line))
       return { text: `the Resume line goes as your message: ${line}` }
     }
+    if (sent.has(prompt)) return refuse('docs/PROMPT.txt already went in this session; type it if you mean it again')
+    sent.add(prompt)
     $.clock.after(0, () => submit($, prompt))
     return { text: `docs/PROMPT.txt goes as your message, on branch ${wanted}.` }
   })

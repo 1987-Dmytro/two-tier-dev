@@ -13,7 +13,7 @@
    allow Workflow(verify-phase) и чеки кита (в -p правила allow из .claude/settings.json не действуют), --setting-sources
    project,local (настройки и хуки пользователя приёмку не трогают), --settings
    .claude/launch.settings.json клона (worktree.baseRef: head — агенты в worktree видят HEAD, а не ветку по умолчанию).
-   Список фич и прошлые вердикты этих фич (SPEC-v3.4 F7.2) уходят воркфлоу в args JSON-объектом {features, prior}; нечего передать — без args.
+   Список фич и прошлые вердикты этих фич (SPEC-v3.4 F7.2) уходят воркфлоу в args JSON-объектом {features, prior, risk}; нечего передать — без args.
 4. Итог воркфлоу — из task_notification.output_file → docs/evidence/verify-<sha>.txt этого репо, точечный — verify-<sha>-F2-F4.txt;
    первая строка — VERDICT: PASS или VERDICT: NEEDS_WORK, вторая — классы дефектов и счёт, строка FEATURES: — фичи вердикта: не те, что просили, — вердикта нет,
    exit 1. Лимит на всё, клон и гейт включительно, — 1800 с: истёк — VERIFY_TIMEOUT,
@@ -207,7 +207,9 @@ def main(argv):
         print(f"verify-phase: в стартовом запросе {start or 'docs/PROMPT.txt'} нет bin/gate… — чеки гоняют проверяющие")
     settings = ["--settings", ".claude/launch.settings.json"] if os.path.isfile(f"{clone}/.claude/launch.settings.json") else []
     last = prior(spec, ids or known)
-    wf_args = {**({"features": ids} if ids else {}), **({"prior": last} if last else {})}
+    labels = re.findall(r"^- \*\*(F\d+)\b[^\n]*·\s*risk:\s*(low|high)\b", git("show", f"HEAD:{spec}").stdout, re.M) if spec else []  # строка фичи, не со слов агента Scope; пункт может цитировать метку
+    risk = {f: t for f, t in labels if not ids or f in ids}
+    wf_args = {**({"features": ids} if ids else {}), **({"prior": last} if last else {}), **({"risk": risk} if risk else {})}
     prompt = PROMPT.format(args=f"with args set to the JSON object {json.dumps(wf_args, ensure_ascii=False, separators=(',', ':'))} (an object value, not a string)"
                            if wf_args else "without args")
     # v3.2: --setting-sources project,local — хуки и плагины пользователя (его Toolgate спрашивает, а в -p вопрос — отказ) приёмку не трогают
