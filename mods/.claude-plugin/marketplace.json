@@ -1,9 +1,10 @@
 {
   "name": "two-tier-mods",
   "owner": { "name": "two-tier-dev" },
-  "metadata": { "description": "Mods of the two-tier-dev system: handoff (automatic handoff + fresh context), limits (rate-limit status line)." },
+  "metadata": { "description": "Mods of the two-tier-dev system: handoff (automatic handoff + fresh context), window-guard (rate-limit status line and the week guard), phase-start (/phase)." },
   "plugins": [
     { "name": "handoff", "source": "./handoff", "description": "Writes a handoff from the live transcript past a context threshold or on /handoff, then /clear and resume." },
-    { "name": "limits", "source": "./limits", "description": "Status line with the 5h and weekly rate limits, reset countdowns, context fill and session cost." }
+    { "name": "window-guard", "source": "./window-guard", "description": "Status line of the rate-limit windows; above window_seven_day_pct of budgets.json a tool call is denied until /window override. Absorbs limits." },
+    { "name": "phase-start", "source": "./phase-start", "description": "/phase sends docs/PROMPT.txt as your message on the branch it names and refuses on another; /phase resume, /phase halt." }
   ]
 }

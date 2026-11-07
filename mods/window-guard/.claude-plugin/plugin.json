@@ -1,0 +1,8 @@
+{
+  "name": "window-guard",
+  "version": "0.1.0",
+  "description": "Status line of the subscription windows; above window_seven_day_pct of the project's budgets.json a tool call is denied until /window override. Absorbs limits.",
+  "author": {
+    "name": "two-tier-dev"
+  }
+}

@@ -6,6 +6,17 @@ version is what the next `bin/two-tier-init` ships. A rule enters only on the RE
 it, and it enters first as a hook (D10). Dates are the days the rule entered the live kit.
 
 ## Unreleased — named debts
+- **Mods of phase v3.4 (F8.3, F8.4), `claude plugin validate`.** One in, one out: `limits` leaves the marketplace for `docs/archive/mods-limits`, `window-guard` absorbs it.
+- `window-guard` 0.1.0 (`mods/window-guard`), «Validation passed»:
+  - `./register.ts hooks: session.start, session.measure, tool.call, command.run{command=window}`
+  - `./register.ts calls: $.clock.now, $.command.register, $.fs.read (via readLimit), $.session.root (via readLimit), $.session.surfaces, $.session.usage, $.ui.status`
+
+  The status line of `limits`, plus the week against `window_seven_day_pct` of the project's `budgets.json` (decision 396): above it a tool call is denied with the numbers and the reset; `/window` shows them, `/window override` lifts the guard for this session and says so. No `budgets.json` or no key — nothing is judged. A subagent and a plain `claude -p` run are never denied. `gating hook without .catch: tool.call` is deliberate: on its own error the call goes through (kit rule). `claude plugin test mods/window-guard` — 28 pass, 0 fail. Sources: [mods events](https://code.claude.com/docs/en/plugins/mods/events#guard-or-change-a-tool-call), [mods reference](https://code.claude.com/docs/en/plugins/mods/reference#mods-api-methods).
+- `phase-start` 0.1.0 (`mods/phase-start`), «Validation passed»:
+  - `./register.ts hooks: session.start, command.run{command=phase}`
+  - `./register.ts calls: $.clock.after, $.command.register, $.fs.read (via readOr), $.fs.write (via halt), $.process.run (via currentBranch), $.prompt.submit (via submit), $.session.root, $.ui.toast (via submit)`
+
+  `/phase` sends `docs/PROMPT.txt` as the person's own words on the branch it names, and refuses on another with both names; `/phase resume` sends the Resume line of the open STOP; `/phase halt` writes `AGENT_STOP` in the project and says how to lift it. `/resume` is a built-in, so these are arguments. `claude plugin test mods/phase-start` — 22 pass, 0 fail. Sources: [mods api](https://code.claude.com/docs/en/plugins/mods/api#start-a-turn-from-a-background-job), [commands](https://code.claude.com/docs/en/commands).
 - **`bin/check-harness commit`: the live abide model is calibration, not the mechanism (decision 397, phase v3.4).** A judge of the harness, not a field.
   Before: `COMMIT_FAIL` whenever the model missed the 0.5–0.8 band on the borderline samples of F2.4 («заметка» 0/4) or left a rubric rule unscored in F2.5 — four runs, a different red each time, while abide answered 0.97 in 1.2 s directly.
   After: `COMMIT_WARN abide: заметка k/4, без оценки <rule>` with the numbers; FAIL only on a wrong answer of the judge: no refusal ≥ 0.8 on the key print, the repeat of the same diff not passing, the error and the timeout not skipping, a stub boundary (0.80/0.79/0.50/0.49), a red sample scored below 0.8. Both states are shown on stub inputs in the evidence line.

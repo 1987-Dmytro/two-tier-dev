@@ -18,9 +18,9 @@
            в один круг, их ссылки и пути живые; красное — копия README с мёртвой ссылкой;
     F6.3 — bin/check-budget --templates → BUDGET_OK; шаблоны и настройки кита — формат пунктов и таблица судей, без ушедших
            инструментов, строка запуска с предохранителем; красное — PROCESS с Toolgate «да»;
-    F6.4 — строки hooks: и calls: мода limits в записи v3.3, у каждого мода mods/ — свои строки; с claude в PATH —
+    F6.4 — строки hooks: и calls: мода window-guard (вобрал limits, F8.3) в записях новее v3.3, у каждого мода mods/ — свои строки; с claude в PATH —
            `claude plugin validate` и `claude plugin test` мода зелёные и строки совпадают с CHANGELOG (без claude, в CI, — только
-           CHANGELOG, это сказано в строке); красное — запись v3.3 без строк мода.
+           CHANGELOG, это сказано в строке); красное — записи без строк мода.
 """
 import json, os, re, shutil, subprocess, sys
 
@@ -220,34 +220,37 @@ item("F6.3", b_ok and not g_ret,
 
 
 def f64(e):
-    """Строки hooks: и calls: мода limits в записи v3.3 (без `…` и « - »)."""
-    m = re.search(MOD_LINES.format(m="limits"), e + "\n")
+    """Строки hooks: и calls: мода window-guard в записях новее v3.3 (без `…` и « - »)."""
+    m = re.search(MOD_LINES.format(m="window-guard"), e + "\n")
     return [l.strip().lstrip("- ").strip("`") for l in m.group(1).splitlines()] if m else []
 
 
-cl64 = f64(v33)
+v34 = CL.split("\n## v3.3", 1)[0]  # всё новее v3.3: Unreleased и запись v3.4, где бы ни стояли строки модов; запись v3.3 с limits — история
+cl64 = f64(v34)
 mods = sorted(d for d in os.listdir("mods") if os.path.isfile(f"mods/{d}/.claude-plugin/plugin.json"))
-no_lines = [m for m in mods if not any(re.search(MOD_LINES.format(m=re.escape(m)), e + "\n") for e in (v32, v33))]
-green, ok = f"запись v3.3: строк hooks: и calls: мода limits — {len(cl64)}; моды mods/ без своих строк — {', '.join(no_lines) or 'нет'}", len(cl64) == 2 and not no_lines
+no_lines = [m for m in mods if not any(re.search(MOD_LINES.format(m=re.escape(m)), e + "\n") for e in (v32, v33, v34))]
+market = sorted(p["source"].removeprefix("./") for p in json.loads(read("mods/.claude-plugin/marketplace.json"))["plugins"])  # F8.3: мод в архиве из marketplace не ставится
+green, ok = (f"записи новее v3.3: строк hooks: и calls: мода window-guard — {len(cl64)}; моды mods/ без своих строк — {', '.join(no_lines) or 'нет'}; "
+             f"marketplace {'= mods/' if market == mods else 'не как mods/: ' + ', '.join(market)}"), len(cl64) == 2 and not no_lines and market == mods
 if shutil.which("claude"):
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}  # подписка; модели не зовутся
-    st = lambda: subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "mods/limits"], capture_output=True, text=True).stdout
+    st = lambda: subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "mods/window-guard"], capture_output=True, text=True).stdout
     before = st()
-    v = subprocess.run(["claude", "plugin", "validate", "mods/limits"], capture_output=True, text=True, timeout=120, env=env)
-    t = subprocess.run(["claude", "plugin", "test", "mods/limits"], capture_output=True, text=True, timeout=300, env=env)
+    v = subprocess.run(["claude", "plugin", "validate", "mods/window-guard"], capture_output=True, text=True, timeout=120, env=env)
+    t = subprocess.run(["claude", "plugin", "test", "mods/window-guard"], capture_output=True, text=True, timeout=300, env=env)
     vo, to = v.stdout + v.stderr, t.stdout + t.stderr
     vl = [re.sub(r"^[^.]*?(\./)", r"\1", l).strip() for l in vo.splitlines() if re.search(r"\./\S+ (?:hooks|calls): ", l)]
     passed = (re.search(r"Validation passed[^\n]*", vo) or [None])[0]
     tp, tf = (int(m.group(1)) if m else None for m in (re.search(r"(\d+) pass\b", to), re.search(r"(\d+) fail\b", to)))
     left = st() != before
-    ok = ok and v.returncode == 0 and passed and sorted(vl) == sorted(cl64) and f"«{passed}»" in v33 and t.returncode == 0 and tp and tf == 0 and not left
-    green += (f"; claude plugin validate mods/limits: rc {v.returncode}, «{passed or 'нет Validation passed'}», строк hooks:/calls: {len(vl)}, "
-              f"{'= CHANGELOG' if sorted(vl) == sorted(cl64) else 'не как в CHANGELOG: ' + '; '.join(vl)}; claude plugin test mods/limits: rc {t.returncode}, "
+    ok = ok and v.returncode == 0 and passed and sorted(vl) == sorted(cl64) and re.search(rf"`window-guard`[^\n]*«{re.escape(passed)}»", v34) and t.returncode == 0 and tp and tf == 0 and not left
+    green += (f"; claude plugin validate mods/window-guard: rc {v.returncode}, «{passed or 'нет Validation passed'}», строк hooks:/calls: {len(vl)}, "
+              f"{'= CHANGELOG' if sorted(vl) == sorted(cl64) else 'не как в CHANGELOG: ' + '; '.join(vl)}; claude plugin test mods/window-guard: rc {t.returncode}, "
               f"{tp} pass, {tf} fail; файлов после — {'остались' if left else 'нет'}")
 else:
     green += "; claude нет в PATH (CI) — проверены только строки CHANGELOG"
-r64 = f64(re.sub(r"(`limits`[^\n]*\n)(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n)+", r"\1", v33 + "\n"))
-item("F6.4", ok, green, not r64, f"запись v3.3 без строк мода — строк hooks: и calls: limits {len(r64)}")
+r64 = f64(re.sub(r"(`window-guard`[^\n]*\n)(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n)+", r"\1", v34 + "\n"))
+item("F6.4", ok, green, not r64, f"записи без строк мода — строк hooks: и calls: window-guard {len(r64)}")
 
 print("DOCS_OK" if all(out) else "DOCS_FAIL")
 sys.exit(0 if all(out) else 1)
