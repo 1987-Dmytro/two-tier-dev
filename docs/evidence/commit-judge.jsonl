@@ -119,3 +119,4 @@
 {"ts": "2026-11-07T09:06:14Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/SPEC-v3.4.md", "docs/STATUS.md", "docs/reviews/V3.4-review.md"], "score": null, "note": "abide check error TYPESAFE_AI_API_KEY", "diff": "2db3147ee5eaffa0", "ms": 1153}
 {"ts": "2026-11-07T09:16:54Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["kit/bin/check-harness"], "score": 0.37, "diff": "99a5b30b41174387", "ms": 8483}
 {"ts": "2026-11-07T09:35:16Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.1, "diff": "f125a83b2a1352ac", "ms": 1599}
+{"ts": "2026-11-07T09:57:27Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F1-check-harness-result.txt"], "score": 0.11, "diff": "3d48eb86a0776dcc", "ms": 2127}

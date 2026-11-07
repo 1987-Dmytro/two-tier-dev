@@ -1,0 +1,16 @@
+VERDICT: PASS
+FEATURES: F1
+/verify-phase · docs/SPEC-v3.4.md · HEAD 62f123a · проверяющие claude-sonnet-5-5 (фич 1 из 8, опровергателей 0) · судья claude-opus-5-5
+
+F1 на HEAD 62f123a доказана: свежий прогон `bin/check-harness items` зелёный с маркером, `docs/evidence/F1-check-harness-result.txt` начинается `spec: SPEC-v3.4` и несёт `GATE_HOOK_OK` и строки F1.1–F1.5, собственные пробы проверяющего подтвердили все пять пунктов, а мутация `ofSpec` покраснела в чеке. Кандидатов в блокирующие после опровержения нет, нарушений инвариантов §3 по этой фиче не найдено, а три оставшиеся находки лежат вне пунктов и «готово», поэтому не блокируют.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- `caps.same_list = 0` в `.claude/spec-gate.json` превращает каждый block в pass (no-progress после 0 блоков): скрытая ошибка конфигурации файла тимлида, по умолчанию 3, вне «готово» F1.2.
+- Фоновая задача судится только по типу: monitor или shell со статусом completed/failed всё равно отпускает ход; совпадение типа точное ('Monitor', 'monitor ' идут в суд); непустая строка в session_crons считается cron-pass. F1.1 называет только тип, поэтому это вне пунктов.
+- `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP=-5` пишется в журнал как `platform_cap=-5`: поле справочное, на решения не влияет, косметика.
+
+## По фичам
+- F1: чек `bin/check-harness items` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутация kit/.claude/hooks/spec-gate.mjs: ofSpec in decide(): `ls[0] === `spec: ${specName}`` changed to `ls.includes(`spec: ${specName}`)` (the spec: line counts anywhere in the evidence file, not only as the first line; F1.3) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0

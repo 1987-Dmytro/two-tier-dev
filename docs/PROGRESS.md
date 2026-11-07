@@ -1,7 +1,7 @@
 # PROGRESS — two-tier-dev, SPEC-v3.4 «кит под вкладкой Code» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — плечо 1, F1–F4 построены, graphify в ките, F1 ждёт решения по abide
-**Сделано:** шаг 0 и F1–F4: судья конца хода, линты, замок и паспорт, окно и канарейка; мутации разобраны и починены; `/code-review`: 10 находок, 7 починены (`6b089d2`), названы 3: F1.5 — реплей формы Stop input, вечный `shell` в фоне, срез журнала `bin/check-live`. Окно 5 ч снято (`1e31e90`). Круг `verify-phase` на `be5c7a5`: F4 — PASS; F1 F2 F3 — NEEDS_WORK из-за `ENV_FAIL`. Решение 396: таблица и Chromium 1254 поправлены — `ENV_OK`. Graphify встроен в кит по слову оператора (`9538f7c`–`ee7a5a8`, `GRAPH_OK`, CI зелёный). **Следующий шаг оператора:** ответ на вопрос стопа ниже. **Когда закончим:** плечо 1 — точечный `bin/verify-phase F1`, затем строка `STOP: STOP-TL «Leg 1»`.
+## Голова — плечо 1 закрыто, идёт плечо 2
+**Сделано:** плечо 1: шаг 0, F1–F4 (судья конца хода, линты, замок и паспорт, окно и канарейка), мутации, `/code-review` (10 находок, 7 починены `6b089d2`, названы 3: F1.5 — реплей формы Stop input, вечный `shell` в фоне, срез журнала `bin/check-live`), окно 5 ч снято (`1e31e90`), graphify в ките (`9538f7c`–`ee7a5a8`), решения 396, 397. Голый `bin/check-harness` — все маркеры OK. Круг `verify-phase`: F4 — PASS на `be5c7a5`, F1 — PASS на `62f123a`; F2, F3 — NEEDS_WORK на `be5c7a5` только из-за `ENV_FAIL` F1, блокирующих по своим пунктам нет. **Следующий шаг оператора:** нет — слово на плечо 2 дано 07.11. **Когда закончим:** плечо 2 — строкой `STOP: STOP-TL «Leg 2»` в этом файле.
 
 ## Done
 - Шаг 0 (`5944469`): `git mv` PROGRESS → `docs/archive/PROGRESS-v3.3-2026-11-06.md`, evidence и вердикты v3.3 → `docs/archive/evidence-v3.3/`; `docs/PLAN-v3.4.md`.
@@ -11,12 +11,12 @@
 - **F4 Fenster & Kanarienvogel** (`598b336`, `e6c1958`, `6b089d2`): `bin/check-kit fenster` → `FENSTER_OK` — `docs/evidence/F4-check-kit-result.txt`.
 
 ## Next — один айтем
-1. **Точечный `bin/verify-phase F1`** после ответа оператора по `COMMIT_FAIL`: вердикт в `docs/evidence/`.
+1. **F5 → F6 (F6.2–F6.4, остаток F6.1) → F7 → F8**, PLAN «К плечу 2»; `/code-review`, круг `verify-phase` F5 F6 F7 и F8, отчёт фазы, `bin/gate-v3.4`.
 
-## Open stop — STOP-INPUT
-STOP: STOP-INPUT «Leg 1 — живой abide в commit»: голый `bin/check-harness` на `ee7a5a8` — `ENV_OK`, `HARNESS_OK`, `HOOKS_OK`, `GATE_HOOK_OK`, `ITEMS_OK`, красный один `COMMIT_FAIL`: `F2.4 FAIL: … заметка (4 проб.) — rc 0 «»` и `F2.5 FAIL: … no-secret-values —`. Это живой суд abide в пробах v3.3, код плеча их не трогал; четыре прогона — красное каждый раз в другом месте, напрямую abide отвечает за 1,2 с (журнал — PLAN).
-Вопрос оператору: принять `COMMIT_FAIL` как стохастику живого abide и идти в точечный `bin/verify-phase F1` или прогнать голый `bin/check-harness` ещё раз позже?
-Resume: «Продолжай по SPEC-v3.4: COMMIT принят — точечный круг F1, затем STOP-TL» или «Продолжай по SPEC-v3.4: ещё прогон голого bin/check-harness, затем круг F1».
+## Open stop — STOP-TL «Leg 1»
+STOP: STOP-TL «Leg 1» — плечо 1 построено, круг сделан: F1 и F4 PASS, F2 и F3 без своих блокирующих; голый `bin/check-harness`, `make ci` зелёные.
+Вопрос тимлиду: читать плечо 1 сейчас или вместе с плечом 2 на `STOP-TL «Leg 2»`?
+Resume: «Продолжай по SPEC-v3.4 с F5» — слово оператора на плечо 2 дано 07.11, сессия идёт дальше сама.
 
 ## Notes
 - Старт: CLI 2.1.316, вкладка Code; стартовый контекст (S2): SPEC 23 516 + kit-fixes 14 494 + `CLAUDE.md` 2 873 — 40 883 из 50 000 знаков; стартовый запрос 3 972.
@@ -29,6 +29,7 @@ Resume: «Продолжай по SPEC-v3.4: COMMIT принят — точеч�
 - Слово оператора 07.11: graphify доделать и встроить в кит — `.githooks/post-commit` (`graphify update .` в фоне, если граф есть: AST, без модели и сети, только `graphify-out/`), первая сборка в `bin/two-tier-init`, строки отчёта апгрейда, `HARNESS_WARN graph-age` в `bin/check-harness`, `bin/check-kit graph` → `GRAPH_OK`. Вход Claude Code истёк посреди прогона (`OAuth session expired`) — оператор вошёл заново.
 - Слово оператора 07.11: разработка — в приложении (вкладка Code, движок 2.1.317 приложения), CLI на PATH зовут только скрипты кита (`verify-phase`, пары `check-harness`, `check-window`); оператор обновил CLI до 2.1.319, 2.1.316 остался на диске. Автообновление в ките — сверка версий CLI, приложения и последней с командой `claude update` (F6.1), скрипты ничего не ставят.
 - Решение 397: живой abide в разделе commit харнеса — `COMMIT_WARN` с числами, FAIL — неверный ответ судьи. Развилка: таймаут или ошибка abide на печати ключа — не ответ судьи, а пропуск (механизм пропуска верен): WARN «печать ключа без ответа», не FAIL; FAIL — судья ответил и не отказал.
+- Круг F1 на `62f123a` (CLI 2.1.319) — 827 с, 167 161 токен, PASS. Названо кругом: `caps.same_list = 0` делает из блока pass (файл тимлида); `monitor`/`shell` со статусом completed отпускает ход — буква F1.1; `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP=-5` в журнале — косметика.
 - Решение 396 (`7c34be5`): голый `bin/check-harness` на нём — `OK run2: system/init = таблица`, `HARNESS_OK`, `HOOKS_OK`, `GATE_HOOK_OK`, `ITEMS_OK`, `COMMIT_OK`, красный один `jev-browser`; вывод — `docs/evidence/F1-check-harness-result.txt`.
 - Тимлиду: `bin/check-ui` пинит `jev-browser@0.1.2`, а его `playwright ^1.63.0` плавает: ревизия Chromium зависит от кэша npx под /tmp и может уехать после чистки /tmp. Совет пакета `npx playwright install chromium` ставит другую ревизию: так вышло в этот раз. `frozen.json` — в `owner` корня на приёмке.
 - `bin/check-harness env` на этой вкладке → `ENV_FAIL` не от правок плеча: таблица `docs/PROCESS.md` (файл тимлида) расходится с профилем v3.4 (ponytail, pr-review-toolkit, pyright-lsp — «да», сняты по SPEC §1; `limits` — «нет», включён в launch settings; скилл graphify — «да», не ставится), и нет Chromium для Playwright в домашнем кэше (`bin/check-ui`). PROCESS (g): таблицу правит тимлид, установку — оператор.
