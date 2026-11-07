@@ -12,8 +12,7 @@
 - **F3 Geschlossene Module** (`0adcfe5`, `2ba0dcb`, `6b089d2`): `bin/check-kit frozen` → `FROZEN_OK` — `docs/evidence/F3-check-kit-result.txt`.
 - **F4 Fenster & Kanarienvogel** (`598b336`, `e6c1958`, `6b089d2`): `bin/check-kit fenster` → `FENSTER_OK` — `docs/evidence/F4-check-kit-result.txt`.
 - **F5 Paar & Metriken** (`b2fbce2`, `d2b7961`, `cc59bf6`): `bin/check-kit paar` → `PAAR_OK`, F5.3 `offen` до второго круга на ≥ 2.1.318 — `docs/evidence/F5-check-kit-result.txt`.
-- **F6 Desktop** (`10875bd`, `1a9ca35`, `cc59bf6`), **F7 Risk & Evals** (`749c6e9`, `d2b7961`, `cc59bf6`), **F8 Dokumente, Mods & Gate** (`e145112`, `acadf13`, `1a9ca35`, `cc59bf6`): код — да; evidence — после входа.
-- PLAN «К плечу 2»: F3.4 (`5acb911`, `c8b6649`), F2.1 (`b2fbce2`, `d2b7961`), F5.5 (`b2fbce2`).
+- **F6 Desktop** (`10875bd`, `1a9ca35`, `cc59bf6`), **F7 Risk & Evals** (`749c6e9`, `d2b7961`, `cc59bf6`), **F8 Dokumente, Mods & Gate** (`e145112`, `acadf13`, `1a9ca35`, `cc59bf6`): код — да; evidence — после входа. PLAN «К плечу 2»: F3.4 (`5acb911`, `c8b6649`), F2.1 и F5.5 (`b2fbce2`, `d2b7961`).
 
 ## Next — один айтем
 1. После входа: голый `bin/check-harness` и `--desktop`, evidence F1, F6, F7, F8; круги `F5 F7` и `F6 F8`; `bin/phase-report`, `bin/gate-v3.4`, `make ci`; `STOP-TL «Leg 2»`.
@@ -22,12 +21,10 @@
 STOP: STOP-INPUT «Leg 2 — вход CLI, профиль, моды» — вложенные `claude -p` не идут (вход CLI истёк), а `--desktop` и голый харнесс красны от профиля тимлида, названного на снятый `limits`.
 Вопрос оператору и тимлиду: всё из списка ниже сделано, и как решены записи реестра плагинов — оставить `true` у модов или `false`?
 Resume: Продолжай по SPEC-v3.4 с evidence F1, F6, F7, F8: вход дан, реестр — решение оператора.
-
 **Оператору, по порядку** (скрипты этого не делают: правило 4):
 1. `claude auth login`.
 2. `claude plugin uninstall limits@two-tier-mods --scope user`, затем `claude plugin marketplace update two-tier-mods`, затем `claude plugin install window-guard@two-tier-mods --scope user` и `claude plugin install phase-start@two-tier-mods --scope user`. Записи уровня user у обоих модов уже есть (побочный эффект, Notes), `enabledPlugins` — ещё нет.
 3. После правки тимлида: `cp .claude/launch.settings.json .claude/settings.local.json`, новая сессия вкладки.
-
 **Тимлиду, файлы его:**
 - `.claude/launch.settings.json`: `limits@two-tier-mods` → `false`, добавить `window-guard@two-tier-mods` и `phase-start@two-tier-mods` → `true`; в `skillOverrides` — `"graphify": "off"`, `"anthropic-skills:artifact-emulator": "off"` (или строка таблицы).
 - `docs/PROCESS.md`: строку `limits` → две строки, как `kit/docs/PROCESS.template.md:23-24`; список `enabledPlugins` в профиле; строка `graphify`.
