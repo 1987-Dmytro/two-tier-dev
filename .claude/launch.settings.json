@@ -13,7 +13,9 @@
     "typesafe@typesafe-ai": true,
     "jev-belay@jev-belay": true,
     "handoff@two-tier-mods": true,
-    "limits@two-tier-mods": true,
+    "window-guard@two-tier-mods": true,
+    "phase-start@two-tier-mods": true,
+    "limits@two-tier-mods": false,
     "ponytail@ponytail": false,
     "pr-review-toolkit@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": false,
@@ -74,7 +76,9 @@
     "anthropic-skills:team-lead": "off",
     "anthropic-skills:team-lead-brief": "off",
     "anthropic-skills:team-lead-spec": "off",
-    "anthropic-skills:xlsx": "off"
+    "anthropic-skills:xlsx": "off",
+    "graphify": "off",
+    "anthropic-skills:artifact-emulator": "off"
   },
   "permissions": {
     "deny": [

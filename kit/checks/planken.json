@@ -39,5 +39,29 @@
   "pair": {
     "max_diff_p50_ms": null,
     "max_diff_p95_ms": null
-  }
+  },
+  "vendor_words": [
+    "вендор",
+    "vendor",
+    "Google",
+    "Gemini",
+    "Speech",
+    "TTS",
+    "STT",
+    "Jev",
+    "TypeSafe",
+    "OpenAI",
+    "Anthropic",
+    "API"
+  ],
+  "deploy_words": [
+    "make deploy",
+    "DEPLOY_OK",
+    "LIVE_OK",
+    "ROLLBACK_OK",
+    "окно деплоя",
+    "Fenster",
+    "на линию",
+    "на номер"
+  ]
 }
