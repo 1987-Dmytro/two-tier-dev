@@ -43,7 +43,7 @@ const MTIME: Record<string, number> = { 'verify-aaaaaaa-F1.txt': 1, 'verify-bbbb
 
 // The engine beneath the mod: files under /repo (mutable between calls), what the session draws on, and what the mod asked of it.
 const seat = (on: any, { files = fixture(), surfaces = [] as string[] } = {}) => {
-  const seen = { files, surfaces, statuses: [] as unknown[], opened: [] as string[], registered: [] as string[], reads: 0, clock: mock.clock(on, { now: 0 }) }
+  const seen = { files, surfaces, statuses: [] as unknown[], opened: [] as string[], registered: [] as string[], reads: 0, git: null as string | null, repoFails: false, clock: mock.clock(on, { now: 0 }) }
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
   on('session.attach', () => ({}))
   on('command.register', ($: any, e: any) => {
@@ -51,7 +51,10 @@ const seat = (on: any, { files = fixture(), surfaces = [] as string[] } = {}) =>
     return { value: { command: e.name } }
   })
   on('session.root', () => ({ value: '/repo' }))
-  on('session.repo', () => ({ value: { root: '/repo', remote: null, internal: false } }))
+  on('session.repo', () => {
+    if (seen.repoFails) throw new Error('gone')
+    return { value: { root: '/repo', remote: null, internal: false } }
+  })
   on('session.surfaces', () => ({ value: seen.surfaces }))
   on('fs.read', ($: any, e: any) => {
     seen.reads += 1
@@ -71,6 +74,10 @@ const seat = (on: any, { files = fixture(), surfaces = [] as string[] } = {}) =>
     seen.opened.push(e.id)
     return { value: { isPlaced: true } }
   })
+  on('process.run', ($: any, e: any) => {
+    expect(e.argv.slice(0, 2)).toEqual(['git', 'log'])
+    return seen.git === null ? { deny: 'no git' } : { value: { exitCode: 0, stdout: seen.git, stderr: '' } }
+  })
   on('tool.call', () => ({ result: {} }))
   return seen
 }
@@ -89,6 +96,8 @@ test('markOf: a probe line is green, FAIL, BAD or offen is red, an id alone or a
   expect(markOf('F1.1', [['F1.1 FAIL: x']]).mark).toBe('red')
   expect(markOf('F1.1', [['F1.1 BAD x']]).mark).toBe('red')
   expect(markOf('F1.1', [['F1.1 offen · claude нет']]).mark).toBe('red')
+  expect(markOf('F3.5', [['F3.5 telefon=offen · клона нет']]).mark).toBe('red')
+  expect(markOf('F3.1', [['F3.1 verboten=OK offen=OK cap=OK']]).mark).toBe('green')
   expect(markOf('F1.1', [['F1.1 ok=FAIL-free']]).mark).toBe('green')
   expect(markOf('F1.1', [['F1.1'], ['F1.10 ok'], ['xF1.1 ok']]).mark).toBe('none')
 })
@@ -114,6 +123,7 @@ test('a probe line removed: board=1/1/2 after the next tool call', async ($, on)
   const seen = seat(on)
   await start($)
   seen.files['docs/evidence/F2-b-result.txt'] = F2.replace('F2.1 ok=1 · сырой вывод\n', '')
+  await seen.clock.advance(5_000)
   await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect(last(seen)).toBe('board 1/1/2 · маркеров 2/2 · gate block 3 missing · PASS F1,F2 · STOP-TL «Leg 3»')
 })
@@ -122,6 +132,7 @@ test('a marker line removed: the feature has no marker', async ($, on) => {
   const seen = seat(on)
   await start($)
   seen.files['docs/evidence/F1-a-result.txt'] = F1.replace('A_OK\n', '')
+  await seen.clock.advance(5_000)
   await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect(last(seen)).toContain('маркеров 1/2')
 })
@@ -139,6 +150,7 @@ test('the verdict is the newest verify file of this SPEC; another SPEC newer doe
   await start($)
   expect(last(seen)).toContain('NEEDS_WORK F1')
   delete seen.files['docs/evidence/verify-aaaaaaa-F1.txt']
+  await seen.clock.advance(5_000)
   await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect(last(seen)).toContain('вердикта нет')
 })
@@ -182,6 +194,7 @@ test('a host that attaches a surface later draws from then on', async ($, on) =>
   await start($, false)
   expect(seen.statuses).toEqual([])
   seen.surfaces.push('desktop')
+  await seen.clock.advance(5_000)
   await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect(last(seen)).toContain('board 2/1/1')
 })
@@ -191,6 +204,7 @@ test('a subagent tool call does not redraw', async ($, on) => {
   await start($)
   const before = seen.statuses.length
   seen.files['docs/evidence/F2-b-result.txt'] = F2.replace('F2.1 ok=1 · сырой вывод\n', '')
+  await seen.clock.advance(5_000)
   await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a1' })
   expect(seen.statuses.length).toBe(before)
 })
@@ -200,4 +214,39 @@ test('a value an earlier version stored is declined: the pane draws the empty bo
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text' }))?.text).toBe('board: нет фазы (docs/PROMPT.txt без SPEC в Read first) · gate — · —')
   await ui.unmount()
+})
+
+test('the verdict follows git order, newest commit first, when every file has the same time (a fresh clone)', async ($, on) => {
+  const seen = seat(on)
+  for (const k of Object.keys(MTIME)) MTIME[k] = 5
+  seen.git = 'docs/evidence/verify-aaaaaaa-F1.txt\n\ndocs/evidence/verify-ccccccc.txt\ndocs/evidence/verify-bbbbbbb.txt\n'
+  await start($)
+  expect(last(seen)).toContain('NEEDS_WORK F1')
+  seen.git = 'docs/evidence/verify-bbbbbbb.txt\ndocs/evidence/verify-aaaaaaa-F1.txt\n'
+  await seen.clock.advance(60_000)
+  expect(last(seen)).toContain('PASS F1,F2')
+  Object.assign(MTIME, { 'verify-aaaaaaa-F1.txt': 1, 'verify-bbbbbbb.txt': 3, 'verify-ccccccc.txt': 9 })
+})
+
+test('tool calls closer than 5 s read the files once; the next one after the gap reads them again', async ($, on) => {
+  const seen = seat(on)
+  await start($)
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  const reads = seen.reads
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(seen.reads).toBe(reads)
+  await seen.clock.advance(5_000)
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(seen.reads).toBeGreaterThan(reads)
+})
+
+test('a failed read keeps the last board and the call stands', async ($, on) => {
+  const seen = seat(on)
+  await start($)
+  const before = seen.statuses.length
+  seen.repoFails = true
+  await seen.clock.advance(5_000)
+  const r = await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(r.isError).not.toBe(true)
+  expect(seen.statuses.length).toBe(before)
 })

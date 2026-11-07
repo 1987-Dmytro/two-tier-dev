@@ -2,7 +2,7 @@
 // /board opens a pane: the items F<n>.<k> of the phase SPEC against the probe lines of docs/evidence/*-result.txt (green · red · no
 // line), the feature markers, the last spec-gate decision, the newest verdict of this SPEC and the open STOP; the same summary goes to
 // the status line. The data are the files spec-gate judges (./board.ts), read from disk: no model, no network.
-// Redrawn after each tool call of the main loop and every minute. Who draws: a person's session — the REPL, or a host that attached a
+// Redrawn after a tool call of the main loop (at most every 5 s) and every minute. Who draws: a person's session — the REPL, or a host that attached a
 // surface (the Code tab starts as the SDK does: isInteractive false, a surface later). A `claude -p` run and a subagent's tool calls
 // draw nothing; /board still answers its line there. No .catch: on its own error a hook is skipped and the tool call stands (kit rule).
 
@@ -13,6 +13,7 @@ import { EMPTY, boardOf, specPathOf, statusOf } from './board'
 
 const PANE = 'spec-board'
 const EVERY_MS = 60_000
+const CALL_GAP_MS = 5_000 // after a tool call the files are read again at most this often; the clock catches the rest
 // Change the tag when Board's fields change: it declines what an earlier version stored, which outlives a reload.
 const board = atom({ plugin: 'spec-board', key: 'board' } as const, EMPTY, { shape: 'board-1' })
 
@@ -40,7 +41,15 @@ async function collect($: EngineInterface): Promise<Board> {
     const text = await readOr($, `${root}/docs/evidence/${e.name}`)
     if (text !== undefined) evidence.push({ name: e.name, text, mtimeMs: e.mtimeMs })
   }
+  let order: string[] | undefined
+  try {  // the verdicts in commit order, newest first: a fresh clone gives every file the same mtime
+    const r = await $.process.run(['git', 'log', '--format=', '--name-only', '--diff-filter=A', '--', 'docs/evidence'], { cwd: root })
+    order = r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.slice(l.lastIndexOf('/') + 1)) : undefined
+  } catch {
+    order = undefined
+  }
   return boardOf({
+    order,
     prompt,
     spec: rf ? await readOr($, `${root}/${rf}`) : undefined,
     evidence,
@@ -56,7 +65,12 @@ async function isPersons($: EngineInterface, isAttended: boolean): Promise<boole
 // Recompute, store for the pane, and set the status line — only where a person sees it.
 async function refresh($: EngineInterface, isAttended: boolean): Promise<Board | undefined> {
   if (!(await isPersons($, isAttended))) return undefined
-  const b = await collect($)
+  let b: Board
+  try {
+    b = await collect($)
+  } catch {
+    return undefined // the board is a view: a failed read leaves the last drawing and never touches the call or the timer
+  }
   await update($, board, () => b)
   $.ui.status(statusOf(b))
   return b
@@ -64,6 +78,7 @@ async function refresh($: EngineInterface, isAttended: boolean): Promise<Board |
 
 export const register: Register = on => {
   let isAttended = false // the REPL, or a surface attached once
+  let lastAt = -Infinity // the last refresh after a tool call
 
   on('session.start', async ($, e, next) => {
     isAttended ||= e.isInteractive
@@ -82,12 +97,10 @@ export const register: Register = on => {
 
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    if (e.agentId === undefined) {
-      try {
-        await refresh($, isAttended)
-      } catch {
-        // the board is a view: its own failure never touches the call
-      }
+    const now = await $.clock.now()
+    if (e.agentId === undefined && now - lastAt >= CALL_GAP_MS) {
+      lastAt = now
+      await refresh($, isAttended)
     }
     return ran
   })

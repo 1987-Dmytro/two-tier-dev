@@ -14,6 +14,7 @@ export type Files = {
   evidence: ReadonlyArray<{ name: string; text: string; mtimeMs: number }>
   gateLog: string | undefined
   progress: string | undefined
+  order?: readonly string[] // evidence files, newest commit first (git log); a file not in it — newer still; no list — by mtime
 }
 
 export function specPathOf(prompt: string): string | undefined {
@@ -48,7 +49,7 @@ export function featuresOf(spec: string): Array<{ id: string; marker: string | n
 export function markOf(id: string, files: ReadonlyArray<readonly string[]>): { mark: Mark; line: string } {
   for (const lines of files) {
     const line = lines.find(l => l.startsWith(`${id} `) && l.length > id.length + 1)
-    if (line) return { mark: /^\S+ (?:FAIL|BAD|offen)\b/.test(line) ? 'red' : 'green', line }
+    if (line) return { mark: /^\S+ (?:FAIL|BAD|(?:[a-z_]+=)?offen)(?:\s|:|$)/.test(line) ? 'red' : 'green', line }  // offen — и формой ключ=offen, как offen() гейта
   }
   return { mark: 'none', line: '' }
 }
@@ -64,11 +65,12 @@ function gateOf(log: string | undefined): string {
   }
 }
 
-function verdictOf(files: Files['evidence'], specPath: string): string {
+function verdictOf(files: Files['evidence'], specPath: string, order: readonly string[] | undefined): string {
+  const rank = (name: string) => (order ? (order.includes(name) ? order.indexOf(name) : -1) : 0)
   const own = files
     .filter(f => /^verify-[0-9a-f]{7,40}(?:-[\w.-]+)?\.txt$/.test(f.name))
     .filter(f => baseName((f.text.match(/^\/verify-phase · (\S+) · /m) || [])[1] || '') === baseName(specPath))
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]
+    .sort((a, b) => rank(a.name) - rank(b.name) || b.mtimeMs - a.mtimeMs)[0]
   if (!own) return 'вердикта нет'
   const verdict = (own.text.match(/^VERDICT: (\S+)/m) || [])[1] || '?'
   const scope = (own.text.match(/^FEATURES:\s*(.+)$/m) || [])[1]
@@ -104,7 +106,7 @@ export function boardOf(files: Files): Board {
     features,
     counts: [count('green'), count('red'), count('none')],
     gate: gateOf(files.gateLog),
-    verdict: verdictOf(files.evidence, specPath),
+    verdict: verdictOf(files.evidence, specPath, files.order),
     stop: stopOf(files.progress),
   }
 }
