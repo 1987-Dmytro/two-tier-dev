@@ -25,6 +25,8 @@
     F8.1 — запись v3.4 над v3.3: строка таблицы на поле харнеса (https-источник, до и после), строка на снятое, «вошло → вышло» (SPEC §3),
            блок модов и переехавшие строки Unreleased; README, LAUNCH, dev-system называют механизмы фазы, их ссылки живые: docs=4;
            красное — на копии в памяти без поля, без снятого, без ячейки «вышло», без слова документа, с мёртвой ссылкой;
+           хук .mjs настроек кита вне списка v3.2 — строкой таблицы с источником в записях новее v3.3 (красное — хук без строки, запись без строки хука, строка без источника);
+           шаг копии профиля вкладки — в docs/LAUNCH.md и bin/two-tier-init;
     F8.2 — bin/check-budget --templates зелёный, строки модов и профиль кита; шаблон SPEC §2–§5 и (ae)–(ah) против клона telefon
            (TELEFON_CLONE, нет его — сказано в строке): строка telefon есть в ките или это названная дельта; красное — копия кита во
            /tmp/two-tier-v3 без каждой фразы договора, шаблон без строки доводки против telefon, профиль с выключенным модом.
@@ -261,7 +263,7 @@ item("F6.4", ok, green, not r64, f"записи без строк мода — �
 
 # ── v3.4 (SPEC-v3.4 F8) ──────────────────────────────────────────────────────────────────────────────────────────────────────
 FIELDS34 = ["background_tasks", "platform_cap", "permissions.blockWritesOutsideWorkingDirectories", "effortLevel", "ultracode",
-            "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_SUBAGENT_EFFORT", "PermissionDenied", "{features, prior}"]
+            "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_SUBAGENT_EFFORT", "PermissionDenied", "{features, prior}", "unifiedWindows", "enabledPlugins", "post-commit"]
 RETIRED34 = ["K30", "P1-4", "ultrareview", "blocks 12", "caps.hours", "window_five_hour_pct", "window_repair_pct", "mods/limits"]
 IN34 = ["background_tasks", "PermissionDenied", "blockWritesOutsideWorkingDirectories", "effortLevel", "ultracode", "CLAUDE_CODE_SUBAGENT_MODEL",
         "CLAUDE_CODE_SUBAGENT_EFFORT", "planka-source", "scope-growth", "planken-inline", "frozen-paths", "risk-tier", "window-guard", "phase-start"]
@@ -282,6 +284,8 @@ def f81_log(cl):
     rows2 = [[c.strip() for c in r.strip().strip("|").split("|")] for r in e.splitlines() if r.startswith("|") and r.count("|") == 3]
     good = lambda c: "https://" in c[2] and all(x not in ("", "—", "-") for x in c[3:5])
     bad = [f"поле {f}" for f in FIELDS34 if not any(f in c[0] and good(c) for c in rows5)]
+    opens = lambda c: re.search(r"https://[^)\s]*#", c[2]) or "измерено" in c[2] or "Source sweep" in c[2]  # источник открывается: якорь, сверка или своя проба (чтение F8.1)
+    bad += [f"источник без якоря {f}" for f in FIELDS34 if any(f in c[0] and good(c) and not opens(c) for c in rows5)]
     bad += [] if any("CLAUDE_CODE_SUBAGENT_EFFORT" in c[0] and "changelog only" in c[2] for c in rows5) else ["CLAUDE_CODE_SUBAGENT_EFFORT без «changelog only»"]
     bad += [f"снятое {r}" for r in RETIRED34 if not any(l.startswith("  - ") and f"`{r}`" in l and " — " in l for l in e.splitlines())]
     bad += [f"вошло без вышло {i}" for i in IN34 if not any(i in c[0] and c[1] not in ("", "—", "-") for c in rows2)]
@@ -306,6 +310,7 @@ def drop(text, pred):
 
 
 r_field = f81_log(drop(CL, lambda l: l.startswith("| ") and "PermissionDenied" in l.split("|")[1]))
+r_anchor = f81_log(re.sub(r"^\| workflow `args`.*$", lambda m: re.sub(r"#[\w-]+", "", m[0]), CL, flags=re.M))
 r_ret = f81_log(drop(CL, lambda l: l.startswith("  - `P1-4`")))
 r_out = f81_log(re.sub(r"^(\| lint `risk-tier`[^|]*\|)[^|]*\|$", r"\1 — |", CL, flags=re.M))
 r_mod = f81_log(CL.replace("- `phase-start` 0.1.0 (`mods/phase-start`), «Validation passed»:", "- phase-start, «Validation passed»:"))
@@ -314,10 +319,33 @@ r_dead = f81_doc("README.md", rd + "\n[пропавший](docs/no-such-file.md)
 item("F8.1", n_docs == 4 and not g34,
      f"docs={n_docs} · CHANGELOG: полей с источником и до/после {len(FIELDS34)}, снятых строкой {len(RETIRED34)}, вошло → вышло {len(IN34)}, строки Unreleased и моды в записи; "
      f"README.md, docs/LAUNCH.md, docs/dev-system.ru.md: слов фазы {sum(map(len, NEED81.values()))}; расхождения — {'; '.join(g34 + [x for v in g_docs.values() for x in v]) or 'нет'}",
-     "поле PermissionDenied" in r_field and "снятое P1-4" in r_ret and "вошло без вышло risk-tier" in r_out and "не в записи `phase-start` 0.1.0" in r_mod
+     "поле PermissionDenied" in r_field and "источник без якоря {features, prior}" in r_anchor and "снятое P1-4" in r_ret and "вошло без вышло risk-tier" in r_out and "не в записи `phase-start` 0.1.0" in r_mod
      and r_word == ["docs/LAUNCH.md: blockWritesOutsideWorkingDirectories"] and r_dead == ["README.md: мёртвая docs/no-such-file.md"],
-     f"без строки поля — {'; '.join(r_field)}; без строки снятого — {'; '.join(r_ret)}; без ячейки «вышло» — {'; '.join(r_out)}; без блока мода — {'; '.join(r_mod)}; "
+     f"без строки поля — {'; '.join(r_field)}; источник без якоря — {'; '.join(r_anchor)}; без строки снятого — {'; '.join(r_ret)}; без ячейки «вышло» — {'; '.join(r_out)}; без блока мода — {'; '.join(r_mod)}; "
      f"LAUNCH без поля — {'; '.join(r_word)}; README с мёртвой ссылкой — {'; '.join(r_dead)}")
+
+
+
+def new_hooks(settings, log):
+    """(хуки .mjs настроек вне списка v3.2, те из них без строки таблицы текста log: имя в первой ячейке, https-источник)."""
+    rows = [[c.strip() for c in r.strip().strip("|").split("|")] for r in log.splitlines() if r.startswith("| ") and r.count("|") >= 6]
+    new = sorted(set(re.findall(r"[\w-]+\.mjs", json.dumps(settings.get("hooks", {})))) - set(need32))
+    return new, [h for h in new if not any(h in c[0] and "https://" in c[2] for c in rows)]
+
+
+s34 = json.loads(read("kit/.claude/settings.json"))
+new34, miss34 = new_hooks(s34, v34)
+r_hook = new_hooks({"hooks": {**s34["hooks"], "Probe": [{"hooks": [{"command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/undocumented-new.mjs"]}]}]}}, v34)[1]
+r_row = new_hooks(s34, drop(v34, lambda l: l.startswith("| ") and "permission-denied.mjs" in l))[1]
+r_src = new_hooks(s34, re.sub(r"^(\| [^|\n]*permission-denied\.mjs[^|\n]*\|[^|\n]*\|)[^|\n]*\|", r"\1 — |", v34, flags=re.M))[1]
+say(not miss34 and r_hook == ["undocumented-new.mjs"] and r_row == r_src == ["permission-denied.mjs"], "CHANGELOG новее v3.3",
+    f"хуков .mjs кита вне списка v3.2 — {', '.join(new34) or 'нет'}; без строки с источником — {', '.join(miss34) or 'нет'} · красный образец: кит с новым хуком — без строки: {', '.join(r_hook) or 'нет'}; "
+    f"запись без строки хука — без строки: {', '.join(r_row) or 'нет'}; строка без источника — без строки: {', '.join(r_src) or 'нет'}")
+COPY_STEP = "cp .claude/launch.settings.json .claude/settings.local.json"
+no_step = [d for d in ("docs/LAUNCH.md", "bin/two-tier-init") if COPY_STEP not in read(d)]
+ci_target = re.search(r"^ci:\n((?:\t.*\n)+)", read("Makefile"), re.M)
+say(bool(ci_target) and "bin/check-gate" in ci_target[1], "Makefile ci", "цель ci идёт через bin/check-gate")
+say(not no_step, "профиль вкладки", f"шаг копии «{COPY_STEP}»: нет в — {', '.join(no_step) or 'ничего'}")
 
 TMP = "/tmp/two-tier-v3"
 TELEFON = os.environ.get("TELEFON_CLONE", f"{TMP}/telefon-src")

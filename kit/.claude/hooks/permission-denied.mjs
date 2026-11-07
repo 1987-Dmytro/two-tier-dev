@@ -11,7 +11,7 @@ import path from 'node:path'
 
 function ruleOf(reason) {
   const text = String(reason ?? '')
-  const bracket = text.match(/^\[([^\]\n]+)\]/)
+  const bracket = text.match(/^\[([A-Z][A-Za-z -]{0,60})\]/)
   if (bracket) return bracket[1]
   if (text.startsWith('Auto mode could not evaluate this action')) return 'no-verdict'
   return text === 'Classifier unavailable' ? 'unavailable' : 'other'
@@ -25,7 +25,7 @@ function main() {
   const session = createHash('sha256').update(String(input.session_id || '')).digest('hex').slice(0, 8)
   const rule = ruleOf(input.reason)
   const old = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).flatMap(l => { try { return [JSON.parse(l)] } catch { return [] } }) : []
-  const n = old.filter(l => l.session === session && l.rule === rule).length + 1
+  const n = old.filter(l => l?.session === session && l?.rule === rule).length + 1
   fs.mkdirSync(path.dirname(logPath), { recursive: true })
   fs.appendFileSync(logPath, JSON.stringify({ ts: new Date().toISOString(), session, tool: input.tool_name, rule, n }) + '\n')
 }

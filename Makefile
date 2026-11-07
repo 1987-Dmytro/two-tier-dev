@@ -8,3 +8,4 @@ ci:
 	bin/check-harness --self-test
 	bin/check-kit
 	bin/check-docs
+	bin/check-gate

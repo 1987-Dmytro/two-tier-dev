@@ -18,7 +18,7 @@ def key(v):
 
 def asked(*cmd):
     try:
-        r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=TIMEOUT)
+        r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace", timeout=TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return None
     m = VERSION.match(r.stdout.strip()) if r.returncode == 0 else None

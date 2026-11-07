@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# gate-v3.4 — гейт кита v3.4 (SPEC-v3.4 F7.4, F8.5). Без ветки — GATE_SKIP, rc 0: чеки кита ждут ветку, красный там был бы ложным (K80).
+# gate-v3.4 — гейт кита v3.4 (SPEC-v3.4 F7.4, F8.5). Без ветки — GATE_SKIP, rc 0: чеки кита ждут ветку, красный там был бы ложным (K80);
+# git не читает HEAD (не репо, битый .git, нет git в PATH) — GATE_FAIL reason=no-repo, rc 1. Сам гейт на заглушках чеков судит bin/check-gate в make ci.
 # Кит на пустом репо: свой t4 во /tmp/two-tier-v3 от bin/two-tier-init; маркеры F1–F7 фазы с номером фичи, уцелевшие маркеры v3.3 и v3.2,
 # копия клона telefon (TELEFON_CLONE или /tmp/two-tier-v3/telefon-src) после bin/two-tier-upgrade --branch kit-v3.4 и её bin/check-budget,
 # строка на пункт F8.1–F8.5, GATE_OK — только после всех проверок; лог без маркера — GATE_FAIL с именем. offen разрешён один — F5.3 (SPEC §4);
@@ -10,6 +11,7 @@
 # полные логи — свой каталог /tmp/two-tier-v3/gate34-*, в вывод — команда, итог и строки FAIL/WARN/BAD/FLAKY.
 set -uo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
+git -C "$REPO" rev-parse --verify -q HEAD >/dev/null || { echo "GATE_FAIL reason=no-repo"; exit 1; }
 if ! git -C "$REPO" symbolic-ref -q HEAD >/dev/null; then
   echo "GATE_SKIP reason=detached sha=$(git -C "$REPO" rev-parse --short=7 HEAD)"
   exit 0

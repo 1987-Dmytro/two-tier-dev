@@ -22,7 +22,8 @@ SPEC-v3.3 F5); .claude/launch.settings.json — проекта, иначе ис�
          (F2.5), коммит из подпроцесса и счёт судей в отчёте фазы (F2.6). Нужен ключ в окружении для частей с `abide check`.
   --desktop (SPEC-v3.4 F6: HARNESS; без имени раздела — только он, разделы выше не идут) — среда и профиль вкладки Code. `claude -p` — прокси вкладки,
          не она сама: профиль лежит как .claude/settings.local.json, источники настроек — как у вкладки; что видит только вкладка — строка
-         «вкладка: гейт оператора §5». Версии, граф, брошенные worktree (F6.1); запись вне рабочих каталогов до и после поля, агент в worktree
+         «вкладка: гейт оператора §5». Настоящий .claude/settings.local.json проекта (файл вне git, копия launch — шаг оператора, кит его не кладёт):
+         нет — HARNESS_WARN tab-profile, не красный; иное по смыслу — F6.3 красный с именами ключей (tab-profile). Версии, граф, брошенные worktree (F6.1); запись вне рабочих каталогов до и после поля, агент в worktree
          (F6.2); `system/init` = таблица Environment, поля профиля до и после, deny (F6.3); хук PermissionDenied на входах фикстуры (F6.4).
          Нет claude в PATH (CI) — строки `F6.2 offen`, `F6.3 offen`, маркера HARNESS_OK нет, код 0.
 Пары и пробы HOOKS идут с SPEC_GATE=off. В вывод — только имена, счётчики и маркеры.
@@ -1870,6 +1871,7 @@ def versions_probes():
     tool("нет ничего", "rc 0 VERSIONS cli=— app=— github=—")
     tool("gh без входа", "rc 0 VERSIONS cli=2.1.319 app=— github=—", cli("2.1.319"), "echo v2.1.999; exit 1")
     tool("мусор вместо версий", "rc 0 VERSIONS cli=— app=— github=—", 'echo \'{"type":"system"}\'', "echo Not Found", ["latest"])
+    tool("не UTF-8 в stdout — «—», не отказ", "rc 0 VERSIONS cli=— app=— github=—", "printf '\\377\\376garbage'", "printf '\\377\\376garbage'")
     tool("gh завис — «—» по таймауту", "rc 0 VERSIONS cli=2.1.319 app=— github=—", cli("2.1.319"), "exec /bin/sleep 30")
     here = os.path.dirname(CHECK_VERSIONS)
     fx = tempfile.mkdtemp(dir=d)
@@ -1883,9 +1885,17 @@ def versions_probes():
             shutil.copy2(f"{here}/{f}", f"{b}/{f}")
         r = subprocess.run([sys.executable, f"{b}/check-window"], cwd=b, env=dict(base, PATH=path), capture_output=True, text=True, timeout=60)
         o = r.stdout.strip().splitlines() or [""]
-        got.append((name, want, f"rc {r.returncode} · {o[0] if o[0].startswith('VERSIONS') else 'первая строка не VERSIONS'} · {o[-1]}"))
+        got.append((name, want, f"rc {r.returncode} · {o[0] if o[0].startswith('VERSIONS') else 'первая строка не VERSIONS'} · {o[-1]}" + gh_called(path.split(":")[0])))
+
+    def gh_called(where):  # каталог заглушки общий на стороны: маркер снимается на своей
+        called = os.path.exists(f"{where}/gh-called")
+        if called:
+            os.remove(f"{where}/gh-called")
+        return " · gh зван" if called else ""
 
     empty = tempfile.mkdtemp(dir=fx)
+    for where in (f"{fx}/stub", empty):
+        stub(where, "gh", ': > "${0%/*}/gh-called"; echo v2.1.319')
     stub(f"{fx}/stub", "claude", "case \"$1\" in --version) echo '2.1.319 (Claude Code)';; *) echo '{\"type\":\"system\",\"subtype\":\"init\",\"apiKeySource\":\"none\"}';; esac")
     window("check-window: версии до окна", "rc 0 · VERSIONS cli=2.1.319 app=— github=— · WINDOW: start", True, f"{fx}/stub:/usr/bin:/bin")
     window("check-window: нет claude и каталога", "rc 0 · VERSIONS cli=— app=— github=— · WINDOW: start", True, f"{empty}:/usr/bin:/bin")
@@ -1906,7 +1916,7 @@ def versions_probes():
         o = r.stdout.splitlines()
         first = next((i for i, l in enumerate(o) if l.startswith("VERSIONS")), None)
         clone = next((i for i, l in enumerate(o) if "свежий клон" in l), None)
-        got.append((name, want, f"VERSIONS {sum(l.startswith('VERSIONS') for l in o)} раз, до клона — {'нет строки' if first is None or clone is None else 'да' if first < clone else 'нет'}, клон — {'есть' if clone is not None else 'нет'}"))
+        got.append((name, want, f"VERSIONS {sum(l.startswith('VERSIONS') for l in o)} раз, до клона — {'нет строки' if first is None or clone is None else 'да' if first < clone else 'нет'}, клон — {'есть' if clone is not None else 'нет'}" + gh_called(f"{fx}/stub")))
 
     launcher("verify-phase, check-window рядом", "VERSIONS 1 раз, до клона — да, клон — есть", "check-window", "check-versions")
     launcher("verify-phase без check-window", "VERSIONS 1 раз, до клона — да, клон — есть", "check-versions")
@@ -1945,10 +1955,13 @@ def worktree_probes():
 
 def tab_view(rows, init, which=shutil.which):
     """(расхождения, MCP приложения, сводка): system/init прокси против таблицы Environment глазами вкладки (F6.3). Флаги строки запуска во вкладке не задаются — их замена
-    ключи профиля, статика; MCP с 0 инструментов в init выключен deny профиля (замер: сервер connected, инструментов нет) — не лишний; MCP «да», которого нет в init, даёт приложение —
+    ключи профиля, статика; MCP с 0 инструментов в init не работает — не лишний, какой бы ни был статус: connected — выключен deny профиля (замер), pending — ещё не поднялся (замер: ref и blockscout
+    от прогона к прогону то connected, то pending); MCP «да» с 0 инструментов и иным статусом (failed, needs-auth) — красный; MCP «да», которого нет в init или он pending, даёт приложение или не поднялся —
     его видит только вкладка, на строку «вкладка:», не красный."""
     tools = init.get("tools", [])
-    live = [s for s in init.get("mcp_servers", []) if any(t.startswith(f"mcp__{re.sub(r'[^a-zA-Z0-9_-]', '_', s.get('name', ''))}__") for t in tools)]
+    yes = [i for _, form, ids, on, _ in rows if form == "MCP" and on for i in ids]
+    live = [s for s in init.get("mcp_servers", []) if any(t.startswith(f"mcp__{re.sub(r'[^a-zA-Z0-9_-]', '_', s.get('name', ''))}__") for t in tools)
+            or (s.get("status") not in ("connected", "pending") and any(fnmatch.fnmatchcase(s.get("name", ""), p) for p in yes))]
     bad, summary = compare([r for r in rows if r[1] != "флаг"], {**init, "mcp_servers": live}, "", which)
     tail = ": нет в system/init"
     absent = lambda b: b.startswith("MCP ") and b.endswith(tail)
@@ -1971,7 +1984,12 @@ def tab_view_probes():
             ("лишний плагин", "плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»", seen(plugins=green["plugins"] + [{"source": "commit-commands@claude-plugins-official"}])),
             ("плагин таблицы не загружен", "плагин ponytail@ponytail: нет в system/init", seen(plugins=[])),
             ("скилл «нет» загружен", "скилл anthropic-skills:docx: включён — в таблице «нет»", seen(skills=["graphify", "anthropic-skills:docx"])),
-            ("MCP «да» с иным статусом", "MCP context7: статус needs-auth, ждём connected", seen(mcp_servers=[{"name": "context7", "status": "needs-auth"}]))]
+            ("MCP «да» с иным статусом, как настоящий сломанный: 0 инструментов", "MCP context7: статус needs-auth, ждём connected", seen(mcp_servers=[{"name": "context7", "status": "needs-auth"}], tools=["Bash"])),
+            ("MCP «да» failed, 0 инструментов", "MCP context7: статус failed, ждём connected", seen(mcp_servers=[{"name": "context7", "status": "failed"}], tools=["Bash"])),
+            ("MCP «да» pending, 0 инструментов — не поднялся, на строку вкладки", ("равно", ["context7"]),
+             (seen(mcp_servers=[{"name": "context7", "status": "pending"}], tools=["Bash"]), tab_view(rows, {**green, "mcp_servers": [{"name": "context7", "status": "pending"}], "tools": ["Bash"]}, which)[1])),
+            ("MCP «нет» pending, 0 инструментов", "равно", seen(mcp_servers=green["mcp_servers"] + [{"name": "ref", "status": "pending"}])),
+            ("MCP «нет» failed, 0 инструментов", "равно", seen(mcp_servers=green["mcp_servers"] + [{"name": "ref", "status": "failed"}]))]
 
 
 def profile_bad(profile, settings, template=True):
@@ -1985,6 +2003,69 @@ def profile_bad(profile, settings, template=True):
     return bad
 
 
+def tab_profile(local, launch):
+    """F6.3: настоящий файл профиля вкладки против launch: None — файла нет (свежий клон: файл вне git), иначе ключи верхнего уровня, что расходятся по смыслу (разобранный JSON); значения не отдаются."""
+    if not os.path.isfile(local):
+        return None
+    have, want = (json.load(open(p, encoding="utf-8")) for p in (local, launch))
+    return sorted(k for k in set(have) | set(want) if k not in have or k not in want or have[k] != want[k])
+
+
+def additional_dirs(src, launch):
+    """F6.2: каталоги permissions.additionalDirectories под источниками вкладки (пользователь, проект, local; массивы сливаются) числом — для вкладки они рабочие. Настройки пользователя только читаются, пути не печатаются: они домашние."""
+    dirs = set()
+    for p in (os.path.expanduser("~/.claude/settings.json"), f"{src}/.claude/settings.json", f"{os.path.dirname(launch)}/settings.local.json"):
+        try:
+            dirs |= set(json.load(open(p, encoding="utf-8")).get("permissions", {}).get("additionalDirectories", []))
+        except (OSError, ValueError):
+            pass
+    return len(dirs)
+
+
+def tab_line(app, step, additional):
+    """Строка «вкладка:» — пункты гейта оператора §5. step — копия профиля, файла нет; additional — число каталогов, что шире поля записи."""
+    return (f"вкладка: гейт оператора §5 — effort и ultracode самой вкладки, модель подагента ({SUBAGENT_MODEL} из файлов профиля не доходит, действует только из --settings), MCP приложения ({', '.join(app) or 'нет строк'}): "
+            "скрипту не видны, выше не мерены; effort выше — прокси, ultracode сигнала не даёт, только ключ профиля"
+            + (f"; файла профиля нет, оператор копирует: {step}" if step else "") + (f"; поле записи шире рабочих каталогов: write-block-wider additional={additional}" if additional else ""))
+
+
+def tab_profile_probes(src, launch):
+    """F6.3, F6.2, F6.1: стороны файла профиля через этот же скрипт: --desktop на копии, в PATH только git и node — claude нет, ветка статики, и этих проб во вложенном прогоне нет. (имя, ждём, получили)."""
+    dst, path = deploy(src, launch), tempfile.mkdtemp(prefix="tab-profile-", dir=TMP)
+    for tool in ("git", "node"):
+        os.symlink(shutil.which(tool), f"{path}/{tool}")
+    os.makedirs(f"{path}/home/.claude")
+    profile, local, hidden = json.load(open(launch, encoding="utf-8")), f"{dst}/.claude/settings.local.json", "скрытое-значение"
+    settings = json.load(open(f"{dst}/.claude/settings.json", encoding="utf-8"))
+
+    def side(text, user=(), project=()):
+        if text is None and os.path.exists(local):
+            os.remove(local)
+        if text is not None:
+            open(local, "w", encoding="utf-8").write(text)
+        json.dump({"permissions": {"additionalDirectories": list(user)}}, open(f"{path}/home/.claude/settings.json", "w", encoding="utf-8"))
+        json.dump({**settings, "permissions": {**settings["permissions"], "additionalDirectories": list(project)}}, open(f"{dst}/.claude/settings.json", "w", encoding="utf-8"))
+        r = subprocess.run([sys.executable, os.path.realpath(__file__), "--desktop"], cwd=dst, env=dict(os.environ, HOME=f"{path}/home", PATH=path), capture_output=True, text=True, timeout=300)
+        lines = r.stdout.splitlines()
+        warns = [l for l in lines if l.startswith(("HARNESS_WARN tab-profile", "HARNESS_WARN write-block-wider"))]
+        f63 = next((l for l in lines if l.startswith("F6.3 ")), "")
+        graph = re.search(r"graph=\S+", next((l for l in lines if l.startswith("F6.1 ")), ""))
+        said = re.search(r"tab-profile[^;·]*", f63)
+        return (f"rc {r.returncode}; {' | '.join(warns)}; F6.3 {said.group().strip() if said else f63.split(' ')[1] if f63 else 'нет строки'}; {graph.group() if graph else 'нет graph='}; "
+                f"утечек {sum(w in r.stdout for w in (hidden, '/nested-dir'))}")
+
+    step = "cp .claude/launch.settings.json .claude/settings.local.json"
+    got = [("нет файла: WARN, код 0; каталоги пользователя и проекта слиты числом, графа нет", f"rc 0; HARNESS_WARN write-block-wider additional=3 | HARNESS_WARN tab-profile нет .claude/settings.local.json — оператор копирует профиль: {step}; F6.3 offen; graph=нет; утечек 0",
+            side(None, ["/nested-dir-a", "/nested-dir-b", "/nested-dir-a"], ["/nested-dir-b", "/nested-dir-c"])),
+           ("та же суть, иной порядок ключей и пробелы: строки нет", "rc 0; ; F6.3 offen; graph=нет; утечек 0", side(json.dumps(dict(reversed(list(profile.items()))), indent=4))),
+           ("иное по смыслу: красный с именами ключей, без значений; каталог из local — числом",
+            "rc 1; HARNESS_WARN write-block-wider additional=1; F6.3 tab-profile: .claude/settings.local.json не как .claude/launch.settings.json, ключи: effortLevel, extraKey, permissions; graph=нет; утечек 0",
+            side(json.dumps({**profile, "effortLevel": hidden, "extraKey": hidden, "permissions": {**profile.get("permissions", {}), "additionalDirectories": ["/nested-dir-d"]}})))]
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.rmtree(path, ignore_errors=True)
+    return got
+
+
 def profile_probes():
     good = {"effortLevel": "xhigh", "ultracode": True, "env": {SUBAGENT_MODEL: "claude-sonnet-5-5", SUBAGENT_EFFORT: "high"}}
     seen = lambda p, s=None, **kw: "; ".join(profile_bad(p, s or {}, **kw)) or "ok"
@@ -1992,7 +2073,9 @@ def profile_probes():
             ("шаблон без него", f"{SUBAGENT_EFFORT} None", seen({**good, "env": {SUBAGENT_MODEL: "claude-sonnet-5-5"}})),
             ("псевдоним модели", f"{SUBAGENT_MODEL} sonnet: нужен полный id", seen({**good, "env": {SUBAGENT_MODEL: "sonnet", SUBAGENT_EFFORT: "high"}})),
             ("effortLevel иной", "effortLevel high, ждём xhigh", seen({**good, "effortLevel": "high"})), ("без ultracode", "ultracode None, ждём true", seen({k: v for k, v in good.items() if k != "ultracode"})),
-            ("ultracode в settings.json", "ultracode в settings.json: идёт в каждый вложенный прогон", seen(good, {"ultracode": True}))]
+            ("ultracode в settings.json", "ultracode в settings.json: идёт в каждый вложенный прогон", seen(good, {"ultracode": True})),
+            ("строка вкладки: модель подагента — всегда, копии и каталогов нет", (True, False, False), (SUBAGENT_MODEL in tab_line([], None, 0), "оператор копирует" in tab_line([], None, 0), "write-block-wider" in tab_line([], None, 0))),
+            ("строка вкладки: нет файла, каталоги шире", (True, True), ("оператор копирует: cp a b" in tab_line([], "cp a b", 2), "write-block-wider additional=2" in tab_line([], "cp a b", 2)))]
 
 
 def denied_probes(src):
@@ -2013,7 +2096,7 @@ def denied_probes(src):
         return f"строк {len(rows)}: " + "; ".join(f"{r['tool']}/{r['rule']}/{r['n']}" for r in rows) + f", поля {sorted(set(k for r in rows for k in r))}, утечек {sum(w in text for w in leak)}"
 
     fields = "['n', 'rule', 'session', 'tool', 'ts']"
-    a, b, c, e = (tempfile.mkdtemp(dir=d) for _ in range(4))
+    a, b, c, e, h, n = (tempfile.mkdtemp(dir=d) for _ in range(6))
     three = [DENIED, {**DENIED, "tool_name": "Write", "tool_input": {"file_path": "/Users/x/secret.txt", "content": "x"}, "reason": "Auto mode could not evaluate this action and is blocking it for safety"},
              {**DENIED, "tool_name": "WebFetch", "tool_input": {"url": "https://example.invalid/x"}, "reason": "Classifier unavailable"}]
     got = [("три входа — три строки, без stdout", "rc≠0 0, stdout 0", feed(a, *map(json.dumps, three))),
@@ -2022,6 +2105,8 @@ def denied_probes(src):
     feed(b, json.dumps(same), json.dumps(same), json.dumps({**same, "session_id": "other"}), json.dumps({**DENIED, "reason": "Blocked by classifier: /Users/x/secret.txt"}))
     got.append(("счётчик по сессии и правилу; проза reason не утекает",
                 f"строк 4: Bash/Data Exfiltration/1; Bash/Data Exfiltration/2; Bash/Data Exfiltration/1; Bash/other/1, поля {fields}, утечек 0", journal(b)))
+    feed(h, *(json.dumps({**DENIED, "reason": r}) for r in ("[Blocked: pushes secret to client-acme.example from /Users/x/.ssh/id_rsa] details", f"[{'A' * 62}]", "[lowercase class]")))
+    got.append(("класс вне белого списка — other: путь в скобках, длиннее 61, со строчной", f"строк 3: Bash/other/1; Bash/other/2; Bash/other/3, поля {fields}, утечек 0", journal(h)))
     broken = ["not json", "", "[]", "null", "1", "{}", json.dumps({"hook_event_name": "Stop", "tool_name": "Bash"}), json.dumps({"hook_event_name": "PermissionDenied"}),
               json.dumps({"hook_event_name": "PermissionDenied", "tool_name": 1})]
     got.append((f"битый вход ×{len(broken)}", "rc≠0 0, stdout 0", feed(c, *broken)))
@@ -2032,6 +2117,10 @@ def denied_probes(src):
     open(f"{c}/docs/evidence/denials.jsonl", "w").write("обрыв строки\n")
     feed(c, json.dumps(DENIED))
     got.append(("битая строка журнала не глушит счёт", f"строк 1: Bash/Irreversible Local Destruction/1, поля {fields}, утечек 0", journal(c)))
+    os.makedirs(f"{n}/docs/evidence")
+    open(f"{n}/docs/evidence/denials.jsonl", "w").write("null\n")
+    feed(n, json.dumps(DENIED))
+    got.append(("строка журнала null не глушит хук", f"строк 1: Bash/Irreversible Local Destruction/1, поля {fields}, утечек 0", journal(n)))
     s = json.load(open(f"{src}/.claude/settings.json", encoding="utf-8"))
     decl = [h for g in s.get("hooks", {}).get("PermissionDenied", []) for h in g.get("hooks", [])]
     got.append(("settings: exec form", True, any(h.get("command") == "node" and h.get("args") == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/permission-denied.mjs"] for h in decl)))
@@ -2066,7 +2155,7 @@ def desktop_versions():
     print("\n".join(graph_lines()[1:]), flush=True) if status == "WARN" else None
     versions, trees, graphs = versions_probes(), worktree_probes(), graph_age_probes()
     item("HARNESS", "F6.1", r.returncode == 0 and len(three) == 3 and sides_ok(versions) and sides_ok(trees) and sides_ok(graphs),
-         f"versionen={sum(v != '—' for v in three)} graph={status or 'OK'} · живьём: {' | '.join(lines)}; брошенных worktree {abandoned_worktrees()}; граф этого репо: {text} · "
+         f"versionen={sum(v != '—' for v in three)} graph={status or 'нет'} · живьём: {' | '.join(lines)}; брошенных worktree {abandoned_worktrees()}; граф этого репо: {text} · "
          f"фикстуры check-versions: {sides_text(versions)} · worktree: {sides_text(trees)} · граф против HEAD: {sides_text(graphs)}")
 
 
@@ -2093,7 +2182,7 @@ def worktree_side(src, launch):
     open(f"{dst}/.claude/workflows/wt-probe.js", "w").write(WF_WORKTREE)
     for a in (["add", "--", ".claude/workflows/wt-probe.js"], ["commit", "-qm", "x"]):
         subprocess.run(["git", "-C", dst, *a], env=GIT_ENV, capture_output=True, check=True)
-    _, _, _, _, ev = control(dst, {}, ["--permission-mode", "auto", "--model", "claude-haiku-5-5", "--setting-sources", "project,local"], "worktree", PROMPT_WF.format("wt-probe"),
+    _, _, _, _, ev = control(dst, {}, ["--permission-mode", "auto", "--model", "claude-haiku-5-5", "--setting-sources", "project,local", "--no-session-persistence"], "worktree", PROMPT_WF.format("wt-probe"),
                              extra=["--allowedTools", "Workflow(wt-probe)"], env_over={"CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0"})
     status, wf = workflow(ev)
     root = f"{dst}/.claude/worktrees"
@@ -2102,6 +2191,9 @@ def worktree_side(src, launch):
 
 
 def desktop_write(src, launch):
+    additional = additional_dirs(src, launch)
+    if additional:  # пара ниже идёт без настроек пользователя, вкладка — с ними
+        print(f"HARNESS_WARN write-block-wider additional={additional}", flush=True)
     settings = json.load(open(f"{src}/.claude/settings.json", encoding="utf-8"))
     key = settings.get("permissions", {}).get(WRITE_KEY)
     if not shutil.which("claude"):
@@ -2160,12 +2252,18 @@ def desktop_profile(src, proc, launch):
     tpl = f"{src}/.claude/launch.settings.json"
     if os.path.realpath(tpl) != os.path.realpath(launch):  # в репо кита вкладку ведёт профиль тимлида, шаблон судится отдельно
         bad += [f"шаблон {tpl}: {b}" for b in profile_bad(json.load(open(tpl, encoding="utf-8")), settings)]
+    local = f"{os.path.dirname(launch)}/settings.local.json"
+    differs, step = tab_profile(local, launch), f"cp {launch} {local}"
+    if differs is None:
+        print(f"HARNESS_WARN tab-profile нет {local} — оператор копирует профиль: {step}", flush=True)
+    elif differs:
+        bad.append(f"tab-profile: {local} не как {launch}, ключи: {', '.join(differs)}")
     views, kinds = tab_view_probes(), profile_probes()
     if not shutil.which("claude"):
         if bad or not sides_ok(views) or not sides_ok(kinds):
             return item(S, "F6.3", False, f"статика: {'; '.join(bad) or 'ok'} · сверка: {sides_text(views)} · поля: {sides_text(kinds)}")
         return offen(S, "F6.3", "claude нет в PATH — прокси нет")
-    env = profile.get("env", {})
+    env, files = profile.get("env", {}), tab_profile_probes(src, launch)
     after, before, flag = tab_side(src, launch, "tab-after"), tab_side(src, launch, "tab-before", strip=True), tab_side(src, launch, "tab-flag", ["--settings", ".claude/launch.settings.json"], local=False)
     init = after["init"]
     diff, app, summary = tab_view(table(open(proc, encoding="utf-8").read()), init)
@@ -2180,14 +2278,14 @@ def desktop_profile(src, proc, launch):
         print(f"HARNESS_WARN subagent-model-local settings.local={','.join(after['models']) or '—'} --settings={','.join(flag['models']) or '—'}", flush=True)
     refused, edited, written = after["refused"] and after["status"] == "old\n", "new" in after["kit"] and "old" not in after["kit"], before["status"] != "old\n"
     bad += [] if written else ["без правила Edit(/docs/STATUS.md) файл не записан: отказ — не от правила"]
-    ok = not diff and not bad and refused and edited and sides_ok(views) and sides_ok(kinds)
+    ok = not diff and not bad and refused and edited and sides_ok(views) and sides_ok(kinds) and sides_ok(files)
     item(S, "F6.3", ok, f"init={'gleich' if not diff else 'иное'} deny={refused + edited}/2 · " + (f"расхождения: {'; '.join(diff)} · " if diff else "")
          + (f"поля: {'; '.join(bad)} · " if bad else "") + f"прокси claude -p с профилем {launch} как settings.local, источники как у вкладки, auto: {summary}; строк таблицы «флаг» не судятся: их замена — ключи профиля · "
          f"effortLevel: до {before['main']}, после {after['main']} · {SUBAGENT_EFFORT} (источник — только changelog 2.1.316): подагент до {before['sub']}, после {after['sub']} (профиль {env.get(SUBAGENT_EFFORT, 'нет')}) · "
          f"{SUBAGENT_MODEL} {env.get(SUBAGENT_MODEL)}: подагент до {','.join(before['models']) or '—'}, через settings.local {','.join(after['models']) or '—'}, через --settings {','.join(flag['models']) or '—'} · "
          f"deny: без правила docs/STATUS.md {'записан' if written else 'цел'}; с правилом {'отказ, файл цел' if refused else 'НЕ отказан'}; kit/CLAUDE.md {'правка' if edited else 'НЕ правлен'} · "
-         f"сверка на подставных init: {sides_text(views)} · поля профиля: {sides_text(kinds)}")
-    print(f"вкладка: гейт оператора §5 — effort и ultracode самой вкладки, MCP приложения ({', '.join(app) or 'нет строк'}): скрипту не видны, выше не мерены; effort выше — прокси, ultracode сигнала не даёт, только ключ профиля", flush=True)
+         f"сверка на подставных init: {sides_text(views)} · поля профиля: {sides_text(kinds)} · файл профиля: {sides_text(files)}")
+    print(tab_line(app, None if differs is not None else step, additional_dirs(src, launch)), flush=True)
 
 
 def desktop_probes(src, proc, launch):

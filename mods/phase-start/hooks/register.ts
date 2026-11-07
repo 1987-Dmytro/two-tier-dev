@@ -1,7 +1,9 @@
 // phase-start — a Claude Code mod (two-tier-dev). One command, /phase:
 //   /phase         sends docs/PROMPT.txt as the person's own words, on the branch the phase names; another branch: refused with both names;
-//   /phase resume  the same check, then sends the Resume line of the open STOP of docs/PROGRESS.md;
-//   /phase halt    writes AGENT_STOP in the project root; the kit's kill switch stops the session at its next tool call.
+//   /phase resume  the same check, then sends the Resume line of the open STOP of docs/PROGRESS.md; a line left as a form, with <…> or
+//                  | alternatives, is refused: the fork is the operator's to answer, and a timer leaves no moment to correct it;
+//   /phase halt    writes AGENT_STOP in the start directory, what the kit's kill switch reads as CLAUDE_PROJECT_DIR; it stops the session
+//                  at its next tool call. $.session.root follows a worktree move, that variable does not, and a mod does not see it.
 // /resume is a built-in and $.command.register throws for a taken name, so these are arguments, and `halt` rides with them. immediate: a
 // halt cannot wait for the turn it stops. The prompts leave on a timer: the engine refuses $.prompt.submit from a command.run hook, and
 // the call resolves only when that turn starts.
@@ -51,7 +53,10 @@ async function halt($: EngineInterface, root: string): Promise<string> {
 }
 
 export const register: Register = on => {
+  let startDir: string | undefined
+
   on('session.start', async ($, e, next) => {
+    startDir = await $.session.root()
     await $.command.register({
       name: 'phase',
       description: 'Send docs/PROMPT.txt as your message on the branch it names; `resume` sends the Resume line of the open STOP; `halt` writes AGENT_STOP.',
@@ -65,7 +70,7 @@ export const register: Register = on => {
     const arg = e.args.trim().toLowerCase()
     if (arg && arg !== 'resume' && arg !== 'halt') return { text: `unknown argument «${arg}»: /phase, /phase resume or /phase halt. Nothing was sent.` }
     const root = await $.session.root()
-    if (arg === 'halt') return { text: await halt($, root) }
+    if (arg === 'halt') return { text: await halt($, startDir ?? root) }
     const prompt = await readOr($, `${root}/docs/PROMPT.txt`)
     if (prompt === undefined) return refuse('no docs/PROMPT.txt in the project')
     const wanted = branchOf(prompt)
@@ -75,6 +80,7 @@ export const register: Register = on => {
     if (arg === 'resume') {
       const line = resumeOf((await readOr($, `${root}/docs/PROGRESS.md`)) ?? '')
       if (!line) return refuse('no open STOP with a Resume line in docs/PROGRESS.md')
+      if (/<[^<>]+>|\|/.test(line)) return refuse(`the Resume line has an unfilled <…> or | alternatives; type your answer to it: ${line}`)
       $.clock.after(0, () => submit($, line))
       return { text: `the Resume line goes as your message: ${line}` }
     }

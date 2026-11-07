@@ -10,10 +10,12 @@ const usage = (rateLimits: Array<{ kind: string; percentUsed: number; resetsAt?:
 })
 const week = (percentUsed: number) => ({ kind: 'seven_day', percentUsed, resetsAt: at(1500) })
 
-// The engine beneath the mod: the tool stub runs when the guard lets the call through. `surfaces` is what the session draws on,
-// `windows` what the session reports (default: the week at `percent`), `noUsage` makes $.session.usage reject.
-type Seat = { percent?: number; budgets?: string | null; surfaces?: string[]; windows?: Array<{ kind: string; percentUsed: number; resetsAt?: string }>; noUsage?: boolean }
-const seat = (on: any, { percent = 90, budgets = BUDGETS, surfaces = [], windows, noUsage = false }: Seat) => {
+// The engine beneath the mod: the tool stub runs when the guard lets the call through. `surfaces` is what the session draws on, attach and
+// detach move it; `root` and `repo` the session's directories, budgets.json exists only at /repo; `windows` what the session reports
+// (default: the week at `percent`), `noUsage` makes $.session.usage reject.
+type Seat = { percent?: number; budgets?: string | null; root?: string; repo?: string | null; surfaces?: string[]; windows?: Array<{ kind: string; percentUsed: number; resetsAt?: string }>; noUsage?: boolean }
+const seat = (on: any, { percent = 90, budgets = BUDGETS, root = '/repo', repo = '/repo', surfaces = [], windows, noUsage = false }: Seat) => {
+  let roster = surfaces
   const seen = { registered: [] as Array<{ name: string; argumentHint?: string; immediate?: true }>, statuses: [] as unknown[] }
   mock.clock(on, { now })
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
@@ -21,10 +23,19 @@ const seat = (on: any, { percent = 90, budgets = BUDGETS, surfaces = [], windows
     seen.registered.push(e)
     return { value: { command: e.name } }
   })
-  on('session.root', () => ({ value: '/repo' }))
-  on('fs.read', () => (budgets === null ? { deny: 'no such file' } : { value: budgets }))
+  on('session.root', () => ({ value: root }))
+  on('session.repo', () => ({ value: repo === null ? null : { root: repo, remote: null, internal: false } }))
+  on('fs.read', ($: any, e: any) => (budgets !== null && e.path === '/repo/budgets.json' ? { value: budgets } : { deny: 'no such file' }))
   on('session.usage', () => (noUsage ? { deny: 'no figures' } : usage(windows ?? [week(percent)])))
-  on('session.surfaces', () => ({ value: surfaces }))
+  on('session.surfaces', () => ({ value: roster }))
+  on('session.attach', ($: any, e: any) => {
+    roster = [...roster, e.surface]
+    return { clientId: e.clientId }
+  })
+  on('session.detach', ($: any, e: any) => {
+    roster = roster.filter(s => s !== e.surface)
+    return { clientId: e.clientId }
+  })
   on('session.measure', ($: any, e: any) => ({ changed: e.changed }))
   on('ui.status', ($: any, e: any) => {
     seen.statuses.push(e.text)
@@ -122,6 +133,13 @@ test('/window under the threshold says tool calls pass', async ($, on) => {
   expect((await $.command.run({ command: 'window', args: '', ...CMD })).text).toContain('tool calls pass')
 })
 
+test('the argument of /window takes any case', async ($, on) => {
+  seat(on, { percent: 90 })
+  await start($)
+  expect((await $.command.run({ command: 'window', args: ' OVERRIDE ', ...CMD })).text).toContain('override, the guard is lifted for this session')
+  expect((await call($)).result).toBe('ran')
+})
+
 test('another argument lifts nothing', async ($, on) => {
   seat(on, { percent: 90 })
   await start($)
@@ -156,6 +174,24 @@ test('a budgets.json that does not parse passes', async ($, on) => {
   expect((await call($)).result).toBe('ran')
 })
 
+test('the threshold is the number of budgets.json, no built-in one: defaults 70 at 75 % is denied', async ($, on) => {
+  seat(on, { percent: 75, budgets: JSON.stringify({ defaults: { window_seven_day_pct: 70 }, project: {} }) })
+  await start($)
+  expect((await call($)).deny).toContain('seven_day 75% > 70%')
+})
+
+test('budgets.json is read at the repo root, also from a session started in a subfolder', async ($, on) => {
+  seat(on, { percent: 90, root: '/repo/docs' })
+  await start($)
+  expect((await call($)).deny).toContain('seven_day 90% > 85%')
+})
+
+test('outside a repository budgets.json is read at the session root', async ($, on) => {
+  seat(on, { percent: 90, repo: null })
+  await start($)
+  expect((await call($)).deny).toContain('seven_day 90% > 85%')
+})
+
 test('project tightens the threshold', async ($, on) => {
   seat(on, { percent: 82, budgets: JSON.stringify({ defaults: { window_seven_day_pct: 85 }, project: { window_seven_day_pct: 80 } }) })
   await start($)
@@ -182,10 +218,43 @@ test('a plain claude -p run is never denied: not interactive, no surface', async
   expect((await call($)).result).toBe('ran')
 })
 
+test('a plain claude -p run: /window does not claim a denial', async ($, on) => {
+  seat(on, { percent: 90, surfaces: [] })
+  await start($, false)
+  const { text } = await $.command.run({ command: 'window', args: '', ...CMD })
+  expect(text).toBe('seven_day 90% ↻1d01h · threshold seven_day 85% (budgets.json) · no surface in this run: nothing is judged')
+})
+
 test('a hosted session with a surface attached, as the Code tab, is denied', async ($, on) => {
   seat(on, { percent: 90, surfaces: ['desktop'] })
   await start($, false)
   expect((await call($)).deny).toContain('seven_day 90% > 85%')
+})
+
+test('a hosted session stays judged after its page is gone: attached, then detached', async ($, on) => {
+  seat(on, { percent: 90 })
+  await start($, false)
+  await $.session.attach({ surface: 'desktop', clientId: 'c1' })
+  expect((await call($)).deny).toContain('seven_day 90% > 85%')
+  await $.session.detach({ surface: 'desktop', clientId: 'c1', reason: 'detach' })
+  expect((await call($)).deny).toContain('seven_day 90% > 85%')
+  expect((await $.command.run({ command: 'window', args: '', ...CMD })).text).toContain('tool calls are denied')
+})
+
+test('attached and gone before any tool call: still judged', async ($, on) => {
+  seat(on, { percent: 90 })
+  await start($, false)
+  await $.session.attach({ surface: 'desktop', clientId: 'c1' })
+  await $.session.detach({ surface: 'desktop', clientId: 'c1', reason: 'detach' })
+  expect((await call($)).deny).toBeDefined()
+})
+
+test('attached before session.start and gone: still judged', async ($, on) => {
+  seat(on, { percent: 90 })
+  await $.session.attach({ surface: 'desktop', clientId: 'c1' })
+  await start($, false)
+  await $.session.detach({ surface: 'desktop', clientId: 'c1', reason: 'detach' })
+  expect((await call($)).deny).toBeDefined()
 })
 
 test('the REPL is denied before it reports a surface', async ($, on) => {
