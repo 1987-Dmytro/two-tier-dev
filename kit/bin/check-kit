@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-kit [<корень>] [frozen|fenster] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
+"""check-kit [<корень>] [frozen|fenster|graph] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
 (вердикт — /verify-phase из свежего клона, лимит 30 мин) и plan-phase, evaluator без правок, воркфлоу verify-phase и его лаунчер.
 
 Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
@@ -10,14 +10,14 @@
 Окна (SPEC-v3.3 F5, кит и проект): bin/check-window на подставленных событиях и строка запуска шаблона с заглушкой claude —
 строки v3.3-F5.1…F5.4 и WINDOW_OK; при claude в PATH ещё живой ход справкой.
 Разделы v3.4: frozen (F3: замок, паспорт, регрессия в деплое, апгрейд клона telefon — FROZEN_OK), fenster (F4: окно деплоя, живой канал, канарейка,
-шаблоны — FENSTER_OK); с именем раздела идёт только он, без имени — всё.
+шаблоны — FENSTER_OK), graph (Graphify: `.githooks/post-commit`, первая сборка bin/two-tier-init, отчёт апгрейда, живой прогон при CLI в PATH — GRAPH_OK); с именем раздела идёт только он, без имени — всё.
 Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — F3.5 не гонялся: строка `F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
 """
 import json, os, re, shutil, subprocess, sys, tempfile, time
 
 out = []
 TMP = "/tmp/two-tier-v3"
-SECTIONS = ("frozen", "fenster")
+SECTIONS = ("frozen", "fenster", "graph")
 GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.invalid",
                GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
 for k in ("TYPESAFE_API_KEY", "TYPESAFE_AI_API_KEY"):  # суд abide фикстурам не нужен: без ключа он — пропуск
@@ -942,8 +942,122 @@ def section_fenster():
     return all(sec) and len(sec) == 4
 
 
+def section_graph():
+    """Граф кода в ките: хук после коммита на заглушке CLI, первая сборка, отчёт апгрейда, живой CLI при наличии. Стороны — fz_rc, итог — GRAPH_OK."""
+    os.makedirs(TMP, exist_ok=True)
+    stub_dir = tempfile.mkdtemp(prefix="graph-stub-", dir=TMP)
+    put(stub_dir, "graphify", '#!/bin/sh\necho "$*" >> graphify-called\nsleep "${STUB_SLEEP:-0}"\n[ "${STUB_RC:-0}" = 0 ] || exit "$STUB_RC"\nmkdir -p graphify-out && echo "{}" > graphify-out/graph.json\n')
+    os.chmod(f"{stub_dir}/graphify", 0o755)
+    bare_path = ":".join(p for p in os.environ.get("PATH", "").split(":") if not os.path.exists(f"{p}/graphify"))
+    stub = dict(GIT_ENV, PATH=f"{stub_dir}:{bare_path}")
+    no_cli = dict(GIT_ENV, PATH=bare_path)
+
+    def waited(path, seconds):
+        end = time.monotonic() + seconds
+        while time.monotonic() < end and not os.path.exists(path):
+            time.sleep(0.1)
+        return os.path.exists(path)
+
+    def fixture(graph=True):
+        d = project({"basis": None, "module": {}})
+        if graph:
+            put(d, "graphify-out/graph.json", "{}\n")
+        return d
+
+    def after_commit(d, env, name="src/g.py"):
+        put(d, name, "g = 1\n")
+        sh(["git", "add", "--", name], d, env=env)
+        t0 = time.monotonic()
+        rc, text = sh(["git", "commit", "-qm", "F1.1: проба графа"], d, env=env)
+        return rc, text, time.monotonic() - t0
+    rows = []
+    # хук: есть граф и CLI — update в фоне; нет графа, нет CLI, ошибка CLI — коммит проходит, CLI не зовётся или не держит
+    hook = f"{root}/.githooks/post-commit"
+    rows.append((os.access(hook, os.X_OK), f"{hook} исполняемый — {'да' if os.access(hook, os.X_OK) else 'нет'}"))
+    d = fixture()
+    rc, _, _ = after_commit(d, stub)
+    called = waited(f"{d}/graphify-called", 5)
+    args_seen = read(f"{d}/graphify-called").strip() if called else ""
+    ignored = read(f"{d}/graphify-out/.gitignore").strip() if os.path.exists(f"{d}/graphify-out/.gitignore") else ""
+    dirty = sh(["git", "status", "--short", "--", "graphify-out"], d)[1]
+    rows.append((rc == 0 and args_seen == "update ." and ignored == "*" and not dirty, f"граф и CLI — rc {rc}, CLI «{args_seen}», graphify-out вне git — {'да' if ignored == '*' and not dirty else 'нет'}"))
+    d = fixture(graph=False)
+    rc, _, _ = after_commit(d, stub)
+    absent = not waited(f"{d}/graphify-called", 1)
+    rows.append((rc == 0 and absent and not os.path.exists(f"{d}/graphify-out"), f"графа нет — rc {rc}, CLI не звали — {'да' if absent else 'нет'}"))
+    d = fixture()
+    rc, _, _ = after_commit(d, no_cli)
+    rows.append((rc == 0 and not os.path.exists(f"{d}/graphify-out/.gitignore"), f"CLI нет — rc {rc}"))
+    d = fixture()
+    rc, _, _ = after_commit(d, dict(stub, STUB_RC="3"))
+    rows.append((rc == 0 and waited(f"{d}/graphify-called", 5), f"CLI упал — rc {rc}, коммит прошёл"))
+    d = fixture()
+    rc, _, spent = after_commit(d, dict(stub, STUB_SLEEP="6"))
+    rows.append((rc == 0 and spent < 4, f"CLI думает 6 с — коммит не ждёт: {spent:.1f} с"))
+    if root == "kit":
+        init = os.path.abspath("bin/two-tier-init")
+
+        def fresh_target():
+            t = tempfile.mkdtemp(prefix="graph-init-", dir=TMP)
+            sh(["git", "init", "-q", "-b", "main"], t)
+            return t
+        t = fresh_target()
+        rc, text = sh([init, t], os.getcwd(), env=stub)
+        built = "graphify-out/ собран" in text and read(f"{t}/graphify-called").strip() == "update ." and read(f"{t}/graphify-out/.gitignore").strip() == "*"
+        rows.append((rc == 0 and built and not sh(["git", "status", "--short", "--", "graphify-out"], t)[1], f"init с CLI — rc {rc}, собран и вне git — {'да' if built else 'нет'}; post-commit в цели — {'да' if os.access(f'{t}/.githooks/post-commit', os.X_OK) else 'нет'}"))
+        rows.append((os.access(f"{t}/.githooks/post-commit", os.X_OK), "init кладёт исполняемый post-commit"))
+        t = fresh_target()
+        rc, text = sh([init, t], os.getcwd(), env=no_cli)
+        rows.append((rc == 0 and "CLI graphify нет" in text and not os.path.exists(f"{t}/graphify-out"), f"init без CLI — rc {rc}, строка установки — {'да' if 'CLI graphify нет' in text else 'нет'}"))
+        t = fresh_target()
+        rc, text = sh([init, t], os.getcwd(), env=dict(stub, STUB_RC="3"))
+        rows.append((rc == 0 and "не прошёл" in text, f"init, CLI упал — rc {rc}, сказано — {'да' if 'не прошёл' in text else 'нет'}"))
+        up = os.path.abspath(f"{root}/bin/two-tier-upgrade")
+
+        def upgraded(silent_hook, graph):
+            u = tempfile.mkdtemp(prefix="graph-up-", dir=TMP)
+            sh(["git", "init", "-q", "-b", "main"], u)
+            put(u, "src/a.py", "a = 1\n")
+            sh(["git", "add", "-A"], u)
+            sh(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "base"], u)
+            if silent_hook:
+                put(u, ".git/hooks/post-commit", "#!/bin/sh\ngraphify hook-rebuild\n")
+            if graph:
+                put(u, "graphify-out/graph.json", "{}\n")
+            rc_up, _ = sh([up, u], os.getcwd(), env=dict(os.environ))
+            return rc_up, read(f"{u}/docs/upgrade-v3.md") if os.path.isfile(f"{u}/docs/upgrade-v3.md") else "", os.access(f"{u}/.githooks/post-commit", os.X_OK)
+        rc, report, hooked = upgraded(True, False)
+        rows.append((rc == 0 and hooked and "`post-commit`" in report and "молчат" in report and "`graphify update .`" in report, f"апгрейд: хук .git/hooks и нет графа — rc {rc}, в отчёте названы — {'да' if 'молчат' in report and 'graphify update' in report else 'нет'}; post-commit кита — {'да' if hooked else 'нет'}"))
+        rc, report, hooked = upgraded(False, True)
+        rows.append((rc == 0 and hooked and "молчат" not in report and "`graphify update .`" not in report, f"апгрейд: своих хуков нет, граф есть — rc {rc}, лишних строк нет — {'да' if 'молчат' not in report and 'graphify update' not in report else 'нет'}"))
+    else:
+        print("--   graph: не репо кита — init и апгрейд не гоняются", flush=True)
+    # живой CLI: граф растёт после коммита, вне репо не пишет; на машине без CLI (CI) — строка
+    if shutil.which("graphify"):
+        home = tempfile.mkdtemp(prefix="graph-home-", dir=TMP)
+        live = dict(GIT_ENV, HOME=home, PATH=os.environ["PATH"])
+        d = project({"basis": None, "module": {}})
+        first = sh(["graphify", "update", "."], d, env=live)
+        put(d, "src/g2.py", "def graph_probe_fn():\n    return 1\n")
+        sh(["git", "add", "--", "src/g2.py"], d, env=live)
+        rc, _ = sh(["git", "commit", "-qm", "F1.1: живая проба графа"], d, env=live)
+        end, found = time.monotonic() + 30, False
+        while time.monotonic() < end and not found:
+            found = "graph_probe_fn" in read(f"{d}/graphify-out/graph.json")
+            time.sleep(0.3)
+        outside = [f for _, _, fs in os.walk(home) for f in fs]
+        rows.append((first[0] == 0 and rc == 0 and found and not outside and not sh(["git", "status", "--short", "--", "graphify-out"], d)[1], f"живой CLI: новая функция в графе после коммита — {'да' if found else 'нет'}, файлов вне репо — {len(outside)}"))
+    else:
+        print("--   graph: CLI graphify нет в PATH (CI) — живого прогона нет", flush=True)
+    ok, raw_rows = all(r[0] for r in rows), "; ".join(("" if r[0] else "FAIL ") + r[1] for r in rows)
+    print(f"graph {'' if ok else 'FAIL: '}{raw_rows}", flush=True)
+    print("GRAPH_OK" if ok else "GRAPH_FAIL", flush=True)
+    shutil.rmtree(stub_dir, ignore_errors=True)
+    return ok
+
+
 def run_sections(names):
-    return all([{"frozen": section_frozen, "fenster": section_fenster}[n]() for n in names])
+    return all([{"frozen": section_frozen, "fenster": section_fenster, "graph": section_graph}[n]() for n in names])
 
 
 if want:

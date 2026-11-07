@@ -876,6 +876,34 @@ MODE_FIXTURE = """## Environment
 """
 
 
+def graph_age(root="."):
+    """(статус, текст) графа кода против HEAD (F6.1): граф старше коммита HEAD — WARN, не красное: его пересобирает .githooks/post-commit в фоне; графа нет — статуса нет."""
+    p = os.path.join(root, "graphify-out/graph.json")
+    head = subprocess.run(["git", "-C", root, "log", "-1", "--format=%ct"], capture_output=True, text=True).stdout.strip()
+    if not os.path.isfile(p) or not head:
+        return None, "графа нет (graphify-out/graph.json) или нет коммитов"
+    age = int(head) - int(os.path.getmtime(p))
+    return ("WARN", f"граф старше HEAD на {age} с; собрать: graphify update .") if age > 0 else ("OK", "граф не старше HEAD")
+
+
+def graph_age_probes():
+    """Стороны graph_age на фикстуре: нет графа, старше HEAD, ровно HEAD, новее."""
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="graph-age-", dir=TMP)
+    git = lambda *a: subprocess.run(["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a], capture_output=True, text=True)
+    git("init", "-q")
+    git("commit", "-q", "--allow-empty", "-m", "x")
+    t = int(git("log", "-1", "--format=%ct").stdout.strip())
+    got = [("нет графа", None, graph_age(d)[0])]
+    os.makedirs(f"{d}/graphify-out")
+    open(f"{d}/graphify-out/graph.json", "w").write("{}")
+    for name, delta, want in (("старше HEAD", -100, "WARN"), ("ровно HEAD", 0, "OK"), ("новее HEAD", 100, "OK")):
+        os.utime(f"{d}/graphify-out/graph.json", (t + delta, t + delta))
+        got.append((name, want, graph_age(d)[0]))
+    shutil.rmtree(d, ignore_errors=True)
+    return got
+
+
 def self_test():
     rows = table(FIXTURE)
     line = "--permission-mode auto --effort ultracode"
@@ -917,6 +945,9 @@ def self_test():
         good = not bad if want is None else len(bad) == 1 and want in bad[0]
         ok &= good
         print(f"{'ok ' if good else 'BAD'} modes · {name}: {'; '.join(bad) or 'расхождений нет'}")
+    for name, want, status in graph_age_probes():
+        ok &= status == want
+        print(f"{'ok ' if status == want else 'BAD'} graph-age · {name}: {status or 'статуса нет'}")
     print(f"фикстура таблицы: строк {len(rows)}; {'; '.join(f'{f}: {len(ids)}' for _, f, ids, _, _ in rows[:3])} …")
     for name, init, l, w, want in cases:
         bad, _ = compare(rows, init, l, w)
@@ -1720,6 +1751,8 @@ def main():
     print(f"источник харнеса: {src}; строка запуска: {proc}; launch settings: {launch}; разделы: {', '.join(want)}")
     if "env" in want:
         say("ENV", "OK" if self_test() else "FAIL", "self-test", "фикстуры обеих сторон сверки")
+        status, text = graph_age()
+        print(f"{status or '--':4} graph: {text}" + ("\nHARNESS_WARN graph-age" if status == "WARN" else ""), flush=True)
         line = static(src, proc, launch)
         ran = False
         if line:

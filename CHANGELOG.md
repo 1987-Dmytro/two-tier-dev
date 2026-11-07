@@ -6,6 +6,9 @@ version is what the next `bin/two-tier-init` ships. A rule enters only on the RE
 it, and it enters first as a hook (D10). Dates are the days the rule entered the live kit.
 
 ## Unreleased — named debts
+- **Graphify is in the kit (the operator's word, 07.11, in phase v3.4).** `core.hooksPath .githooks` silences `.git/hooks`, so `graphify hook install` stopped rebuilding the graph without a word (telefon, lesson 54).
+  New: `.githooks/post-commit` runs `graphify update .` in the background when a graph and the CLI exist (AST, no model, no network, writes only to `graphify-out/`); `bin/two-tier-init` builds the first graph when the CLI is there; the upgrade report names silenced hooks and the build command; `bin/check-harness` prints `HARNESS_WARN graph-age` when the graph is older than HEAD (the graph part of F6.1); `bin/check-kit graph` → `GRAPH_OK`.
+  Before: a commit left the graph stale and nothing said so; after: the graph follows HEAD, a stale one is named. No hint hook and no `rules/graphify.md`: v3.0 retired them, the Environment row carries the tool.
 - **The 5-hour window is gone (the operator's word, 06.11, in phase v3.4).** The plan dropped it: the live `rate_limit_event` of 06.11 carries only `unifiedWindows.seven_day`.
   `bin/check-window` judges the week alone: before — `WINDOW: refuse — окна не сняты: нет окна five_hour`, and `bin/verify-phase` refused before the clone; after — `WINDOW: start`, `WINDOW_OK`.
   `window_five_hour_pct` and `window_repair_pct` left `kit/budgets.json` (the repair threshold stood on that window); `--repair` is still accepted and does nothing, a project's launch line may carry it.

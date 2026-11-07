@@ -91,7 +91,7 @@ commit hook and by the ownership lint: a commit that changes one of them must st
 | `kit/REVIEW.md` | the review template: findings, at most five blocking, `Named, not built` |
 | `kit/budgets.json` · `kit/bin/` | the budgets and the tools a project runs itself (`check-budget`, `check-ci`, `check-harness`, `check-kit`, `check-spend`, `check-ui`, `check-window`, `jev`, `phase-report`, `two-tier-upgrade`, `verify-phase`) |
 | `kit/docs/*.template.*` · `kit/docs/LAUNCH.md` | INTENT, SPEC (items and the judges table), the start prompt PROMPT, PLAN, PROGRESS, STATUS, PROCESS; the launch line with the window guard, `spec-gate` modes and the control run |
-| `kit/.githooks/` | `commit-msg` (the code rules, then `abide check`), `pre-push` (no force-push) |
+| `kit/.githooks/` | `commit-msg` (the code rules, then `abide check`), `pre-push` (no force-push), `post-commit` (rebuilds the Graphify code graph in the background when one exists: AST, no model, no network) |
 | `kit/.claude/settings.json` | `model: claude-opus-5-5`, `autoMemoryEnabled: false`, `disableClaudeAiConnectors: true`, `worktree.baseRef: head`, `workflowSizeGuideline: medium`, narrow allow on `bin/check-*`, `bin/gate-*`, `make ci`, deny `Edit` on team-lead files, the hooks |
 | `kit/.claude/launch.settings.json` | `enabledPlugins` and `skillOverrides` by the Environment table, the `autoMode.environment` template (`"$defaults"` + project placeholders), passed with `--settings` |
 | `kit/.claude/workflows/verify-phase.js` | the saved workflow `/verify-phase`, a feature list through `args`; its copy in `.claude/workflows/` lets this repository accept its own phases |
