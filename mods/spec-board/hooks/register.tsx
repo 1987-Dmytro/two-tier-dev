@@ -9,13 +9,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 import type { Board } from '../types'
-import { EMPTY, boardOf, specPathOf, statusOf } from './board'
+import { EMPTY, boardOf, featuresOf, specPathOf, statusOf } from './board'
 
 const PANE = 'spec-board'
 const EVERY_MS = 60_000
 const CALL_GAP_MS = 5_000 // after a tool call the files are read again at most this often; the clock catches the rest
 // Change the tag when Board's fields change: it declines what an earlier version stored, which outlives a reload.
-const board = atom({ plugin: 'spec-board', key: 'board' } as const, EMPTY, { shape: 'board-1' })
+const board = atom({ plugin: 'spec-board', key: 'board' } as const, EMPTY, { shape: 'board-2' })
 
 async function readOr($: EngineInterface, path: string): Promise<string | undefined> {
   try {
@@ -29,29 +29,38 @@ async function collect($: EngineInterface): Promise<Board> {
   const root = (await $.session.repo())?.root ?? (await $.session.root())
   const prompt = (await readOr($, `${root}/docs/PROMPT.txt`)) ?? (await readOr($, `${root}/docs/GOAL.txt`))
   const rf = prompt ? specPathOf(prompt) : undefined
+  const spec = rf ? await readOr($, `${root}/${rf}`) : undefined
+  const ids = new Set(featuresOf(spec ?? '').map(f => f.id)) // only the files of this SPEC's features are read, as spec-gate reads them
   let entries: Array<{ name: string; kind: string; mtimeMs: number }> = []
   try {
     entries = await $.fs.list(`${root}/docs/evidence`)
   } catch {
     entries = []
   }
-  const wanted = entries.filter(e => e.kind === 'file' && (/^F\d+-.*-result\.txt$/.test(e.name) || /^verify-[0-9a-f]{7,40}(?:-[\w.-]+)?\.txt$/.test(e.name)))
+  const wanted = entries.filter(e => e.kind === 'file' && (ids.has((e.name.match(/^(F\d+)-.*-result\.txt$/) || [])[1] ?? '') || /^verify-[0-9a-f]{7,40}(?:-[\w.-]+)?\.txt$/.test(e.name)))
   const evidence = []
   for (const e of wanted) {
     const text = await readOr($, `${root}/docs/evidence/${e.name}`)
     if (text !== undefined) evidence.push({ name: e.name, text, mtimeMs: e.mtimeMs })
   }
-  let order: string[] | undefined
-  try {  // the verdicts in commit order, newest first: a fresh clone gives every file the same mtime
-    const r = await $.process.run(['git', 'log', '--format=', '--name-only', '--diff-filter=A', '--', 'docs/evidence'], { cwd: root })
-    order = r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.slice(l.lastIndexOf('/') + 1)) : undefined
-  } catch {
-    order = undefined
+  const git = async (argv: string[]) => {
+    try {
+      const r = await $.process.run(['git', ...argv], { cwd: root })
+      return r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trimEnd()).filter(Boolean) : undefined
+    } catch {
+      return undefined
+    }
   }
+  // the verdicts in commit order, newest first: a fresh clone gives every file the same mtime
+  const order = (await git(['log', '--format=', '--name-only', '--diff-filter=A', '--', 'docs/evidence']))?.map(l => l.slice(l.lastIndexOf('/') + 1))
+  // what spec-gate holds the turn on: the set changed or untracked against HEAD (journals *.jsonl are not part of the set)
+  const set = ['docs/PROMPT.txt', 'docs/GOAL.txt', 'docs/PROGRESS.md', ...(rf ? [rf] : []), 'docs/evidence']
+  const dirty = ((await git(['status', '--porcelain', '--untracked-files=all', '--', ...set])) ?? []).map(l => l.slice(3)).filter(p => !p.endsWith('.jsonl') && !p.endsWith('phase-report.md'))
   return boardOf({
     order,
+    dirty,
     prompt,
-    spec: rf ? await readOr($, `${root}/${rf}`) : undefined,
+    spec,
     evidence,
     gateLog: await readOr($, `${root}/docs/evidence/spec-gate.jsonl`),
     progress: await readOr($, `${root}/docs/PROGRESS.md`),
@@ -120,6 +129,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         <Text>{cut(statusOf(b))}</Text>
+        {b.dirty.length > 0 && <Text color="warning">{cut(`не в HEAD (spec-gate их не засчитает): ${b.dirty.join(', ')}`)}</Text>}
         {b.features.map(f => (
           <Box flexDirection="column" key={f.id}>
             <Text color={f.hasMarker ? 'success' : 'error'}>{cut(`${f.id} ${f.marker ?? 'нет маркера'} ${f.hasMarker ? 'есть' : 'нет'}`)}</Text>

@@ -1501,9 +1501,29 @@ BOARD_TESTS = {  # названные тесты мода — стороны п�
 }
 
 
+def board_net(code):
+    """Что в коде мода зовёт модель, сеть или процесс сверх git: `$.model`, `$.agent`, `$.http`, `fetch(`, `$.process.*` не `run(['git', …])` — список; пусто — чисто."""
+    bad = [w for w in ("$.model", "$.agent", "$.http", "fetch(") if w in code]
+    return bad + [m.group(0) for m in re.finditer(r"\$\.process\.(\w+)\(\s*(?:\[\s*['\"](\w+)['\"])?", code) if not (m.group(1) == "run" and m.group(2) == "git")]
+
+
+def board_agrees(row, on):
+    """Строка шаблона Environment и профиль кита о spec-board: строка есть, в профиле — булево, «да» ⇔ true."""
+    return bool(row) and isinstance(on, bool) and ("| да |" in row) == on
+
+
+def board_run(folder, env):
+    """claude plugin test папки мода: (rc, вывод, pass, fail, названные непрошедшие по пунктам)."""
+    r = sh(["claude", "plugin", "test", folder], ".", env=env, timeout=300)
+    npass, nfail = re.search(r"^\s*(\d+) pass$", r[1], re.M), re.search(r"^\s*(\d+) fail$", r[1], re.M)
+    miss = {i: [n for n in names if f"(pass) {n}" not in r[1]] for i, names in BOARD_TESTS.items()}
+    return r[0], r[1], npass.group(1) if npass else "?", nfail.group(1) if nfail else "?", miss
+
+
 def section_mods():
-    """F9: мод spec-board в репо кита. validate и test — настоящий CLI на папке мода; F9.1 — названные тесты фикстуры (2/1/1, снять строку — 1/1/2), F9.2 — validate,
-    число тестов, -p и подагенты без рисования, в коде мода нет $.model, $.net и fetch, строка marketplace, строка шаблона Environment и профиль кита согласны."""
+    """F9: мод spec-board в репо кита. validate и test — настоящий CLI на папке мода; F9.1 — названные тесты фикстуры и числа доски из их вывода (строки
+    `F9.1-board`/`F9.1-nach`: замер, не имя теста); F9.2 — validate, число тестов, -p и подагенты без рисования, в коде мода нет модели, сети и процессов,
+    кроме git, строка marketplace, строка шаблона Environment и профиль кита согласны; у каждой проверки F9.2 — красная сторона."""
     sec.clear()
     if not os.path.isdir(SPEC_BOARD) or not os.path.isfile("mods/.claude-plugin/marketplace.json"):
         for i in ("F9.1", "F9.2"):
@@ -1517,26 +1537,38 @@ def section_mods():
         return True
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     v = sh(["claude", "plugin", "validate", SPEC_BOARD], ".", env=env, timeout=180)
-    t = sh(["claude", "plugin", "test", SPEC_BOARD], ".", env=env, timeout=300)
-    npass, nfail = re.search(r"^\s*(\d+) pass$", t[1], re.M), re.search(r"^\s*(\d+) fail$", t[1], re.M)
-    passed = lambda name: f"(pass) {name}" in t[1]
-    tested = t[0] == 0 and npass and nfail and nfail.group(1) == "0"
-    miss = {i: [n for n in names if not passed(n)] for i, names in BOARD_TESTS.items()}
-    nums = [re.search(r"board=(\d+/\d+/\d+)", n).group(1) for n in BOARD_TESTS["F9.1"][:2]]
-    probe("F9.1", tested and not miss["F9.1"], f"board={nums[0] if passed(BOARD_TESTS['F9.1'][0]) else 'нет'} nach={nums[1] if passed(BOARD_TESTS['F9.1'][1]) else 'нет'} · "
-          f"claude plugin test {SPEC_BOARD}: rc {t[0]}, {npass.group(1) if npass else '?'} pass, {nfail.group(1) if nfail else '?'} fail; названных тестов F9.1 "
+    rc, text, npass, nfail, miss = board_run(SPEC_BOARD, env)
+    tested = rc == 0 and npass != "?" and nfail == "0"
+    seen = lambda tag: (re.search(rf"^{tag} board (\d+/\d+/\d+)\b", text, re.M) or [None, "нет"])[1]
+    board, nach = seen("F9.1-board"), seen("F9.1-nach")
+    probe("F9.1", tested and not miss["F9.1"] and board == "2/1/1" and nach == "1/1/2",
+          f"board={board} nach={nach} · claude plugin test {SPEC_BOARD}: rc {rc}, {npass} pass, {nfail} fail; названных тестов F9.1 "
           f"{len(BOARD_TESTS['F9.1']) - len(miss['F9.1'])} из {len(BOARD_TESTS['F9.1'])}" + (f"; не прошли — {'; '.join(miss['F9.1'])}" if miss["F9.1"] else ""))
     code = "\n".join(read(f"{SPEC_BOARD}/hooks/{f}") for f in sorted(os.listdir(f"{SPEC_BOARD}/hooks")) if not f.endswith((".test.tsx", ".test.ts", ".json")))
-    net = [w for w in ("$.model", "$.net", "fetch(", "$.agent") if w in code]
-    market = [p.get("name") for p in json.loads(read("mods/.claude-plugin/marketplace.json")).get("plugins", [])]
+    net = board_net(code)
+    market = [x.get("name") for x in json.loads(read("mods/.claude-plugin/marketplace.json")).get("plugins", [])]
     row = next((l for l in read(f"{root}/docs/PROCESS.template.md").splitlines() if "`spec-board@two-tier-mods`" in l), "")
     on = json.loads(read(f"{root}/.claude/launch.settings.json")).get("enabledPlugins", {}).get("spec-board@two-tier-mods")
-    agree = bool(row) and isinstance(on, bool) and ("| да |" in row) == on
-    ok = v[0] == 0 and "Validation passed" in v[1] and tested and not miss["F9.2"] and not net and "spec-board" in market and agree
-    probe("F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass.group(1) if npass else '?'} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "
+    agree = board_agrees(row, on)
+    # красные стороны F9.2: копия мода с поломанным названным тестом, код с сетью и процессом, строка и профиль врозь
+    broken = tempfile.mkdtemp(prefix="check-kit-board-", dir=TMP)
+    shutil.copytree(SPEC_BOARD, f"{broken}/spec-board", ignore=shutil.ignore_patterns(".claude-plugin/types"))
+    tf = f"{broken}/spec-board/hooks/spec-board.test.tsx"
+    put(f"{broken}/spec-board", "hooks/spec-board.test.tsx", read(tf).replace("expect(seen.statuses.length).toBe(before)\n})\n\ntest('a value", "expect(seen.statuses.length).toBe(before + 1)\n})\n\ntest('a value", 1))
+    b_rc, _, _, b_fail, b_miss = board_run(f"{broken}/spec-board", env)
+    shutil.rmtree(broken, ignore_errors=True)
+    red_test = b_rc != 0 and "a subagent tool call does not redraw" in b_miss["F9.2"]
+    red_net = board_net("await fetch(u)") == ["fetch("] and board_net("$.process.run(['curl', u])") and not board_net("$.process.run(['git', 'log'])") and board_net("$.model.complete({})")
+    git_clean = not board_net("$.process.run(['git', 'log'])")
+    red_agree = not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | да | x |", False) and not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | нет | x |", True) and not board_agrees("", False)
+    ok = v[0] == 0 and "Validation passed" in v[1] and tested and not miss["F9.2"] and not net and "spec-board" in market and agree and red_test and bool(red_net) and git_clean and red_agree
+    probe("F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "
           f"названных тестов F9.2 {len(BOARD_TESTS['F9.2']) - len(miss['F9.2'])} из {len(BOARD_TESTS['F9.2'])}" + (f" (не прошли — {'; '.join(miss['F9.2'])})" if miss["F9.2"] else "")
-          + f"; модель и сеть в коде мода — {', '.join(net) or 'нет'}; marketplace — {'есть' if 'spec-board' in market else 'нет'}; "
-          f"строка шаблона Environment — {'«да»' if '| да |' in row else '«нет»' if row else 'нет строки'}, профиль кита — {on}{'' if agree else ' (не согласны)'}")
+          + f"; модель, сеть и процесс не на git в коде мода — {', '.join(net) or 'нет'}; marketplace — {'есть' if 'spec-board' in market else 'нет'}; "
+          f"строка шаблона Environment — {'«да»' if '| да |' in row else '«нет»' if row else 'нет строки'}, профиль кита — {on}{'' if agree else ' (не согласны)'} · "
+          f"красные: копия с поломанным тестом «a subagent tool call does not redraw» — rc {b_rc}, fail {b_fail}, {'названный не прошёл' if red_test else 'НЕ пойман'}; "
+          f"fetch, curl через процесс, $.model — {'пойманы' if red_net else 'НЕ пойманы'}, git — {'чист' if git_clean else 'пойман зря'}; "
+          f"строка «да» и профиль false, «нет» и true, нет строки — {'врозь' if red_agree else 'НЕ пойманы'}")
     green = all(sec) and len(sec) == 2
     print("MODS_OK" if green else "MODS_FAIL", flush=True)
     return green

@@ -1,6 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 import { featuresOf, markOf } from './board'
 
+declare const console: { log: (...args: unknown[]) => void } // the test runner has it; lib es2023 does not declare it
+
 // The fixture of SPEC-v3.4 F9.1: two features, four items; F1.1 and F2.1 green, F1.2 red, F2.2 without a probe line → 2/1/1.
 const PROMPT = 'Phase 1.\nRead first: docs/SPEC-1.md, docs/PROGRESS.md\n'
 const SPEC = [
@@ -43,9 +45,9 @@ const MTIME: Record<string, number> = { 'verify-aaaaaaa-F1.txt': 1, 'verify-bbbb
 
 // The engine beneath the mod: files under /repo (mutable between calls), what the session draws on, and what the mod asked of it.
 const seat = (on: any, { files = fixture(), surfaces = [] as string[] } = {}) => {
-  const seen = { files, surfaces, statuses: [] as unknown[], opened: [] as string[], registered: [] as string[], reads: 0, git: null as string | null, repoFails: false, clock: mock.clock(on, { now: 0 }) }
+  const seen = { files, surfaces, statuses: [] as unknown[], opened: [] as string[], registered: [] as string[], reads: 0, paths: [] as string[], git: null as string | null, status: '', repoFails: false, clock: mock.clock(on, { now: 0 }) }
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
-  on('session.attach', () => ({}))
+  on('session.attach', ($: any, e: any) => ({ clientId: e.clientId }))  // the roster stays empty: the attach alone must make the session a person's
   on('command.register', ($: any, e: any) => {
     seen.registered.push(e.name)
     return { value: { command: e.name } }
@@ -58,6 +60,7 @@ const seat = (on: any, { files = fixture(), surfaces = [] as string[] } = {}) =>
   on('session.surfaces', () => ({ value: seen.surfaces }))
   on('fs.read', ($: any, e: any) => {
     seen.reads += 1
+    seen.paths.push(String(e.path))
     const rel = String(e.path).replace(/^\/repo\//, '')
     return rel in seen.files ? { value: seen.files[rel] } : { deny: 'no such file' }
   })
@@ -75,7 +78,10 @@ const seat = (on: any, { files = fixture(), surfaces = [] as string[] } = {}) =>
     return { value: { isPlaced: true } }
   })
   on('process.run', ($: any, e: any) => {
-    expect(e.argv.slice(0, 2)).toEqual(['git', 'log'])
+    expect(e.argv[0]).toBe('git')
+    expect(e.init.cwd).toBe('/repo')
+    if (e.argv[1] === 'status') return { value: { exitCode: 0, stdout: seen.status, stderr: '' } }
+    expect(e.argv[1]).toBe('log')
     return seen.git === null ? { deny: 'no git' } : { value: { exitCode: 0, stdout: seen.git, stderr: '' } }
   })
   on('tool.call', () => ({ result: {} }))
@@ -99,13 +105,14 @@ test('markOf: a probe line is green, FAIL, BAD or offen is red, an id alone or a
   expect(markOf('F3.5', [['F3.5 telefon=offen · клона нет']]).mark).toBe('red')
   expect(markOf('F3.1', [['F3.1 verboten=OK offen=OK cap=OK']]).mark).toBe('green')
   expect(markOf('F1.1', [['F1.1 ok=FAIL-free']]).mark).toBe('green')
-  expect(markOf('F1.1', [['F1.1'], ['F1.10 ok'], ['xF1.1 ok']]).mark).toBe('none')
+  expect(markOf('F1.1', [['F1.1'], ['F1.1 '], ['F1.10 ok'], ['xF1.1 ok']]).mark).toBe('none')
 })
 
 test('fixture: board=2/1/1 in the status line and the pane, on every surface', async ($, on) => {
   const seen = seat(on)
   await start($)
   expect(last(seen)).toBe('board 2/1/1 · маркеров 2/2 · gate block 3 missing · PASS F1,F2 · STOP-TL «Leg 3»')
+  console.log(`F9.1-board ${last(seen)}`)  // bin/check-kit mods берёт число из этой строки: замер, не имя теста
   const answer = await $.command.run({ command: 'board', args: '', ...CMD })
   expect(answer.text).toBe(last(seen))
   expect(seen.opened).toEqual(['spec-board'])
@@ -113,6 +120,9 @@ test('fixture: board=2/1/1 in the status line and the pane, on every surface', a
     const ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Text', text: /^board / }))?.text).toBe(last(seen))
     expect((await ui.find({ type: 'Text', text: /F1\.2/ }))?.text).toBe('  F1.2 red · FAIL: b=нет · сырой вывод')
+    expect((await ui.find({ type: 'Text', text: /F1\.2/ }))?.props.color).toBe('error')
+    expect((await ui.find({ type: 'Text', text: /F1\.1/ }))?.props.color).toBe('success')
+    expect((await ui.find({ type: 'Text', text: /F2\.2/ }))?.props.color).toBe('subtle')
     expect((await ui.find({ type: 'Text', text: /F2\.2/ }))?.text).toBe('  F2.2 нет строки')
     expect((await ui.find({ type: 'Text', text: /^F2 / }))?.text).toBe('F2 B_OK есть')
     await ui.unmount()
@@ -126,6 +136,7 @@ test('a probe line removed: board=1/1/2 after the next tool call', async ($, on)
   await seen.clock.advance(5_000)
   await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect(last(seen)).toBe('board 1/1/2 · маркеров 2/2 · gate block 3 missing · PASS F1,F2 · STOP-TL «Leg 3»')
+  console.log(`F9.1-nach ${last(seen)}`)
 })
 
 test('a marker line removed: the feature has no marker', async ($, on) => {
@@ -249,4 +260,45 @@ test('a failed read keeps the last board and the call stands', async ($, on) => 
   const r = await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect(r.isError).not.toBe(true)
   expect(seen.statuses.length).toBe(before)
+})
+
+test('featuresOf: a range wider than its item lines counts every id; an item after a blank line under a feature without a range stays', () => {
+  const spec = '- **F3 Drei** · готово: F3.1–F3.3 · чек: `bin/c` → `C_OK` · служит: S1\n  - `F3.1` a\n  - `F3.2` b\n- **F4 Vier** · чек: `bin/d` → `D_OK`\n  - `F4.1` a\n\n  - `F4.2` b\n'
+  expect(featuresOf(spec)).toEqual([
+    { id: 'F3', marker: 'C_OK', items: ['F3.1', 'F3.2', 'F3.3'] },
+    { id: 'F4', marker: 'D_OK', items: ['F4.1', 'F4.2'] },
+  ])
+})
+
+test('files of the set changed or untracked against HEAD are named: spec-gate does not count them', async ($, on) => {
+  const seen = seat(on)
+  seen.status = '?? docs/evidence/F2-b-result.txt\n M docs/evidence/spec-gate.jsonl\n'
+  await start($)
+  expect(last(seen)).toBe('board 2/1/1 · не в HEAD: 1 · маркеров 2/2 · gate block 3 missing · PASS F1,F2 · STOP-TL «Leg 3»')
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /не в HEAD \(/ }))?.text).toBe('не в HEAD (spec-gate их не засчитает): docs/evidence/F2-b-result.txt')
+  await ui.unmount()
+})
+
+test('only the evidence files of this SPEC features are read', async ($, on) => {
+  const seen = seat(on)
+  seen.files['docs/evidence/F7-other-result.txt'] = 'spec: SPEC-7\nF7.1 ok\n'
+  await start($)
+  expect(seen.paths).not.toContain('/repo/docs/evidence/F7-other-result.txt')
+  expect(seen.paths).toContain('/repo/docs/evidence/F2-b-result.txt')
+})
+
+test('a surface attached later draws: the attach alone is enough', async ($, on) => {
+  const seen = seat(on)
+  await start($, false)
+  expect(seen.statuses).toEqual([])
+  await $.session.attach({ surface: 'desktop', clientId: 'c1' })
+  expect(last(seen)).toContain('board 2/1/1')
+})
+
+test('a spec-gate journal whose last line is not JSON is said so', async ($, on) => {
+  const seen = seat(on)
+  seen.files['docs/evidence/spec-gate.jsonl'] = GATE + '{oops\n'
+  await start($)
+  expect(last(seen)).toContain('gate журнал не JSON')
 })

@@ -6,7 +6,7 @@
 
 import type { Board, FeatureRow, Mark } from '../types'
 
-export const EMPTY: Board = { spec: '', features: [], counts: [0, 0, 0], gate: '—', verdict: '—', stop: '—' }
+export const EMPTY: Board = { spec: '', features: [], counts: [0, 0, 0], gate: '—', verdict: '—', stop: '—', dirty: [] }
 
 export type Files = {
   prompt: string | undefined
@@ -15,6 +15,7 @@ export type Files = {
   gateLog: string | undefined
   progress: string | undefined
   order?: readonly string[] // evidence files, newest commit first (git log); a file not in it — newer still; no list — by mtime
+  dirty?: readonly string[] // the set spec-gate judges as pushed that git status shows changed or untracked (paths from the repo root)
 }
 
 export function specPathOf(prompt: string): string | undefined {
@@ -108,11 +109,13 @@ export function boardOf(files: Files): Board {
     gate: gateOf(files.gateLog),
     verdict: verdictOf(files.evidence, specPath, files.order),
     stop: stopOf(files.progress),
+    dirty: [...(files.dirty ?? [])],
   }
 }
 
 export function statusOf(b: Board): string {
   if (!b.spec) return `board: нет фазы (docs/PROMPT.txt без SPEC в Read first) · gate ${b.gate} · ${b.stop}`
   const markers = b.features.filter(f => f.hasMarker).length
-  return `board ${b.counts.join('/')} · маркеров ${markers}/${b.features.length} · gate ${b.gate} · ${b.verdict} · ${b.stop}`
+  const dirty = b.dirty.length ? ` · не в HEAD: ${b.dirty.length}` : ''  // spec-gate judges the set as pushed: a line only on disk does not count there
+  return `board ${b.counts.join('/')}${dirty} · маркеров ${markers}/${b.features.length} · gate ${b.gate} · ${b.verdict} · ${b.stop}`
 }

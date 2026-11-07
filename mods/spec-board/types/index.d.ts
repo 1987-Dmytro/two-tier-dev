@@ -9,6 +9,7 @@ export type Board = {
   gate: string // the last decision of docs/evidence/spec-gate.jsonl
   verdict: string // the newest verify-*.txt of this SPEC
   stop: string // the open STOP of docs/PROGRESS.md
+  dirty: string[] // files of the set changed or untracked against HEAD (git status): spec-gate holds the turn on them
 }
 
 declare module 'claude-code' {
