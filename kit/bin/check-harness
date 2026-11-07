@@ -2065,7 +2065,7 @@ def tab_profile_probes(src, launch):
                 f"утечек {sum(w in r.stdout for w in (hidden, '/nested-dir'))}")
 
     step = "cp .claude/launch.settings.json .claude/settings.local.json"
-    got = [("нет файла: WARN, код 0; каталоги пользователя и проекта слиты числом, графа нет", f"rc 0; HARNESS_WARN write-block-wider additional=3 | HARNESS_WARN tab-profile нет .claude/settings.local.json — оператор копирует профиль: {step}; F6.3 offen; graph=нет; утечек 0",
+    got = [("нет файла: WARN, код 0; каталоги пользователя и проекта слиты числом, графа нет", f"rc 0; HARNESS_WARN write-block-wider additional=3 | HARNESS_WARN tab-profile profil=fehlt — нет .claude/settings.local.json, оператор копирует профиль: {step}; F6.3 offen; graph=нет; утечек 0",
             side(None, ["/nested-dir-a", "/nested-dir-b", "/nested-dir-a"], ["/nested-dir-b", "/nested-dir-c"])),
            ("та же суть, иной порядок ключей и пробелы: строки нет", "rc 0; ; F6.3 offen; graph=нет; утечек 0", side(json.dumps(dict(reversed(list(profile.items()))), indent=4))),
            ("иное по смыслу: красный с именами ключей, без значений; каталог из local — числом",
@@ -2271,7 +2271,7 @@ def desktop_profile(src, proc, launch):
     local = f"{os.path.dirname(launch)}/settings.local.json"
     differs, step = tab_profile(local, launch), f"cp {launch} {local}"
     if differs is None:
-        print(f"HARNESS_WARN tab-profile нет {local} — оператор копирует профиль: {step}", flush=True)
+        print(f"HARNESS_WARN tab-profile profil=fehlt — нет {local}, оператор копирует профиль: {step}", flush=True)
     elif differs:
         bad.append(f"tab-profile: {local} не как {launch}, ключи: {', '.join(differs)}")
     views, kinds = tab_view_probes(), profile_probes()

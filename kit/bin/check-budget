@@ -50,7 +50,7 @@ DAY, MONTH = r"(?:0[1-9]|[12]\d|3[01])", r"(?:0[1-9]|1[0-2])"
 AMEND = re.compile(rf"Поправка[ \t]+[^\s:<>][^:\n<>]*:[ \t]*слово оператора[ \t]+(?:{DAY}\.{MONTH}(?:\.\d{{4}})?|\d{{4}}-{MONTH}-{DAY})(?!\.?\d)")
 EVIDENCE = re.compile(r"(?<![\w./-])docs/evidence/[^\s`,;()]+")  # v3.4, F2.1: путь в ячейке «измерено у нас»; ../docs/evidence/ — уже не он
 PAIR_LINE = re.compile(r"^PAIR_(?:OK|FAIL) diff_p50=-?\d+ diff_p95=-?\d+", re.M)  # v3.4, F5.2: итог checks/paired_stand.sh в файле звена вендора
-DEPLOY_LINE = re.compile(r"\b(?:DEPLOY_LINIE=1|linie=1)\b")  # v3.4, F7.1: только токены шаблона деплоя: фраза «деплой на линию» ловит и описания
+DEPLOY_LINE = re.compile(r"\b(?:DEPLOY_LINIE=1|linie=1)\b")  # v3.4, F7.1: токены шаблона деплоя судят всегда; слова — список deploy_words файла тимлида (решение 398)
 LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key", "risk-tier")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
 
 
@@ -226,10 +226,29 @@ def issued(spec, prompt):
     return not git("log", "-1", "--format=%H", f"{at}..HEAD", "--", spec).stdout.strip() and not git("status", "--porcelain", "--", spec, prompt).stdout.strip()
 
 
+def in_flight(spec, prompt):
+    """Фаза идёт: после последнего коммита запроса есть коммит исполнителя (не «Тимлид:»), на диске запрос и SPEC чисты. Поправка тимлида на ходу такую SPEC в черновик не возвращает."""
+    at = git("log", "-1", "--format=%H", "--", prompt).stdout.strip()
+    subjects = git("log", "--format=%s", f"{at}..HEAD").stdout.splitlines() if at else []
+    return any(not s.startswith("Тимлид:") for s in subjects) and not git("status", "--porcelain", "--", spec, prompt).stdout.strip()
+
+
+def planken_words(key):
+    """v3.4, решение 398: список слов checks/planken.json как регулярка — слово целиком, без регистра. Нет файла, не JSON, нет ключа, пустой список — None:
+    судят встроенные маркер и токен (проект после апгрейда держит свой файл, IF_ABSENT ключи не дописывает)."""
+    try:
+        data = json.loads(read(PLANKEN))
+    except (OSError, ValueError):
+        return None
+    words = data.get(key) if isinstance(data, dict) else None
+    words = [w.strip() for w in words if isinstance(w, str) and w.strip()] if isinstance(words, list) else []
+    return re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, words)) + r")(?!\w)", re.I) if words else None
+
+
 def landing_rows(text):
-    """Планки таблиц посадки: [(звено, ячейка «измерено у нас»)]. Не планки: разделитель (во всех ячейках только тире и двоеточия), итог (первая ячейка
+    """Планки таблиц посадки: [(звено, ячейка «измерено у нас», ячейка «инструмент»)]. Не планки: разделитель (во всех ячейках только тире и двоеточия), итог (первая ячейка
     жирная и вторая пустая), таблица в блоке кода ```; экранированный \\| ячейку не делит. Жирное имя планки и пустая первая ячейка — планки."""
-    rows, col, fence = [], None, False
+    rows, col, tool, fence = [], None, None, False
     for l in text.splitlines():
         if re.match(r"\s*```[^`]*$", l):
             fence = not fence
@@ -239,8 +258,9 @@ def landing_rows(text):
         cells = [c.strip() for c in re.split(r"(?<!\\)\|", re.sub(r"^\||(?<!\\)\|$", "", l.strip()))]
         if col is None:
             col = next((i for i, c in enumerate(cells) if "измерено у нас" in c.lower()), None)
+            tool = next((i for i, c in enumerate(cells) if "инструмент" in c.lower()), None)
         elif not all(c and not c.strip("-:") for c in cells) and not (re.fullmatch(r"\*\*.+\*\*", cells[0]) and not "".join(cells[1:2])):
-            rows.append((cells[0], cells[col] if col < len(cells) else ""))
+            rows.append((cells[0], cells[col] if col < len(cells) else "", cells[tool] if tool is not None and tool < len(cells) else ""))
     return rows
 
 
@@ -254,13 +274,15 @@ def rule_planka(b):
     """v3.4, F2.1: планка без файла распределения — красная до выдачи SPEC (SPEC-v3.4 §1); выданная SPEC — файл тимлида, у неё WARN; на обрезанной истории
     выдачу не определить — тоже WARN. Ячейка годна: «ранняя» своим первым словом или файл в docs/evidence/ (путь, glob; непустой по тексту, симлинк наружу каталога — нет), а вне пути — n=<число ≥ 1>
     и числа p50/p95: «p50 1180, p95 2300» или «p50/p95 1180/2300», между именем и числом может стоять =, : или ≈.
-    F5.2: строка со словом «вендор» в ячейке звена судится парой: «ранняя» или слово pair вне пути и файл со строкой итога checks/paired_stand.sh; n и p50/p95 её не заменяют."""
+    F5.2: звено вендора — слово «вендор» в ячейке звена или слово vendor_words в ячейках звена и инструмента (решение 398; имена вендоров у telefon стоят в инструменте); судится парой:
+    «ранняя» или слово pair вне пути и файл со строкой итога checks/paired_stand.sh; n и p50/p95 её не заменяют."""
     ph = phase()
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec, prompt = ph[2], ph[4]
     rows, bad, home = landing_rows(read(spec)), [], os.path.join(os.path.realpath("."), "docs", "evidence") + os.sep  # от корня: сам docs/evidence бывает симлинком
-    for name, cell in rows:
+    vendor = planken_words("vendor_words")
+    for name, cell, tool in rows:
         if re.match(r"[^\w<]*ранняя\b", cell, re.I):  # своё первое слово: «<файл … или «ранняя»>» и «не ранняя» — не пометка
             continue
         f = EVIDENCE.search(cell)
@@ -273,7 +295,7 @@ def rule_planka(b):
         pct = re.search(r"\bp50\s*[=:≈]?\s*\d", rest, re.I) and re.search(r"\bp95\s*[=:≈]?\s*\d", rest, re.I) or re.search(r"\bp50\s*/\s*p95\s*[=:≈]?\s*[\d.,]+\s*/\s*\d", rest, re.I)
         source = "нет docs/evidence/<файл>" if not os.path.normpath(path).startswith("docs/evidence/") else f"нет файла {path}" if not found \
             else f"симлинк наружу docs/evidence/ — {path}" if not inside else f"пустой файл {path}" if not any(texts) else None
-        if "вендор" in name.lower():  # F5.2: абсолютный перцентиль стенда звено вендора не судит — нужен результат пары
+        if "вендор" in name.lower() or vendor and vendor.search(f"{name}\n{tool}"):  # F5.2: абсолютный перцентиль стенда звено вендора не судит — нужен результат пары
             why = "звено вендора: нет pair и нет «ранняя»" if not re.search(r"\bpair\b", rest) else source or (None if any(map(PAIR_LINE.search, texts)) else f"звено вендора: нет строки PAIR_OK|PAIR_FAIL в {path}")
         else:
             why = source or ("нет n=" if not (n and int(n.group(1))) else "нет p50/p95" if not pct else None)
@@ -295,19 +317,20 @@ def amendments(t):  # строки «Поправка …» в §0 SPEC (F2.2); 
 
 
 def rule_risk(b):
-    """v3.4, F7.1: фича с деплоем на линию (токен в её строке или пунктах) — только с `risk: high` в строке фичи: иначе красная до выдачи SPEC; выданная SPEC
-    или обрезанная история — WARN, как у planka-source."""
+    """v3.4, F7.1: фича с деплоем на линию (токен или слово deploy_words в её строке или пунктах, решение 398) — только с `risk: high` в строке фичи: иначе красная до выдачи SPEC;
+    выданная SPEC, идущая фаза (слова списка меняются на ходу, построенную фичу красным не вернуть) или обрезанная история — WARN."""
     ph = phase()
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec, prompt = ph[2], ph[4]
-    deployed = [(f, ls) for f, ls in blocks(read(spec).splitlines()) if any(DEPLOY_LINE.search(l) for l in ls)]
+    words = planken_words("deploy_words")
+    deployed = [(f, ls) for f, ls in blocks(read(spec).splitlines()) if any(DEPLOY_LINE.search(l) or words and words.search(l) for l in ls)]
     bad = [f for f, ls in deployed if not re.search(r"·\s*risk:\s*high\b", ls[0])]
     if not bad:
-        return [("OK", "risk-tier", f"{spec}: фич с токеном DEPLOY_LINIE=1|linie=1: {len(deployed)}, у всех risk: high")]
+        return [("OK", "risk-tier", f"{spec}: фич с деплоем на линию (токен или deploy_words): {len(deployed)}, у всех risk: high")]
     shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
     weight, note = ("WARN", " (история git обрезана: выдана ли SPEC — не определить)") if shallow \
-        else ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) else ("FAIL", "")
+        else ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) or in_flight(spec, prompt) else ("FAIL", "")
     return [(weight, "risk-tier", f"{' '.join(bad)}: деплой на линию без risk: high в строке фичи {spec}{note}")]
 
 
@@ -659,6 +682,16 @@ def fixtures(b, defaults):
     add("risk", "деплой на линию с risk: high", "OK", risk(" · risk: high", "`DEPLOY_LINIE=1 make deploy`"), rule_risk)
     add("risk", "деплой на линию без метки", "FAIL", risk("", "`DEPLOY_OK linie=1`"), rule_risk)
     add("risk", "без деплоя метка не нужна", "OK", risk("", "`bin/x`"), rule_risk)
+    words = lambda fs, w: {**fs, PLANKEN: json.dumps({"deploy_words": w})}
+    add("risk", "слово deploy_words без метки", "FAIL", words(risk("", "`make deploy`"), ["make deploy"]), rule_risk)
+    add("risk", "слово deploy_words с risk: high", "OK", words(risk(" · risk: high", "`make deploy`"), ["make deploy"]), rule_risk)
+    add("risk", "слово deploy_words другим регистром", "FAIL", words(risk("", "`MAKE DEPLOY`"), ["make deploy"]), rule_risk)
+    add("risk", "часть слова — не слово", "OK", words(risk("", "`remake deploys`"), ["make deploy"]), rule_risk)
+    add("risk", "пустые слова и не строки не судят всё", "OK", words(risk("", "`bin/x`"), ["", " ", 7]), rule_risk)
+    add("risk", "список не список: слово не судит", "OK", words(risk("", "`make deploy`"), "make deploy"), rule_risk)
+    add("risk", "файл не объект: токен судит", "FAIL", {**risk("", "`linie=1`"), PLANKEN: "[1]"}, rule_risk)
+    add("risk", "файл не JSON: слово не судит", "OK", {**risk("", "`make deploy`"), PLANKEN: "{"}, rule_risk)
+    add("risk", "файл не JSON: токен судит", "FAIL", {**risk("", "`linie=1`"), PLANKEN: "{"}, rule_risk)
     add("intent", "пин = hash-object", "OK", phase_fs(), rule_intent)
     add("intent", "пин ≠ hash-object", "FAIL", phase_fs(pin="0123456789ab"), rule_intent)
     add("intent", "пина нет", "FAIL", phase_fs(pin="<hash>"), rule_intent)

@@ -668,20 +668,29 @@ def lint_base():
     return d
 
 
-def lint_side(base, *spec_lines, issue=False, cut=False):
+def lint_side(base, *spec_lines, issue=False, cut=False, planken=None, tl_edit=None):
     """Настоящий bin/check-budget на копии проекта, зелёной во всём, кроме судимого (F7.1): (rc, строка risk-tier, BUDGET_ …).
-    issue — SPEC выдана (HEAD впереди коммита запроса); cut — клон глубины 1."""
+    issue — SPEC выдана (HEAD впереди коммита запроса); cut — клон глубины 1; planken — свой текст checks/planken.json (иначе список кита);
+    tl_edit — правка SPEC тимлидом: flight — коммитом после работы исполнителя, draft — коммитом до неё, dirty — после работы, без коммита."""
     d = tempfile.mkdtemp(prefix="verify-lint-", dir=TMP)
     shutil.copytree(base, d, symlinks=True, dirs_exist_ok=True)
     g = lambda *a: subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True, text=True)
     pin = g("hash-object", "intent/INTENT.md").stdout[:12]
     open(f"{d}/docs/SPEC-1.md", "w", encoding="utf-8").write(f"# SPEC-1\n\n**intent:** `intent/INTENT.md @ {pin}`\n\n## 2. Фичи\n" + "\n".join(spec_lines) + "\n\n## 3. Инварианты\n")
-    if issue or cut:
+    if planken is not None:
+        open(f"{d}/checks/planken.json", "w", encoding="utf-8").write(planken)
+    if issue or cut or tl_edit:
         g("add", "--", *g("ls-files", "-o", "--exclude-standard", "-z").stdout.split("\0")[:-1])
         g("commit", "-qm", "Тимлид: выдача")
-        open(f"{d}/work.txt", "w").write("x\n")
-        g("add", "--", "work.txt")
-        g("commit", "-qm", "F1.1: работа")
+        if tl_edit != "draft":
+            open(f"{d}/work.txt", "w").write("x\n")
+            g("add", "--", "work.txt")
+            g("commit", "-qm", "F1.1: работа")
+        if tl_edit:
+            open(f"{d}/docs/SPEC-1.md", "a", encoding="utf-8").write("Правка тимлида.\n")
+            if tl_edit != "dirty":
+                g("add", "--", "docs/SPEC-1.md")
+                g("commit", "-qm", "Тимлид: правка")
     cwd = d
     if cut:
         g("clone", "-q", "--depth", "1", f"file://{d}", f"{d}/cut")
@@ -728,14 +737,28 @@ def f71(s, h, crep):
         ("история обрезана", 0, "BUDGET_WARN risk-tier F1", side(head, item_d, cut=True)),
         ("risk: high в строке", 0, "нет", side(head + " · risk: high", item_d)),
         ("без токена", 0, "нет", side(head, neutral)),
-        ("фраза «деплой на линию», linie=10, DEPLOY_LINIE=0, xlinie=1 — не токены", 0, "нет", side(head, "  - `F1.1` деплой на линию: `linie=10` `DEPLOY_LINIE=0` `xlinie=1`")),
+        ("linie=10, DEPLOY_LINIE=0, xlinie=1 — не токены", 0, "нет", side(head, "  - `F1.1` `linie=10` `DEPLOY_LINIE=0` `xlinie=1`")),
+        # решение 398: деплой на линию — и слово deploy_words файла тимлида; без ключа или файла судит только токен
+        ("слово make deploy в пункте", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` `make deploy` печатает X")),
+        ("слово LIVE_OK в пункте", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` `bin/x` печатает `LIVE_OK`")),
+        ("фраза «деплой на линию»", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` деплой на линию")),
+        ("слово в строке фичи", 1, "BUDGET_FAIL risk-tier F1", side(head + " · окно деплоя", neutral)),
+        ("слово с risk: high", 0, "нет", side(head + " · risk: high", "  - `F1.1` `make deploy` печатает X")),
+        ("часть слова — не слово", 0, "нет", side(head, "  - `F1.1` `DEPLOY_OKAY` `XLIVE_OK` remake deploys")),
+        ("нет ключа: слово не судит", 0, "нет", side(head, "  - `F1.1` `make deploy` деплой на линию", planken="{}")),
+        ("нет ключа: токен судит", 1, "BUDGET_FAIL risk-tier F1", side(head, item_d, planken="{}")),
+        ("свой список заменяет список кита", 1, "BUDGET_FAIL risk-tier F1", side(head, "  - `F1.1` `ship it`", planken='{"deploy_words": ["ship it"]}')),
+        # SPEC в работе не возвращается в черновик правкой тимлида; черновик и правка на диске остаются красными
+        ("правка тимлида в идущей фазе", 0, "BUDGET_WARN risk-tier F1", side(head, item_d, tl_edit="flight")),
+        ("правка тимлида до работы исполнителя", 1, "BUDGET_FAIL risk-tier F1", side(head, item_d, tl_edit="draft")),
+        ("правка на диске в идущей фазе", 1, "BUDGET_FAIL risk-tier F1", side(head, item_d, tl_edit="dirty")),
     ]
     lint = all(r[0] == rc and r[2] == want and (want != "нет" or r[1].startswith("OK")) for _, rc, want, r in sides)
-    counted = {n: r[1] for n, _, _, r in sides}  # строка OK называет, что посчитано: токен, а не «деплой на линию»
-    lint = lint and "фич с токеном DEPLOY_LINIE=1|linie=1: 1, " in counted["risk: high в строке"] and "фич с токеном DEPLOY_LINIE=1|linie=1: 0, " in counted["без токена"]
+    counted = {n: r[1] for n, _, _, r in sides}  # строка OK называет, что посчитано
+    lint = lint and "фич с деплоем на линию (токен или deploy_words): 1, " in counted["risk: high в строке"] and "фич с деплоем на линию (токен или deploy_words): 0, " in counted["без токена"]
     cur = subprocess.run([f"{REPO}/bin/check-budget"], cwd=REPO, capture_output=True, text=True)
     cur_line = line(cur.stdout, r"^\w+ +risk-tier:")
-    lint = lint and cur_line.startswith("OK")
+    lint = lint and cur_line.startswith(("OK", "WARN"))  # текущая SPEC: выданной или идущей метки ставит тимлид — WARN; FAIL — дефект рассчёта «идёт»
     # метка в конце строки фичи не отбирает её пункты у spec-gate
     src, launch = gate_sources()
     repo, tr = h.gate_fixture(src, launch, full=True, items=True, spec=h.GATE_SPEC_ITEMS.replace(AFTER, AFTER + " · risk: high"))

@@ -30,7 +30,7 @@ hours to the gate; its judges on every action made 80 % of the Jev calls and cau
 Between the claims no model judges: Toolgate, the Abide hooks on edit and turn, Compact Adviser and Steer-or-Queue left the executor
 for the operator's sessions, where their events are; Jev Belay stays in the shadow, and Jev keeps one cell of the phase report in the
 shadow — an item against the raw output of its probe. **The window guard** starts the launch line: `bin/check-window` refuses
-before the session when the subscription's week is above 85 % (the plan dropped the 5-hour window); the only bypass is `--override` in the line, and it is printed.
+before the session when the subscription's week is above `window_seven_day_pct` of `budgets.json`: 100 % in the kit since decision 398, so it prints the numbers and does not refuse; a project tightens it in `project` (the plan dropped the 5-hour window); the only bypass is `--override` in the line, and it is printed.
 
 v3.4 (07.11.2026) moves into the kit what held in the telefon project, and repairs the judge under **the Code tab**:
 - **the end of a turn:** `spec-gate` passes on a background task only by `background_tasks[].type` (`monitor`, `workflow`, `shell`); a background subagent goes to the judgment of the set; the 3-hour cap is gone, evidence opens with `spec: SPEC-<n>`, `STOP-TL` is the fifth stop;
