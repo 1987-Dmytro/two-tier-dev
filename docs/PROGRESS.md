@@ -17,13 +17,13 @@
 ## Next — один айтем
 1. После входа: голый `bin/check-harness` и `--desktop`, evidence F1, F6, F7, F8; круги `F5 F7` и `F6 F8`; `bin/phase-report`, `bin/gate-v3.4`, `make ci`; `STOP-TL «Leg 2»`.
 
-## Open stop — STOP-INPUT «Leg 2 — две установки модов и профиль»
-STOP: STOP-INPUT «Leg 2 — две установки модов и профиль» — вход CLI дан, `limits` снят у пользователя, marketplace обновлён; ждут установка `window-guard`, `phase-start`, профиль тимлида и решение о модах.
-Вопрос оператору: обе установки и профиль сделаны, моды в профиле кита — `true` или `false`? Удобнее одним сообщением с Resume: каждая команда в чате — новый ход.
+## Open stop — STOP-INPUT «Leg 2 — phase-start и профиль тимлида»
+STOP: STOP-INPUT «Leg 2 — phase-start и профиль тимлида» — вход CLI дан, `limits` снят, marketplace обновлён, `window-guard` установлен; ждут установка `phase-start`, профиль тимлида и решение о модах.
+Вопрос оператору: `phase-start` установлен, тимлид поправил профиль, моды в профиле кита — `true` или `false`? Resume — после правки тимлида, одним сообщением.
 Resume: Продолжай по SPEC-v3.4 с evidence F1, F6, F7, F8: команды модов выполнены, профиль поправлен, моды в профиле кита — true.
 **Оператору, по порядку** (скрипты этого не делают: правило 4):
 1. `claude auth login` — сделано 07.11.
-2. `claude plugin uninstall limits@two-tier-mods --scope user` — сделано 07.11; `claude plugin marketplace update two-tier-mods` — сделано; затем `claude plugin install window-guard@two-tier-mods --scope user` и `claude plugin install phase-start@two-tier-mods --scope user`. Записи уровня user у обоих модов уже есть (побочный эффект, Notes), `enabledPlugins` — ещё нет.
+2. `claude plugin uninstall limits@two-tier-mods --scope user` — сделано 07.11; `claude plugin marketplace update two-tier-mods` и `claude plugin install window-guard@two-tier-mods --scope user` — сделано; затем `claude plugin install phase-start@two-tier-mods --scope user`. Записи уровня user у обоих модов уже есть (побочный эффект, Notes), `enabledPlugins` — ещё нет.
 3. После правки тимлида: `cp .claude/launch.settings.json .claude/settings.local.json`, новая сессия вкладки.
 **Тимлиду, файлы его:**
 - `.claude/launch.settings.json`: `limits@two-tier-mods` → `false`, добавить `window-guard@two-tier-mods` и `phase-start@two-tier-mods` → `true`; в `skillOverrides` — `"graphify": "off"`, `"anthropic-skills:artifact-emulator": "off"` (или строка таблицы).
