@@ -50,7 +50,8 @@ DAY, MONTH = r"(?:0[1-9]|[12]\d|3[01])", r"(?:0[1-9]|1[0-2])"
 AMEND = re.compile(rf"Поправка[ \t]+[^\s:<>][^:\n<>]*:[ \t]*слово оператора[ \t]+(?:{DAY}\.{MONTH}(?:\.\d{{4}})?|\d{{4}}-{MONTH}-{DAY})(?!\.?\d)")
 EVIDENCE = re.compile(r"(?<![\w./-])docs/evidence/[^\s`,;()]+")  # v3.4, F2.1: путь в ячейке «измерено у нас»; ../docs/evidence/ — уже не он
 PAIR_LINE = re.compile(r"^PAIR_(?:OK|FAIL) diff_p50=-?\d+ diff_p95=-?\d+", re.M)  # v3.4, F5.2: итог checks/paired_stand.sh в файле звена вендора
-LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
+DEPLOY_LINE = re.compile(r"\b(?:DEPLOY_LINIE=1|linie=1)\b")  # v3.4, F7.1: только токены шаблона деплоя: фраза «деплой на линию» ловит и описания
+LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key", "risk-tier")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
 
 
 def read(p):
@@ -292,6 +293,23 @@ def amendments(t):  # строки «Поправка …» в §0 SPEC (F2.2); 
     return len(AMEND.findall(sec0.group(1))) if sec0 else 0
 
 
+def rule_risk(b):
+    """v3.4, F7.1: фича с деплоем на линию (токен в её строке или пунктах) — только с `risk: high` в строке фичи: иначе красная до выдачи SPEC; выданная SPEC
+    или обрезанная история — WARN, как у planka-source."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec, prompt = ph[2], ph[4]
+    deployed = [(f, ls) for f, ls in blocks(read(spec).splitlines()) if any(DEPLOY_LINE.search(l) for l in ls)]
+    bad = [f for f, ls in deployed if not re.search(r"·\s*risk:\s*high\b", ls[0])]
+    if not bad:
+        return [("OK", "risk-tier", f"{spec}: фич с деплоем на линию {len(deployed)}, у всех risk: high")]
+    shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
+    weight, note = ("WARN", " (история git обрезана: выдана ли SPEC — не определить)") if shallow \
+        else ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) else ("FAIL", "")
+    return [(weight, "risk-tier", f"{' '.join(bad)}: деплой на линию без risk: high в строке фичи {spec}{note}")]
+
+
 def rule_scope(b):
     """v3.4, F2.2: новая фича против SPEC на выдаче — только строкой «Поправка» в §0; поправки считаются. Выдача — первый коммит, где стартовый запрос называет эту
     SPEC: поздняя правка запроса базу не двигает; SPEC там ещё нет — её первый коммит; в истории её нет вовсе — база она сама. Повтор id — тоже новая фича: сравниваются счета."""
@@ -482,7 +500,7 @@ def rule_frozen(b):
     return [("FAIL" if r.returncode else "OK", "frozen-paths", ((r.stdout + r.stderr).strip().splitlines() or ["судья без вывода"])[-1])]
 
 
-RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide, rule_frozen]
+RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_risk, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide, rule_frozen]
 
 
 def run(b):
@@ -497,7 +515,7 @@ def report(out):
         print(f"{s:4} {r}: {m}")
     for s, r, m in out:
         if r in LINT_RULES and s != "OK":  # v3.4, F2: строка линта для гейта и тимлида; scope-growth называет фичи
-            print(f"BUDGET_{s} {r}" + (" " + m.split(":", 1)[0] if r == "scope-growth" else ""))
+            print(f"BUDGET_{s} {r}" + (" " + m.split(":", 1)[0] if r in ("scope-growth", "risk-tier") else ""))
     fails = sum(s == "FAIL" for s, _, _ in out)
     print(f"BUDGET_FAIL: {fails}" if fails else "BUDGET_OK")
     return 1 if fails else 0
@@ -636,6 +654,10 @@ def fixtures(b, defaults):
         return {"intent/INTENT.md": intent, "docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n",
                 "docs/SPEC-1.md": f"**intent:** `intent/INTENT.md @ {p}`\n{feat(80, serves=serves)}\n{spec_extra}"}
     marker = "[NEEDS CLARIFICATION: объём?]"
+    risk = lambda line, item: spec1(f"- **F1 x** · готово · служит: S1 · after: —{line}\n  - `F1.1` {item}\n")
+    add("risk", "деплой на линию с risk: high", "OK", risk(" · risk: high", "`DEPLOY_LINIE=1 make deploy`"), rule_risk)
+    add("risk", "деплой на линию без метки", "FAIL", risk("", "`DEPLOY_OK linie=1`"), rule_risk)
+    add("risk", "без деплоя метка не нужна", "OK", risk("", "`bin/x`"), rule_risk)
     add("intent", "пин = hash-object", "OK", phase_fs(), rule_intent)
     add("intent", "пин ≠ hash-object", "FAIL", phase_fs(pin="0123456789ab"), rule_intent)
     add("intent", "пина нет", "FAIL", phase_fs(pin="<hash>"), rule_intent)

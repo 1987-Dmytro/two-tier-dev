@@ -1101,6 +1101,9 @@ VERIFY_RUNS = "docs/evidence/verify-runs.jsonl"
 CLI_BEFORE, CLI_AFTER = (2, 1, 316), (2, 1, 318)  # K78: changelog 2.1.318 — шелл-команды фоновых подагентов уходят в фон через 3 мин
 FAKE_CLAUDE = """#!/usr/bin/env python3
 import json, os, sys, time
+if sys.argv[1:] == ["--version"]:  # check-versions зовёт его до прогона: настоящий CLI отвечает сразу, даже когда прогон повиснет
+    print("2.1.316 (Claude Code)")
+    sys.exit(0)
 d = os.environ["FAKE_DIR"]
 json.dump({"result": {"report": "VERDICT: PASS\\nFEATURES: F1\\n"}, "workflowProgress": []}, open(f"{d}/out.json", "w"))
 for l in open(f"{d}/stream.jsonl"):

@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""deploy ok|bad — выкатка релиза r2: здоровье красное — пауза отката, затем откат на r1. Каждая строка начинается t=<мс от старта>."""
+import sys, time
+
+PAUSE = 1.0
+start = time.monotonic()
+
+
+def say(text):
+    print(f"t={int((time.monotonic() - start) * 1000)} {text}", flush=True)
+
+
+say("deploy r2")
+if sys.argv[1:] == ["ok"]:
+    say("health=OK")
+else:
+    say("health=FAIL")
+    time.sleep(PAUSE)
+    say("rollback r1")
+    sys.exit(1)

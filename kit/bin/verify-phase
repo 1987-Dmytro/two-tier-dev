@@ -13,9 +13,9 @@
    allow Workflow(verify-phase) и чеки кита (в -p правила allow из .claude/settings.json не действуют), --setting-sources
    project,local (настройки и хуки пользователя приёмку не трогают), --settings
    .claude/launch.settings.json клона (worktree.baseRef: head — агенты в worktree видят HEAD, а не ветку по умолчанию).
-   Список фич уходит воркфлоу в args JSON-массивом.
+   Список фич и прошлые вердикты этих фич (SPEC-v3.4 F7.2) уходят воркфлоу в args JSON-объектом {features, prior}; нечего передать — без args.
 4. Итог воркфлоу — из task_notification.output_file → docs/evidence/verify-<sha>.txt этого репо, точечный — verify-<sha>-F2-F4.txt;
-   первая строка — VERDICT: PASS или VERDICT: NEEDS_WORK, строка FEATURES: — фичи вердикта: не те, что просили, — вердикта нет,
+   первая строка — VERDICT: PASS или VERDICT: NEEDS_WORK, вторая — классы дефектов и счёт, строка FEATURES: — фичи вердикта: не те, что просили, — вердикта нет,
    exit 1. Лимит на всё, клон и гейт включительно, — 1800 с: истёк — VERIFY_TIMEOUT,
    вердикта нет, exit 3. В вывод — счётчики, модели, коды выхода и пути от /tmp/two-tier-v3.
 5. Замер (K78, SPEC-v3.4 F5.3): прогон, дошедший до гейта или воркфлоу, и прогон, упёршийся в лимит, — строка `verify-phase: K78 …` и строка JSON в docs/evidence/verify-runs.jsonl: версия CLI (system/init
@@ -42,6 +42,25 @@ def spec_feats():
     m = re.search(r"Read first:\s*`?([^\s,`]+)", start)
     s = git("show", f"HEAD:{m.group(1)}") if m else None
     return (m.group(1), re.findall(r"^- \*\*(F\d+)\b", s.stdout, re.M)) if s and s.returncode == 0 else (None, [])
+
+
+def prior(spec, feats):
+    """Прошлый вердикт фич из HEAD (F7.2): {F<n>: {file, verdict, blocking}} — новейший по истории docs/evidence/verify-*.txt этой SPEC, что называет F<n>;
+    blocking — его строки этой фичи под `## Блокирующие`, не больше 5 по 160 знаков: args идут текстом в запросе claude -p."""
+    out = {}
+    names = git("log", "--format=", "--name-only", "--diff-filter=AM", "HEAD", "--", "docs/evidence/verify-*.txt").stdout.split()
+    for name in dict.fromkeys(names):
+        text = git("show", f"HEAD:{name}").stdout  # файла уже нет в HEAD — пусто
+        verdict = text.split("\n", 1)[0]
+        of = re.search(r"^/verify-phase · (\S+) · ", text, re.M)
+        if verdict not in ("VERDICT: PASS", "VERDICT: NEEDS_WORK") or not of or os.path.basename(of.group(1)) != os.path.basename(spec or ""):
+            continue
+        named = re.findall(r"F\d+", (re.search(r"^FEATURES:[ \t]*(.*)$", text, re.M) or [None, ""])[1])
+        sec = re.search(r"^## Блокирующие[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+        for f in [f for f in feats if f in named and f not in out]:
+            lines = [l[:160] for l in (sec.group(1).splitlines() if sec else []) if re.match(rf"- \*\*{f}\b", l)]
+            out[f] = {"file": os.path.basename(name), "verdict": verdict.split()[1], "blocking": lines[:5]}
+    return out
 
 
 def run(cmd, cwd, env, limit, log, init_check=False):
@@ -177,8 +196,10 @@ def main(argv):
     else:
         print(f"verify-phase: в стартовом запросе {start or 'docs/PROMPT.txt'} нет bin/gate… — чеки гоняют проверяющие")
     settings = ["--settings", ".claude/launch.settings.json"] if os.path.isfile(f"{clone}/.claude/launch.settings.json") else []
-    prompt = PROMPT.format(args=f"with args set to the JSON array {json.dumps(ids, separators=(',', ':'))} (an array value, not a string)"
-                           if ids else "without args")
+    last = prior(spec, ids or known)
+    wf_args = {**({"features": ids} if ids else {}), **({"prior": last} if last else {})}
+    prompt = PROMPT.format(args=f"with args set to the JSON object {json.dumps(wf_args, ensure_ascii=False, separators=(',', ':'))} (an object value, not a string)"
+                           if wf_args else "without args")
     # v3.2: --setting-sources project,local — хуки и плагины пользователя (его Toolgate спрашивает, а в -p вопрос — отказ) приёмку не трогают
     cmd = ["claude", "-p", prompt, "--permission-mode", "auto", "--model", "claude-opus-5-5", "--setting-sources", "project,local", *settings,
            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--add-dir", d, "--allowedTools", *ALLOW,

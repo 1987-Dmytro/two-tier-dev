@@ -6,10 +6,22 @@
 строкой (CR, LF и прочие концы строк в ней экранированы); дальше вывод команды как есть. Домашний каталог в обеих — `~`; HOME пуст
 или `/` — не вычищается ничего. На экран — то же, по мере вывода; пока команда идёт, файл лежит под /tmp/two-tier-v3. Код выхода — код команды, убитая сигналом n — 128+n; файл заменяется
 по её окончании. Нет SPEC или неверные аргументы — код 2, команда не идёт. Команда идёт из корня проекта (git toplevel).
+Команда сменила другой файл под docs/evidence/ — на экран и в файл строка `evidence geändert <файл>` (F7.4, K80); свой файл результата и дописываемые журналы *.jsonl не в счёт.
 """
-import os, re, shutil, subprocess, sys, tempfile
+import hashlib, os, re, shutil, subprocess, sys, tempfile
 
 TMP = "/tmp/two-tier-v3"
+
+
+def snapshot(own):
+    """Файлы под docs/evidence/ → их отпечаток, кроме своего файла результата и журналов *.jsonl."""
+    snap = {}
+    for d, _, names in os.walk("docs/evidence"):
+        for p in (os.path.join(d, n) for n in names if not n.endswith(".jsonl")):
+            if p != own and os.path.isfile(p):
+                with open(p, "rb") as f:
+                    snap[p] = hashlib.sha1(f.read()).hexdigest()
+    return snap
 
 
 def main(argv):
@@ -33,6 +45,7 @@ def main(argv):
         return 2
     os.makedirs("docs/evidence", exist_ok=True)
     path = f"docs/evidence/{feature}-{check}-result.txt"
+    before = snapshot(path)
     home = os.path.expanduser("~").rstrip("/")  # HOME пуст или «/» — домашнего каталога нет, вычищать нечего
     scrub = lambda s: s.replace(home, "~") if home else s
     os.makedirs(TMP, exist_ok=True)
@@ -58,6 +71,10 @@ def main(argv):
         rc = p.wait()
         if rc < 0:  # убита сигналом n — код как в оболочке
             rc = 128 - rc
+        after = snapshot(path)
+        for changed in sorted(q for q in before.keys() | after.keys() if before.get(q) != after.get(q)):
+            out.write(f"evidence geändert {changed}\n")
+            print(f"evidence geändert {changed}", flush=True)
     os.chmod(tmp, 0o644)
     shutil.move(tmp, path)  # из /tmp на другой том os.replace не пишет
     print(f"evidence: {path} — rc {rc}")
