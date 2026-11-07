@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""check-versions [--offline] — версии Claude Code числом (SPEC-v3.4 F6.1). Никогда не отказ: rc 0, скрипт ничего не ставит.
+
+VERSIONS cli=<v> app=<v|—> github=<v|—>: cli — `claude --version` (CLI на PATH, им идут вложенные прогоны кита); app — движок вкладки Code:
+старшее имя каталога ~/Library/Application Support/Claude/claude-code/<версия> (недокументировано, читается только имя); github — последний
+релиз через gh, --offline — без него. Нет claude, каталога, сети или входа gh, нет ответа за 10 с — «—».
+CLI старше app или github — «HARNESS_WARN cli-behind cli=<v> <другой>=<v>» и строка «claude update»: её выполняет оператор.
+"""
+import os, re, subprocess, sys
+
+TIMEOUT = 10
+VERSION = re.compile(r"v?(\d+\.\d+\.\d+)(?![\d.])")
+
+
+def key(v):
+    return tuple(int(n) for n in v.split("."))
+
+
+def asked(*cmd):
+    try:
+        r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = VERSION.match(r.stdout.strip()) if r.returncode == 0 else None
+    return m.group(1) if m else None
+
+
+def app_engine():
+    d = os.path.expanduser("~/Library/Application Support/Claude/claude-code")
+    try:
+        names = [n for n in os.listdir(d) if re.fullmatch(r"\d+\.\d+\.\d+", n) and os.path.isdir(f"{d}/{n}")]
+    except OSError:
+        return None
+    return max(names, key=key, default=None)
+
+
+def main(argv):
+    if argv not in ([], ["--offline"]):
+        print("usage: check-versions [--offline]")
+        return 2
+    cli, app = asked("claude", "--version"), app_engine()
+    github = None if argv else asked("gh", "api", "repos/anthropics/claude-code/releases/latest", "--jq", ".tag_name")
+    print(f"VERSIONS cli={cli or '—'} app={app or '—'} github={github or '—'}")
+    ahead = [(n, v) for n, v in (("app", app), ("github", github)) if cli and v and key(cli) < key(v)]
+    for name, v in ahead:
+        print(f"HARNESS_WARN cli-behind cli={cli} {name}={v}")
+    if ahead:
+        print("claude update")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

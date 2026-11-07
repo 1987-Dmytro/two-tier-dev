@@ -141,6 +141,12 @@ def main(argv):
             return 1
     else:
         print("verify-phase: check-window рядом нет — окно подписки не проверено")
+        cv = os.path.join(os.path.dirname(cw), "check-versions")  # F6.1: версии печатает check-window, без него — лаунчер
+        if os.path.isfile(cv):
+            try:
+                print(subprocess.run([sys.executable, cv, "--offline"], capture_output=True, text=True, timeout=30).stdout.strip())
+            except (OSError, subprocess.SubprocessError):
+                pass
     path = f"docs/evidence/verify-{sha[:7]}{''.join('-' + i for i in ids)}.txt"
     if os.path.exists(path):  # вердикт прошлого прогона того же HEAD и того же списка не остаётся рядом с VERIFY_TIMEOUT
         os.remove(path)

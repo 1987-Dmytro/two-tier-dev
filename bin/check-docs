@@ -105,10 +105,8 @@ say(all(f in lm for f in flags), "LAUNCH.md", f"флагов и команд с�
 # v3.2: поля фазы — каждое строкой таблицы записи v3.2 с источником и столбцами до/после
 v32 = entry(CL, "v3.2", "v3.1")
 rows32 = [r for r in v32.splitlines() if r.startswith("| ") and r.count("|") >= 6 and re.search(r"code\.claude\.com/docs/en/|github\.com/", r)]
-ks = json.loads(read("kit/.claude/settings.json"))
-hooks32 = {os.path.basename(h["args"][0] if h.get("command") in ("node", "python3") and h.get("args") else h.get("command", ""))
-           for g in ks.get("hooks", {}).values() for e in g for h in e.get("hooks", [])}
-need32 = sorted({h for h in hooks32 if h.endswith(".mjs")} | {"toolgate.yaml", "spec-gate.json", "launch.settings.json", "--setting-sources", "--add-dir",
+# хуки записи v3.2 поимённо (kit b5b81cd): хук новее — в своей записи
+need32 = sorted({"abide.mjs", "spec-gate.mjs", "toolgate-deny.mjs"} | {"toolgate.yaml", "spec-gate.json", "launch.settings.json", "--setting-sources", "--add-dir",
                                                              "--no-chrome", "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "docs/PROMPT.txt", "bin/verify-phase", "verify-phase.js"})
 miss = [f for f in need32 if not any(f in r for r in rows32)]
 say(v32 and not miss, "CHANGELOG v3.2", f"полей v3.2 — {len(need32)}, строк таблицы с источником и до/после — {len(rows32)}; без строки — {', '.join(miss) or 'нет'}")

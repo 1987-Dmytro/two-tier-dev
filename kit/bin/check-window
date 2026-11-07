@@ -98,6 +98,12 @@ args = sys.argv[1:]
 if set(args) - {"--repair", "--override"}:
     print("usage: check-window [--override]")
     sys.exit(2)
+cv = os.path.join(os.path.dirname(os.path.realpath(__file__)), "check-versions")
+if os.path.isfile(cv):  # F6.1: версии — до хода, без сети; нет claude или приложения — «—», не отказ
+    try:
+        print(subprocess.run([sys.executable, cv, "--offline"], capture_output=True, text=True, timeout=30).stdout.strip())
+    except (OSError, subprocess.SubprocessError):
+        pass
 top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip() or os.getcwd()
 th, notes = thresholds(top)
 t7, s7 = th["window_seven_day_pct"]
