@@ -73,3 +73,4 @@
 {"ts":"2026-11-07T20:27:22.497Z","session":"298cb691","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":103}
 {"ts":"2026-11-07T21:08:07.836Z","session":"298cb691","mode":"active","decision":"pass","reason":"background:shell","missing":[],"stops":[],"bg":["shell"],"platform_cap":8,"stop_hook_active":false,"ms":422}
 {"ts":"2026-11-07T21:17:02.142Z","session":"298cb691","mode":"active","decision":"stop","reason":"STOP-TL","missing":[],"stops":["60:397936e4a3bf"],"bg":[],"platform_cap":8,"stop_hook_active":false,"ms":1028}
+{"ts":"2026-11-07T22:02:21.220Z","session":"298cb691","mode":"active","decision":"pass","reason":"background:shell,workflow","missing":[],"stops":[],"bg":["shell","workflow"],"platform_cap":8,"stop_hook_active":false,"ms":116}
