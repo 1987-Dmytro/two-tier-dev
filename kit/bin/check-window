@@ -2,7 +2,7 @@
 """check-window [--override] — окно подписки до запуска плеча (SPEC-v3.3 F5; окно 5 ч снято словом оператора 06.11: тариф его отменил).
 
 Числа: один ход `claude -p` на Haiku во временном каталоге /tmp/two-tier-v3 (без ANTHROPIC_API_KEY, SPEC_GATE=off, 120 с),
-событие rate_limit_event, поле rate_limit_info.unifiedWindows.seven_day (недокументированное — исключение C2): доля 0..1 × 100; другие окна события не судятся.
+последнее событие rate_limit_event с ключом seven_day (нет такого — просто последнее), поле rate_limit_info.unifiedWindows.seven_day (недокументированное — исключение C2): доля 0..1 × 100; другие окна события не судятся.
 Порог — budgets.json корня проекта (git toplevel): defaults, в репо кита без ключа — kit/budgets.json, иначе 85;
 project только ужесточает. Неделя > window_seven_day_pct — «WINDOW: refuse», rc 1; равно — проходит, «WINDOW: start», rc 0. Числа не сняты — отказ с причиной, rc 1: нет события, нет или пусто поле unifiedWindows, ошибка claude, seven_day без числа.
 В unifiedWindows нет ключа seven_day (решение 396, SPEC-v3.4 F5.5: судится одна неделя) — «WINDOW_WARN seven_day=fehlt», неделя не судится, «WINDOW: start», rc 0: тариф уже снимал окно этим способом, и строка запуска падать от этого не должна.
@@ -65,13 +65,14 @@ def clean(s):  # текст ошибки — без почты и домашне
 
 def parse(text, rc, err):
     ev, res = None, None
+    week_in = lambda e: "seven_day" in (((e.get("rate_limit_info") or {}).get("unifiedWindows")) or {})
     for line in text.splitlines():
         try:
             o = json.loads(line)
         except ValueError:
             continue
         if isinstance(o, dict) and o.get("type") == "rate_limit_event":
-            ev = o
+            ev = o if ev is None or week_in(o) or not week_in(ev) else ev  # событие без ключа не прячет уже увиденную неделю
         elif isinstance(o, dict) and o.get("type") == "result":
             res = o
     w = ((ev or {}).get("rate_limit_info") or {}).get("unifiedWindows")

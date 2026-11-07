@@ -12,7 +12,7 @@
 Разделы v3.4: frozen (F3: замок, паспорт, регрессия в деплое, апгрейд клона telefon — FROZEN_OK), fenster (F4: окно деплоя, живой канал, канарейка,
 шаблоны — FENSTER_OK), graph (Graphify: `.githooks/post-commit`, первая сборка bin/two-tier-init, отчёт апгрейда, живой прогон при CLI в PATH — GRAPH_OK), paar (F5: пара одного часа, планка звена вендора, журнал bin/verify-phase, метрики bin/phase-report, окно без ключа недели — PAAR_OK); с именем раздела идёт только он, без имени — всё.
 Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — F3.5 не гонялся: строка `F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
-F5.3 закрывается замером: n ≥ 2 на обеих сторонах пары ≤2.1.316 и ≥2.1.318 в docs/evidence/verify-runs.jsonl; меньше или журнала нет — строка `F5.3 offen n=<k> fon=<m>`, PAAR_OK печатается (SPEC-v3.4 §4). Прогон дольше лимита bin/verify-phase — FAIL.
+F5.3 закрывается замером: n ≥ 2 на обеих сторонах пары ≤2.1.316 и ≥2.1.318 в docs/evidence/verify-runs.jsonl; меньше или журнала нет — строка `F5.3 offen n=<k> fon=<m>`, PAAR_OK печатается (SPEC-v3.4 §4). Судит и считается только дошедший прогон (status completed): дольше своего лимита (limit строки; в старой строке его нет — лимит bin/verify-phase) — FAIL; упавший запуск — не замер, VERIFY_TIMEOUT — счётчик timeout=<k>.
 """
 import json, os, re, shutil, subprocess, sys, tempfile, time
 
@@ -1116,8 +1116,8 @@ if os.path.exists(f"{d}/hang"):
 
 
 def runs_read(path, limit):
-    """Журнал bin/verify-phase (F5.3, K78) → (состояние, k, m, сырой вывод). Состояние: rot — прогон дольше лимита, offen — n < 2 хоть на одной стороне пары ≤2.1.316 и ≥2.1.318 или журнала нет, done — иначе.
-    k — меньшее n двух сторон, m — команд в фоне по всему журналу; по каждой версии — n, p50 и max секунд, команды в фоне. Битая строка — не прогон."""
+    """Журнал bin/verify-phase (F5.3, K78) → (состояние, k, m, сырой вывод). Замер — только прогон со status completed. Состояние: rot — замер дольше своего лимита (limit строки; в старой строке его нет — limit аргумента), offen — n < 2 хоть на одной стороне пары ≤2.1.316 и ≥2.1.318 или журнала нет, done — иначе.
+    k — меньшее n двух сторон, m — команд в фоне по всему журналу; по каждой версии — n, p50 и max секунд замеров, команды в фоне; упёршиеся в лимит — счётчиком timeout=<k>. Битая строка — не прогон."""
     runs = []
     for l in read(path).splitlines() if os.path.isfile(path) else []:
         try:
@@ -1130,16 +1130,19 @@ def runs_read(path, limit):
         return "offen", 0, 0, f"журнала {path} нет или в нём нет прогонов"
     cli = lambda r: str(r.get("cli") or "?")
     ver = lambda v: tuple(map(int, v.split("."))) if re.fullmatch(r"\d+(\.\d+)+", v) else None
-    before = sum(1 for r in runs if ver(cli(r)) and ver(cli(r)) <= CLI_BEFORE)
-    after = sum(1 for r in runs if ver(cli(r)) and ver(cli(r)) >= CLI_AFTER)
+    done = [r for r in runs if r.get("status") == "completed"]
+    before = sum(1 for r in done if ver(cli(r)) and ver(cli(r)) <= CLI_BEFORE)
+    after = sum(1 for r in done if ver(cli(r)) and ver(cli(r)) >= CLI_AFTER)
     rows = []
-    for v in sorted({cli(r) for r in runs}, key=lambda v: ver(v) or ()):
-        secs = sorted(r["sec"] for r in runs if cli(r) == v)
+    for v in sorted({cli(r) for r in done}, key=lambda v: ver(v) or ()):
+        secs = sorted(r["sec"] for r in done if cli(r) == v)
         rows.append(f"{v}: n={len(secs)} p50={secs[(len(secs) + 1) // 2 - 1]:g} max={secs[-1]:g} fon={sum(int(r.get('fon') or 0) for r in runs if cli(r) == v)}")
-    over = [r for r in runs if r["sec"] > limit]
-    top = max(r["sec"] for r in runs)
+    over = [r for r in done if r["sec"] > r.get("limit", limit)]
+    top = max((r["sec"] for r in done), default=0)
+    timeouts = sum(1 for r in runs if r.get("status") == "timeout")
+    longer = sum(1 for r in done if r["sec"] > limit)  # по своему --limit: limit аргумента они не держат
     state = "rot" if over else "offen" if min(before, after) < 2 else "done"
-    raw = f"{'; '.join(rows)} · пара: ≤2.1.316 n={before}, ≥2.1.318 n={after} · лимит {limit} с: " + (f"прогонов дольше — {len(over)}, max {top:g}" if over else f"max {top:g} — держит")
+    raw = f"{'; '.join(rows)} · пара: ≤2.1.316 n={before}, ≥2.1.318 n={after} · timeout={timeouts} · лимит {limit} с: " + (f"прогонов дольше своего лимита — {len(over)}, max {top:g}" if over else f"max {top:g}, дольше него по своему --limit — {longer}" if longer else f"max {top:g} — держит")
     return state, min(before, after), sum(int(r.get("fon") or 0) for r in runs), raw
 
 
@@ -1300,7 +1303,9 @@ def section_paar():
     put(fk, "hang", "")
     hang = launch(head_ev + bash_ev[:1] + ['{"type":"system","subtype":"task_st'], "--limit", "5")
     os.remove(f"{fk}/hang")
-    want = {"cli": "2.1.316", "features": ["F1"], "wf_sec": 12, "bash": 3, "fon": 2, "moved": 1, "status": "completed"}
+    put(fk, "bad.json", '{"result": {"report": "VERDICT')
+    cut_out = launch(head_ev + [event(subtype="task_notification", task_id="w1", status="completed", output_file=f"{fk}/bad.json", usage={"duration_ms": 1000})])  # файл итога обрезан
+    want = {"cli": "2.1.316", "features": ["F1"], "limit": limit, "wf_sec": 12, "bash": 3, "fon": 2, "moved": 1, "status": "completed"}
     got = {k: x for k, x in (full[3][0] if full[3] else {}).items() if k != "sec"}
     secret_free = all(not re.search(r"/tmp|/Users|/home", json.dumps(r)) for r in hang[3])
     jr = f"{fk}/j.jsonl"
@@ -1317,16 +1322,34 @@ def section_paar():
     near = journal_of(*pair_ok[:2], ("2.1.317", 200, 0), ("2.1.317", 200, 0))
     broken = journal_of(*pair_ok, raw_lines=("{битая\n", '{"cli": "2.1.319"}\n'))
     absent = runs_read(f"{fk}/нет.jsonl", limit)
+    extra = lambda c, s, **kw: json.dumps({"cli": c, "features": ["F1"], "sec": s, "bash": 1, "fon": 0, "status": "completed", **kw}) + "\n"
+    timed = journal_of(*pair_ok, raw_lines=(extra("2.1.319", limit + 6, status="timeout"), extra("2.1.319", limit + 6, status="timeout", limit=limit)))
+    only_timed = journal_of(raw_lines=(extra("2.1.319", limit + 6, status="timeout"),))
+    override = journal_of(*pair_ok, raw_lines=(extra("2.1.319", 2009, limit=3600),))
+    own_over = journal_of(*pair_ok, raw_lines=(extra("2.1.319", 3601, limit=3600),))
+    own_short = journal_of(*pair_ok, raw_lines=(extra("2.1.319", 601, limit=600),))
+    failed = journal_of(*pair_ok[:3], raw_lines=(extra("2.1.319", 6, status="failed"),))
+    failed_none = journal_of(*pair_ok[:3], raw_lines=(extra("2.1.319", 5, status="none"),))
+    launcher_rows = runs_read(f"{v}/{VERIFY_RUNS}", limit)
     live_state, live_k, live_m, live_raw = runs_read(VERIFY_RUNS, limit)
     ok_sides = [("поток", full[0] == 0 and got == want and isinstance(full[3][0].get("sec"), int), f"rc {full[0]} «{full[2][len('verify-phase: '):]}»"),
                 ("поток без task_updated — другое число", no_patch[0] == 0 and "bash=3 fon=1 moved=0 status=completed" in no_patch[2] and len(no_patch[3]) == 2, no_patch[2][len("verify-phase: "):]),
                 ("воркфлоу не стартовал", "status=none" in no_task[2] and len(no_task[3]) == 3, f"rc {no_task[0]} «{no_task[2][len('verify-phase: '):]}»"),
-                ("лимит истёк, поток обрезан", hang[0] == 3 and "VERIFY_TIMEOUT" in hang[1] and "cli=2.1.316" in hang[2] and "bash=1 fon=0 moved=0 status=timeout" in hang[2] and len(hang[3]) == 4 and hang[3][-1]["sec"] >= 5 and secret_free, f"rc {hang[0]} «{hang[2][len('verify-phase: '):]}»"),
+                ("лимит истёк, поток обрезан", hang[0] == 3 and "VERIFY_TIMEOUT" in hang[1] and "cli=2.1.316" in hang[2] and "bash=1 fon=0 moved=0 status=timeout" in hang[2] and len(hang[3]) == 4 and hang[3][-1]["sec"] >= 5 and hang[3][-1].get("limit") == 5 and secret_free, f"rc {hang[0]} «{hang[2][len('verify-phase: '):]}»"),
+                ("файл итога обрезан: строка журнала есть, вердикта нет", cut_out[0] == 1 and "воркфлоу не вернул отчёт" in cut_out[1] and "Traceback" not in cut_out[1] and len(cut_out[3]) == 5, f"rc {cut_out[0]} «{cut_out[2][len('verify-phase: '):]}», строк журнала {len(cut_out[3])}"),
+                ("журнал этих прогонов лаунчера: timeout не красит", launcher_rows[0] != "rot" and "timeout=1" in launcher_rows[3], f"{launcher_rows[0]} · {launcher_rows[3]}"),
                 ("лимит лаунчера", limit == 1800, f"{limit} с"),
                 ("журнал n ≥ 2 с обеих сторон", closed[:3] == ("done", 2, 7) and runs_word(*closed[:3]) == "n=2 fon=7", f"{runs_word(*closed[:3])} · {closed[3]}"),
                 ("прогон ровно на лимите", edge_j[0] == "done", edge_j[0]),
                 ("прогон дольше лимита, новая сторона", over_after[0] == "rot", f"{over_after[0]} · {over_after[3].split(' · ')[-1]}"),
                 ("прогон дольше лимита, старая сторона", over_before[0] == "rot", over_before[0]),
+                ("VERIFY_TIMEOUT — счётчик, не красный и не замер", timed[:3] == ("done", 2, 7) and "timeout=2" in timed[3] and "max 400 — держит" in timed[3], f"{timed[0]} · {timed[3]}"),
+                ("только VERIFY_TIMEOUT", only_timed[:2] == ("offen", 0) and "timeout=1" in only_timed[3], f"{only_timed[0]} · {only_timed[3]}"),
+                ("--limit 3600, прогон 2009 с", override[0] == "done" and "max 2009, дольше него по своему --limit — 1" in override[3], f"{override[0]} · {override[3].split(' · ')[-1]}"),
+                ("--limit 3600, прогон 3601 с", own_over[0] == "rot", f"{own_over[0]} · {own_over[3].split(' · ')[-1]}"),
+                ("--limit 600, прогон 601 с", own_short[0] == "rot", own_short[0]),
+                ("упавший запуск — не замер: n и p50 те же", failed[:2] == ("offen", 1) and "2.1.319: n=1 p50=200 " in failed[3], f"{runs_word(*failed[:3])} · {failed[3]}"),
+                ("запуск без воркфлоу — не замер", failed_none[:2] == ("offen", 1), runs_word(*failed_none[:3])),
                 ("≥2.1.318 n=1", short[:3] == ("offen", 1, 7) and runs_word(*short[:3]) == "offen n=1 fon=7", runs_word(*short[:3])),
                 ("2.1.317 — ни одна сторона", near[:2] == ("offen", 0), f"{near[0]} n={near[1]}"),
                 ("битые строки журнала — не прогоны", broken[:3] == ("done", 2, 7), f"{broken[0]} n={broken[1]}"),
@@ -1369,6 +1392,15 @@ def section_paar():
     empty_r = rep(empty_p)
     os.remove(f"{empty_p}/docs/PROMPT.txt")
     no_prompt = rep(empty_p)
+    back_p = fresh(tools=tools_r)
+    put(back_p, "docs/evidence/deploy-window.log", "DEPLOY_OK sha=a linie=0 rollback=none\nDEPLOY_OK sha=b linie=0 rollback=a\nROLLBACK_OK sha=a sekunden=0\n")
+    off_line = rep(back_p)  # шаблон по умолчанию: DEPLOY_LINIE=0
+    with open(f"{back_p}/docs/evidence/deploy-window.log", "a", encoding="utf-8") as fh:
+        fh.write("DEPLOY_FAIL step=rollout sha=c rc=1 linie=1\nROLLBACK_OK sha=a sekunden=0\nROLLBACK_OK sha=a sekunden=0\n")
+    twice = rep(back_p)
+    with open(f"{back_p}/docs/evidence/deploy-window.log", "a", encoding="utf-8") as fh:
+        fh.write("DEPLOY_OK sha=d linie=1 rollback=a\nDEPLOY_FAIL step=args sha=e\nROLLBACK_OK sha=a sekunden=0\n")
+    no_linie = rep(back_p)
     row("F5.4", (("metriken", "3"),), [
         ("metriken", "фикстура", base_r[0] == 0 and base_r[1].startswith("Кругов до PASS: 2 (F1 2, F2 1; без PASS: F3 — 1)") and base_r[2] == "Откатов деплоя: 1 из 3" and base_r[3] == "Поправок объёма: 2"
          and "кругов до PASS 2, откатов 1 из 3, поправок 2" in base_r[4], show(base_r)),
@@ -1376,6 +1408,9 @@ def section_paar():
         ("metriken", "полный круг раньше точечного на одном sha", same_sha[1].startswith("Кругов до PASS: 4 (F1 4,"), same_sha[1]),
         ("metriken", "ещё один откат", more_back[2] == "Откатов деплоя: 2 из 3", more_back[2]),
         ("metriken", "ещё одна поправка", more_amend[3] == "Поправок объёма: 3", more_amend[3]),
+        ("metriken", "откат выкатки linie=0 — не откат с линии", off_line[2] == "Откатов деплоя: 0 из 0", off_line[2]),
+        ("metriken", "два отката одной выкатки — один", twice[2] == "Откатов деплоя: 1 из 1", twice[2]),
+        ("metriken", "DEPLOY_FAIL без linie= выкатку не сменил", no_linie[2] == "Откатов деплоя: 2 из 2", no_linie[2]),
         ("metriken", "без данных — нули", empty_r[0] == 0 and (empty_r[1], empty_r[2], empty_r[3]) == ("Кругов до PASS: 0", "Откатов деплоя: 0 из 0", "Поправок объёма: 0"), show(empty_r)),
         ("metriken", "нет и запроса фазы", no_prompt[0] == 0 and (no_prompt[1], no_prompt[3]) == ("Кругов до PASS: 0", "Поправок объёма: 0"), show(no_prompt)),
     ])
@@ -1394,6 +1429,13 @@ def section_paar():
     warn = "WINDOW_WARN seven_day=fehlt"
     fehlt_a, fehlt_b, fehlt_o = wnd({"other": {"utilization": 0.1}}), wnd({"five_hour": {"utilization": 0.99}}), wnd({"other": {"utilization": 0.1}}, "--override")
     g84, g86 = wnd(week(84)), wnd(week(86))
+
+    def wnd_stream(*windows):  # несколько событий rate_limit_event подряд
+        put(fk, "w.jsonl", "".join(json.dumps({"type": "rate_limit_event", "rate_limit_info": {"status": "allowed", "unifiedWindows": w}}) + "\n" for w in windows) + json.dumps({"type": "result", "is_error": False, "result": "ok"}) + "\n")
+        return sh([win_tool], w_d, env=dict(GIT_ENV, CHECK_WINDOW_EVENTS=f"{fk}/w.jsonl", CHECK_WINDOW_RC="0"))
+    hidden = wnd_stream(week(99), {"seven_day_opus": {"utilization": 0.1}})
+    keyless_first = wnd_stream({"seven_day_opus": {"utilization": 0.1}}, week(99))
+    last_week = wnd_stream(week(99), week(5))
     no_num, no_ev, no_field, no_empty, no_login = wnd({"seven_day": {}}), wnd(False), wnd(None), wnd({}), wnd(error="Not logged in")
     w_brief = lambda r: f"rc {r[0]} «{tail(r[1], 2, 110)}»"
     refused = lambda r, why: r[0] == 1 and "WINDOW: refuse" in r[1] and why in r[1] and warn not in r[1]
@@ -1403,6 +1445,9 @@ def section_paar():
         ("fehlt", "ключа нет, --override", fehlt_o[0] == 0 and warn in fehlt_o[1] and "был бы старт" in fehlt_o[1], w_brief(fehlt_o)),
         ("fehlt", "ключ есть, 84 %", g84[0] == 0 and warn not in g84[1] and last(g84[1]) == "WINDOW: start", w_brief(g84)),
         ("fehlt", "ключ есть, 86 %", refused(g86, "неделя 86 % > 85 %"), w_brief(g86)),
+        ("fehlt", "неделя 99 %, за ней событие без ключа", refused(hidden, "неделя 99 % > 85 %"), w_brief(hidden)),
+        ("fehlt", "событие без ключа, за ним неделя 99 %", refused(keyless_first, "неделя 99 % > 85 %"), w_brief(keyless_first)),
+        ("fehlt", "две недели: судит последняя", last_week[0] == 0 and warn not in last_week[1] and last(last_week[1]) == "WINDOW: start", w_brief(last_week)),
         ("fehlt", "ключ без числа", refused(no_num, "seven_day без числа"), w_brief(no_num)),
         ("fehlt", "нет события", refused(no_ev, "нет события rate_limit_event"), w_brief(no_ev)),
         ("fehlt", "нет поля unifiedWindows", refused(no_field, "нет поля unifiedWindows"), w_brief(no_field)),

@@ -8,7 +8,7 @@
 1. HEAD запушен: есть origin — origin/<ветка> = HEAD и клон с origin; нет origin — клон этого репо (фикстуры).
 2. Свежий клон — свой каталог во /tmp/two-tier-v3. Гейт фазы — первая `bin/gate…` стартового запроса docs/PROMPT.txt (нет его —
    прежнего docs/GOAL.txt) — идёт
-   в клоне, его лог агенты читают по $VERIFY_GATE_LOG: долгие чеки они не перезапускают.
+   в клоне, его лог агенты читают по $VERIFY_GATE_LOG: долгие чеки они не перезапускают. Сменил файлы под docs/evidence клона — сразу за строкой гейта `evidence geändert <файл>` на каждый (F7.4, K80).
 3. `claude -p` в клоне: только подписка (env -u ANTHROPIC_API_KEY; apiKeySource не none — стоп), SPEC_GATE=off, --permission-mode auto,
    allow Workflow(verify-phase) и чеки кита (в -p правила allow из .claude/settings.json не действуют), --setting-sources
    project,local (настройки и хуки пользователя приёмку не трогают), --settings
@@ -19,7 +19,7 @@
    exit 1. Лимит на всё, клон и гейт включительно, — 1800 с: истёк — VERIFY_TIMEOUT,
    вердикта нет, exit 3. В вывод — счётчики, модели, коды выхода и пути от /tmp/two-tier-v3.
 5. Замер (K78, SPEC-v3.4 F5.3): прогон, дошедший до гейта или воркфлоу, и прогон, упёршийся в лимит, — строка `verify-phase: K78 …` и строка JSON в docs/evidence/verify-runs.jsonl: версия CLI (system/init
-   claude_code_version), фичи, секунды лаунчера и воркфлоу (task_notification usage.duration_ms), шелл-команды и команды в фоне (task_started: task_type local_bash, is_backgrounded; task_updated:
+   claude_code_version), фичи, лимит этого прогона, секунды лаунчера и воркфлоу (task_notification usage.duration_ms), шелл-команды и команды в фоне (task_started: task_type local_bash, is_backgrounded; task_updated:
    patch.is_backgrounded — agent-sdk/typescript), итог. Только счётчики; читает `bin/check-kit paar`.
 """
 import json, os, re, signal, subprocess, sys, tempfile, time
@@ -45,9 +45,11 @@ def spec_feats():
 
 
 def prior(spec, feats):
-    """Прошлый вердикт фич из HEAD (F7.2): {F<n>: {file, verdict, blocking}} — новейший по истории docs/evidence/verify-*.txt этой SPEC, что называет F<n>;
-    blocking — его строки этой фичи под `## Блокирующие`, не больше 5 по 160 знаков: args идут текстом в запросе claude -p."""
-    out = {}
+    """Прошлый вердикт фич из HEAD (F7.2): {F<n>: {file, verdict, blocking[, more]}} — новейший круг по истории docs/evidence/verify-*.txt этой SPEC, что называет F<n>;
+    файлы одного sha — один круг, внутри коммита их порядок — порядок имён: file — первый из них, строки вместе и без повторов, NEEDS_WORK — если так сказал хоть один файл.
+    blocking — строки этой фичи под `## Блокирующие`, не больше 5 по 160 знаков: args идут текстом в запросе claude -p; more — остальные, по 100 знаков: только ключи пометки «повтор», проверяющему не идут."""
+    out, found = {}, {}
+    sha = lambda name: re.split(r"[-.]", os.path.basename(name))[1]
     names = git("log", "--format=", "--name-only", "--diff-filter=AM", "HEAD", "--", "docs/evidence/verify-*.txt").stdout.split()
     for name in dict.fromkeys(names):
         text = git("show", f"HEAD:{name}").stdout  # файла уже нет в HEAD — пусто
@@ -57,9 +59,15 @@ def prior(spec, feats):
             continue
         named = re.findall(r"F\d+", (re.search(r"^FEATURES:[ \t]*(.*)$", text, re.M) or [None, ""])[1])
         sec = re.search(r"^## Блокирующие[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
-        for f in [f for f in feats if f in named and f not in out]:
-            lines = [l[:160] for l in (sec.group(1).splitlines() if sec else []) if re.match(rf"- \*\*{f}\b", l)]
-            out[f] = {"file": os.path.basename(name), "verdict": verdict.split()[1], "blocking": lines[:5]}
+        for f in [f for f in feats if f in named and (f not in out or sha(out[f]["file"]) == sha(name))]:
+            lines = [l for l in (sec.group(1).splitlines() if sec else []) if re.match(rf"- \*\*{f}\b", l)]
+            found[f] = list(dict.fromkeys(found.get(f, []) + lines))
+            was = out.get(f, {"file": os.path.basename(name), "verdict": "PASS"})
+            out[f] = {**was, "verdict": "NEEDS_WORK" if verdict.endswith("NEEDS_WORK") else was["verdict"]}
+    for f, p in out.items():
+        p["blocking"] = [l[:160] for l in found[f][:5]]
+        if found[f][5:]:
+            p["more"] = [l[:100] for l in found[f][5:]]
     return out
 
 
@@ -95,13 +103,13 @@ def stream(log):
     return out
 
 
-def journal(features, ev=(), note=None):
-    """K78: строка прогона в журнал и в вывод. note None — лимит истёк (итог timeout), иначе итог — status уведомления воркфлоу, его нет — none."""
+def journal(features, limit, ev=(), note=None):
+    """K78: строка прогона в журнал и в вывод, с лимитом этого прогона (--limit). note None — лимит истёк (итог timeout), иначе итог — status уведомления воркфлоу, его нет — none."""
     cli = next((e.get("claude_code_version") for e in ev if e.get("subtype") == "init"), None)
     bash = {e.get("task_id"): bool(e.get("is_backgrounded")) for e in ev if e.get("subtype") == "task_started" and e.get("task_type") == "local_bash"}
     moved = {e.get("task_id") for e in ev if e.get("subtype") == "task_updated" and (e.get("patch") or {}).get("is_backgrounded") is True and bash.get(e.get("task_id")) is False}
     ms = ((note or {}).get("usage") or {}).get("duration_ms")
-    rec = {"cli": cli, "features": features, "sec": round(time.monotonic() - T0), "wf_sec": round(ms / 1000) if isinstance(ms, (int, float)) else None,
+    rec = {"cli": cli, "features": features, "limit": limit, "sec": round(time.monotonic() - T0), "wf_sec": round(ms / 1000) if isinstance(ms, (int, float)) else None,
            "bash": len(bash), "fon": sum(bash.values()) + len(moved), "moved": len(moved), "status": "timeout" if note is None else note.get("status") or "none"}
     os.makedirs(os.path.dirname(JOURNAL), exist_ok=True)
     with open(JOURNAL, "a", encoding="utf-8") as f:
@@ -188,10 +196,12 @@ def main(argv):
     if gate:
         rc = run([gate], clone, env, limit, f"{d}/gate.log")
         if rc is None:
-            journal(ids or known)
+            journal(ids or known, limit)
             timeout(f"гейт {gate}")
         markers = [l for l in open(f"{d}/gate.log", encoding="utf-8", errors="replace").read().splitlines() if re.fullmatch(r"(F\d+ )?[A-Z0-9_]+_OK", l)]
         print(f"verify-phase: гейт {gate} — rc {rc}, маркеров {len(markers)}: {' · '.join(markers) or 'нет'} ({time.monotonic() - T0:.0f} с)")
+        for changed in git("status", "--porcelain", "--untracked-files=all", "--", "docs/evidence", cwd=clone).stdout.splitlines():  # K80: чек, сменивший evidence, виден и без bin/evidence
+            print(f"evidence geändert {changed[3:]}")
         env["VERIFY_GATE_LOG"] = f"{d}/gate.log"
     else:
         print(f"verify-phase: в стартовом запросе {start or 'docs/PROMPT.txt'} нет bin/gate… — чеки гоняют проверяющие")
@@ -207,12 +217,15 @@ def main(argv):
     rc = run(cmd, clone, env, limit, f"{d}/run.jsonl", init_check=True)
     ev = stream(f"{d}/run.jsonl")
     if rc is None:
-        journal(ids or known, ev)
+        journal(ids or known, limit, ev)
         timeout("воркфлоу /verify-phase")
     wid = next((e.get("task_id") for e in ev if e.get("subtype") == "task_started" and e.get("workflow_name") == "verify-phase"), None)
     note = next((e for e in ev if e.get("subtype") == "task_notification" and e.get("task_id") == wid), {})  # у агентов свои фоновые задачи
     f = note.get("output_file", "")
-    out = json.load(open(f, encoding="utf-8")) if f and os.path.isfile(f) else {}
+    try:
+        out = json.load(open(f, encoding="utf-8")) if f and os.path.isfile(f) else {}
+    except ValueError:  # файл итога обрезан: строка журнала важнее, вердикта нет
+        out = {}
     res = out.get("result") if isinstance(out.get("result"), dict) else {}
     agents = [a for a in out.get("workflowProgress", []) if a.get("type") == "workflow_agent"]
     models = {}
@@ -222,7 +235,7 @@ def main(argv):
     print(f"verify-phase: claude -p rc {rc}; воркфлоу {note.get('status') or 'не запущен'}; агентов {len(agents)}: "
           f"{', '.join(f'{m} ×{n}' for m, n in models.items()) or 'нет'}; проверяющие {', '.join(checkers) or 'нет'}; "
           f"токенов {out.get('totalTokens')}; {time.monotonic() - T0:.0f} с")
-    journal(ids or known, ev, note)
+    journal(ids or known, limit, ev, note)
     report = res.get("report", "")
     if report.split("\n", 1)[0] not in ("VERDICT: PASS", "VERDICT: NEEDS_WORK"):
         print("verify-phase: воркфлоу не вернул отчёт — вердикта нет")

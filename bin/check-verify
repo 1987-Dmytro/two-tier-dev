@@ -16,7 +16,7 @@
   · F7.1 — метка `risk:` в заглушках и в живых clean/point (F1 high, F2 low), правило risk-tier — настоящий bin/check-budget на своих проектах;
     F7.2 — прошлый вердикт в args лаунчера (заглушка и живой point) и в запросах, «повтор», строка КЛАССЫ, отчёт нового вида читает spec-gate;
     F7.3 — кейс docs/evals/rollback-pause живым кругом: с мутантом и без него; F7.4 — bin/gate-v3.4 один в своём репо (рекурсии нет: bin/check-verify
-    там нет), bin/evidence на своём проекте.
+    там нет), bin/evidence на своём проекте, лаунчер с заглушкой claude и гейтом, меняющим evidence клона.
 Фикстуры синтетические и не пушатся: у них нет origin.
 """
 import json, os, re, shutil, signal, subprocess, sys, tempfile, time
@@ -222,9 +222,10 @@ def eval_fixture(kind):
 
 
 def eval_caught(report, case):
-    """Поймал ли круг мутант кейса: только код о пункте кейса. NEEDS_WORK и проза судьи бывают и без мутанта: выживший мутант проверяющего на слабом чеке."""
+    """Поймал ли круг мутант кейса: только строка кода о пункте кейса с причиной «свой прогон не подтвердил» — проверяющий сам увидел дефект; другая причина той же строки — ленивый ответ. NEEDS_WORK и проза судьи бывают и без мутанта: выживший мутант проверяющего на слабом чеке."""
     block = report.split("## Блокирующие", 1)[-1].split("## Named", 1)[0]
-    return report.startswith("VERDICT: NEEDS_WORK") and f"- **{case['item']}: не подтверждён своим прогоном**" in block
+    head = f"- **{case['item']}: не подтверждён своим прогоном**"
+    return report.startswith("VERDICT: NEEDS_WORK") and any(l.startswith(head) and "· свой прогон не подтвердил:" in l for l in block.splitlines())
 
 
 def window_env():
@@ -323,6 +324,7 @@ STUB = {
     "item_label": scen(scope=ITEM_ONLY),
     "prior_rep": scen(was(SURVIVED), verify_F1=ver("F1", "green")),
     "prior_item": scen(was("- **F1.2: не подтверждён своим прогоном** — x"), verify_F1=ver("F1", holds=False)),
+    "prior_more": scen({"features": ["F1"], "prior": {"F1": {**was("- **F1.1: не подтверждён своим прогоном** — x")["prior"]["F1"], "more": ["- **F1.2: не подтверждён своим прогоном** — ключ"]}}}, verify_F1=ver("F1", holds=False)),
     "prior_file": scen(was("- **F1: мутация выжила — bin/other: x** · чек"), verify_F1=ver("F1", "green")),
     "prior_id": scen(was("- **F1.3: не подтверждён своим прогоном** — x"), verify_F1=ver("F1", holds=False)),
     "prior_pass": scen(was(verdict="PASS"), judge=judged()),
@@ -337,6 +339,7 @@ STUB = {
     "f2": scen(["F2"]), "f2str": scen("F2"), "all": scen(), "f9": scen(["F9"]),
     "mut_green": scen(verify_F1=ver("F1", "green")), "mut_red": scen(verify_F1=ver("F1", "red")),
     "no_own": scen(verify_F1=ver("F1", command="", raw_output="")),
+    "no_item": scen(verify_F1={**ver("F1"), "items": [i for i in ver("F1")["items"] if i["id"] != "F1.2"]}),
     "evidence": scen(verify_F1=ver("F1", command="grep F1.2 docs/evidence/F1-slug-result.txt", raw_output="F1.2 '  Hello,  World!  ' → hello-world")),
     "check_cmd": scen(verify_F1=ver("F1", command="bin/check-F1", raw_output="F1.2 hello-world\nSLUG_OK")),
     "holds_false": scen(verify_F1=ver("F1", raw_output="-hello-world-", holds=False)),
@@ -380,7 +383,7 @@ for e in ({"type": "system", "subtype": "init", "apiKeySource": "none"}, {"type"
 
 
 def launcher_prior(d, go):
-    """F7.2: прошлый вердикт в args — только из HEAD, этой SPEC, этих фич, новейший, строки своей фичи, не длиннее 160 и не больше 5."""
+    """F7.2: прошлый вердикт в args — только из HEAD, этой SPEC, этих фич, новейший круг (файлы одного sha — один круг), строки своей фичи, не длиннее 160 и не больше 5, остальные — ключами more."""
     g = lambda *a: subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True, text=True)
 
     def commit(name, text):
@@ -408,16 +411,34 @@ def launcher_prior(d, go):
     long = [f"- **F1.{k}: не подтверждён своим прогоном** — " + "я" * 300 for k in range(1, 8)]
     commit("verify-eeeeeee-F1-F2.txt", verdict_text("NEEDS_WORK", "F1, F2, F22", *long, "- **F2.1: пункт F2** · x", "- **F22: чужая фича** · x"))
     many = args_of("F1, F2", "F1", "F2")
+    # файлы одного sha одним коммитом: порядок внутри коммита — порядок имён, последний круг (F1) идёт вторым
+    def batch(sha, a, b):
+        open(f"{d}/docs/evidence/verify-{sha}-F1-F3.txt", "w", encoding="utf-8").write(a)
+        g("add", "--", f"docs/evidence/verify-{sha}-F1-F3.txt")
+        commit(f"verify-{sha}-F1.txt", b)
+        return args_of("F1", "F1")
+    line_a, line_b = "- **F1.1: не подтверждён своим прогоном** — круг 25", "- **F1.2: не подтверждён своим прогоном** — круг 27"
+    round_both = batch("fffffff", verdict_text("NEEDS_WORK", "F1, F3", line_a), verdict_text("NEEDS_WORK", "F1", line_b, line_a))
+    round_pass = batch("1111111", verdict_text("PASS", "F1, F3"), verdict_text("NEEDS_WORK", "F1", line_b))
+    round_last = batch("2222222", verdict_text("NEEDS_WORK", "F1, F3", line_a), verdict_text("PASS", "F1"))
+    commit("verify-3333333-F1.txt", verdict_text("PASS", "F1"))  # новее другим sha — старый круг не примешан
+    round_new = args_of("F1", "F1")
     was = lambda a: a.get("prior", {}).get("F1", {})
     cut = was(many).get("blocking", [])
+    rest = was(many).get("more", [])
     ok = (point == {"features": ["F1"], "prior": {"F1": {"file": "verify-aaaaaaa-F1.txt", "verdict": "NEEDS_WORK", "blocking": [item]}}}
           and other_feat == {"features": ["F2"]} and full == {"prior": point["prior"]} and other_spec == point
           and was(newer) == {"file": "verify-ccccccc-F1.txt", "verdict": "PASS", "blocking": []} and on_disk == newer and edited == newer
           and was(many).get("file") == "verify-eeeeeee-F1-F2.txt" and len(cut) == 5 and all(len(x) == 160 and x.startswith("- **F1.") for x in cut)
-          and many.get("prior", {}).get("F2", {}).get("blocking") == ["- **F2.1: пункт F2** · x"])
+          and len(rest) == 2 and all(len(x) == 100 for x in rest) and rest[0].startswith("- **F1.6:") and rest[1].startswith("- **F1.7:")
+          and many.get("prior", {}).get("F2", {}).get("blocking") == ["- **F2.1: пункт F2** · x"]
+          and was(round_both) == {"file": "verify-fffffff-F1-F3.txt", "verdict": "NEEDS_WORK", "blocking": [line_a, line_b]}
+          and was(round_pass) == {"file": "verify-1111111-F1-F3.txt", "verdict": "NEEDS_WORK", "blocking": [line_b]}
+          and was(round_last) == {"file": "verify-2222222-F1-F3.txt", "verdict": "NEEDS_WORK", "blocking": [line_a]}
+          and was(round_new) == {"file": "verify-3333333-F1.txt", "verdict": "PASS", "blocking": []})
     return ok, (f"лаунчер: F1 → args {json.dumps(point, ensure_ascii=False)}; F2 → {json.dumps(other_feat)}; без списка → {'только prior' if full == {'prior': point.get('prior')} else full}; "
                 f"вердикт другой SPEC новее → {was(other_spec).get('file')}; новый этой → {was(newer).get('file')} {was(newer).get('verdict')}; на диске, не в HEAD → {was(on_disk).get('file')}; правка на диске без коммита → {was(edited).get('verdict')}; "
-                f"7 строк по 340 знаков → строк {len(cut)}, длина {max(map(len, cut), default=0)}; у F2 — своя строка, без F22 → {many.get('prior', {}).get('F2', {}).get('blocking')}")
+                f"7 строк по 340 знаков → строк {len(cut)}, длина {max(map(len, cut), default=0)}, ключей {len(rest)}; файлы одного sha одним коммитом → {was(round_both).get('verdict')}, строк {len(was(round_both).get('blocking', []))}; PASS и NEEDS_WORK одного sha → {was(round_pass).get('verdict')}; новее другим sha → {was(round_new).get('verdict')} без старых строк; у F2 — своя строка, без F22 → {many.get('prior', {}).get('F2', {}).get('blocking')}")
 
 
 def launcher():
@@ -540,7 +561,7 @@ def main():
     f44(h)
     f71(s, h, crep)
     f72(s, h, prior_side, prep)
-    f73(live)
+    f73(live, s)
     f74()
     return finish()
 
@@ -694,6 +715,8 @@ def f71(s, h, crep):
         ("фраза «деплой на линию», linie=10, DEPLOY_LINIE=0, xlinie=1 — не токены", 0, "нет", side(head, "  - `F1.1` деплой на линию: `linie=10` `DEPLOY_LINIE=0` `xlinie=1`")),
     ]
     lint = all(r[0] == rc and r[2] == want and (want != "нет" or r[1].startswith("OK")) for _, rc, want, r in sides)
+    counted = {n: r[1] for n, _, _, r in sides}  # строка OK называет, что посчитано: токен, а не «деплой на линию»
+    lint = lint and "фич с токеном DEPLOY_LINIE=1|linie=1: 1, " in counted["risk: high в строке"] and "фич с токеном DEPLOY_LINIE=1|linie=1: 0, " in counted["без токена"]
     cur = subprocess.run([f"{REPO}/bin/check-budget"], cwd=REPO, capture_output=True, text=True)
     cur_line = line(cur.stdout, r"^\w+ +risk-tier:")
     lint = lint and cur_line.startswith("OK")
@@ -721,6 +744,10 @@ def f72(s, h, prior_side, prep):
         and "The prior verdict" not in prompt("prior_pass", "verify:F1") and "прошлый вердикт " + WAS in by_feature(rep("prior_all")) and "прошлый вердикт" not in rep("none_green")
     repeat = rep_line.endswith(mark) and rep_line.startswith("- **F1: мутация выжила — bin/slug: ") and mark in line(rep("prior_item"), r"^- \*\*F1\.2") \
         and mark in line(rep("judge_rep"), r"^- \*\*F1: дефисы по краям")
+    # шестая и дальше строки прошлого вердикта — только ключи: «повтор» есть, в запрос проверяющего не идут
+    over_keys = mark in line(rep("prior_more"), r"^- \*\*F1\.2") and second(rep("prior_more")) == "КЛАССЫ: блокирующих 1 (пункт 1), повторов 1, named 0" and "— ключ" not in prompt("prior_more", "verify:F1")
+    # черновики проверяющего — в его worktree: запись мимо него запрещена настройкой проверяющего, mktemp -d ему не предлагается
+    no_scratch = all("mktemp" not in p for x in s.values() for p in x.get("prompts", {}).values())
     fresh = {k: rep(k) for k in ("prior_file", "prior_id", "prior_pass", "judge_new", "judge_none", "none_green")}
     fresh_ok = not any("повтор (" in v for v in fresh.values())
     # object и строка-JSON: фичи — только из features; имя файла прошлого вердикта их не добавляет
@@ -745,15 +772,15 @@ def f72(s, h, prior_side, prep):
         and "F2: blocking in the full" in gate_block.get("reason", "") and "- F1:" not in gate_block.get("reason", "")
     live = "прошлый вердикт verify-0000000-F1.txt; " in by_feature(prep) and prep.startswith("VERDICT: ") and second(prep).startswith("КЛАССЫ: блокирующих ")
     prior_ok, prior_text = prior_side
-    probe("F7.2", prior_ok and fed and repeat and fresh_ok and shape and klasse and gated and live,
-          f"prior={'OK' if prior_ok and fed else 'нет'} klasse={'OK' if klasse else 'нет'} · {prior_text} · заглушка: повтор выжившего — «{rep_line[:50]}…{rep_line[-34:]}»; пункта — «{line(rep('prior_item'), 'F1.2')[-34:]}»; судьи — «{line(rep('judge_rep'), 'дефисы')[-34:]}»; "
+    probe("F7.2", prior_ok and fed and repeat and over_keys and no_scratch and fresh_ok and shape and klasse and gated and live,
+          f"prior={'OK' if prior_ok and fed else 'нет'} klasse={'OK' if klasse else 'нет'} · {prior_text} · заглушка: повтор выжившего — «{rep_line[:50]}…{rep_line[-34:]}»; пункта — «{line(rep('prior_item'), 'F1.2')[-34:]}»; судьи — «{line(rep('judge_rep'), 'дефисы')[-34:]}»; шестой и дальше по ключу — «{line(rep('prior_more'), 'F1.2')[-34:]}», ключ в запросе проверяющего — {'нет' if over_keys else 'есть'}; mktemp в запросах — {'нет' if no_scratch else 'есть'}; "
           f"без пометки — другой файл, другой пункт, прошлый PASS, судья без флага, судья без прошлого, нет прошлого: «повтор (» {'есть' if not fresh_ok else 'нет'}; "
           f"args строкой JSON → {calls('json_str')}; только prior → {calls('prior_all')} · вторая строка: «{second(rep('all'))}»; «{second(rep('prior_rep'))}»; «{second(rep('mix'))}» · "
           f"spec-gate: новый PASS — «{gate_pass.get('systemMessage', gate_pass.get('reason', ''))[:40]}»; новый NEEDS_WORK — {gate_block.get('decision')} «{next((l[2:60] for l in gate_block.get('reason', '').split(chr(10)) if l.startswith('- F2:')), 'нет')}» · "
           f"живой point: «{prep.splitlines()[0] if prep else 'нет файла'}», «{second(prep)}», «{line(by_feature(prep), '^- F1: ')[:60]}»")
 
 
-def f73(live):
+def f73(live, s):
     """F7.3 — кейс docs/evals: круг ловит мутант паузы отката (EVAL_OK 1/1), тот же кейс без мутанта — не EVAL_OK."""
     case = eval_case()
     res = {k: eval_caught(live[k][4], case) for k in ("eval", "eval-clean")}
@@ -766,21 +793,24 @@ def f73(live):
     paused = {k: pause(live[k][1]) for k in res}
     measured = paused["eval"] < 1000 <= paused["eval-clean"]
     report = lambda verdict, *block: f"VERDICT: {verdict}\n## Блокирующие\n" + "\n".join(block) + "\n## Named, not built\n- не подтверждён\n"
-    item = f"- **{case['item']}: не подтверждён своим прогоном** — x"
+    item = f"- **{case['item']}: не подтверждён своим прогоном** — x · свой прогон не подтвердил: `bin/deploy bad` rc 1 → «t=0 health=FAIL ⏎ t=0 rollback r1»"
+    rep = lambda k: s.get(k, {}).get("report", "")
     # не поимка: выживший мутант проверяющего со словом «пауза», другой пункт, проза судьи, пункт вне блокирующих, PASS
     not_caught = {"выживший мутант о паузе": report("NEEDS_WORK", "- **F1: мутация выжила — bin/deploy: убрана пауза** · чек"), "другой пункт": report("NEEDS_WORK", "- **F1.1: не подтверждён своим прогоном** — x"),
                   "проза судьи": report("NEEDS_WORK", "- **F1: нет паузы отката** · доказательство"), "PASS": report("PASS", item),
-                  "вне блокирующих": report("NEEDS_WORK", "- **F1: x**") + item + "\n"}
-    criterion = eval_caught(report("NEEDS_WORK", item), case) and not any(eval_caught(v, case) for v in not_caught.values())
+                  "вне блокирующих": report("NEEDS_WORK", "- **F1: x**") + item + "\n",
+                  # ленивые причины строки кода — настоящие отчёты воркфлоу под заглушками: проверяющий дефекта не видел
+                  "читал evidence": rep("evidence"), "читал лог гейта": rep("gate_log"), "прогнал чек фичи": rep("check_cmd"), "нет команды и вывода": rep("no_own"), "пункт выпал": rep("no_item")}
+    criterion = eval_caught(report("NEEDS_WORK", item), case) and eval_caught(rep("holds_false"), case) and not any(eval_caught(v, case) for v in not_caught.values())
     item_line = lambda k: line(live[k][4], rf"^- \*\*{case['item']}")[:90]
     show = lambda k: f"rc {live[k][2]}, «{live[k][4].splitlines()[0] if live[k][4] else 'нет файла'}», «{item_line(k)}» → {mark[k]}"
     probe("F7.3", res["eval"] and not res["eval-clean"] and measured and criterion,
           f"eval={int(res['eval'])}/1 · с мутантом ({case['mutant']['file']}, пауза {paused['eval']} мс): {show('eval')} · без мутанта (пауза {paused['eval-clean']} мс): {show('eval-clean')} · "
-          f"критерий на образцах: пункт кейса в блокирующих — поимка {'да' if criterion else 'нет'}; не поимка: {', '.join(not_caught)}")
+          f"критерий на образцах: пункт кейса в блокирующих с причиной «свой прогон не подтвердил» — поимка {'да' if criterion else 'нет'}; не поимка: {', '.join(not_caught)}")
 
 
 def f74():
-    """F7.4 — K80: гейт без ветки — GATE_SKIP; чек, сменивший чужой файл evidence, это печатает. Гейт идёт один в своём репо: чеков там нет, рекурсии гейт → check-verify → гейт нет."""
+    """F7.4 — K80: гейт без ветки — GATE_SKIP; чек, сменивший чужой файл evidence, это печатает, и лаунчер — за гейтом в клоне. Гейт идёт один в своём репо: чеков там нет, рекурсии гейт → check-verify → гейт нет."""
     d = tempfile.mkdtemp(prefix="verify-f74-", dir=TMP)
     g = lambda *a: subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True, text=True)
     g("init", "-q", "-b", "main")
@@ -824,7 +854,14 @@ def f74():
         ("чужой файл создан", f"echo a > {other}", [other]),
         ("тот же файл с тем же текстом", f"echo a > {other}", []),
         ("чужой файл сменён", f"echo b > {other}", [other]),
-        ("журнал *.jsonl дописан", "echo x >> docs/evidence/log.jsonl", []),
+        ("журнал *.jsonl создан", "echo x >> docs/evidence/log.jsonl", []),
+        ("журнал *.jsonl дописан", "echo y >> docs/evidence/log.jsonl", []),
+        ("журнал *.log создан и дописан", "echo DEPLOY_OK >> docs/evidence/deploy-window.log; echo LIVE_OK >> docs/evidence/deploy-window.log", []),
+        ("журнал *.log дописан", "echo ROLLBACK_OK >> docs/evidence/deploy-window.log", []),
+        ("журнал *.jsonl переписан", "echo z > docs/evidence/log.jsonl", ["docs/evidence/log.jsonl"]),
+        ("журнал *.jsonl усечён", ": > docs/evidence/log.jsonl", ["docs/evidence/log.jsonl"]),
+        ("журнал *.log переписан", "echo z > docs/evidence/deploy-window.log", ["docs/evidence/deploy-window.log"]),
+        ("журнал удалён", "rm docs/evidence/log.jsonl", ["docs/evidence/log.jsonl"]),
         ("файл в подкаталоге", "mkdir -p docs/evidence/sub && echo a > docs/evidence/sub/a.txt", ["docs/evidence/sub/a.txt"]),
         ("чужой файл удалён", f"rm {other}", [other]),
         ("два файла, команда красная", "echo a > docs/evidence/b.txt; echo a > docs/evidence/a.txt; exit 3", ["docs/evidence/a.txt", "docs/evidence/b.txt"]),
@@ -832,8 +869,50 @@ def f74():
     got = [(n, ev(c), want) for n, c, want in sides]
     words = lambda want: [f"evidence geändert {w}" for w in want]
     ev_ok = all(r[1] == words(want) and r[2] == words(want) for _, r, want in got) and got[-1][1][0] == 3 and got[0][1][0] == 0
-    probe("F7.4", gate_ok and ev_ok, f"detached={'SKIP' if gate_ok else 'нет'} · без ветки: rc {drc} «{dout}» · на ветке, голый скрипт: rc {brc} «{' ⏎ '.join(bout.splitlines())[-110:]}» · evidence: "
-          + "; ".join(f"{n} — {'; '.join(r[1]) or 'молчит'}" for n, r, _ in got))
+
+    def ev_rc(name, cmd):  # другой чек той же папки: код выхода, вывод, его файл результата — или None
+        r = subprocess.run([f"{REPO}/bin/evidence", "F3", name, "--", "sh", "-c", cmd], cwd=e, capture_output=True, text=True)
+        f = f"{e}/docs/evidence/F3-{name}-result.txt"
+        return r.returncode, r.stdout + r.stderr, open(f, encoding="utf-8").read() if os.path.isfile(f) else None
+    # файл под docs/evidence нельзя прочитать: чек, сделавший его, и следующий чек сохраняют результат и код
+    locked = "docs/evidence/made.txt"
+    un_made = ev_rc("u", f"echo U_OK; echo a > {locked}; chmod 000 {locked}; exit 3")
+    un_next = ev_rc("v", "echo V_OK")
+    os.chmod(f"{e}/{locked}", 0o644)
+    un_ok = un_made[0] == 3 and "Traceback" not in un_made[1] and un_made[2] is not None and "U_OK" in un_made[2] and f"evidence geändert {locked}" in un_made[2] \
+        and un_next[0] == 0 and "Traceback" not in un_next[1] and un_next[2] is not None and "V_OK" in un_next[2] and "geändert" not in un_next[2]
+
+    # K80: гейт в клоне лаунчера сменил evidence без bin/evidence — строка сразу за строкой гейта; чистый результат — молчит
+    k80, _ = fixture("stub")
+    h80 = lambda *a: subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *a], cwd=k80, env=GIT_ENV, capture_output=True, check=True, text=True)
+    open(f"{k80}/bin/gate-1", "w").write('#!/bin/sh\neval "$K80_GATE"\necho GATE_OK\n')
+    h80("add", "--", "bin/gate-1")
+    h80("commit", "-qm", "гейт из окружения")
+    fk = tempfile.mkdtemp(prefix="verify-fake-k80-", dir=TMP)
+    open(f"{fk}/claude", "w").write(FAKE)
+    os.chmod(f"{fk}/claude", 0o755)
+    open(f"{fk}/report.txt", "w").write("VERDICT: PASS\nFEATURES: F1\n")
+    env80 = dict(window_env(), FAKE_DIR=fk, PATH=f"{fk}:{os.environ['PATH']}")
+
+    def clone_gate(cmd):  # лаунчер с заглушкой claude: (код выхода, строки «evidence geändert», строки за строкой гейта)
+        r = subprocess.run([f"{REPO}/bin/verify-phase", "F1"], cwd=k80, env=dict(env80, K80_GATE=cmd), capture_output=True, text=True, timeout=120)
+        o = (r.stdout + r.stderr).splitlines()
+        at = next((i for i, l in enumerate(o) if "гейт bin/gate-1 — rc" in l), len(o))
+        return r.returncode, [l for l in o if "geändert" in l], o[at + 1:]
+
+    def after_gate(cmd, *want):
+        rc, seen, tail = clone_gate(cmd)
+        return (rc == 0 and seen == words(want) and tail[:len(want)] == words(want)), rc, seen
+    clone_sides = [
+        ("гейт не меняет evidence", after_gate("")),
+        ("гейт переписал свой результат", after_gate("echo x > docs/evidence/F1-slug-result.txt", "docs/evidence/F1-slug-result.txt")),
+        ("новый файл в новом подкаталоге", after_gate("mkdir docs/evidence/n; echo x > docs/evidence/n/a.txt", "docs/evidence/n/a.txt")),
+    ]
+    clone_ok = all(c[1][0] for c in clone_sides)
+    probe("F7.4", gate_ok and ev_ok and un_ok and clone_ok, f"detached={'SKIP' if gate_ok else 'нет'} · без ветки: rc {drc} «{dout}» · на ветке, голый скрипт: rc {brc} «{' ⏎ '.join(bout.splitlines())[-110:]}» · evidence: "
+          + "; ".join(f"{n} — {'; '.join(r[1]) or 'молчит'}" for n, r, _ in got)
+          + f" · файл не читается: чек rc {un_made[0]}, результат {'есть' if un_made[2] else 'нет'}; следующий чек rc {un_next[0]}, результат {'есть' if un_next[2] else 'нет'} · гейт в клоне лаунчера: "
+          + "; ".join(f"{n} — rc {c[1]}, {'; '.join(c[2]) or 'молчит'}" for n, c in clone_sides))
 
 
 def finish():

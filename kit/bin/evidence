@@ -6,22 +6,34 @@
 строкой (CR, LF и прочие концы строк в ней экранированы); дальше вывод команды как есть. Домашний каталог в обеих — `~`; HOME пуст
 или `/` — не вычищается ничего. На экран — то же, по мере вывода; пока команда идёт, файл лежит под /tmp/two-tier-v3. Код выхода — код команды, убитая сигналом n — 128+n; файл заменяется
 по её окончании. Нет SPEC или неверные аргументы — код 2, команда не идёт. Команда идёт из корня проекта (git toplevel).
-Команда сменила другой файл под docs/evidence/ — на экран и в файл строка `evidence geändert <файл>` (F7.4, K80); свой файл результата и дописываемые журналы *.jsonl не в счёт.
+Команда сменила другой файл под docs/evidence/ — на экран и в файл строка `evidence geändert <файл>` (F7.4, K80); свой файл результата не в счёт, журнал *.jsonl и *.log — только если его прежние байты не начало новых: созданный и дописанный журнал не в счёт. Прогон, идущий параллельно, тоже меняет файлы: его файл здесь тоже назван.
 """
-import hashlib, os, re, shutil, subprocess, sys, tempfile
+import os, re, shutil, subprocess, sys, tempfile
 
 TMP = "/tmp/two-tier-v3"
+JOURNALS = (".jsonl", ".log")
 
 
 def snapshot(own):
-    """Файлы под docs/evidence/ → их отпечаток, кроме своего файла результата и журналов *.jsonl."""
+    """Файлы под docs/evidence/, кроме своего файла результата → их байты; не прочитан — None: чек сохраняет свой результат и код выхода."""
     snap = {}
     for d, _, names in os.walk("docs/evidence"):
-        for p in (os.path.join(d, n) for n in names if not n.endswith(".jsonl")):
+        for p in (os.path.join(d, n) for n in names):
             if p != own and os.path.isfile(p):
-                with open(p, "rb") as f:
-                    snap[p] = hashlib.sha1(f.read()).hexdigest()
+                try:
+                    with open(p, "rb") as f:
+                        snap[p] = f.read()
+                except OSError:
+                    snap[p] = None
     return snap
+
+
+def changed(p, before, after):
+    """Сменён ли файл p: нет в одном снимке или другие байты; журнал создан или дописан — нет."""
+    if p not in before or p not in after:
+        return p in before or not p.endswith(JOURNALS)
+    old, new = before[p], after[p]
+    return old != new and not (p.endswith(JOURNALS) and old is not None and new is not None and new.startswith(old))
 
 
 def main(argv):
@@ -72,9 +84,9 @@ def main(argv):
         if rc < 0:  # убита сигналом n — код как в оболочке
             rc = 128 - rc
         after = snapshot(path)
-        for changed in sorted(q for q in before.keys() | after.keys() if before.get(q) != after.get(q)):
-            out.write(f"evidence geändert {changed}\n")
-            print(f"evidence geändert {changed}", flush=True)
+        for q in sorted(q for q in before.keys() | after.keys() if changed(q, before, after)):
+            out.write(f"evidence geändert {q}\n")
+            print(f"evidence geändert {q}", flush=True)
     os.chmod(tmp, 0o644)
     shutil.move(tmp, path)  # из /tmp на другой том os.replace не пишет
     print(f"evidence: {path} — rc {rc}")

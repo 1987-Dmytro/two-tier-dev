@@ -8,7 +8,7 @@
   · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
     отказы и отклонённые — поимённо, их читает тимлид;
   · пропуски spec-gate — строки docs/evidence/spec-gate.jsonl с решением pass и причиной (кап, no-progress, ошибка, AGENT_STOP, фон);
-  · метрики ретро (SPEC-v3.4 F5.4): кругов до PASS — по вердиктам этой SPEC docs/evidence/verify-<sha>[-F<n>…].txt в порядке истории; откатов деплоя — строки ROLLBACK_OK
+  · метрики ретро (SPEC-v3.4 F5.4): кругов до PASS — по вердиктам этой SPEC docs/evidence/verify-<sha>[-F<n>…].txt в порядке истории; откатов деплоя — строки ROLLBACK_OK после выкатки на линию, по одной на выкатку,
     против деплоев на линию в docs/evidence/deploy-window.log; поправок объёма — строки «Поправка» §0 SPEC. Данных нет — нули;
   · ячейка Jev в тени: один вопрос `choice` на пункт — пункт против сырого вывода его пробы (`questions.item_status` в
     .claude/spec-gate.json): подтверждает / противоречит / молчит; ошибка и таймаут — статус, rc не меняют. Метки копятся
@@ -227,7 +227,12 @@ def main(argv):
     took, going = rounds(spec)
     n_rounds = max(took.values(), default=0)
     deploy_log = read("docs/evidence/deploy-window.log").splitlines()
-    n_back = sum(1 for l in deploy_log if re.search(r"\bROLLBACK_OK\b", l))
+    n_back, on_line = 0, False  # откат той выкатки на линию, что шла перед ним, и один на выкатку: иначе «1 из 0»
+    for l in deploy_log:
+        d = re.search(r"\bDEPLOY_(?:OK|FAIL)\b.*\blinie=(\d)", l)
+        on_line = d[1] == "1" if d else on_line
+        if on_line and re.search(r"\bROLLBACK_OK\b", l):
+            n_back, on_line = n_back + 1, False
     n_line = sum(1 for l in deploy_log if re.search(r"\bDEPLOY_(?:OK|FAIL)\b", l) and re.search(r"\blinie=1\b", l))  # красная выкатка на линии — тоже деплой на линию (check-fenster)
     n_amend = amend_count(spec)
     detail = "; ".join(x for x in (", ".join(f"{f} {k}" for f, k in sorted(took.items(), key=lambda x: int(x[0][1:]))),

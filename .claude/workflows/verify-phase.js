@@ -12,7 +12,7 @@ export const meta = {
 
 // two-tier-dev v3.3 (SPEC-v3.1 F4, SPEC-v3.3 F4.1–F4.3). The script touches no files and reads no clock: the launcher bin/verify-phase
 // clones, runs the gate (log in $VERIFY_GATE_LOG), enforces the limit and writes the returned report.
-// args — the launcher's object {features, prior} (SPEC-v3.4 F7.2): features — the F<n> ids of a point round, prior — F<n> → its prior verdict {file, verdict, blocking};
+// args — the launcher's object {features, prior} (SPEC-v3.4 F7.2): features — the F<n> ids of a point round, prior — F<n> → its prior verdict {file, verdict, blocking, more};
 // the ids alone also do (an array, or a string that carries them); absent — every feature (F4.1).
 // The label `· risk: high|low` on the feature line sets the depth (SPEC-v3.4 F7.1): high — the full depth and at least 2 mutations; low — the fresh check and the items only; none — the full depth, one mutation.
 // Code blocks after the judge: a dead verifier, a red check, a surviving mutation (F4.2), too few mutations at risk high, an item without the checker own run (F4.3).
@@ -28,7 +28,7 @@ const input = typeof args === 'string' && args.trim().startsWith('{') ? JSON.par
 const A = input && typeof input === 'object' && !Array.isArray(input) ? input : { features: input }
 const ids = (Array.isArray(A.features) ? A.features.join(' ') : typeof A.features === 'string' ? A.features : '').match(/\bF\d+\b/g)
 const ASKED = ids ? [...new Set(ids)] : null
-const priorOf = id => { const p = (A.prior || {})[id]; return p ? { ...p, blocking: p.blocking || [] } : null }
+const priorOf = id => { const p = (A.prior || {})[id]; return p ? { ...p, blocking: p.blocking || [], more: p.more || [] } : null }
 const tier = f => (/·\s*risk:\s*(low|high)\b/.exec(f.line) || [])[1] || null  // the feature line only: an item may quote the label
 
 phase('Scope')
@@ -45,7 +45,7 @@ const feats = ASKED ? scope.features.filter(f => ASKED.includes(f.id)) : scope.f
 const absent = ASKED ? ASKED.filter(id => !scope.features.some(f => f.id === id)) : []
 log(`${scope.spec} @ ${scope.sha}: features ${feats.length} of ${scope.features.length}${ASKED ? ` (args ${ASKED.join(', ')})` : ''}, gate log ${scope.gate_log ? 'present' : 'absent'}`)
 
-const verifyPrompt = f => `Acceptance of feature ${f.id} of ${scope.spec} at HEAD ${scope.sha}. You work in your own git worktree, a copy of HEAD: edit files only there (scratch files too, or under \`mktemp -d\`), never commit, never push; the gate log and its directory are read-only. The feature line, verbatim:
+const verifyPrompt = f => `Acceptance of feature ${f.id} of ${scope.spec} at HEAD ${scope.sha}. You work in your own git worktree, a copy of HEAD: edit files only there (scratch files too, in your worktree), never commit, never push; the gate log and its directory are read-only. The feature line, verbatim:
 ${f.line}
 ${priorOf(f.id) && priorOf(f.id).blocking.length ? `
 The prior verdict ${priorOf(f.id).file} blocked this feature with these findings:
@@ -137,7 +137,7 @@ ${JSON.stringify(dossier, null, 1)}`,
 const ok = verdict.blocking.length === 0 && coded.length === 0
 // a finding that repeats the prior verdict of its feature gets «повтор»: a coded line — by its key (the survivor's file included), a judge finding — by its flag (F7.2)
 const keyOf = l => (/^- \*\*F\d+: мутация выжила — [^:]+:|^- \*\*.+?(?= — |\*\*)/.exec(l) || [''])[0]
-const priorFile = (id, hit) => { const p = priorOf(id); return p && p.blocking.some(hit) ? p.file : null }
+const priorFile = (id, hit) => { const p = priorOf(id); return p && [...p.blocking, ...p.more].some(hit) ? p.file : null }  // more — keys of the lines past the five of the prompt
 const idOf = s => (/F\d+/.exec(s) || [''])[0]
 const found = [
   ...coded.map(line => { const k = keyOf(line); return { line, cls: /мутация выжила|risk high/.test(k) ? 'мутация' : /не подтверждён/.test(k) ? 'пункт' : 'чек', file: priorFile(idOf(k), l => l.startsWith(k)) } }),

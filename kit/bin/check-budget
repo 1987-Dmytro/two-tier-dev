@@ -244,9 +244,10 @@ def landing_rows(text):
     return rows
 
 
-def evidence_text(p):  # текст файла распределения; BOM и пробелы — не текст, битые байты lint не роняют
+def evidence_text(p):  # текст файла распределения — с буквой или цифрой; BOM, пробелы, NUL и знаки нулевой ширины — не текст, битые байты lint не роняют
     with open(p, encoding="utf-8", errors="replace") as f:
-        return f.read().replace("\ufeff", "").strip()
+        t = f.read().replace("\ufeff", "").strip()
+    return t if re.search(r"\w", t) else ""
 
 
 def rule_planka(b):
@@ -258,7 +259,7 @@ def rule_planka(b):
     if not ph or not ph[2] or not os.path.isfile(ph[2]):
         return []
     spec, prompt = ph[2], ph[4]
-    rows, bad, home = landing_rows(read(spec)), [], os.path.realpath("docs/evidence") + os.sep
+    rows, bad, home = landing_rows(read(spec)), [], os.path.join(os.path.realpath("."), "docs", "evidence") + os.sep  # от корня: сам docs/evidence бывает симлинком
     for name, cell in rows:
         if re.match(r"[^\w<]*ранняя\b", cell, re.I):  # своё первое слово: «<файл … или «ранняя»>» и «не ранняя» — не пометка
             continue
@@ -303,7 +304,7 @@ def rule_risk(b):
     deployed = [(f, ls) for f, ls in blocks(read(spec).splitlines()) if any(DEPLOY_LINE.search(l) for l in ls)]
     bad = [f for f, ls in deployed if not re.search(r"·\s*risk:\s*high\b", ls[0])]
     if not bad:
-        return [("OK", "risk-tier", f"{spec}: фич с деплоем на линию {len(deployed)}, у всех risk: high")]
+        return [("OK", "risk-tier", f"{spec}: фич с токеном DEPLOY_LINIE=1|linie=1: {len(deployed)}, у всех risk: high")]
     shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
     weight, note = ("WARN", " (история git обрезана: выдана ли SPEC — не определить)") if shallow \
         else ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) else ("FAIL", "")
@@ -786,9 +787,12 @@ def lints():
         ("пустой файл", "FAIL", "пустой файл docs/evidence/e.txt", pk("`docs/evidence/e.txt`, n=12, p50 1, p95 2", {"docs/evidence/e.txt": ""})),
         ("файл из пробелов", "FAIL", "пустой файл docs/evidence/w.txt", pk("`docs/evidence/w.txt`, n=12, p50 1, p95 2", {"docs/evidence/w.txt": " \n\t\n"})),
         ("файл из BOM и пробелов", "FAIL", "пустой файл docs/evidence/w.txt", pk("`docs/evidence/w.txt`, n=12, p50 1, p95 2", {"docs/evidence/w.txt": "\ufeff \n"})),
+        ("файл из NUL", "FAIL", "пустой файл docs/evidence/w.txt", pk("`docs/evidence/w.txt`, n=12, p50 1, p95 2", {"docs/evidence/w.txt": "\0\0\0\n"})),
+        ("файл из пробела нулевой ширины", "FAIL", "пустой файл docs/evidence/w.txt", pk("`docs/evidence/w.txt`, n=12, p50 1, p95 2", {"docs/evidence/w.txt": "\u200b\n"})),
         ("симлинк наружу docs/evidence/", "FAIL", "симлинк наружу docs/evidence/ — docs/evidence/l.txt", linked("../PROGRESS.md")),
         ("симлинк с абсолютной целью", "FAIL", "симлинк наружу", linked("/etc/hosts")),
         ("симлинк каталога наружу", "FAIL", "симлинк наружу", run_side({**s("`docs/evidence/d/a.txt`, n=12, p50 1, p95 2"), "docs/other/a.txt": "x\n"}, None, lambda _b: (os.symlink("../other", "docs/evidence/d"), rule_planka(_b))[1])),
+        ("сам docs/evidence — симлинк наружу", "FAIL", "симлинк наружу docs/evidence/ — docs/evidence/a.txt", run_side({**s("`docs/evidence/a.txt`, n=12, p50 1, p95 2"), "docs/ext/a.txt": "x\n"}, None, lambda _b: (os.rename("docs/evidence", "docs/evidence.real"), os.symlink("ext", "docs/evidence"), rule_planka(_b))[2])),
         ("путь выходит из docs/evidence/", "FAIL", no_file, pk("`docs/evidence/../PROGRESS.md`, n=3, p50 1, p95 2", {"docs/PROGRESS.md": "x\n"})),
         ("путь ../docs/evidence/", "FAIL", no_file, pk("`../docs/evidence/x.txt`, n=3, p50 1, p95 2")),
         ("без n", "FAIL", no_n, pk("`docs/evidence/x.txt`, p50 1, p95 2")),
