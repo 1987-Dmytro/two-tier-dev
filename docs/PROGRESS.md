@@ -2,7 +2,7 @@
 
 ## Голова — плечо 2: стройка и ревью закрыты, живые прогоны ждут входа
 **Сделано:** плечо 1 и слово на плечо 2 (`STOP-TL «Leg 1»` снят 07.11). F5, F6, F7, F8 и пункты PLAN F3.4, F2.1 закоммичены и запушены; ревью четырьмя независимыми проверяющими (42 находки, 14 блокирующих) и `/code-review` (10) разобраны: блокирующие починены, кроме evidence F6 и пока не закрытой F5.3 (ниже). Без модели зелёные и сняты: `bin/check-budget` (`--lints`, `--templates`), `bin/check-kit` (`FROZEN_OK`, `FENSTER_OK`, `PAAR_OK`), `bin/check-docs`, `bin/check-gate`; evidence F2–F5 — этого кода, F5.3 `offen`. **Не проверено на финальном коде:** `bin/check-verify`, `bin/gate-v3.4`, голый `bin/check-harness`, `--desktop`, круги F5–F8: вход CLI истёк.
-**Следующий шаг оператора:** `STOP-INPUT` ниже — вход CLI, команды модов; тимлиду — строки профиля и таблицы.
+**Следующий шаг оператора:** `STOP-INPUT` ниже — решение по реестру, команды модов; тимлиду — строки профиля и таблицы. Вход CLI дан 07.11.
 **Когда закончим:** evidence F1, F6, F7, F8, круги `F5 F7` и `F6 F8`, отчёт фазы, `bin/gate-v3.4`, `make ci` — затем `STOP-TL «Leg 2»`.
 
 ## Done
@@ -17,12 +17,12 @@
 ## Next — один айтем
 1. После входа: голый `bin/check-harness` и `--desktop`, evidence F1, F6, F7, F8; круги `F5 F7` и `F6 F8`; `bin/phase-report`, `bin/gate-v3.4`, `make ci`; `STOP-TL «Leg 2»`.
 
-## Open stop — STOP-INPUT «Leg 2 — вход CLI, профиль, моды»
-STOP: STOP-INPUT «Leg 2 — вход CLI, профиль, моды» — вложенные `claude -p` не идут (вход CLI истёк), а `--desktop` и голый харнесс красны от профиля тимлида, названного на снятый `limits`.
-Вопрос оператору и тимлиду: всё из списка ниже сделано, и как решены записи реестра плагинов — оставить `true` у модов или `false`?
-Resume: Продолжай по SPEC-v3.4 с evidence F1, F6, F7, F8: вход дан, реестр — решение оператора.
+## Open stop — STOP-INPUT «Leg 2 — реестр плагинов и моды»
+STOP: STOP-INPUT «Leg 2 — реестр плагинов и моды» — вход CLI дан (`claude -p` отвечает); живые прогоны с профилем кита пишут реестр плагинов, до решения о модах не запускаю.
+Вопрос оператору: моды в профиле кита оставить `true` (реестр растёт — исключение из правила 4 словом тимлида) или `false` (без `/window` и `/phase`), и выполнены ли пункты ниже?
+Resume: Продолжай по SPEC-v3.4 с evidence F1, F6, F7, F8: команды модов выполнены, профиль поправлен, моды в профиле кита — true.
 **Оператору, по порядку** (скрипты этого не делают: правило 4):
-1. `claude auth login`.
+1. `claude auth login` — сделано 07.11.
 2. `claude plugin uninstall limits@two-tier-mods --scope user`, затем `claude plugin marketplace update two-tier-mods`, затем `claude plugin install window-guard@two-tier-mods --scope user` и `claude plugin install phase-start@two-tier-mods --scope user`. Записи уровня user у обоих модов уже есть (побочный эффект, Notes), `enabledPlugins` — ещё нет.
 3. После правки тимлида: `cp .claude/launch.settings.json .claude/settings.local.json`, новая сессия вкладки.
 **Тимлиду, файлы его:**
