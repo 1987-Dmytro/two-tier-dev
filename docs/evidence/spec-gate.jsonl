@@ -63,3 +63,5 @@
 {"ts":"2026-11-07T16:47:24.127Z","session":"cf839055","mode":"active","decision":"stop","reason":"STOP-INPUT","missing":[],"stops":["60:054e2fe0a0b9"],"bg":[],"platform_cap":8,"stop_hook_active":false,"ms":914}
 {"ts":"2026-11-07T16:47:58.585Z","session":"cf839055","mode":"active","decision":"stop","reason":"STOP-INPUT","missing":[],"stops":["60:093214df0b99"],"bg":[],"platform_cap":8,"stop_hook_active":false,"ms":867}
 {"ts":"2026-11-07T16:48:33.687Z","session":"cf839055","mode":"active","decision":"stop","reason":"STOP-INPUT","missing":[],"stops":["60:c50d0266b1d8"],"bg":[],"platform_cap":8,"stop_hook_active":false,"ms":899}
+{"ts":"2026-11-07T18:11:48.468Z","session":"298cb691","mode":"active","decision":"pass","reason":"background:shell,workflow","missing":[],"stops":[],"bg":["shell","shell","workflow"],"platform_cap":8,"stop_hook_active":false,"ms":178}
+{"ts":"2026-11-07T18:15:09.489Z","session":"298cb691","mode":"active","decision":"pass","reason":"background:shell,workflow","missing":[],"stops":[],"bg":["shell","workflow"],"platform_cap":8,"stop_hook_active":false,"ms":154}

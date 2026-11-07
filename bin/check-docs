@@ -310,7 +310,7 @@ def f81_index(text):
 
 g34 = f81_log(CL)
 g_index = f81_index(read("docs/README.md"))
-r_index = f81_index(read("docs/README.md").replace(f"`{SPEC_NOW}`", "`SPEC-0.md`"))
+r_index = f81_index(read("docs/README.md").replace(f"`{SPEC_NOW}`", "`SPEC-0.md`") + f"\n- `{SPEC_NOW}` на другой строке\n")
 g_docs = {d: f81_doc(d, read(d)) for d in NEED81}
 n_docs = (not g34) + sum(not v for v in g_docs.values())
 

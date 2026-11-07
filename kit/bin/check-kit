@@ -1238,8 +1238,8 @@ def section_paar():
     # F5.2 — строка пары в шаблоне §2; planka-source: звено вендора только с pair (файл со строкой итога) или «ранняя»
     budget_tool = os.path.abspath(f"{root}/bin/check-budget")
 
-    def planka(cell, name="звено вендора: STT", files=None, tool="t"):  # строка правила planka-source настоящего bin/check-budget на проекте-фикстуре, до выдачи
-        spec = "# SPEC\n\n## 2. Фичи\n\n| звено | инструмент | нижняя оценка | источник | измерено у нас (`docs/evidence/<файл>`, n, p50/p95) |\n|---|---|---|---|---|\n" + f"| {name} | {tool} | 1 мс | док | {cell} |\n"
+    def planka(cell, name="звено вендора: STT", files=None, tool="t", table=None):  # строка правила planka-source настоящего bin/check-budget на проекте-фикстуре, до выдачи
+        spec = "# SPEC\n\n## 2. Фичи\n\n" + (table or "| звено | инструмент | нижняя оценка | источник | измерено у нас (`docs/evidence/<файл>`, n, p50/p95) |\n|---|---|---|---|---|\n" + f"| {name} | {tool} | 1 мс | док | {cell} |\n")
         p = fresh(spec="SPEC-1", extra={"docs/SPEC-1.md": spec, **(files or {})})
         return next((l for l in sh([budget_tool], p)[1].splitlines() if re.match(r"(OK|WARN|FAIL) +planka-source:", l)), "нет строки planka-source")
     result_ok, result_red = "PAIR_OK diff_p50=0 diff_p95=0 n=10/10\n", "spec: SPEC-1\nPAIR_FAIL diff_p50=600 diff_p95=600 n=10/10\n"
@@ -1254,11 +1254,14 @@ def section_paar():
              ("слово списка в инструменте, pair и файл", planka(pair_cell, name="распознавание", tool="Google Speech", files={**vendor_words, "docs/evidence/pair.txt": result_ok})),
              ("часть слова — не вендор", planka(numbers, name="rapid-сборка", tool="Jevons", files={**vendor_words, **x_file})),
              ("нет ключа: слово не судит", planka(numbers, name="распознавание", tool="Google Speech", files={"checks/planken.json": "{}", **x_file})),
-             ("файл не JSON: слово не судит", planka(numbers, name="распознавание", tool="Google Speech", files={"checks/planken.json": "{", **x_file}))]
+             ("файл не JSON: слово не судит", planka(numbers, name="распознавание", tool="Google Speech", files={"checks/planken.json": "{", **x_file})),
+             ("колонка инструмента только в первой таблице", planka(numbers, files={**vendor_words, **x_file}, table="| звено | инструмент | измерено у нас |\n|---|---|---|\n| сборка | t | ранняя |\n\n"
+                                                                     f"| звено | заметка | измерено у нас |\n|---|---|---|\n| сборка | Google | {numbers} |\n"))]
     bad = [("слово списка в звене", "нет pair", planka(numbers, name="STT сервера", files={**vendor_words, **x_file})),
            ("слово списка в инструменте", "нет pair", planka(numbers, name="распознавание", tool="Google Speech", files={**vendor_words, **x_file})),
            ("слово списка другим регистром, через дефис", "нет pair", planka(numbers, name="мозг", tool="gemini-3.5-flash", files={**vendor_words, **x_file})),
            ("слово списка, pair без файла", "нет docs/evidence/<файл>", planka("pair", name="распознавание", tool="Google Speech", files=vendor_words)),
+           ("инструмент не вторым столбцом", "нет pair", planka(numbers, files={**vendor_words, **x_file}, table=f"| звено | оценка | инструмент | измерено у нас |\n|---|---|---|---|\n| распознавание | 1 мс | Google Speech | {numbers} |\n")),
            ("нет ключа: слово «вендор» судит", "нет pair", planka(numbers, files={"checks/planken.json": "{}", **x_file})),
            ("файл, n, p50/p95 без pair", "нет pair", planka(numbers, files={"docs/evidence/x.txt": "x\n"})), ("абсолют без файла", "нет pair", planka("≈ 2 с")),
            ("Вендор с большой буквы", "нет pair", planka(numbers, name="Вендор STT", files={"docs/evidence/x.txt": "x\n"})),

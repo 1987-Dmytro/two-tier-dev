@@ -180,6 +180,18 @@ test('the threshold is the number of budgets.json, no built-in one: defaults 70 
   expect((await call($)).deny).toContain('seven_day 75% > 70%')
 })
 
+test('the kit threshold of 100 % refuses nothing: a week of 99 % runs (decision 398)', async ($, on) => {
+  seat(on, { percent: 99, budgets: JSON.stringify({ defaults: { window_seven_day_pct: 100 }, project: {} }) })
+  await start($)
+  expect((await call($)).result).toBe('ran')
+})
+
+test('a threshold substituted before the session starts: 10 % at a week of 50 % is denied (SPEC section 5, step 5)', async ($, on) => {
+  seat(on, { percent: 50, budgets: JSON.stringify({ defaults: { window_seven_day_pct: 10 }, project: {} }) })
+  await start($)
+  expect((await call($)).deny).toContain('seven_day 50% > 10%')
+})
+
 test('budgets.json is read at the repo root, also from a session started in a subfolder', async ($, on) => {
   seat(on, { percent: 90, root: '/repo/docs' })
   await start($)

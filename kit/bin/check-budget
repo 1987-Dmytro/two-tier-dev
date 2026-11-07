@@ -227,10 +227,12 @@ def issued(spec, prompt):
 
 
 def in_flight(spec, prompt):
-    """Фаза идёт: после последнего коммита запроса есть коммит исполнителя (не «Тимлид:»), на диске запрос и SPEC чисты. Поправка тимлида на ходу такую SPEC в черновик не возвращает."""
-    at = git("log", "-1", "--format=%H", "--", prompt).stdout.strip()
-    subjects = git("log", "--no-merges", "--format=%s", f"{at}..HEAD").stdout.splitlines() if at else []
-    return any(not s.startswith("Тимлид:") for s in subjects) and not git("status", "--porcelain", "--", spec, prompt).stdout.strip()
+    """Фаза идёт: после выдачи (первый коммит, где запрос называет эту SPEC, как в scope-growth: поздняя правка запроса её не двигает) на первой родительской линии есть коммит пункта
+    `F<n>.<k>: …` — так начинает сообщение только исполнитель; слияние, коммит оператора и F-коммиты влитой ветки — не работа этой фазы; на диске запрос и SPEC чисты.
+    Поправка тимлида на ходу такую SPEC в черновик не возвращает."""
+    at = git("log", "--reverse", "--format=%H", f"-S{spec}", "--", prompt).stdout.split()[:1]
+    subjects = git("log", "--first-parent", "--no-merges", "--format=%s", f"{at[0]}..HEAD").stdout.splitlines() if at else []
+    return any(re.match(r"F\d+\.\d+\b", s) for s in subjects) and not git("status", "--porcelain", "--", spec, prompt).stdout.strip()
 
 
 def planken_words(key):
