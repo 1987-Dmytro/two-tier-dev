@@ -1028,13 +1028,17 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
                                  "spec-gate", "`STOP: <id>`", "launch-line argument"],
     "docs/PROCESS.template.md": ["| инструмент | форма | id | вкл | фича или чек | установка | удаление |",
                                  "claude --permission-mode auto --model claude-opus-5-5 --effort ultracode",
-                                 "--setting-sources project,local", '-- "$(cat docs/PROMPT.txt)"', "--strict-mcp-config", "% недели"],
+                                 "--setting-sources project,local", '-- "$(cat docs/PROMPT.txt)"', "--strict-mcp-config", "% недели",
+                                 # v3.4, F8.2: развилки ретро telefon, строки модов, запуск во вкладке Code
+                                 "**(ae)", "**(af)", "**(ag)", "**(ah)", "| `window-guard@two-tier-mods` | да |", "| `phase-start@two-tier-mods` | да |",
+                                 "`.claude/settings.local.json`", "`/phase`"],
     "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase",
                   "## Rules for every commit", "abide check", ".abide/rubric.json"],
 }
 
 
 CONTRACT_S2 = ["пара одного часа", "<звено вендора"]  # v3.4, F5.2: строка звена вендора — живой текст §2 шаблона SPEC
+CONTRACT_S3 = ["Фаза доводки", "`bin/check-frozen-diff`"]  # v3.4, F8.2: строка доводки закрытого модуля — живой текст §3 шаблона SPEC
 
 
 def contract_text(f, text, sec=5):
@@ -1060,9 +1064,9 @@ def templates():
     for f, words in CONTRACT.items():
         text = contract_text(f, read(f"{root}/{f}"))
         miss = [w for w in words if w not in text]
-        s2 = CONTRACT_S2 if f == "docs/SPEC.template.md" else []
-        miss += [w for w in s2 if w not in contract_text(f, read(f"{root}/{f}"), 2)]
-        out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words) + len(s2)}, нет — {'; '.join(miss) or 'ничего'}"))
+        by_sec = {2: CONTRACT_S2, 3: CONTRACT_S3} if f == "docs/SPEC.template.md" else {}
+        miss += [w for sec, ws in by_sec.items() for w in ws if w not in contract_text(f, read(f"{root}/{f}"), sec)]
+        out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words) + sum(map(len, by_sec.values()))}, нет — {'; '.join(miss) or 'ничего'}"))
     slash = re.compile("/" + "goal" + r"\b")  # v3.2: фазу запускает стартовый запрос — команды в ките не остаётся (строка не ловит сама себя)
     hits = []
     kit_paths = [os.path.join(d, f) for top in (".claude", "bin") for d, _, fs in os.walk(f"{root}/{top}") for f in fs]

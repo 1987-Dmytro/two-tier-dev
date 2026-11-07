@@ -16,6 +16,8 @@
     "jev-steer-or-queue@jev-steer-or-queue": false,
     "compact-adviser@compact-adviser": false,
     "handoff@two-tier-mods": true,
+    "window-guard@two-tier-mods": true,
+    "phase-start@two-tier-mods": true,
     "limits@two-tier-mods": false
   },
   "pluginConfigs": {

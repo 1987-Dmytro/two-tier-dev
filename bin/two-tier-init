@@ -62,5 +62,5 @@ if command -v graphify >/dev/null 2>&1; then
 else
   echo "  граф кода: CLI graphify нет — pip install graphifyy && graphify install, затем graphify update . (строка Environment)"
 fi
-echo "  4. Мод handoff (строка таблицы Environment) — оператор ставит его один раз на машину:"
-echo "     claude plugin marketplace add \"$HERE/mods\" && claude plugin install handoff@two-tier-mods"
+echo "  4. Моды handoff, window-guard, phase-start (строки таблицы Environment) — оператор ставит их один раз на машину:"
+echo "     claude plugin marketplace add \"$HERE/mods\" && claude plugin install handoff@two-tier-mods && claude plugin install window-guard@two-tier-mods && claude plugin install phase-start@two-tier-mods"
