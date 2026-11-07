@@ -37,7 +37,7 @@ echo "$out"
 
 # 2. выкатка
 if [ -n "${DEPLOY_CMD:-}" ]; then
-  eval "$DEPLOY_CMD" || finish_red rollout "rc=$? linie=$LINIE"
+  ( eval "$DEPLOY_CMD" ) || finish_red rollout "rc=$? linie=$LINIE"  # в подоболочке: exit N в команде не минует итог и строку отката
 fi
 
 # 3. регрессия закрытых модулей

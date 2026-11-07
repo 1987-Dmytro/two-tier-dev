@@ -462,7 +462,8 @@ def section_frozen():
                              red("REGRESS_OKAY", deploy(d, regress="echo REGRESS_OKAY")), red("REGRESS_OK только в stderr", deploy(d, regress="echo итог; echo REGRESS_OK >&2")),
                              red("REGRESS_OK, затем REGRESS_FAIL", deploy(d, regress="echo REGRESS_OK; echo REGRESS_FAIL x")),
                              red("нет REGRESS_CMD и Makefile", sh(["bash", "scripts/deploy.sh"], d, env=no_regress)),
-                             red("DEPLOY_CMD=false", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false")), "rollout")])
+                             red("DEPLOY_CMD=false", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false")), "rollout"),
+                             red("DEPLOY_CMD=exit 3", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="exit 3")), "step=rollout sha=")])
     probe("F3.4", two == 2 and rg_ok, f"regress={two}/2 · REGRESS_OK — rc {a[0]} «{tail(a[1], 2)}» · REGRESS_FAIL — rc {b[0]} «{tail(b[1], 2)}» · {rg_raw}")
     # F3.5 — апгрейд копии клона telefon: замок и хук работают, bin/check-budget проекта зелёный; нет клона или не репо кита — offen и без маркера
     clone = os.environ.get("TELEFON_CLONE", f"{TMP}/telefon-src")
