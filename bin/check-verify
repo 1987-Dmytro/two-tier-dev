@@ -641,14 +641,14 @@ def f44(h):
     h.ship(nw, "точечный NEEDS_WORK по F1, F2", f"docs/evidence/verify-{fx3}-F1-F2.txt")
     mixed = h.gate_run(nw, tn, "f44-mixed")[1]
     f2 = lambda r: next((l[2:] for l in r.get("reason", "").split("\n") if l.startswith("- F2:")), "нет строки F2")
-    ok = (full.get("systemMessage", "").startswith("SPEC_GATE_OK") and none.get("decision") == "block" and "F2: changed after the full" in none.get("reason", "")
-          and other.get("decision") == "block" and "F2: changed after the full" in other.get("reason", "") and "- F1:" not in other.get("reason", "")
-          and early.get("decision") == "block" and "F2: changed after the full" in early.get("reason", "")
+    ok = (full.get("systemMessage", "").startswith("SPEC_GATE_OK") and none.get("decision") == "block" and "F2: changed after its" in none.get("reason", "")
+          and other.get("decision") == "block" and "F2: changed after its" in other.get("reason", "") and "- F1:" not in other.get("reason", "")
+          and early.get("decision") == "block" and "F2: changed after its" in early.get("reason", "")
           and point.get("systemMessage", "").startswith("SPEC_GATE_OK") and f"verify-{fix}-F2.txt" in point["systemMessage"]
-          and plan.get("systemMessage", "").startswith("SPEC_GATE_OK") and nw_none.get("decision") == "block" and "F2: blocking in the full" in nw_none.get("reason", "")
+          and plan.get("systemMessage", "").startswith("SPEC_GATE_OK") and nw_none.get("decision") == "block" and "F2: blocking in the" in nw_none.get("reason", "")
           and nw_ok.get("systemMessage", "").startswith("SPEC_GATE_OK")
           and mixed.get("decision") == "block" and "- F2:" in mixed.get("reason", "") and "- F1:" not in mixed.get("reason", "")
-          and nw_stale.get("decision") == "block" and "F2: changed after the full" in nw_stale.get("reason", ""))
+          and nw_stale.get("decision") == "block" and "F2: changed after its" in nw_stale.get("reason", ""))
     probe("v3.3-F4.4", ok, f"полный круг — «{full.get('systemMessage', '')[:70]}»; починка «F2.1:» без точечного — {none.get('decision')}: «{f2(none)[:110]}»; "
           f"точечный PASS по F2 до починки — {early.get('decision')}: «{f2(early)[:50]}»; точечный PASS только по F1 — {other.get('decision')}: «{f2(other)[:60]}»; точечный PASS по F2 — «{point.get('systemMessage', '')[:110]}»; "
           f"потом коммит строки журнала PLAN — «{plan.get('systemMessage', plan.get('reason', ''))[:40]}» · полный круг NEEDS_WORK с блокирующей F2 — {nw_none.get('decision')}: «{f2(nw_none)[:90]}»; "
@@ -829,7 +829,7 @@ def f72(s, h, prior_side, prep):
     h.ship(repo, "вердикт нового вида: NEEDS_WORK с повтором", f"docs/evidence/{v}")
     gate_block = h.gate_run(repo, tr, "f72-block")[1]
     gated = gate_pass.get("systemMessage", "").startswith("SPEC_GATE_OK") and gate_block.get("decision") == "block" \
-        and "F2: blocking in the full" in gate_block.get("reason", "") and "- F1:" not in gate_block.get("reason", "")
+        and "F2: blocking in the" in gate_block.get("reason", "") and "- F1:" not in gate_block.get("reason", "")
     live = "прошлый вердикт verify-0000000-F1.txt; " in by_feature(prep) and prep.startswith("VERDICT: ") and second(prep).startswith("КЛАССЫ: блокирующих ")
     prior_ok, prior_text = prior_side
     probe("F7.2", prior_ok and fed and repeat and over_keys and no_scratch and fresh_ok and shape and klasse and gated and live,

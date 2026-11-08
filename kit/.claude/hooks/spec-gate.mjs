@@ -8,10 +8,11 @@
 // marker on a line of its own and, per item, a line «F<n>.<k> <raw output of its probe>» in one of the feature's evidence files; the
 // branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова» section) names what is done, the operator's
 // next step and when, and was rewritten — in this session when the session committed anything beyond evidence, else in this phase
-// (since the last commit of the start prompt: a fresh context on a closed phase is not held); a VERDICT: PASS of a full
-// /verify-phase round of this SPEC for HEAD or an ancestor (or a NEEDS_WORK one whose blocking features are then verified again), and for every
-// feature changed after it (item ids at the start of the commit message) a point verdict that names it (`FEATURES: F<n>, …`) without
-// blocking it, at or after its last change (SPEC-v3.3 F4.4, §5).
+// (since the last commit of the start prompt: a fresh context on a closed phase is not held); a full /verify-phase round of this SPEC —
+// the union of its calls (decision 401): every feature of the SPEC named (`FEATURES: F<n>, …`; a verdict without the line names them
+// all) by its newest verdict committed at HEAD for HEAD or an ancestor, a PASS or a NEEDS_WORK whose parsed blocking list leaves it
+// out, and that verdict at or after the feature's last change (item ids at the start of the commit message); a commit naming no item
+// after the oldest of these verdicts holds the turn as it is (SPEC-v3.3 F4.4, §5). An uncovered feature is a missing line by its name.
 // The set is judged as pushed: the start prompt, the SPEC, docs/PROGRESS.md, the evidence files of the SPEC's features and the
 // verdict files are read from HEAD, and any of them that `git status` shows as changed, untracked or deleted (eol conversion and
 // filters as git applies them) holds the turn by its name. Logs that checks and hooks append (docs/evidence/*.jsonl) and the phase
@@ -33,7 +34,7 @@
 // of the background tasks; a pass there, with its reason, is a line of the phase report (F1.5).
 // Modes off · shadow · active: SPEC_GATE from the environment, else `mode` of .claude/spec-gate.json (the team lead's file).
 // `claude -p` of acceptance and of the control pairs runs with SPEC_GATE=off. The hook never prints a permission decision; on its
-// own error it exits 0.
+// own error it exits 0, and an empty stdin or one that is not a JSON object is its own error too: pass with the reason in the log (decision 401).
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
@@ -173,34 +174,35 @@ function verdicts(root, sha, specPath) {  // verdict files of this SPEC committe
   return out
 }
 
-function coverage(root, sha, ids, specPath) {  // what the verdicts leave uncovered — [] when HEAD is covered (SPEC-v3.3 F4.4)
+function coverage(root, sha, ids, specPath) {  // what the verdicts leave uncovered — [] when HEAD is covered (SPEC-v3.3 F4.4, decision 401)
   const all = verdicts(root, sha, specPath)
-  const isFull = v => !v.scope || ids.every(i => v.scope.includes(i))
-  const dist = v => Number(git(root, 'rev-list', '--count', `${v.sha}..${sha}`) ?? 1e9)
-  const full = all.filter(isFull).sort((a, b) => dist(a) - dist(b) || b.pass - a.pass)[0]  // the newest full round, PASS or NEEDS_WORK
-  // a feature counts as verified at v.sha when v names it and does not block it (a NEEDS_WORK verdict without a parsed blocking list verifies nothing)
-  const verifies = (v, f) => v !== full && v.scope?.includes(f) && (v.pass || (v.blocking.length > 0 && !v.blocking.includes(f)))
-  const vs = all.filter(v => v.pass || v.blocking.length)
-  if (!full) return { missing: [`no full /verify-phase round for HEAD ${sha.slice(0, 7)} or an ancestor in HEAD (docs/evidence/verify-<sha>.txt)`] }
-  const missing = [], last = {}
-  // SPEC-v3.3 §5: the blocking findings of the one full round are fixed, then only the touched features are verified again
-  const failed = full.pass ? [] : full.blocking.length ? full.blocking : ids
-  for (const f of failed) last[f] = full.sha
+  const away = new Map(all.map(v => [v, Number(git(root, 'rev-list', '--count', `${v.sha}..${sha}`) ?? 1e9)]))  // commits from the verdict to HEAD
+  const names = (v, f) => !v.scope || v.scope.includes(f)  // no FEATURES line — a round of every feature: one file with all is the special case
+  // v verifies f when it names it and does not block it; a NEEDS_WORK verdict without a parsed blocking list blocks all it names
+  const verifies = (v, f) => names(v, f) && (v.pass || (v.blocking.length > 0 && !v.blocking.includes(f)))
+  // the verdict of a feature: its newest naming one; at the same commit one that verifies it comes first
+  const newest = f => all.filter(v => names(v, f)).sort((a, b) => away.get(a) - away.get(b) || verifies(b, f) - verifies(a, f))[0]
+  const of = Object.fromEntries(ids.map(f => [f, newest(f)]))
+  const s7 = x => x.slice(0, 7)
+  const missing = ids.filter(f => !of[f]).map(f => `${f}: no /verify-phase verdict in HEAD names ${f} for HEAD ${s7(sha)} or an ancestor (docs/evidence/verify-<sha>[-F…].txt) — the full round is the union of the calls: every feature named by a PASS, or by a NEEDS_WORK that does not block it`)
+  const used = [...new Set(Object.values(of).filter(Boolean))]
+  if (!used.length) return { missing }
+  const oldest = used.reduce((a, b) => (away.get(b) > away.get(a) ? b : a))
+  const last = {}
   const own = p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md' || /^docs\/PLAN-[^/]+\.md$/.test(p)  // the executor's report files
-  for (const c of commits(root, `${full.sha}..${sha}`)) {
+  for (const c of commits(root, `${oldest.sha}..${sha}`)) {
     if (c.subj.startsWith('Тимлид:') || c.files.every(own)) continue
     const fs_ = [...new Set(((c.subj.match(/^((?:F\d+\.\d+[,;\s]*)+)/) || [])[1] || '').match(/F\d+(?=\.)/g) || [])]
-    if (!fs_.length) missing.push(`commit ${c.sha.slice(0, 7)} «${c.subj.slice(0, 60)}» after the full /verify-phase round ${full.sha.slice(0, 7)} changes ${c.files.slice(0, 3).join(', ')} and names no item: no point verdict can cover it`)
-    for (const f of fs_) if (!last[f] || last[f] === full.sha) last[f] = c.sha  // newest first: the first seen is the last change of the feature
+    if (!fs_.length) missing.push(`commit ${s7(c.sha)} «${c.subj.slice(0, 60)}» after the /verify-phase round ${s7(oldest.sha)} (${oldest.file}) changes ${c.files.slice(0, 3).join(', ')} and names no item: no point verdict can cover it`)
+    for (const f of fs_) if (!last[f]) last[f] = c.sha  // newest first: the first seen is the last change of the feature
   }
-  for (const [f, c] of Object.entries(last)) {
-    if (!vs.some(v => verifies(v, f) && isAncestor(root, c, v.sha))) {
-      missing.push(c === full.sha ? `${f}: blocking in the full /verify-phase round ${full.sha.slice(0, 7)} (${full.file}) — no point VERDICT: PASS that names ${f} after it`
-        : `${f}: changed after the full /verify-phase round ${full.sha.slice(0, 7)} (commit ${c.slice(0, 7)}) — no point VERDICT: PASS that names ${f} at or after it`)
-    }
+  for (const f of [...ids, ...Object.keys(last).filter(f => !ids.includes(f))]) {
+    const v = of[f] ?? (of[f] = newest(f))
+    if (!v) { if (!ids.includes(f)) missing.push(`${f}: commit ${s7(last[f])} names ${f}, and no /verify-phase verdict in HEAD names it`); continue }
+    if (!verifies(v, f)) missing.push(`${f}: blocking in the /verify-phase round ${s7(v.sha)} (${v.file}) — no point VERDICT: PASS that names ${f} after it`)
+    else if (last[f] && !isAncestor(root, last[f], v.sha)) missing.push(`${f}: changed after its /verify-phase verdict ${s7(v.sha)} (${v.file}, commit ${s7(last[f])}) — no point VERDICT: PASS that names ${f} at or after it`)
   }
-  const point = vs.filter(v => Object.keys(last).some(f => verifies(v, f)))
-  return { missing, used: [full.file, ...point.map(v => v.file)].join(', ') }
+  return { missing, used: used.map(v => v.file).join(', ') }
 }
 
 const bgTypes = input => (Array.isArray(input.background_tasks) ? input.background_tasks : []).map(t => String(t?.type ?? 'no type')).sort()
@@ -303,10 +305,14 @@ function main() {
   try {
     raw = fs.readFileSync(0, 'utf8')
   } catch {}
-  let input = {}
+  let input = null
   try {
     input = JSON.parse(raw)
   } catch {}
+  // the hook's own error: no Stop input to judge — the turn passes, the reason goes to the log (decision 401)
+  const mute = input && typeof input === 'object' && !Array.isArray(input) ? null
+    : raw.trim() ? `stdin: not a JSON object (${Buffer.byteLength(raw)} bytes) — the gate passes` : 'stdin: empty — the gate passes'
+  if (mute) input = {}
   const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd()
   let cfg = DEFAULTS
   let broken = null
@@ -323,7 +329,7 @@ function main() {
   const log = (read(logPath) || '').split('\n').filter(Boolean).flatMap(l => { try { return [JSON.parse(l)] } catch { return [] } })
   let d
   try {
-    d = broken ? { decision: 'pass', reason: broken } : decide(input, root, cfg, log)
+    d = broken || mute ? { decision: 'pass', reason: broken || mute } : decide(input, root, cfg, log)
   } catch (e) {
     d = { decision: 'pass', reason: `error: ${e.name}: ${String(e.message).slice(0, 120)}` }
   }

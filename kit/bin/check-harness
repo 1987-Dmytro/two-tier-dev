@@ -1274,15 +1274,16 @@ def ship(repo, msg, *paths):
         subprocess.run(["git", *a], cwd=repo, env=GIT_ENV, capture_output=True, text=True, check=True)
 
 
-def gate_run(repo, transcript, session, env_over=None, extra=None, hook=None):
-    """Один вызов Stop-хука как от Claude Code: (rc, JSON stdout или {}, сырой stdout, строки журнала, секунды); hook — другой файл хука."""
+def gate_run(repo, transcript, session, env_over=None, extra=None, hook=None, raw=None):
+    """Один вызов Stop-хука как от Claude Code: (rc, JSON stdout или {}, сырой stdout, строки журнала, секунды); hook — другой файл хука;
+    raw — stdin как есть вместо входа Stop (пустой, битый)."""
     inp = {"session_id": session, "transcript_path": transcript, "cwd": repo, "hook_event_name": "Stop", "stop_hook_active": False,
            "last_assistant_message": "Готово: фаза закрыта, все фичи сделаны.", "background_tasks": [], "session_crons": [], **(extra or {})}
     env = {k: v for k, v in os.environ.items() if k != "SPEC_GATE"} | {"CLAUDE_PROJECT_DIR": repo}
     for k, v in (env_over or {}).items():
         env.pop(k, None) if v is None else env.update({k: v})
     t = time.monotonic()
-    r = subprocess.run(["node", hook or f"{repo}/.claude/hooks/spec-gate.mjs"], input=json.dumps(inp), env=env, capture_output=True, text=True, timeout=90)
+    r = subprocess.run(["node", hook or f"{repo}/.claude/hooks/spec-gate.mjs"], input=json.dumps(inp) if raw is None else raw, env=env, capture_output=True, text=True, timeout=90)
     try:
         res = json.loads(r.stdout) if r.stdout.strip() else {}
     except ValueError:
@@ -1493,7 +1494,7 @@ def gate34_probes(src, launch):
     open(f"{rp}/docs/evidence/F1-x-result.txt", "w", encoding="utf-8").write("spec: SPEC-1\nF2.1 строка чужой фичи\n")
     alien_probe = no_probe_of(rp)
     ok = (own.get("systemMessage", "").startswith("SPEC_GATE_OK") and all(foreign.values()) and back.get("systemMessage", "").startswith("SPEC_GATE_OK")
-          and alien.get("decision") == "block" and "no full /verify-phase round" in alien.get("reason", "") and (not alt or alt_res.get("systemMessage", "").startswith("SPEC_GATE_OK"))
+          and alien.get("decision") == "block" and "no /verify-phase verdict in HEAD names F1" in alien.get("reason", "") and (not alt or alt_res.get("systemMessage", "").startswith("SPEC_GATE_OK"))
           and ev_ok and "F2.1" in no_probe and "F1.1" not in no_probe and "(2): F2.1, F2.2" in twin_probe and "(2): F2.1, F2.2" in alien_probe
           and beside.get("systemMessage", "").startswith("SPEC_GATE_OK") and hint_ok and phase_ok and ev_more_ok and forged_ok and bom_ok)
     item(S, "F1.3", ok, f"fremd={'missing' if all(foreign.values()) else 'засчитан'} eigen={'OK' if own.get('systemMessage', '').startswith('SPEC_GATE_OK') else 'нет'} · своя — «{short(own)[:60]}»; чужие: "
@@ -1573,14 +1574,75 @@ def gate34_probes(src, launch):
          + f" · живая вкладка: журнал этого проекта, строк с типами {sum('bg' in x for x in self_log)}, типы {seen_types or 'нет'}")
 
 
+def union_probes(S, src, launch):
+    """Решение 401: полный круг — объединение вызовов. Каждая фича названа своим новейшим вердиктом (PASS или NEEDS_WORK, который её не
+    блокирует), вердикт — не раньше последнего коммита с её id; непокрытая фича — строка missing с её именем."""
+    def split(repo, *parts):  # вердикт фикстуры (без FEATURES — все фичи) → точечные файлы того же sha; parts — (суффикс, FEATURES, текст после)
+        v = next(n for n in os.listdir(f"{repo}/docs/evidence") if re.fullmatch(r"verify-[0-9a-f]+\.txt", n))
+        sha = v[7:-4]
+        subprocess.run(["git", "rm", "-q", f"docs/evidence/{v}"], cwd=repo, env=GIT_ENV, check=True)
+        names = []
+        for suf, feats, tail in parts:
+            n = f"docs/evidence/verify-{sha}-{suf}.txt"
+            head = "VERDICT: PASS" if not tail else "VERDICT: NEEDS_WORK"
+            open(f"{repo}/{n}", "w").write(f"{head}\n/verify-phase · docs/SPEC-1.md · HEAD {sha}\nFEATURES: {feats}\n{tail}")
+            names.append(n)
+        ship(repo, "вызовы круга", *names)
+        return sha
+    line = lambda r, f: next((l[2:] for l in r.get("reason", "").split("\n") if l.startswith(f"- {f}:")), "")
+    gate_ok = lambda r: r.get("systemMessage", "").startswith("SPEC_GATE_OK")
+    two, t2 = gate_fixture(src, launch, full=True, items=True)
+    split(two, ("F1", "F1", ""), ("F2", "F2", ""))
+    both = gate_run(two, t2, "probe-union-two")[1]
+    open(f"{two}/bin/b-fix", "w").write("echo B\n")
+    ship(two, "F2.1: починка bin/b", "bin/b-fix")
+    fixed = gate_run(two, t2, "probe-union-changed")[1]
+    fx = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=two, capture_output=True, text=True).stdout.strip()
+    open(f"{two}/docs/evidence/verify-{fx}-F2.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD {fx}\nFEATURES: F2\n")
+    ship(two, "точечный PASS по F2 после починки", f"docs/evidence/verify-{fx}-F2.txt")
+    again = gate_run(two, t2, "probe-union-again")[1]
+    one, t1 = gate_fixture(src, launch, full=True, items=True)
+    split(one, ("F1", "F1", ""))
+    half = gate_run(one, t1, "probe-union-half")[1]
+    nw, tn = gate_fixture(src, launch, full=True, items=True)
+    split(nw, ("F1-F2", "F1, F2", "\n## Блокирующие\n- **F2.1: не подтверждён своим прогоном** — x\n"))
+    blocked = gate_run(nw, tn, "probe-union-blocking")[1]
+    raw, tr = gate_fixture(src, launch, full=True, items=True)
+    split(raw, ("F1-F2", "F1, F2", "\nклассы без раздела блокирующих\n"))
+    unparsed = gate_run(raw, tr, "probe-union-unparsed")[1]
+    sides = {
+        "F1 и F2 — два вызова": gate_ok(both),
+        "коммит «F2.1:» после вызова F2": fixed.get("decision") == "block" and "changed after its /verify-phase verdict" in line(fixed, "F2") and not line(fixed, "F1"),
+        "точечный PASS F2 после коммита": gate_ok(again) and "-F2.txt" in again.get("systemMessage", ""),
+        "назван только F1": half.get("decision") == "block" and "no /verify-phase verdict in HEAD names F2" in line(half, "F2") and not line(half, "F1"),
+        "NEEDS_WORK блокирует F2": blocked.get("decision") == "block" and "blocking in the /verify-phase round" in line(blocked, "F2") and not line(blocked, "F1"),
+        "NEEDS_WORK без разобранного списка": unparsed.get("decision") == "block" and bool(line(unparsed, "F1")) and bool(line(unparsed, "F2")),
+    }
+    say(S, "OK" if all(sides.values()) else "FAIL", "union",
+        "; ".join(f"{k} — {'да' if v else 'НЕТ'}" for k, v in sides.items()) + f" · два вызова — «{both.get('systemMessage', both.get('reason', ''))[:90]}»; назван только F1 — «{line(half, 'F2')[:70]}»")
+
+
+def stdin_probes(S, src, launch):
+    """Решение 401: пустой stdin или не объект JSON — своя ошибка хука: pass с причиной в журнале, не block; целый вход судится как прежде."""
+    repo, tr = gate_fixture(src, launch)  # одна фича из двух: целый вход — block
+    runs = {name: gate_run(repo, tr, "probe-stdin", raw=raw) for name, raw in (("пустой", ""), ("пробелы", " \n"), ("битый", "{oops"), ("null", "null"), ("массив", "[]"))}
+    whole = gate_run(repo, tr, "probe-stdin-whole")
+    passed = {k: r[0] == 0 and r[1].get("decision") != "block" and r[3][-1]["decision"] == "pass" and r[3][-1]["reason"].startswith("stdin:") for k, r in runs.items()}
+    held = whole[0] == 0 and whole[1].get("decision") == "block" and whole[3][-1]["decision"] == "block"
+    say(S, "OK" if all(passed.values()) and held else "FAIL", "stdin",
+        "; ".join(f"{k} — {r[3][-1]['decision']} «{r[3][-1]['reason'][:45]}»" for k, r in runs.items()) + f"; целый вход Stop — {whole[3][-1]['decision']}")
+
+
 def gate_probes(src, launch, lenv, args):
     S = "GATE_HOOK"
     short = lambda res: (res.get("reason") or res.get("systemMessage") or "тишина").replace("\n", " ")[:150]
     repo, tr = gate_fixture(src, launch)
     rc, res, _, log, _ = gate_run(repo, tr, "probe-partial")
     reason = res.get("reason", "")
-    say(S, "OK" if rc == 0 and res.get("decision") == "block" and "- F2:" in reason and "- F1:" not in reason else "FAIL", "partial",
-        f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in reason else 'нет'}, F1 — {'да' if '- F1:' in reason else 'нет'}; rc {rc}")
+    f1_set = [l for l in reason.split("\n") if l.startswith("- F1:") and "no /verify-phase verdict" not in l]  # вердикта нет ни у одной фичи — F1 названа только им (401)
+    say(S, "OK" if rc == 0 and res.get("decision") == "block" and "- F2:" in reason and not f1_set and "- F1: no /verify-phase verdict" in reason else "FAIL", "partial",
+        f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in reason else 'нет'}, комплект F1 — {'да' if f1_set else 'нет'}, "
+        f"F1 без вердикта — {'да' if '- F1: no /verify-phase verdict' in reason else 'нет'}; rc {rc}")
     twin, trw = gate_fixture(src, launch, full=True)  # маркер — целая строка: «B_OK_MAYBE» и «NOT B_OK» не в счёт
     open(f"{twin}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-1\n$ bin/b\nB_OK_MAYBE\nNOT B_OK\n")
     ship(twin, "близнецы маркера", "docs/evidence/F2-b-result.txt")
@@ -1642,10 +1704,12 @@ def gate_probes(src, launch, lenv, args):
     gm("commit", "-qm", "move")
     gm("push", "-q", "origin", "phase")
     res6 = gate_run(moved, trm, "probe-verdict-rename")[1]
-    covered = "after the full /verify-phase round" not in res6.get("reason", "")
+    covered = "after the /verify-phase round" not in res6.get("reason", "")
     say(S, "OK" if res6.get("decision") == "block" and not covered else "FAIL", "verdict",
         f"после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение {res6.get('decision') or 'нет'}, "
         f"вердикт не покрывает коммит — {'нет' if covered else 'да'}")
+    union_probes(S, src, launch)
+    stdin_probes(S, src, launch)
     # B2 (ревью v3.2-2): комплект — из запушенного HEAD; файл комплекта вне HEAD или отличный от HEAD держит ход по имени
     def state_of(tweak=None, **kw):
         repo, tr = gate_fixture(src, launch, full=True, **kw)
