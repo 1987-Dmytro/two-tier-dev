@@ -2286,6 +2286,9 @@ def denied_probes(src):
                 f"строк 4: Bash/Data Exfiltration/1; Bash/Data Exfiltration/2; Bash/Data Exfiltration/1; Bash/other/1, поля {fields}, утечек 0", journal(b)))
     feed(h, *(json.dumps({**DENIED, "reason": r}) for r in ("[Blocked: pushes secret to client-acme.example from /Users/x/.ssh/id_rsa] details", f"[{'A' * 62}]", "[lowercase class]")))
     got.append(("класс вне белого списка — other: путь в скобках, длиннее 61, со строчной", f"строк 3: Bash/other/1; Bash/other/2; Bash/other/3, поля {fields}, утечек 0", journal(h)))
+    edge = tempfile.mkdtemp(dir=d)  # граница длины класса: 61 знак — ещё имя правила, 62 — уже other (сторона выше)
+    feed(edge, json.dumps({**DENIED, "reason": f"[{'A' * 61}] details"}))
+    got.append(("класс ровно 61 знак — имя правила", f"строк 1: Bash/{'A' * 61}/1, поля {fields}, утечек 0", journal(edge)))
     broken = ["not json", "", "[]", "null", "1", "{}", json.dumps({"hook_event_name": "Stop", "tool_name": "Bash"}), json.dumps({"hook_event_name": "PermissionDenied"}),
               json.dumps({"hook_event_name": "PermissionDenied", "tool_name": 1})]
     got.append((f"битый вход ×{len(broken)}", "rc≠0 0, stdout 0", feed(c, *broken)))
