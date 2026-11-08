@@ -1,0 +1,17 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 3
+FEATURES: F1
+/verify-phase · docs/SPEC-v3.4.md · HEAD 1fbf0c1 · проверяющие claude-sonnet-5-5 (фич 1 из 9, опровергателей 0) · судья claude-opus-5-5
+
+Свежий bin/check-harness зелёный: строка F1 GATE_HOOK_OK есть в gate.log, а docs/evidence/F1-check-harness-result.txt начинается с «spec: SPEC-v3.4» и содержит маркер отдельной строкой. Проверяющий подтвердил пункты F1.1–F1.5 собственными фикстурами и сырым выводом: новый хук совпал 10/10, старый только 6/10, обе мутации продукта (subagent в WAKES и startsWith в ofSpec) пойманы. Кандидатов в блокирующие нет, а три оставшиеся находки касаются краёв конфига и входа вне пунктов SPEC, поэтому они не блокирующие.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F1: caps.same_list = 0 в .claude/spec-gate.json превращает первый же block в pass (no-progress): prior.slice(-0) возвращает весь массив, а every() на пустом массиве истинно; строковое "3" до no-progress не доходит. Это значения конфига вне документированного 3, файл тимлида, пункта F1.2 не нарушает.
+- F1: неизвестное значение SPEC_GATE или mode (например 'bogus') тихо выключает принуждение: решение block пишется в журнал, но в вывод не попадает ничего. Это укрепление вне пунктов SPEC.
+- F1: background_tasks[].type приводится через String(), поэтому нестроковый тип вроде ["monitor"] считается 'monitor' и будит сессию. Вечная фоновая задача monitor или shell отпускает ход без судьи; это ограничение задокументировано в kit/docs/LAUNCH.md, а такой вход нереалистичен.
+
+## По фичам
+- F1: прошлый вердикт verify-9b9ae69-F1-F2-F9.txt; чек `bin/check-harness (F1 marker GATE_HOOK_OK): gate.log line 'F1 GATE_HOOK_OK' read; evidence docs/evidence/F1-check-harness-result.txt starts 'spec: SPEC-v3.4' and has GATE_HOOK_OK on its own line; own run of the F1 probe set (gate34_probes via importlib driver, 37 s) -> GATE_HOOK ['OK' x6]` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутация kit/.claude/hooks/spec-gate.mjs: WAKES = ['monitor','workflow','shell','subagent'] (subagent background task wakes the session, so the judge is skipped); product confirmed changed: incomplete set + subagent gave 'pass background:subagent' → red; мутация kit/.claude/hooks/spec-gate.mjs: ofSpec: ls[0] === `spec: ${specName}` replaced by ls[0].startsWith(`spec: ${specName}`) (twin SPEC-10 / SPEC-1.1 evidence counts as SPEC-1); product confirmed changed: twin spec: SPEC-10 -> ok → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0

@@ -1,0 +1,16 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 0
+FEATURES: F3, F4
+/verify-phase · docs/SPEC-v3.4.md · HEAD 1fbf0c1 · проверяющие claude-sonnet-5-5 (фич 2 из 9, опровергателей 0) · судья claude-opus-5-5
+
+F3 и F4 доказаны своими чеками: свежий прогон `bin/check-kit frozen` дал rc=0 с `FROZEN_OK`, gate.log даёт `F4 FENSTER_OK`, а маркеры стоят последней строкой в docs/evidence/F3-check-kit-result.txt и docs/evidence/F4-check-kit-result.txt. Все пункты F3.1–F3.5 и F4.1–F4.4 подтверждены собственными командами проверяющего и их сырым выводом: у замка, паспорта, регрессии, апгрейда telefon, окна, канарейки и контракта шаблонов есть зелёные и красные стороны; кандидатов в блокирующие и опровергнутых находок нет, мутаций при risk low не требуется.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- нет
+
+## По фичам
+- F3: risk low; прошлый вердикт verify-be5c7a5-F1-F2-F3.txt; чек `bin/check-kit frozen` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+- F4: risk low; прошлый вердикт verify-be5c7a5-F4.txt; чек `grep -n '^F4 FENSTER_OK' /tmp/two-tier-v3/verify-1fbf0c1-erylu5h6/gate.log; tail -1 docs/evidence/F4-check-kit-result.txt` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0
