@@ -2,7 +2,7 @@
 
 ## Голова — плечо 3: F9 построен, ждёт установки у пользователя
 **Сделано:** Resume 400 (07.11 22:40–08.11). `risk-tier`: явная метка сильнее слов — `risk: low` при словах деплоя → OK «low: слова деплоя», токен — по-прежнему `high` (`da0f1ad`). Находка 400 измерена: `env` профиля в `settings.local` и в `settings.json` проекта не переключает `CLAUDE_CODE_SUBAGENT_MODEL` (Opus), `--settings` и окружение процесса — переключают (`2705fb5`, `HARNESS_NOTE` в F6, CHANGELOG). F9 `spec-board`: мод `mods/spec-board` (`/board`, строка статуса, файлы `spec-gate`, без модели и сети), 22 теста, validate; `bin/check-kit mods` → `F9.1 board=2/1/1 nach=1/1/2`, `F9.2 validate=OK test=22`, `MODS_OK`; гейт — F9; marketplace; строка шаблона Environment и профиль кита — «нет»/false до установки. `/code-review` дельты (7 находок, 4 починены) и воркфлоу (25 мутантов, ревью; выжившие закрыты сторонами) — `5c7529a`…`f117594`.
-**Следующий шаг оператора:** `STOP-INPUT` ниже — шаги 1–2 сделаны 08.11 (`claude plugin list`: spec-board 0.1.0, scope user, enabled, читается из `mods/spec-board`); осталась новая сессия вкладки.
+**Следующий шаг оператора:** `STOP-INPUT` ниже — вход `claude auth login` для круга приёмки.
 **Когда закончим:** после установки — evidence F9, строка профиля кита `true`, точечный `bin/verify-phase F1 F2 F9`, `bin/phase-report`, `bin/gate-v3.4`, `make ci`, `bin/check-budget` → `STOP-TL «Leg 3»` ≈ 1 ч.
 
 ## Done
@@ -13,20 +13,18 @@
 - **F4 Fenster & Kanarienvogel** (`598b336`, `e6c1958`): `bin/check-kit fenster` → `FENSTER_OK` — `docs/evidence/F4-check-kit-result.txt`.
 - **F5 Paar & Metriken** (`b2fbce2`, `d2b7961`, `d49e78e`, `502f935`): `bin/check-kit paar` → `PAAR_OK`; F5.3 `n=2 fon=7`: 2.1.316 — max 1216 с, 2.1.319 — max 1422 с, лимит 1800 с держит.
 - **F6 Desktop** (`10875bd`, `4b7c87e`): `bin/check-harness --desktop` → `HARNESS_OK`; **F7 Risk & Evals** (`749c6e9`, `7344ceb`): `bin/check-verify` → `VERIFY_OK`; **F8 Dokumente, Mods & Gate** (`e145112`, `7344ceb`): `bin/gate-v3.4` → `GATE_OK`.
-- **F9 Spec-board** (`5c7529a`, `745481f`, `f117594`): `bin/check-kit mods` → `MODS_OK` — evidence после установки (STOP-INPUT).
+- **F9 Spec-board** (`5c7529a`, `745481f`, `f117594`, `e392b3c`, `9afc3c2`): `bin/check-kit mods` → `MODS_OK` — `docs/evidence/F9-check-kit-result.txt` (test=24, профиль true).
 - Круги плеча 2: `verify-265eaa4-F6-F8.txt` — PASS, 1422 с, 259 522 токена, named 9; `verify-502f935-F5-F7.txt` — PASS, 1394 с, 285 593 токена, named 5. Отчёт фазы — `docs/evidence/phase-report.md`: пунктов 38, без пробы только F9.1–F9.2 (плечо 3).
 
 ## Next — один айтем
-1. После установки: `bin/evidence F9 check-kit -- bin/check-kit mods`, строка профиля и шаблона «да»/true, `bin/verify-phase F1 F2 F9`, отчёт, гейт, `make ci` → `STOP-TL «Leg 3»`.
+1. После входа claude: `bin/verify-phase F1 F2 F9`, `bin/phase-report`, `make ci`, `bin/check-budget` → `STOP-TL «Leg 3»`, затем `bin/gate-v3.4`.
 
-## Open stop — STOP-INPUT «Leg 3 — мод рисует в новой сессии, ждёт Resume»
-STOP: STOP-INPUT «Leg 3 — мод рисует в новой сессии, ждёт Resume» — шаги 1–2 сделаны 08.11; в новой сессии вкладки строка статуса spec-board «board 36/0/2 · маркеров 8/9 · gate stop» (снимок оператора); /board и Resume — слово оператора.
-Вопрос оператору: команды ниже выполнены и новая сессия вкладки открыта?
-Resume: Продолжай по SPEC-v3.4 плечом 3 с evidence F9: spec-board установлен у пользователя, новая сессия открыта, строка профиля кита — true.
-**Оператору, по порядку:**
-1. `claude plugin marketplace update two-tier-mods` — сделано 08.11.
-2. `claude plugin install spec-board@two-tier-mods --scope user` — сделано 08.11.
-3. Новая сессия вкладки Code на папке `two-tier-dev` — открыта 08.11, строка статуса мода есть; `/board` должен открыть панель.
+## Open stop — STOP-INPUT «Leg 3 — вход claude для круга F1 F2 F9»
+STOP: STOP-INPUT «Leg 3 — вход claude для круга F1 F2 F9» — `bin/verify-phase F1 F2 F9` (HEAD 9afc3c2) отказал до клона: check-window — «OAuth session expired and could not be refreshed»; `claude auth status` вне сессии — loggedIn false. Вход подпиской — рука оператора.
+Вопрос оператору: вход выполнен и `claude auth status` показывает loggedIn true?
+Resume: Продолжай по SPEC-v3.4 плечом 3 с круга F1 F2 F9: вход claude подпиской восстановлен.
+**Оператору:** в терминале `claude auth login` (подписка, не ключ API), затем `claude auth status` → loggedIn true.
+**Сделано до стопа:** шаги установки spec-board 1–3 (08.11); evidence F9 — `MODS_OK` test=24; профиль кита true, строка шаблона «да» (`e392b3c`); `/code-review` дельты 5c7529a..e392b3c — 8 находок, 7 починены, $.process «CLI only» — пропущена (вкладка Code — локальный CLI) (`9afc3c2`).
 **Тимлиду (файлы его, код не ждёт):** строка `spec-board` в `docs/PROCESS.md` и `"spec-board@two-tier-mods": true` в `.claude/launch.settings.json` — после установки; находка 400: модель подагентов профилем вкладки через `env` не выбирается — решение для профиля telefon.
 
 ## Notes
