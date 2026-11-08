@@ -1552,14 +1552,16 @@ def section_mods():
     agree = board_agrees(row, on)
     # красные стороны F9.2: копия мода с поломанным названным тестом, код с сетью и процессом, строка и профиль врозь
     broken = tempfile.mkdtemp(prefix="check-kit-board-", dir=TMP)
-    shutil.copytree(SPEC_BOARD, f"{broken}/spec-board", ignore=shutil.ignore_patterns(".claude-plugin/types"))
-    tf = f"{broken}/spec-board/hooks/spec-board.test.tsx"
-    put(f"{broken}/spec-board", "hooks/spec-board.test.tsx", read(tf).replace("expect(seen.statuses.length).toBe(before)\n})\n\ntest('a value", "expect(seen.statuses.length).toBe(before + 1)\n})\n\ntest('a value", 1))
-    b_rc, _, _, b_fail, b_miss = board_run(f"{broken}/spec-board", env)
-    shutil.rmtree(broken, ignore_errors=True)
+    try:
+        shutil.copytree(SPEC_BOARD, f"{broken}/spec-board", ignore=shutil.ignore_patterns(".claude-plugin/types"))
+        tf = f"{broken}/spec-board/hooks/spec-board.test.tsx"
+        put(f"{broken}/spec-board", "hooks/spec-board.test.tsx", read(tf).replace("expect(seen.statuses.length).toBe(before)\n})\n\ntest('a value", "expect(seen.statuses.length).toBe(before + 1)\n})\n\ntest('a value", 1))
+        b_rc, _, _, b_fail, b_miss = board_run(f"{broken}/spec-board", env)
+    finally:
+        shutil.rmtree(broken, ignore_errors=True)
     red_test = b_rc != 0 and "a subagent tool call does not redraw" in b_miss["F9.2"]
-    red_net = board_net("await fetch(u)") == ["fetch("] and board_net("$.process.run(['curl', u])") and not board_net("$.process.run(['git', 'log'])") and board_net("$.model.complete({})")
     git_clean = not board_net("$.process.run(['git', 'log'])")
+    red_net = board_net("await fetch(u)") == ["fetch("] and board_net("$.process.run(['curl', u])") and board_net("$.model.complete({})")
     red_agree = not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | да | x |", False) and not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | нет | x |", True) and not board_agrees("", False)
     ok = v[0] == 0 and "Validation passed" in v[1] and tested and not miss["F9.2"] and not net and "spec-board" in market and agree and red_test and bool(red_net) and git_clean and red_agree
     probe("F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "

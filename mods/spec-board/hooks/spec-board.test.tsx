@@ -272,12 +272,34 @@ test('featuresOf: a range wider than its item lines counts every id; an item aft
 
 test('files of the set changed or untracked against HEAD are named: spec-gate does not count them', async ($, on) => {
   const seen = seat(on)
-  seen.status = '?? docs/evidence/F2-b-result.txt\n M docs/evidence/spec-gate.jsonl\n'
+  seen.status = '?? docs/evidence/F2-b-result.txt\0 M docs/evidence/spec-gate.jsonl\0'
   await start($)
   expect(last(seen)).toBe('board 2/1/1 · не в HEAD: 1 · маркеров 2/2 · gate block 3 missing · PASS F1,F2 · STOP-TL «Leg 3»')
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /не в HEAD \(/ }))?.text).toBe('не в HEAD (spec-gate их не засчитает): docs/evidence/F2-b-result.txt')
   await ui.unmount()
+})
+
+test('only what spec-gate judges is named: another SPEC feature, a log, a journal and the phase report are not; a path with a space stays whole', async ($, on) => {
+  const seen = seat(on)
+  seen.status = ['?? docs/evidence/F7-other-result.txt', '?? docs/evidence/run.log', ' M docs/evidence/spec-gate.jsonl', ' M docs/evidence/phase-report.md', '?? docs/evidence/F1-a b-result.txt', ' M docs/PROGRESS.md', '?? docs/evidence/verify-ddddddd-F2.txt', ''].join('\0')
+  await start($)
+  expect(last(seen)).toContain('не в HEAD: 3 ·')
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 200 }, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /не в HEAD \(/ }))?.text).toBe('не в HEAD (spec-gate их не засчитает): docs/evidence/F1-a b-result.txt, docs/PROGRESS.md, docs/evidence/verify-ddddddd-F2.txt')
+  await ui.unmount()
+})
+
+test('the last tool call of a burst is drawn when the gap ends', async ($, on) => {
+  const seen = seat(on)
+  await start($)
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  seen.files['docs/evidence/F1-a-result.txt'] = F1.replace('F1.1 ok=1 · сырой вывод\n', '')
+  await seen.clock.advance(1_000)
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(last(seen)).toContain('board 2/1/1')
+  await seen.clock.advance(4_000)
+  expect(last(seen)).toContain('board 1/1/2')
 })
 
 test('only the evidence files of this SPEC features are read', async ($, on) => {

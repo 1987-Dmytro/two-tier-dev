@@ -2,7 +2,7 @@
 // /board opens a pane: the items F<n>.<k> of the phase SPEC against the probe lines of docs/evidence/*-result.txt (green · red · no
 // line), the feature markers, the last spec-gate decision, the newest verdict of this SPEC and the open STOP; the same summary goes to
 // the status line. The data are the files spec-gate judges (./board.ts), read from disk: no model, no network.
-// Redrawn after a tool call of the main loop (at most every 5 s) and every minute. Who draws: a person's session — the REPL, or a host that attached a
+// Redrawn after a tool call of the main loop (at most every 5 s; a call inside the gap — when it ends) and every minute. Who draws: a person's session — the REPL, or a host that attached a
 // surface (the Code tab starts as the SDK does: isInteractive false, a surface later). A `claude -p` run and a subagent's tool calls
 // draw nothing; /board still answers its line there. No .catch: on its own error a hook is skipped and the tool call stands (kit rule).
 
@@ -43,19 +43,21 @@ async function collect($: EngineInterface): Promise<Board> {
     const text = await readOr($, `${root}/docs/evidence/${e.name}`)
     if (text !== undefined) evidence.push({ name: e.name, text, mtimeMs: e.mtimeMs })
   }
-  const git = async (argv: string[]) => {
+  const git = async (argv: string[], sep = '\n') => {
     try {
       const r = await $.process.run(['git', ...argv], { cwd: root })
-      return r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trimEnd()).filter(Boolean) : undefined
+      return r.exitCode === 0 ? r.stdout.split(sep).map(l => l.trimEnd()).filter(Boolean) : undefined
     } catch {
       return undefined
     }
   }
   // the verdicts in commit order, newest first: a fresh clone gives every file the same mtime
-  const order = (await git(['log', '--format=', '--name-only', '--diff-filter=A', '--', 'docs/evidence']))?.map(l => l.slice(l.lastIndexOf('/') + 1))
-  // what spec-gate holds the turn on: the set changed or untracked against HEAD (journals *.jsonl are not part of the set)
-  const set = ['docs/PROMPT.txt', 'docs/GOAL.txt', 'docs/PROGRESS.md', ...(rf ? [rf] : []), 'docs/evidence']
-  const dirty = ((await git(['status', '--porcelain', '--untracked-files=all', '--', ...set])) ?? []).map(l => l.slice(3)).filter(p => !p.endsWith('.jsonl') && !p.endsWith('phase-report.md'))
+  const order = (await git(['log', '--format=', '--name-only', '--diff-filter=A', '--', 'docs/evidence/verify-*.txt']))?.map(l => l.slice(l.lastIndexOf('/') + 1))
+  // what spec-gate holds the turn on: of its set (the prompt, the SPEC, PROGRESS, the evidence of this SPEC's features, the verdicts)
+  // what git status shows changed or untracked; -z with no renames: exact paths, one per entry, never quoted
+  const top = ['docs/PROMPT.txt', 'docs/GOAL.txt', 'docs/PROGRESS.md', ...(rf ? [rf] : [])]
+  const judged = (p: string) => top.includes(p) || ids.has((p.match(/^docs\/evidence\/(F\d+)-[^/]*-result\.txt$/) || [])[1] ?? '') || /^docs\/evidence\/verify-[0-9a-f]{7,40}(?:-[\w.-]+)?\.txt$/.test(p)
+  const dirty = ((await git(['status', '--porcelain', '-z', '--no-renames', '--untracked-files=all', '--', ...top, 'docs/evidence'], '\0')) ?? []).map(l => l.slice(3)).filter(judged)
   return boardOf({
     order,
     dirty,
@@ -88,6 +90,7 @@ async function refresh($: EngineInterface, isAttended: boolean): Promise<Board |
 export const register: Register = on => {
   let isAttended = false // the REPL, or a surface attached once
   let lastAt = -Infinity // the last refresh after a tool call
+  let isTrailing = false // a refresh is due when the gap ends: the last call of a burst is drawn too
 
   on('session.start', async ($, e, next) => {
     isAttended ||= e.isInteractive
@@ -106,10 +109,19 @@ export const register: Register = on => {
 
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
+    if (e.agentId !== undefined) return ran
     const now = await $.clock.now()
-    if (e.agentId === undefined && now - lastAt >= CALL_GAP_MS) {
+    if (now - lastAt >= CALL_GAP_MS) {
       lastAt = now
       await refresh($, isAttended)
+    } else if (!isTrailing) {
+      isTrailing = true
+      const at = lastAt + CALL_GAP_MS
+      $.clock.after(at - now, () => {
+        isTrailing = false
+        lastAt = at
+        void refresh($, isAttended)
+      })
     }
     return ran
   })
