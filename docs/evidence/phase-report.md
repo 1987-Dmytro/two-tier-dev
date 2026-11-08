@@ -1,60 +1,60 @@
-# Отчёт фазы — docs/SPEC-v3.4.md (код: bin/phase-report, 07.11.2026 21:51)
+# Отчёт фазы — docs/SPEC-v3.4.md (код: bin/phase-report, 08.11.2026 10:36)
 
-Коммиты — после merge-base `5a92e48`, без слияний; HEAD `502f935`. Наблюдение — сырой вывод пробы из строки `F<n>.<k>` evidence. Jev — в тени: его статус ничего не решает.
+Коммиты — после merge-base `5a92e48`, без слияний; HEAD `687ed27`. Наблюдение — сырой вывод пробы из строки `F<n>.<k>` evidence. Jev — в тени: его статус ничего не решает.
 
 ## Матрица пунктов
 
 | пункт | коммиты | проба | наблюдение | Jev |
 |---|---|---|---|---|
-| F1.1 | `265eaa4`, `280433b`, `a78782b`, `f981069`, `62f123a`, `b1f2285`, `8daba84`, `c801425`, `126cc83`, `9e9c447`, `3793cc5`, `c5f2aae`, `97d2cbd`, `bcfd10e`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | pass=3/3 block=2/2 · pass по типу: monitor — background:monitor, workflow — background:workflow, shell — background:shell · суд комплекта: subagent, MCP task; п… | подтверждает 0.92 |
-| F1.2 | `265eaa4`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | hours=weg block=OK · .claude/spec-gate.json caps {'same_list': 3}; сессия старше 3 ч, неполный комплект — block, журнал platform_cap=8; 12 блоков сессии — block… | подтверждает 0.31 |
-| F1.3 | `265eaa4`, `6b089d2`, `4656dea`, `9af7859`, `195bef0`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | fremd=missing eigen=OK · своя — «SPEC_GATE_OK: features 2, items 4, pushed 6e3b09c, verify-ba»; чужие: spec: SPEC-9 — block, близнец spec: SPEC-10 — block, без … | подтверждает 0.96 |
-| F1.4 | `265eaa4`, `4656dea`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | stop_tl=OK · §4 с STOP-TL, вопрос и Resume, запушен — stop (STOP-TL); SPEC без §4, STOP_IDS — stop (хук v3.3 — block); без вопроса — block: ««STOP: STOP-TL» has… | подтверждает 0.94 |
+| F1.1 | `265eaa4`, `280433b`, `a78782b`, `f981069`, `62f123a`, `b1f2285`, `8daba84`, `c801425`, `126cc83`, `9e9c447`, `3793cc5`, `c5f2aae`, `97d2cbd`, `bcfd10e`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | pass=3/3 block=2/2 · pass по типу: monitor — background:monitor, workflow — background:workflow, shell — background:shell · суд комплекта: subagent, MCP task; п… | подтверждает 0.94 |
+| F1.2 | `265eaa4`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | hours=weg block=OK · .claude/spec-gate.json caps {'same_list': 3}; сессия старше 3 ч, неполный комплект — block, журнал platform_cap=8; 12 блоков сессии — block… | подтверждает 0.33 |
+| F1.3 | `265eaa4`, `6b089d2`, `4656dea`, `9af7859`, `195bef0`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | fremd=missing eigen=OK · своя — «SPEC_GATE_OK: features 2, items 4, pushed 6e3b09c, verify-ba»; чужие: spec: SPEC-9 — block, близнец spec: SPEC-10 — block, без … | подтверждает 0.94 |
+| F1.4 | `265eaa4`, `4656dea`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | stop_tl=OK · §4 с STOP-TL, вопрос и Resume, запушен — stop (STOP-TL); SPEC без §4, STOP_IDS — stop (хук v3.3 — block); без вопроса — block: ««STOP: STOP-TL» has… | подтверждает 0.92 |
 | F1.5 | `265eaa4`, `6527808` | `docs/evidence/F1-check-harness-result.txt` | code_tab=10/10 alt=61/78 · входы формы Stop input документации hooks; новый хук: без фона — block; subagent — block; monitor — pass; workflow — pass; shell — pa… | подтверждает 0.97 |
-| F2.1 | `280433b`, `544bb57`, `d2b7961`, `97d2cbd`, `bcfd10e`, `80e0e2e`, `189418a` | `docs/evidence/F2-budget-result.txt` | rot=OK gruen=OK · без файла — FAIL: «docs/SPEC-1.md: планок 1, без файла распределения и без «ранняя» — «сборка»: нет docs/evidence/<файл>» → «BUDGET_FAIL plank… | подтверждает 0.94 |
+| F2.1 | `280433b`, `544bb57`, `d2b7961`, `97d2cbd`, `bcfd10e`, `80e0e2e`, `189418a` | `docs/evidence/F2-budget-result.txt` | rot=OK gruen=OK · без файла — FAIL: «docs/SPEC-1.md: планок 1, без файла распределения и без «ранняя» — «сборка»: нет docs/evidence/<файл>» → «BUDGET_FAIL plank… | подтверждает 0.96 |
 | F2.2 | `6b089d2`, `80e0e2e`, `189418a` | `docs/evidence/F2-budget-result.txt` | ohne=FAIL mit=1 · без строки — «F2: новая фича без строки «Поправка <решение>: слово оператора <дата>» в §0 docs/SPEC-1.md; фич на выдаче 1, сейчас 2, поправок:… | подтверждает 0.98 |
-| F2.3 | `80e0e2e`, `189418a` | `docs/evidence/F2-budget-result.txt` | inline=WARN ohne=FAIL · число рядом — «docs/SPEC-1.md: числа коридора в тексте при ключе — korridor.word: 3300: логика судьи — в checks/planken.json»; нет файла… | подтверждает 0.97 |
-| F2.4 | `80e0e2e`, `189418a` | `docs/evidence/F2-budget-result.txt` | flaky=OK ohne=block · с меткой, красный — rc 0 «FLAKY bash tests/t.sh rc=3 · решение 388: настенное время»; без метки — rc 1 «x TEST_FAIL bash tests/t.sh rc=3» … | подтверждает 0.91 |
-| F3.1 | `280433b`, `97d2cbd`, `bcfd10e`, `6b089d2`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | verboten=OK offen=OK cap=OK · запрет: без SPEC — rc 1 «commit refused by the kit — rule frozen-paths: src/demo/x.py (модуль demo заморожен (SPEC-1), SPEC-2 его … | подтверждает 0.91 |
-| F3.2 | `6b089d2`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | tl=OK · «Тимлид:» в код — rc 1 «commit refused by the kit — rule frozen-paths: src/demo/t.py (модуль demo заморожен (SPEC-1), SPEC-2 его не открывает). Fix the … | подтверждает 0.79 |
-| F3.3 | `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | pass=OK offen=OK · паспорт: совпало — rc 0 «PASSPORT_OK модуль=demo src=a3b40aa8e1c2 texte=66155716c486»; деплой — rc 0 «DEPLOY_OK sha=056ffa6 linie=0 rollback=… | подтверждает 0.77 |
-| F3.4 | `544bb57`, `cc59bf6`, `c8b6649`, `5acb911`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | regress=2/2 · REGRESS_OK — rc 0 «rollback: none \| DEPLOY_OK sha=2b5eac9 linie=0 rollback=none» · REGRESS_FAIL — rc 1 «rollback: none \| DEPLOY_FAIL step=regress … | подтверждает 0.83 |
-| F3.5 | `6b089d2`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | telefon=OK · копия клона, SPEC-10; --branch -x — rc 2; без --branch при разошедшейся kit-v3 — rc 1; --branch kit-v3.4 — rc 0 «коммит bac6fdf8: поставлено 36, в … | подтверждает 0.83 |
-| F4.1 | `280433b`, `544bb57`, `cc59bf6`, `97d2cbd`, `bcfd10e`, `6b089d2`, `e6c1958`, `598b336` | `docs/evidence/F4-check-kit-result.txt` | zeile=OK fenster_rot=OK · строка отката — первый деплой «rollback: none \| DEPLOY_OK sha=de41e46 linie=1 rollback=none», второй «rollback: make rollback SHA=de41… | подтверждает 0.77 |
+| F2.3 | `80e0e2e`, `189418a` | `docs/evidence/F2-budget-result.txt` | inline=WARN ohne=FAIL · число рядом — «docs/SPEC-1.md: числа коридора в тексте при ключе — korridor.word: 3300: логика судьи — в checks/planken.json»; нет файла… | подтверждает 0.96 |
+| F2.4 | `80e0e2e`, `189418a` | `docs/evidence/F2-budget-result.txt` | flaky=OK ohne=block · с меткой, красный — rc 0 «FLAKY bash tests/t.sh rc=3 · решение 388: настенное время»; без метки — rc 1 «x TEST_FAIL bash tests/t.sh rc=3» … | подтверждает 0.92 |
+| F3.1 | `280433b`, `97d2cbd`, `bcfd10e`, `6b089d2`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | verboten=OK offen=OK cap=OK · запрет: без SPEC — rc 1 «commit refused by the kit — rule frozen-paths: src/demo/x.py (модуль demo заморожен (SPEC-1), SPEC-2 его … | подтверждает 0.89 |
+| F3.2 | `6b089d2`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | tl=OK · «Тимлид:» в код — rc 1 «commit refused by the kit — rule frozen-paths: src/demo/t.py (модуль demo заморожен (SPEC-1), SPEC-2 его не открывает). Fix the … | подтверждает 0.83 |
+| F3.3 | `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | pass=OK offen=OK · паспорт: совпало — rc 0 «PASSPORT_OK модуль=demo src=a3b40aa8e1c2 texte=66155716c486»; деплой — rc 0 «DEPLOY_OK sha=056ffa6 linie=0 rollback=… | подтверждает 0.80 |
+| F3.4 | `544bb57`, `cc59bf6`, `c8b6649`, `5acb911`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | regress=2/2 · REGRESS_OK — rc 0 «rollback: none \| DEPLOY_OK sha=2b5eac9 linie=0 rollback=none» · REGRESS_FAIL — rc 1 «rollback: none \| DEPLOY_FAIL step=regress … | подтверждает 0.82 |
+| F3.5 | `6b089d2`, `2ba0dcb`, `0adcfe5` | `docs/evidence/F3-check-kit-result.txt` | telefon=OK · копия клона, SPEC-10; --branch -x — rc 2; без --branch при разошедшейся kit-v3 — rc 1; --branch kit-v3.4 — rc 0 «коммит bac6fdf8: поставлено 36, в … | подтверждает 0.80 |
+| F4.1 | `280433b`, `544bb57`, `cc59bf6`, `97d2cbd`, `bcfd10e`, `6b089d2`, `e6c1958`, `598b336` | `docs/evidence/F4-check-kit-result.txt` | zeile=OK fenster_rot=OK · строка отката — первый деплой «rollback: none \| DEPLOY_OK sha=de41e46 linie=1 rollback=none», второй «rollback: make rollback SHA=de41… | подтверждает 0.86 |
 | F4.2 | `e6c1958`, `598b336` | `docs/evidence/F4-check-kit-result.txt` | fixturen=54/54 · зелёный звонок — LIVE_OK; 389 один звонок при --n 2 — LIVE_FAIL anrufe=1<2; 390 вопрос об уже названном — LIVE_FAIL x: wiederholt=1; 390 «Wie b… | подтверждает 0.76 |
-| F4.3 | `e6c1958`, `598b336` | `docs/evidence/F4-check-kit-result.txt` | rot=OK gruen=OK · rot>0 — rc 1 «CANARY_ROT grund=rot p95=2000 word_max=3000 rot=2 sekunden=0» ['Fixtur Kontrolle: ROT']; S1 rot=1 — rc 1 «CANARY_ROT grund=rot p… | подтверждает 0.77 |
-| F4.4 | `e6c1958`, `598b336` | `docs/evidence/F4-check-kit-result.txt` | templates=OK rot=OK · кит — BUDGET_OK, копия без правки — BUDGET_OK · красных 26/26, без красной стороны: нет, снятая фраза названа в FAIL — True · без строки: … | подтверждает 0.73 |
-| F5.1 | `6eea826`, `544bb57`, `cc59bf6`, `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | gleich=OK rot=FAIL · один код — rc 0 «PAIR_OK diff_p50=0 diff_p95=0 basis_p50=1200 neu_p50=1200 basis_p95=1400 neu_p95=1400 n=10», прогоны basis neu basis neu, … | подтверждает 0.74 |
-| F5.2 | `7344ceb`, `d49e78e`, `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | vorlage=OK · звено вендора, «ранняя» — OK planka-source: docs/SPEC-1.md: планок 1, у всех файл ра; звено вендора, pair и файл с PAIR_OK — OK planka-source: docs… | подтверждает 0.77 |
-| F5.3 | `502f935`, `1bd2d42`, `d2b7961`, `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | n=2 fon=7 · 2.1.316: n=2 p50=639 max=1216 fon=5; 2.1.319: n=2 p50=819 max=1422 fon=2 · пара: ≤2.1.316 n=2, ≥2.1.318 n=2 · timeout=0 · лимит 1800 с: max 1422 — д… | подтверждает 0.73 |
-| F5.4 | `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | metriken=3 · фикстура — rc 0 «Кругов до PASS: 2 (F1 2, F2 1; без PASS: F3 — 1)» «Откатов деплоя: 1 из 3» «Поправок объёма: 2»; ещё один NEEDS_WORK — Кругов до P… | подтверждает 0.74 |
-| F5.5 | `0dcea2f`, `d49e78e`, `b2fbce2`, `be5c7a5`, `1e31e90` | `docs/evidence/F5-check-kit-result.txt` | fehlt=WARN · ключа нет — rc 0 «WINDOW_WARN seven_day=fehlt — неделя не судится \| WINDOW: start»; только окно 5 ч, 99 % — rc 0 «WINDOW_WARN seven_day=fehlt — нед… | подтверждает 0.74 |
-| F6.1 | `502f935`, `280433b`, `1a9ca35`, `10875bd`, `ee7a5a8`, `9af1453`, `9538f7c` | `docs/evidence/F6-check-harness-result.txt` | versionen=3 graph=нет · живьём: VERSIONS cli=2.1.319 app=2.1.317 github=2.1.319; брошенных worktree 13; граф этого репо: графа нет (graphify-out/graph.json) или… | подтверждает 0.74 |
-| F6.2 | `10875bd` | `docs/evidence/F6-check-harness-result.txt` | aussen=verboten innen=OK · permissions.blockWritesOutsideWorkingDirectories True · прокси claude -p, dontAsk, allow Write, без --add-dir и настроек пользователя… | подтверждает 0.76 |
-| F6.3 | `4b7c87e`, `d49e78e`, `afdacb5`, `73b56b8`, `7d33807`, `cc59bf6`, `1bd2d42`, `1a9ca35`, `10875bd` | `docs/evidence/F6-check-harness-result.txt` | init=gleich deny=2/2 · прокси claude -p с профилем .claude/launch.settings.json как settings.local, источники как у вкладки, auto: плагинов 5, MCP 0 (нет), скил… | подтверждает 0.77 |
-| F6.4 | `1a9ca35`, `10875bd` | `docs/evidence/F6-check-harness-result.txt` | denials=3/3 · входы формы документации hooks, живого отказа нет: событие идёт только на отказ auto mode, не на deny-правило F6.3 · три входа — три строки, без s… | подтверждает 0.79 |
-| F7.1 | `280433b`, `7344ceb`, `0dcea2f`, `d49e78e`, `cc59bf6`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | high=voll lint=OK · заглушка: high, 2 мутанта → PASS, в запросе «at least 2 distinct» и шаг 3, minItems 2; low → в запросе только шаги 1–2, minItems 0, «- F2: r… | подтверждает 0.77 |
-| F7.2 | `1bd2d42`, `d2b7961`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | prior=OK klasse=OK · лаунчер: F1 → args {"features": ["F1"], "prior": {"F1": {"file": "verify-aaaaaaa-F1.txt", "verdict": "NEEDS_WORK", "blocking": ["- **F1.2: … | подтверждает 0.80 |
-| F7.3 | `d2b7961`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | eval=1/1 · с мутантом (bin/deploy, пауза 0 мс): rc 0, «VERDICT: NEEDS_WORK», «- **F1.2: не подтверждён своим прогоном** — `bin/deploy bad` печатает `health=FAIL… | подтверждает 0.82 |
-| F7.4 | `1a9ca35`, `d2b7961`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | detached=SKIP · без ветки: rc 0 «GATE_SKIP reason=detached sha=b3142e6» · на ветке, голый скрипт: rc 1 «gate-v3.4: ветка main, HEAD b3142e6 ⏎ GATE_FAIL reason=n… | подтверждает 0.77 |
-| F8.1 | `7344ceb`, `0dcea2f`, `d49e78e`, `1a9ca35`, `acadf13` | `docs/evidence/F8-gate-result.txt` | docs=4 · CHANGELOG: полей с источником и до/после 12, снятых строкой 8, вошло → вышло 14, строки Unreleased и моды в записи; README.md, docs/LAUNCH.md, docs/dev… | подтверждает 0.79 |
-| F8.2 | `acadf13` | `docs/evidence/F8-gate-result.txt` | templates=OK · bin/check-budget --templates: rc 0, копия кита без правки rc 0; шаблон SPEC §2–§5 против telefon: строк 55, без пары в ките 0, названных дельт 7 … | подтверждает 0.79 |
-| F8.3 | `7344ceb`, `7f32315`, `77aa6c6`, `616ae62`, `76b273e`, `7d33807`, `1a9ca35`, `e145112` | `docs/evidence/F8-gate-result.txt` | deny=OK · claude plugin validate mods/window-guard: rc 0, «Validation passed»; claude plugin test mods/window-guard: rc 0, 38 pass, 0 fail; названных тестов 5 и… | подтверждает 0.76 |
-| F8.4 | `7f32315`, `cc59bf6`, `1a9ca35`, `e145112` | `docs/evidence/F8-gate-result.txt` | phase=OK · claude plugin validate mods/phase-start: rc 0, «Validation passed»; claude plugin test mods/phase-start: rc 0, 38 pass, 0 fail; названных тестов 4 из… | подтверждает 0.74 |
-| F8.5 | `502f935`, `280433b`, `cc59bf6`, `1a9ca35`, `acadf13` | `docs/evidence/F8-gate-result.txt` | leer=OK telefon=OK · t4 от bin/two-tier-init: файлов кита 56 из 56, core.hooksPath .githooks; маркеров красных 0 ‖ v3.3 F7.3 без модели: t4 — rc 0 «OK abide_rul… | подтверждает 0.80 |
-| F9.1 | — | — | — | нет пробы |
-| F9.2 | — | — | — | нет пробы |
+| F4.3 | `e6c1958`, `598b336` | `docs/evidence/F4-check-kit-result.txt` | rot=OK gruen=OK · rot>0 — rc 1 «CANARY_ROT grund=rot p95=2000 word_max=3000 rot=2 sekunden=0» ['Fixtur Kontrolle: ROT']; S1 rot=1 — rc 1 «CANARY_ROT grund=rot p… | подтверждает 0.83 |
+| F4.4 | `e6c1958`, `598b336` | `docs/evidence/F4-check-kit-result.txt` | templates=OK rot=OK · кит — BUDGET_OK, копия без правки — BUDGET_OK · красных 26/26, без красной стороны: нет, снятая фраза названа в FAIL — True · без строки: … | подтверждает 0.70 |
+| F5.1 | `6eea826`, `544bb57`, `cc59bf6`, `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | gleich=OK rot=FAIL · один код — rc 0 «PAIR_OK diff_p50=0 diff_p95=0 basis_p50=1200 neu_p50=1200 basis_p95=1400 neu_p95=1400 n=10», прогоны basis neu basis neu, … | подтверждает 0.73 |
+| F5.2 | `7344ceb`, `d49e78e`, `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | vorlage=OK · звено вендора, «ранняя» — OK planka-source: docs/SPEC-1.md: планок 1, у всех файл ра; звено вендора, pair и файл с PAIR_OK — OK planka-source: docs… | подтверждает 0.67 |
+| F5.3 | `502f935`, `1bd2d42`, `d2b7961`, `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | n=2 fon=7 · 2.1.316: n=2 p50=639 max=1216 fon=5; 2.1.319: n=2 p50=819 max=1422 fon=2 · пара: ≤2.1.316 n=2, ≥2.1.318 n=2 · timeout=0 · лимит 1800 с: max 1422 — д… | подтверждает 0.67 |
+| F5.4 | `57dded7`, `7e9b958`, `b2fbce2` | `docs/evidence/F5-check-kit-result.txt` | metriken=3 · фикстура — rc 0 «Кругов до PASS: 2 (F1 2, F2 1; без PASS: F3 — 1)» «Откатов деплоя: 1 из 3» «Поправок объёма: 2»; ещё один NEEDS_WORK — Кругов до P… | подтверждает 0.67 |
+| F5.5 | `0dcea2f`, `d49e78e`, `b2fbce2`, `be5c7a5`, `1e31e90` | `docs/evidence/F5-check-kit-result.txt` | fehlt=WARN · ключа нет — rc 0 «WINDOW_WARN seven_day=fehlt — неделя не судится \| WINDOW: start»; только окно 5 ч, 99 % — rc 0 «WINDOW_WARN seven_day=fehlt — нед… | подтверждает 0.77 |
+| F6.1 | `502f935`, `280433b`, `1a9ca35`, `10875bd`, `ee7a5a8`, `9af1453`, `9538f7c` | `docs/evidence/F6-check-harness-result.txt` | versionen=3 graph=нет · живьём: VERSIONS cli=2.1.319 app=2.1.317 github=2.1.319; брошенных worktree 13; граф этого репо: графа нет (graphify-out/graph.json) или… | подтверждает 0.64 |
+| F6.2 | `10875bd` | `docs/evidence/F6-check-harness-result.txt` | aussen=verboten innen=OK · permissions.blockWritesOutsideWorkingDirectories True · прокси claude -p, dontAsk, allow Write, без --add-dir и настроек пользователя… | подтверждает 0.73 |
+| F6.3 | `2705fb5`, `5c7529a`, `4b7c87e`, `d49e78e`, `afdacb5`, `73b56b8`, `7d33807`, `cc59bf6`, `1bd2d42`, `1a9ca35`, `10875bd` | `docs/evidence/F6-check-harness-result.txt` | init=gleich deny=2/2 · прокси claude -p с профилем .claude/launch.settings.json как settings.local, источники как у вкладки, auto: плагинов 5, MCP 0 (нет), скил… | подтверждает 0.74 |
+| F6.4 | `1a9ca35`, `10875bd` | `docs/evidence/F6-check-harness-result.txt` | denials=3/3 · входы формы документации hooks, живого отказа нет: событие идёт только на отказ auto mode, не на deny-правило F6.3 · три входа — три строки, без s… | подтверждает 0.73 |
+| F7.1 | `687ed27`, `da0f1ad`, `280433b`, `7344ceb`, `0dcea2f`, `d49e78e`, `cc59bf6`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | high=voll lint=OK · заглушка: high, 2 мутанта → PASS, в запросе «at least 2 distinct» и шаг 3, minItems 2; low → в запросе только шаги 1–2, minItems 0, «- F2: r… | подтверждает 0.67 |
+| F7.2 | `1bd2d42`, `d2b7961`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | prior=OK klasse=OK · лаунчер: F1 → args {"features": ["F1"], "prior": {"F1": {"file": "verify-aaaaaaa-F1.txt", "verdict": "NEEDS_WORK", "blocking": ["- **F1.2: … | подтверждает 0.68 |
+| F7.3 | `d2b7961`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | eval=1/1 · с мутантом (bin/deploy, пауза 0 мс): rc 0, «VERDICT: NEEDS_WORK», «- **F1.2: не подтверждён своим прогоном** — `bin/deploy bad` печатает `health=FAIL… | подтверждает 0.74 |
+| F7.4 | `1a9ca35`, `d2b7961`, `749c6e9` | `docs/evidence/F7-check-verify-result.txt` | detached=SKIP · без ветки: rc 0 «GATE_SKIP reason=detached sha=4a796b6» · на ветке, голый скрипт: rc 1 «gate-v3.4: ветка main, HEAD 4a796b6 ⏎ GATE_FAIL reason=n… | подтверждает 0.68 |
+| F8.1 | `7344ceb`, `0dcea2f`, `d49e78e`, `1a9ca35`, `acadf13` | `docs/evidence/F8-gate-result.txt` | docs=4 · CHANGELOG: полей с источником и до/после 12, снятых строкой 8, вошло → вышло 14, строки Unreleased и моды в записи; README.md, docs/LAUNCH.md, docs/dev… | подтверждает 0.70 |
+| F8.2 | `acadf13` | `docs/evidence/F8-gate-result.txt` | templates=OK · bin/check-budget --templates: rc 0, копия кита без правки rc 0; шаблон SPEC §2–§5 против telefon: строк 55, без пары в ките 0, названных дельт 7 … | подтверждает 0.73 |
+| F8.3 | `7344ceb`, `7f32315`, `77aa6c6`, `616ae62`, `76b273e`, `7d33807`, `1a9ca35`, `e145112` | `docs/evidence/F8-gate-result.txt` | deny=OK · claude plugin validate mods/window-guard: rc 0, «Validation passed»; claude plugin test mods/window-guard: rc 0, 38 pass, 0 fail; названных тестов 5 и… | подтверждает 0.68 |
+| F8.4 | `7f32315`, `cc59bf6`, `1a9ca35`, `e145112` | `docs/evidence/F8-gate-result.txt` | phase=OK · claude plugin validate mods/phase-start: rc 0, «Validation passed»; claude plugin test mods/phase-start: rc 0, 38 pass, 0 fail; названных тестов 4 из… | подтверждает 0.72 |
+| F8.5 | `57dded7`, `7e9b958`, `502f935`, `280433b`, `cc59bf6`, `1a9ca35`, `acadf13` | `docs/evidence/F8-gate-result.txt` | leer=OK telefon=OK · t4 от bin/two-tier-init: файлов кита 56 из 56, core.hooksPath .githooks; маркеров красных 0 ‖ v3.3 F7.3 без модели: t4 — rc 0 «OK abide_rul… | подтверждает 0.72 |
+| F9.1 | `9afc3c2`, `e392b3c`, `f117594`, `745481f`, `5c7529a` | `docs/evidence/F9-check-kit-result.txt` | board=2/1/1 nach=1/1/2 · claude plugin test mods/spec-board: rc 0, 24 pass, 0 fail; названных тестов F9.1 4 из 4 | подтверждает 0.76 |
+| F9.2 | `9afc3c2`, `e392b3c`, `24e2b67`, `74f59d6`, `e723c71`, `e871243`, `4f938a8`, `f117594`, `745481f`, `5c7529a` | `docs/evidence/F9-check-kit-result.txt` | validate=OK test=24 · claude plugin validate mods/spec-board: rc 0; названных тестов F9.2 3 из 3; модель, сеть и процесс не на git в коде мода — нет; marketplac… | подтверждает 0.68 |
 
 ## Списки
 
-- **Пункты без коммитов** (2): F9.1, F9.2
-- **Коммиты без пункта** (1): `5944469` Шаг 0: архив фазы v3.3 и план v3.4 — git mv docs/PROGRESS.md в docs/archive/PROGRESS-v3.3-…
-- **Пункты без пробы** (2): F9.1, F9.2
-- Коммиты тимлида в диапазоне: 24
+- **Пункты без коммитов** (0): нет
+- **Коммиты без пункта** (2): `9b9ae69` F9: STOP-INPUT «Leg 3 — вход claude для круга F1 F2 F9»: bin/verify-phase F1 F2 F9 (HEAD 9…; `5944469` Шаг 0: архив фазы v3.3 и план v3.4 — git mv docs/PROGRESS.md в docs/archive/PROGRESS-v3.3-…
+- **Пункты без пробы** (0): нет
+- Коммиты тимлида в диапазоне: 26
 
 ## Судьи коммита (хуки git кита: `commit-msg`, `pre-push`)
 
-Коммитов фазы (git): 80. Суждений в журнале: 153 — прошло 104, отказов 4 (код 4, push 0, abide 0), отклонённых 0, заметок 4, пропусков 41.
+Коммитов фазы (git): 98. Суждений в журнале: 171 — прошло 115, отказов 4 (код 4, push 0, abide 0), отклонённых 0, заметок 4, пропусков 48.
 
 - 2026-10-10T10:40:55Z · refuse · code · no-secret-values · docs/evidence/verify-919a729.txt
 - 2026-10-10T10:41:14Z · refuse · code · evidence-anonymized · docs/evidence/verify-919a729.txt
@@ -105,10 +105,17 @@
 - 2026-11-07T18:10:49Z · skip · abide · abide check error CHECK_TIMEOUT · bin/check-docs, bin/check-verify, kit/bin/check-budget
 - 2026-11-07T19:23:23Z · skip · abide · abide check error CHECK_TIMEOUT · docs/evidence/jev.jsonl, docs/evidence/spec-gate.jsonl, kit/bin/check-harness
 - 2026-11-07T19:42:43Z · skip · abide · abide check error CHECK_TIMEOUT · docs/evidence/F2-budget-result.txt, docs/evidence/F3-check-kit-result.txt, docs/evidence/F4-check-kit-result.txt
+- 2026-11-07T21:04:46Z · skip · abide · abide check error CHECK_TIMEOUT · docs/PROGRESS.md
+- 2026-11-07T21:28:58Z · skip · abide · abide check error TYPESAFE_AI_API_KEY · docs/SPEC-v3.4.md, docs/STATUS.md, docs/reviews/V3.4-review.md
+- 2026-11-07T21:33:07Z · skip · abide · abide check error TYPESAFE_AI_API_KEY · docs/reviews/V3.4-review.md
+- 2026-11-07T21:56:59Z · skip · abide · abide check over 30 s · CHANGELOG.md, bin/check-gate, bin/gate-v3.4
+- 2026-11-07T22:25:02Z · skip · abide · abide check error CHECK_TIMEOUT · CHANGELOG.md, docs/evidence/spec-gate.jsonl, kit/bin/check-kit
+- 2026-11-08T08:39:27Z · skip · abide · abide check error CHECK_TIMEOUT · docs/PROGRESS.md
+- 2026-11-08T08:43:31Z · skip · abide · abide check error CHECK_TIMEOUT · docs/PROGRESS.md
 
 ## Пропуски spec-gate
 
-Решений хука: 73 — блоков 9, OK 3, стопов 12, пропусков 54.
+Решений хука: 92 — блоков 15, OK 3, стопов 19, пропусков 60.
 
 - 2026-10-10T09:00:50.193Z · сессия fa7d07c9 · shadow · 9 missing
 - 2026-10-10T11:08:03.168Z · сессия fc45f02e · shadow · 8 missing
@@ -164,13 +171,19 @@
 - 2026-11-07T19:43:31.156Z · сессия 298cb691 · active · background:shell
 - 2026-11-07T20:02:33.300Z · сессия 298cb691 · active · background:shell
 - 2026-11-07T20:27:22.497Z · сессия 298cb691 · active · background:shell
+- 2026-11-07T21:08:07.836Z · сессия 298cb691 · active · background:shell
+- 2026-11-07T22:02:21.220Z · сессия 298cb691 · active · background:shell,workflow
+- 2026-11-07T22:07:19.005Z · сессия 298cb691 · active · background:workflow
+- 2026-11-08T09:00:13.054Z · сессия 298cb691 · active · background:shell
+- 2026-11-08T09:00:20.947Z · сессия 298cb691 · active · background:shell
+- 2026-11-08T09:00:44.791Z · сессия 298cb691 · active · background:shell
 
 ## Метрики ретро
 
-- Кругов до PASS: 2 (F1 2, F2 1, F3 1, F4 1, F5 1, F6 1, F7 1, F8 1)
+- Кругов до PASS: 2 (F1 2, F2 1, F3 1, F4 1, F5 1, F6 1, F7 1, F8 1, F9 1)
 - Откатов деплоя: 0 из 0
 - Поправок объёма: 4
 
 ## Jev в тени
 
-Вызов: bin/jev rc 0, вопросов 36. Статусы: подтверждает 36.
+Вызов: bin/jev rc 0, вопросов 38. Статусы: подтверждает 38.
