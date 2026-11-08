@@ -11,8 +11,9 @@
 // (since the last commit of the start prompt: a fresh context on a closed phase is not held); a full /verify-phase round of this SPEC —
 // the union of its calls (decision 401): every feature of the SPEC named (`FEATURES: F<n>, …`; a verdict without the line names them
 // all) by its newest verdict committed at HEAD for HEAD or an ancestor, a PASS or a NEEDS_WORK whose parsed blocking list leaves it
-// out, and that verdict at or after the feature's last change (item ids at the start of the commit message); a commit naming no item
-// after the oldest of these verdicts holds the turn as it is (SPEC-v3.3 F4.4, §5). An uncovered feature is a missing line by its name.
+// out; every commit with its id (item ids at the start of the commit message) seen by a verdict that verifies it; a commit naming no
+// item that the verdict of some feature did not see holds the turn and names those features (SPEC-v3.3 F4.4, §5). «Seen» is ancestry,
+// not the date order of git log: a merged branch brings older dates. An uncovered feature is a missing line by its name.
 // The set is judged as pushed: the start prompt, the SPEC, docs/PROGRESS.md, the evidence files of the SPEC's features and the
 // verdict files are read from HEAD, and any of them that `git status` shows as changed, untracked or deleted (eol conversion and
 // filters as git applies them) holds the turn by its name. Logs that checks and hooks append (docs/evidence/*.jsonl) and the phase
