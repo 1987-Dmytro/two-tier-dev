@@ -19,14 +19,14 @@
 ## Next — один айтем
 1. После установки: `bin/evidence F9 check-kit -- bin/check-kit mods`, строка профиля и шаблона «да»/true, `bin/verify-phase F1 F2 F9`, отчёт, гейт, `make ci` → `STOP-TL «Leg 3»`.
 
-## Open stop — STOP-INPUT «Leg 3 — Resume из новой сессии вкладки (spec-board)»
-STOP: STOP-INPUT «Leg 3 — Resume из новой сессии вкладки (spec-board)» — шаги 1–2 сделаны 08.11; прежнюю строку отпустил ход другой сессии этой папки (журнал spec-gate, 08:41:55), работа ждёт Resume оператора.
+## Open stop — STOP-INPUT «Leg 3 — мод рисует в новой сессии, ждёт Resume»
+STOP: STOP-INPUT «Leg 3 — мод рисует в новой сессии, ждёт Resume» — шаги 1–2 сделаны 08.11; в новой сессии вкладки строка статуса spec-board «board 36/0/2 · маркеров 8/9 · gate stop» (снимок оператора); /board и Resume — слово оператора.
 Вопрос оператору: команды ниже выполнены и новая сессия вкладки открыта?
 Resume: Продолжай по SPEC-v3.4 плечом 3 с evidence F9: spec-board установлен у пользователя, новая сессия открыта, строка профиля кита — true.
 **Оператору, по порядку:**
 1. `claude plugin marketplace update two-tier-mods` — сделано 08.11.
 2. `claude plugin install spec-board@two-tier-mods --scope user` — сделано 08.11.
-3. Новая сессия вкладки Code на папке `two-tier-dev`; `/board` должен открыть панель.
+3. Новая сессия вкладки Code на папке `two-tier-dev` — открыта 08.11, строка статуса мода есть; `/board` должен открыть панель.
 **Тимлиду (файлы его, код не ждёт):** строка `spec-board` в `docs/PROCESS.md` и `"spec-board@two-tier-mods": true` в `.claude/launch.settings.json` — после установки; находка 400: модель подагентов профилем вкладки через `env` не выбирается — решение для профиля telefon.
 
 ## Notes
