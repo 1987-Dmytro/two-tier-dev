@@ -1622,13 +1622,102 @@ def union_probes(S, src, launch):
         "; ".join(f"{k} — {'да' if v else 'НЕТ'}" for k, v in sides.items()) + f" · два вызова — «{both.get('systemMessage', both.get('reason', ''))[:90]}»; назван только F1 — «{line(half, 'F2')[:70]}»")
 
 
+def history_probes(S, src, launch):
+    """Решение 401 на истории: вердикты разных коммитов, коммит без id между ними, два коммита фичи, чужой id, новый NEEDS_WORK поверх
+    старого PASS, два вердикта одного коммита и слияние ветки (git log идёт по датам, а вердикт видит только своих предков)."""
+    def at(repo, msg, path, when=None, branch=None, text=None):  # коммит файла на ветке; when — секунды назад (даты коммита и автора)
+        g = lambda *a: subprocess.run(["git", *a], cwd=repo, env=GIT_ENV | ({"GIT_AUTHOR_DATE": f"{int(time.time()) - when} +0000", "GIT_COMMITTER_DATE": f"{int(time.time()) - when} +0000"} if when else {}), capture_output=True, text=True, check=True)
+        if branch:
+            g("switch", "-q", branch) if subprocess.run(["git", "rev-parse", "-q", "--verify", branch], cwd=repo, capture_output=True).returncode == 0 else g("switch", "-qc", branch)
+        os.makedirs(os.path.dirname(f"{repo}/{path}") or repo, exist_ok=True)
+        open(f"{repo}/{path}", "w").write(text if text is not None else f"{msg}\n")
+        g("add", "--", path)
+        g("commit", "-qm", msg)
+        return g("rev-parse", "--short", "HEAD").stdout.strip()
+    verdict = lambda sha, feats, tail="": f"{'VERDICT: NEEDS_WORK' if tail else 'VERDICT: PASS'}\n/verify-phase · docs/SPEC-1.md · HEAD {sha}\nFEATURES: {feats}\n{tail}"
+    call = lambda repo, sha, suf, feats, tail="", when=None, branch=None: at(repo, f"вызов {suf}", f"docs/evidence/verify-{sha}-{suf}.txt", when, branch, verdict(sha, feats, tail))
+    push = lambda repo: subprocess.run(["git", "push", "-q", "origin", "phase"], cwd=repo, env=GIT_ENV, capture_output=True, text=True, check=True)
+    def base():  # фикстура двух фич: вердикт полного круга заменён вызовами F1 и F2 того же коммита
+        repo, tr = gate_fixture(src, launch, full=True, items=True)
+        v = next(n for n in os.listdir(f"{repo}/docs/evidence") if re.fullmatch(r"verify-[0-9a-f]+\.txt", n))
+        sha = v[7:-4]
+        subprocess.run(["git", "rm", "-q", f"docs/evidence/{v}"], cwd=repo, env=GIT_ENV, check=True)
+        for suf in ("F1", "F2"):
+            open(f"{repo}/docs/evidence/verify-{sha}-{suf}.txt", "w").write(verdict(sha, suf))
+        ship(repo, "вызовы F1 и F2", f"docs/evidence/verify-{sha}-F1.txt", f"docs/evidence/verify-{sha}-F2.txt")
+        return repo, tr, sha
+    line = lambda r, f: next((l[2:] for l in r.get("reason", "").split("\n") if l.startswith(f"- {f}:")), "")
+    noid = lambda r: next((l[2:] for l in r.get("reason", "").split("\n") if "names no item" in l), "")
+    gate_ok = lambda r: r.get("systemMessage", "").startswith("SPEC_GATE_OK")
+    sides = {}
+    # коммит без id между вердиктами разных коммитов: должна только фича, чей вердикт его не видел
+    r1, t1, b1 = base()
+    at(r1, "refactor helper", "bin/helper")
+    fx = at(r1, "F2.1: починка bin/b", "bin/b2")
+    call(r1, fx, "F2", "F2"); push(r1)
+    gap = gate_run(r1, t1, "probe-hist-gap")[1]
+    call(r1, fx, "F1", "F1"); push(r1)
+    gap_ok = gate_run(r1, t1, "probe-hist-gap-ok")[1]
+    sides["коммит без id между вызовами — должна F1, не F2"] = gap.get("decision") == "block" and "F1 (verify-" in noid(gap) and "F2 (" not in noid(gap) and not line(gap, "F2")
+    sides["вызов F1 после него"] = gate_ok(gap_ok)
+    # два коммита F2, точечный вердикт между ними; чужой id после вердиктов
+    r2, t2, b2 = base()
+    a = at(r2, "F2.1: починка один", "bin/b1")
+    call(r2, a, "F2", "F2")
+    two = at(r2, "F2.2: починка два", "bin/b2"); push(r2)
+    twice = gate_run(r2, t2, "probe-hist-twice")[1]
+    sides["два коммита F2, вердикт между"] = twice.get("decision") == "block" and f"commit {two}" in line(twice, "F2")
+    r3, t3, b3 = base()
+    at(r3, "F3.1: чужой пункт", "bin/x"); push(r3)
+    alien = gate_run(r3, t3, "probe-hist-alien")[1]
+    sides["id не из SPEC"] = alien.get("decision") == "block" and "names F3" in line(alien, "F3")
+    # новый NEEDS_WORK, блокирующий F2, поверх старого PASS; два вердикта одного коммита — проверяющий первым
+    r4, t4, b4 = base()
+    p = at(r4, "PLAN: журнал", "docs/PLAN-1.md")
+    call(r4, p, "F2", "F2", "\n## Блокирующие\n- **F2.1: не подтверждён своим прогоном** — x\n"); push(r4)
+    newer = gate_run(r4, t4, "probe-hist-newer")[1]
+    sides["новый NEEDS_WORK поверх старого PASS"] = newer.get("decision") == "block" and "blocking in the /verify-phase round" in line(newer, "F2")
+    r5, t5, b5 = base()
+    open(f"{r5}/docs/evidence/verify-{b5}-F1-F2.txt", "w").write(verdict(b5, "F1, F2", "\n## Блокирующие\n- **F2.1: x** — y\n"))
+    ship(r5, "NEEDS_WORK того же коммита", f"docs/evidence/verify-{b5}-F1-F2.txt")
+    tie = gate_run(r5, t5, "probe-hist-tie")[1]
+    sides["PASS и NEEDS_WORK одного коммита"] = gate_ok(tie)
+    # слияние: коммит F2 ветки старше по дате, чем коммит F2 и его вердикт на phase — вердикт его не видел
+    r6, t6, b6 = base()
+    at(r6, "F2.1: на ветке", "bin/b-side", when=300, branch="side")
+    m = at(r6, "F2.2: на phase", "bin/b-main", when=200, branch="phase")
+    call(r6, m, "F2", "F2", when=100)
+    subprocess.run(["git", "merge", "-q", "--no-ff", "-m", "Merge side", "side"], cwd=r6, env=GIT_ENV, capture_output=True, text=True, check=True); push(r6)
+    merged = gate_run(r6, t6, "probe-hist-merge")[1]
+    mh = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=r6, capture_output=True, text=True).stdout.strip()
+    call(r6, mh, "F2-m", "F2"); push(r6)
+    merged_ok = gate_run(r6, t6, "probe-hist-merge-ok")[1]
+    sides["слияние: F2 ветки не видел вердикт phase"] = merged.get("decision") == "block" and "changed after its /verify-phase verdict" in line(merged, "F2")
+    sides["вызов F2 на слиянии"] = gate_ok(merged_ok)
+    # слияние: коммит F2 ветки покрыт точечным вердиктом на ветке, новейший вердикт F2 — на phase
+    r7, t7, b7 = base()
+    c = at(r7, "F2.1: на ветке", "bin/c", when=300, branch="side")
+    call(r7, c, "F2", "F2", when=280, branch="side")
+    y = at(r7, "F1.1: на phase", "bin/y", when=200, branch="phase")
+    call(r7, y, "F1-F2", "F1, F2", when=100)
+    subprocess.run(["git", "merge", "-q", "--no-ff", "-m", "Merge side", "side"], cwd=r7, env=GIT_ENV, capture_output=True, text=True, check=True); push(r7)
+    covered = gate_run(r7, t7, "probe-hist-merge-covered")[1]
+    sides["слияние: F2 ветки покрыт вердиктом ветки"] = gate_ok(covered)
+    say(S, "OK" if all(sides.values()) else "FAIL", "history",
+        "; ".join(f"{k} — {'да' if v else 'НЕТ'}" for k, v in sides.items()) + f" · без id — «{noid(gap)[:110]}»; слияние — «{line(merged, 'F2')[:90]}»")
+
+
 def stdin_probes(S, src, launch):
     """Решение 401: пустой stdin или не объект JSON — своя ошибка хука: pass с причиной в журнале, не block; целый вход судится как прежде."""
     repo, tr = gate_fixture(src, launch)  # одна фича из двух: целый вход — block
-    runs = {name: gate_run(repo, tr, "probe-stdin", raw=raw) for name, raw in (("пустой", ""), ("пробелы", " \n"), ("битый", "{oops"), ("null", "null"), ("массив", "[]"))}
+    inputs = (("пустой", ""), ("пробелы", " \n"), ("битый", "{oops"), ("null", "null"), ("массив", "[]"))
+    runs = {name: gate_run(repo, tr, "probe-stdin", raw=raw) for name, raw in inputs}
     whole = gate_run(repo, tr, "probe-stdin-whole")
-    passed = {k: r[0] == 0 and r[1].get("decision") != "block" and r[3][-1]["decision"] == "pass" and r[3][-1]["reason"].startswith("stdin:") for k, r in runs.items()}
-    held = whole[0] == 0 and whole[1].get("decision") == "block" and whole[3][-1]["decision"] == "block"
+    own = lambda r, i: len(r[3]) == i + 1  # строку журнала написал этот вызов, а не прошлый: вызовы идут по одному журналу
+    why = lambda raw: "stdin: empty — the gate passes" if not raw.strip() else f"stdin: not a JSON object ({len(raw.encode())} bytes) — the gate passes"
+    passed = {k: own(r, i) and r[0] == 0 and r[1].get("decision") != "block" and r[3][-1]["decision"] == "pass" and r[3][-1]["reason"] == why(raw)
+              for i, ((k, r), (_, raw)) in enumerate(zip(runs.items(), inputs))}
+    held = own(whole, len(inputs)) and whole[0] == 0 and whole[1].get("decision") == "block" and whole[3][-1]["decision"] == "block"
     say(S, "OK" if all(passed.values()) and held else "FAIL", "stdin",
         "; ".join(f"{k} — {r[3][-1]['decision']} «{r[3][-1]['reason'][:45]}»" for k, r in runs.items()) + f"; целый вход Stop — {whole[3][-1]['decision']}")
 
@@ -1640,8 +1729,9 @@ def gate_probes(src, launch, lenv, args):
     rc, res, _, log, _ = gate_run(repo, tr, "probe-partial")
     reason = res.get("reason", "")
     f1_set = [l for l in reason.split("\n") if l.startswith("- F1:") and "no /verify-phase verdict" not in l]  # вердикта нет ни у одной фичи — F1 названа только им (401)
-    say(S, "OK" if rc == 0 and res.get("decision") == "block" and "- F2:" in reason and not f1_set and "- F1: no /verify-phase verdict" in reason else "FAIL", "partial",
-        f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in reason else 'нет'}, комплект F1 — {'да' if f1_set else 'нет'}, "
+    f2_set = "- F2: no docs/evidence/F2-" in reason  # F2 названа своим комплектом, а не только отсутствием вердикта
+    say(S, "OK" if rc == 0 and res.get("decision") == "block" and f2_set and not f1_set and "- F1: no /verify-phase verdict" in reason else "FAIL", "partial",
+        f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, комплект F2 назван — {'да' if f2_set else 'нет'}, комплект F1 — {'да' if f1_set else 'нет'}, "
         f"F1 без вердикта — {'да' if '- F1: no /verify-phase verdict' in reason else 'нет'}; rc {rc}")
     twin, trw = gate_fixture(src, launch, full=True)  # маркер — целая строка: «B_OK_MAYBE» и «NOT B_OK» не в счёт
     open(f"{twin}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-1\n$ bin/b\nB_OK_MAYBE\nNOT B_OK\n")
@@ -1709,6 +1799,7 @@ def gate_probes(src, launch, lenv, args):
         f"после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение {res6.get('decision') or 'нет'}, "
         f"вердикт не покрывает коммит — {'нет' if covered else 'да'}")
     union_probes(S, src, launch)
+    history_probes(S, src, launch)
     stdin_probes(S, src, launch)
     # B2 (ревью v3.2-2): комплект — из запушенного HEAD; файл комплекта вне HEAD или отличный от HEAD держит ход по имени
     def state_of(tweak=None, **kw):

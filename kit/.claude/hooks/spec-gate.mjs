@@ -176,31 +176,38 @@ function verdicts(root, sha, specPath) {  // verdict files of this SPEC committe
 
 function coverage(root, sha, ids, specPath) {  // what the verdicts leave uncovered — [] when HEAD is covered (SPEC-v3.3 F4.4, decision 401)
   const all = verdicts(root, sha, specPath)
-  const away = new Map(all.map(v => [v, Number(git(root, 'rev-list', '--count', `${v.sha}..${sha}`) ?? 1e9)]))  // commits from the verdict to HEAD
+  const unseen = new Map(all.map(v => [v, new Set((git(root, 'rev-list', `${v.sha}..${sha}`) || '').split('\n').filter(Boolean))]))  // what a verdict did not see
+  const saw = (v, c) => !unseen.get(v).has(c.sha)
   const names = (v, f) => !v.scope || v.scope.includes(f)  // no FEATURES line — a round of every feature: one file with all is the special case
   // v verifies f when it names it and does not block it; a NEEDS_WORK verdict without a parsed blocking list blocks all it names
   const verifies = (v, f) => names(v, f) && (v.pass || (v.blocking.length > 0 && !v.blocking.includes(f)))
-  // the verdict of a feature: its newest naming one; at the same commit one that verifies it comes first
-  const newest = f => all.filter(v => names(v, f)).sort((a, b) => away.get(a) - away.get(b) || verifies(b, f) - verifies(a, f))[0]
+  // the verdict of a feature: its newest naming one (fewest commits it did not see); at the same commit one that verifies it comes first
+  const newest = f => all.filter(v => names(v, f)).sort((a, b) => unseen.get(a).size - unseen.get(b).size || verifies(b, f) - verifies(a, f))[0]
   const of = Object.fromEntries(ids.map(f => [f, newest(f)]))
   const s7 = x => x.slice(0, 7)
   const missing = ids.filter(f => !of[f]).map(f => `${f}: no /verify-phase verdict in HEAD names ${f} for HEAD ${s7(sha)} or an ancestor (docs/evidence/verify-<sha>[-F…].txt) — the full round is the union of the calls: every feature named by a PASS, or by a NEEDS_WORK that does not block it`)
   const used = [...new Set(Object.values(of).filter(Boolean))]
   if (!used.length) return { missing }
-  const oldest = used.reduce((a, b) => (away.get(b) > away.get(a) ? b : a))
-  const last = {}
   const own = p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md' || /^docs\/PLAN-[^/]+\.md$/.test(p)  // the executor's report files
-  for (const c of commits(root, `${oldest.sha}..${sha}`)) {
-    if (c.subj.startsWith('Тимлид:') || c.files.every(own)) continue
+  const skip = c => c.subj.startsWith('Тимлид:') || c.files.every(own)
+  // the commits some used verdict did not see: one range on a line of history, the union of the ranges after a merge (git log orders by date)
+  const late = new Map()
+  for (const v of used) if (unseen.get(v).size) for (const c of commits(root, `${v.sha}..${sha}`)) if (!late.has(c.sha) && !skip(c)) late.set(c.sha, c)
+  const changes = {}  // feature → its commits that some used verdict did not see
+  for (const c of late.values()) {
     const fs_ = [...new Set(((c.subj.match(/^((?:F\d+\.\d+[,;\s]*)+)/) || [])[1] || '').match(/F\d+(?=\.)/g) || [])]
-    if (!fs_.length) missing.push(`commit ${s7(c.sha)} «${c.subj.slice(0, 60)}» after the /verify-phase round ${s7(oldest.sha)} (${oldest.file}) changes ${c.files.slice(0, 3).join(', ')} and names no item: no point verdict can cover it`)
-    for (const f of fs_) if (!last[f]) last[f] = c.sha  // newest first: the first seen is the last change of the feature
+    for (const f of fs_) (changes[f] ||= []).push(c)
+    if (fs_.length) continue
+    const owed = ids.filter(f => of[f] && !saw(of[f], c)).map(f => `${f} (${of[f].file})`)  // covered once each of them has a verdict at or after it
+    missing.push(`commit ${s7(c.sha)} «${c.subj.slice(0, 60)}» after the /verify-phase round of ${owed.join(', ')} changes ${c.files.slice(0, 3).join(', ')} and names no item: it is covered when each of these features has a verdict at or after it`)
   }
-  for (const f of [...ids, ...Object.keys(last).filter(f => !ids.includes(f))]) {
+  for (const f of [...ids, ...Object.keys(changes).filter(f => !ids.includes(f))]) {
     const v = of[f] ?? (of[f] = newest(f))
-    if (!v) { if (!ids.includes(f)) missing.push(`${f}: commit ${s7(last[f])} names ${f}, and no /verify-phase verdict in HEAD names it`); continue }
-    if (!verifies(v, f)) missing.push(`${f}: blocking in the /verify-phase round ${s7(v.sha)} (${v.file}) — no point VERDICT: PASS that names ${f} after it`)
-    else if (last[f] && !isAncestor(root, last[f], v.sha)) missing.push(`${f}: changed after its /verify-phase verdict ${s7(v.sha)} (${v.file}, commit ${s7(last[f])}) — no point VERDICT: PASS that names ${f} at or after it`)
+    if (!v) { if (!ids.includes(f)) missing.push(`${f}: commit ${s7(changes[f][0].sha)} names ${f}, and no /verify-phase verdict in HEAD names it`); continue }
+    if (!verifies(v, f)) { missing.push(`${f}: blocking in the /verify-phase round ${s7(v.sha)} (${v.file}) — no point VERDICT: PASS that names ${f} after it`); continue }
+    // every change of f its verdict did not see needs a verdict that verifies f and saw it — not only the first one git log lists
+    const open = (changes[f] || []).find(c => !saw(v, c) && !all.some(w => verifies(w, f) && saw(w, c)))
+    if (open) missing.push(`${f}: changed after its /verify-phase verdict ${s7(v.sha)} (${v.file}, commit ${s7(open.sha)}) — no point VERDICT: PASS that names ${f} at or after it`)
   }
   return { missing, used: used.map(v => v.file).join(', ') }
 }
