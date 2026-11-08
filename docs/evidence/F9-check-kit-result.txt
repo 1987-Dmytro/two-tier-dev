@@ -1,0 +1,5 @@
+spec: SPEC-v3.4
+$ bin/check-kit mods
+F9.1 board=2/1/1 nach=1/1/2 · claude plugin test mods/spec-board: rc 0, 22 pass, 0 fail; названных тестов F9.1 4 из 4
+F9.2 validate=OK test=22 · claude plugin validate mods/spec-board: rc 0; названных тестов F9.2 3 из 3; модель, сеть и процесс не на git в коде мода — нет; marketplace — есть; строка шаблона Environment — «да», профиль кита — True · красные: копия с поломанным тестом «a subagent tool call does not redraw» — rc 1, fail 1, названный не прошёл; fetch, curl через процесс, $.model — пойманы, git — чист; строка «да» и профиль false, «нет» и true, нет строки — врозь
+MODS_OK
