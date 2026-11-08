@@ -2,7 +2,7 @@
 
 ## Голова — плечо 3: F9 построен, ждёт установки у пользователя
 **Сделано:** Resume 400 (07.11 22:40–08.11). `risk-tier`: явная метка сильнее слов — `risk: low` при словах деплоя → OK «low: слова деплоя», токен — по-прежнему `high` (`da0f1ad`). Находка 400 измерена: `env` профиля в `settings.local` и в `settings.json` проекта не переключает `CLAUDE_CODE_SUBAGENT_MODEL` (Opus), `--settings` и окружение процесса — переключают (`2705fb5`, `HARNESS_NOTE` в F6, CHANGELOG). F9 `spec-board`: мод `mods/spec-board` (`/board`, строка статуса, файлы `spec-gate`, без модели и сети), 22 теста, validate; `bin/check-kit mods` → `F9.1 board=2/1/1 nach=1/1/2`, `F9.2 validate=OK test=22`, `MODS_OK`; гейт — F9; marketplace; строка шаблона Environment и профиль кита — «нет»/false до установки. `/code-review` дельты (7 находок, 4 починены) и воркфлоу (25 мутантов, ревью; выжившие закрыты сторонами) — `5c7529a`…`f117594`.
-**Следующий шаг оператора:** `STOP-INPUT` ниже — шаг 1 (marketplace update) сделан 08.11; осталась установка и новая сессия вкладки.
+**Следующий шаг оператора:** `STOP-INPUT` ниже — шаги 1–2 сделаны 08.11 (`claude plugin list`: spec-board 0.1.0, scope user, enabled, читается из `mods/spec-board`); осталась новая сессия вкладки.
 **Когда закончим:** после установки — evidence F9, строка профиля кита `true`, точечный `bin/verify-phase F1 F2 F9`, `bin/phase-report`, `bin/gate-v3.4`, `make ci`, `bin/check-budget` → `STOP-TL «Leg 3»` ≈ 1 ч.
 
 ## Done
@@ -19,13 +19,13 @@
 ## Next — один айтем
 1. После установки: `bin/evidence F9 check-kit -- bin/check-kit mods`, строка профиля и шаблона «да»/true, `bin/verify-phase F1 F2 F9`, отчёт, гейт, `make ci` → `STOP-TL «Leg 3»`.
 
-## Open stop — STOP-INPUT «Leg 3 — шаги 2–3 установки spec-board»
-STOP: STOP-INPUT «Leg 3 — шаги 2–3 установки spec-board» — marketplace обновлён оператором (шаг 1, 08.11); install и новая сессия — рука оператора (правило 4, C4), скрипты кита её не делают.
+## Open stop — STOP-INPUT «Leg 3 — шаг 3: новая сессия вкладки с spec-board»
+STOP: STOP-INPUT «Leg 3 — шаг 3: новая сессия вкладки с spec-board» — marketplace обновлён и мод установлен оператором (шаги 1–2, 08.11); мод грузится новой сессией, её открывает оператор.
 Вопрос оператору: команды ниже выполнены и новая сессия вкладки открыта?
 Resume: Продолжай по SPEC-v3.4 плечом 3 с evidence F9: spec-board установлен у пользователя, новая сессия открыта, строка профиля кита — true.
 **Оператору, по порядку:**
 1. `claude plugin marketplace update two-tier-mods` — сделано 08.11.
-2. `claude plugin install spec-board@two-tier-mods --scope user`
+2. `claude plugin install spec-board@two-tier-mods --scope user` — сделано 08.11.
 3. Новая сессия вкладки Code на папке `two-tier-dev`; `/board` должен открыть панель.
 **Тимлиду (файлы его, код не ждёт):** строка `spec-board` в `docs/PROCESS.md` и `"spec-board@two-tier-mods": true` в `.claude/launch.settings.json` — после установки; находка 400: модель подагентов профилем вкладки через `env` не выбирается — решение для профиля telefon.
 
