@@ -10,3 +10,4 @@
 {"cli": "2.1.319", "features": ["F1"], "limit": 1800, "sec": 1099, "wf_sec": 567, "bash": 10, "fon": 0, "moved": 0, "status": "completed"}
 {"cli": "2.1.319", "features": ["F3", "F4"], "limit": 1800, "sec": 627, "wf_sec": 498, "bash": 8, "fon": 0, "moved": 0, "status": "completed"}
 {"cli": "2.1.319", "features": ["F6", "F7"], "limit": 1800, "sec": 1387, "wf_sec": 1363, "bash": 19, "fon": 1, "moved": 0, "status": "completed"}
+{"cli": "2.1.319", "features": ["F6"], "limit": 1800, "sec": 1101, "wf_sec": 719, "bash": 8, "fon": 0, "moved": 0, "status": "completed"}
