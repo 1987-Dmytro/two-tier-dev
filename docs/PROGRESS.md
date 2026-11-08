@@ -1,9 +1,9 @@
 # PROGRESS — two-tier-dev, SPEC-v3.4 «кит под вкладкой Code» (файл исполнителя; потолок 60 строк — `bin/check-budget`)
 
-## Голова — плечо 3: F9 построен, ждёт установки у пользователя
-**Сделано:** Resume 400 (07.11 22:40–08.11). `risk-tier`: явная метка сильнее слов — `risk: low` при словах деплоя → OK «low: слова деплоя», токен — по-прежнему `high` (`da0f1ad`). Находка 400 измерена: `env` профиля в `settings.local` и в `settings.json` проекта не переключает `CLAUDE_CODE_SUBAGENT_MODEL` (Opus), `--settings` и окружение процесса — переключают (`2705fb5`, `HARNESS_NOTE` в F6, CHANGELOG). F9 `spec-board`: мод `mods/spec-board` (`/board`, строка статуса, файлы `spec-gate`, без модели и сети), 22 теста, validate; `bin/check-kit mods` → `F9.1 board=2/1/1 nach=1/1/2`, `F9.2 validate=OK test=22`, `MODS_OK`; гейт — F9; marketplace; строка шаблона Environment и профиль кита — «нет»/false до установки. `/code-review` дельты (7 находок, 4 починены) и воркфлоу (25 мутантов, ревью; выжившие закрыты сторонами) — `5c7529a`…`f117594`.
-**Следующий шаг оператора:** `STOP-INPUT` ниже — вход `claude auth login` для круга приёмки.
-**Когда закончим:** после установки — evidence F9, строка профиля кита `true`, точечный `bin/verify-phase F1 F2 F9`, `bin/phase-report`, `bin/gate-v3.4`, `make ci`, `bin/check-budget` → `STOP-TL «Leg 3»` ≈ 1 ч.
+## Голова — плечо 3 построено: STOP-TL «Leg 3»
+**Сделано:** Resume 400 (07.11 22:40–08.11 11:30). `risk-tier`: явная метка сильнее слов — `risk: low` при словах деплоя → OK «low: слова деплоя», токен — `high` (`da0f1ad`). Находка 400 измерена: `env` профиля в `settings.local` и в `settings.json` проекта не переключает `CLAUDE_CODE_SUBAGENT_MODEL` (Opus), `--settings` и окружение процесса — переключают (`2705fb5`, `HARNESS_NOTE` в F6, CHANGELOG). F9 `spec-board`: мод `mods/spec-board` (`/board`, строка статуса, файлы `spec-gate`, без модели и сети), 24 теста, validate; установлен оператором 08.11, в новой сессии вкладки рисует «board 36/0/2 · маркеров 8/9»; профиль кита `true`, строка шаблона «да» (`e392b3c`); `/code-review` дельты — 8 находок, 7 починены (`9afc3c2`). Круг `F1 F2 F9` на `9b9ae69` — PASS. Гейт клона поймал регрессию `da0f1ad` в `bin/check-verify` (сверка обрезанной строки risk-tier) — починена, evidence F7 — `VERIFY_OK` (`687ed27`). `bin/gate-v3.4` на `da00a54` — `GATE_OK` (536 с, красных 0); `make ci` rc 0; `BUDGET_OK`; отчёт фазы — 38/38 с пробой.
+**Следующий шаг:** тимлид читает плечо 3 (`STOP-TL` ниже).
+**Когда закончим:** фаза v3.4 построена целиком; дальше — приёмка тимлида и его файлы.
 
 ## Done
 - Шаг 0 (`5944469`): `git mv` PROGRESS → `docs/archive/PROGRESS-v3.3-2026-11-06.md`, evidence и вердикты v3.3 → `docs/archive/evidence-v3.3/`; `docs/PLAN-v3.4.md`.
@@ -14,18 +14,16 @@
 - **F5 Paar & Metriken** (`b2fbce2`, `d2b7961`, `d49e78e`, `502f935`): `bin/check-kit paar` → `PAAR_OK`; F5.3 `n=2 fon=7`: 2.1.316 — max 1216 с, 2.1.319 — max 1422 с, лимит 1800 с держит.
 - **F6 Desktop** (`10875bd`, `4b7c87e`): `bin/check-harness --desktop` → `HARNESS_OK`; **F7 Risk & Evals** (`749c6e9`, `7344ceb`): `bin/check-verify` → `VERIFY_OK`; **F8 Dokumente, Mods & Gate** (`e145112`, `7344ceb`): `bin/gate-v3.4` → `GATE_OK`.
 - **F9 Spec-board** (`5c7529a`, `745481f`, `f117594`, `e392b3c`, `9afc3c2`): `bin/check-kit mods` → `MODS_OK` — `docs/evidence/F9-check-kit-result.txt` (test=24, профиль true).
-- Круги плеча 2: `verify-265eaa4-F6-F8.txt` — PASS, 1422 с, 259 522 токена, named 9; `verify-502f935-F5-F7.txt` — PASS, 1394 с, 285 593 токена, named 5. Отчёт фазы — `docs/evidence/phase-report.md`: пунктов 38, без пробы только F9.1–F9.2 (плечо 3).
+- Круги: `verify-265eaa4-F6-F8.txt` — PASS, 1422 с, 259 522 токена, named 9; `verify-502f935-F5-F7.txt` — PASS, 1394 с, named 5; плечо 3 — `verify-9b9ae69-F1-F2-F9.txt` — PASS, 1341 с, 331 158 токенов, блокирующих 0, named 9. Отчёт фазы — `docs/evidence/phase-report.md`: пунктов 38, с пробой 38.
 
 ## Next — один айтем
-1. После входа claude: `bin/verify-phase F1 F2 F9`, `bin/phase-report`, `make ci`, `bin/check-budget` → `STOP-TL «Leg 3»`, затем `bin/gate-v3.4`.
+1. Чтение тимлида плеча 3; по его слову — следующая фаза или правки.
 
-## Open stop — STOP-INPUT «Leg 3 — вход claude для круга F1 F2 F9»
-STOP: STOP-INPUT «Leg 3 — вход claude для круга F1 F2 F9» — `bin/verify-phase F1 F2 F9` (HEAD 9afc3c2) отказал до клона: check-window — «OAuth session expired and could not be refreshed»; `claude auth status` вне сессии — loggedIn false. Вход подпиской — рука оператора.
-Вопрос оператору: вход выполнен и `claude auth status` показывает loggedIn true?
-Resume: Продолжай по SPEC-v3.4 плечом 3 с круга F1 F2 F9: вход claude подпиской восстановлен.
-**Оператору:** в терминале `claude auth login` (подписка, не ключ API), затем `claude auth status` → loggedIn true.
-**Сделано до стопа:** шаги установки spec-board 1–3 (08.11); evidence F9 — `MODS_OK` test=24; профиль кита true, строка шаблона «да» (`e392b3c`); `/code-review` дельты 5c7529a..e392b3c — 8 находок, 7 починены, $.process «CLI only» — пропущена (вкладка Code — локальный CLI) (`9afc3c2`).
-**Тимлиду (файлы его, код не ждёт):** строка `spec-board` в `docs/PROCESS.md` и `"spec-board@two-tier-mods": true` в `.claude/launch.settings.json` — после установки; находка 400: модель подагентов профилем вкладки через `env` не выбирается — решение для профиля telefon.
+## Open stop — STOP-TL «Leg 3»
+STOP: STOP-TL «Leg 3» — плечо 3 SPEC-v3.4 построено: risk-tier 400, находка 400 измерена, F9 spec-board установлен и включён в профиле, круг F1 F2 F9 PASS, gate-v3.4 GATE_OK.
+Вопрос тимлиду: плечо 3 принято, фаза v3.4 закрыта?
+Resume: Продолжай по SPEC-v3.4 по решению тимлида после чтения STOP-TL «Leg 3».
+**Тимлиду (его файлы):** строка `spec-board` в `docs/PROCESS.md` — «да» (сейчас «нет», named круга) и `"spec-board@two-tier-mods": true` в `.claude/launch.settings.json`; находка 400 — модель подагентов профилем вкладки через `env` не выбирается, решение для профиля telefon; `$.process` в API помечен «CLI only» — вкладка Code (локальный CLI) рисует, другой хост потеряет порядок вердиктов и «не в HEAD»; `ONBOARDING.md` в корне — онбординг приложения, не исполнителя, не закоммичен.
 
 ## Notes
 - Старт: CLI 2.1.316, вкладка Code; стартовый контекст (S2): SPEC 23 516 + kit-fixes 14 494 + `CLAUDE.md` 2 873 — 40 883 из 50 000 знаков; стартовый запрос 3 972.
@@ -46,4 +44,5 @@ Resume: Продолжай по SPEC-v3.4 плечом 3 с круга F1 F2 F9:
 - PLAN-v3.4 на потолке: 150/150 строк. Мод пишется в `mods/` репо, не в `~/.claude/dev-mods` (C4); типы — локальный tsc против файла типов скилла: чисто.
 
 ## Named, not built
+- Круг `9b9ae69`: F1 `caps.same_list` без проверки типа; пустой stdin Stop → block с exit 0; F2 `AMEND` не привязан к началу строки (code fence, коммент, дата 31.04); `gate-test` без таймаута, planken 1–2 → planken-inline; F9 `/board` молчит при сбое repo/root (collect вне try), открытый STOP — первая строка, два `session.start` — два таймера, журнал `null` — «не JSON».
 - Из кругов: F1.1 `Monitor` → block (тип сравнивается точно); F1.2 `caps.same_list` 0 и 1 — значение вне нормы в файле тимлида; F3.4 `exit N` в `DEPLOY_CMD`; F4.2 нечисловой `latency_ms`; F5.5 `utilization` true или отрицательная — start; F6.1 `.built-head` не в UTF-8 — трассировка, короткий sha — ложный WARN; F6.4 журнал после обрезанной строки; F7.4 не-ASCII имена evidence в кавычках git; F5.2 колонка «инструмент замера» раньше «инструмент» — ложный OK.
