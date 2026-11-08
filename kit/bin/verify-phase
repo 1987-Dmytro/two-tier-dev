@@ -9,6 +9,9 @@
 2. Свежий клон — свой каталог во /tmp/two-tier-v3. Гейт фазы — первая `bin/gate…` стартового запроса docs/PROMPT.txt (нет его —
    прежнего docs/GOAL.txt) — идёт
    в клоне, его лог агенты читают по $VERIFY_GATE_LOG: долгие чеки они не перезапускают. Сменил файлы под docs/evidence клона — сразу за строкой гейта `evidence geändert <файл>` на каждый (F7.4, K80).
+   Один гейт на HEAD (решение 401: круг — объединение вызовов ≤ 3 фич на одном HEAD): лог, код и строки evidence geändert гейта ложатся в
+   $VERIFY_GATE_CACHE (по умолчанию /tmp/two-tier-v3)/verify-gate-<sha>/; следующий вызов на том же HEAD моложе 12 ч берёт их, не перезапуская
+   гейт, и говорит это строкой гейта; новый HEAD, другой гейт или старый лог — гейт снова. Лимит вызова — без чужого гейта.
 3. `claude -p` в клоне: только подписка (env -u ANTHROPIC_API_KEY; apiKeySource не none — стоп), SPEC_GATE=off, --permission-mode auto,
    allow Workflow(verify-phase) и чеки кита (в -p правила allow из .claude/settings.json не действуют), --setting-sources
    project,local (настройки и хуки пользователя приёмку не трогают), --settings
@@ -26,6 +29,7 @@ import json, os, re, signal, subprocess, sys, tempfile, time
 
 TMP = "/tmp/two-tier-v3"
 JOURNAL = "docs/evidence/verify-runs.jsonl"
+GATE_TTL = 12 * 3600  # лог гейта HEAD годен вызовам того же HEAD столько секунд
 ALLOW = ["Workflow(verify-phase)", "Bash(bin/check-*)", "Bash(bin/gate-*)", "Bash(make ci)"]
 PROMPT = ("Launch the saved workflow verify-phase with the Workflow tool, {args}. When it completes, reply with "
           "the single word done and use no tools.")
@@ -194,14 +198,28 @@ def main(argv):
         print(f"verify-phase: гейт {gate} из стартового запроса не найден в клоне — чеки гоняют проверяющие")
         gate = None
     if gate:
-        rc = run([gate], clone, env, limit, f"{d}/gate.log")
-        if rc is None:
-            journal(ids or known, limit)
-            timeout(f"гейт {gate}")
+        cache = f"{os.environ.get('VERIFY_GATE_CACHE') or TMP}/verify-gate-{sha}"  # один гейт на HEAD: вызовы круга на нём берут его лог
+        keep = lambda n: open(f"{cache}/{n}", encoding="utf-8").read() if os.path.isfile(f"{cache}/{n}") else None
+        age = time.time() - os.path.getmtime(f"{cache}/rc") if os.path.isfile(f"{cache}/rc") else None
+        if age is not None and age < GATE_TTL and keep("gate") == gate and keep("gate.log") is not None and (keep("rc") or "").strip().isdigit():
+            open(f"{d}/gate.log", "w", encoding="utf-8").write(keep("gate.log"))
+            rc, changes = int(keep("rc")), (keep("changed") or "").splitlines()
+            how = f"лог вызова того же HEAD {age / 60:.0f} мин назад ({cache}), не перезапускается"
+        else:
+            rc = run([gate], clone, env, limit, f"{d}/gate.log")
+            if rc is None:
+                journal(ids or known, limit)
+                timeout(f"гейт {gate}")
+            changes = [c[3:] for c in git("status", "--porcelain", "--untracked-files=all", "--", "docs/evidence", cwd=clone).stdout.splitlines()]  # K80
+            os.makedirs(cache, exist_ok=True)
+            os.path.isfile(f"{cache}/rc") and os.remove(f"{cache}/rc")  # пока лог пишется, кэш не годен
+            for n, text in (("gate", gate), ("gate.log", open(f"{d}/gate.log", encoding="utf-8", errors="replace").read()), ("changed", "\n".join(changes)), ("rc", str(rc))):
+                open(f"{cache}/{n}", "w", encoding="utf-8").write(text)  # rc — последним: без него лог не годен
+            how = None
         markers = [l for l in open(f"{d}/gate.log", encoding="utf-8", errors="replace").read().splitlines() if re.fullmatch(r"(F\d+ )?[A-Z0-9_]+_OK", l)]
-        print(f"verify-phase: гейт {gate} — rc {rc}, маркеров {len(markers)}: {' · '.join(markers) or 'нет'} ({time.monotonic() - T0:.0f} с)")
-        for changed in git("status", "--porcelain", "--untracked-files=all", "--", "docs/evidence", cwd=clone).stdout.splitlines():  # K80: чек, сменивший evidence, виден и без bin/evidence
-            print(f"evidence geändert {changed[3:]}")
+        print(f"verify-phase: гейт {gate} — rc {rc}, маркеров {len(markers)}: {' · '.join(markers) or 'нет'}" + (f"; {how}" if how else "") + f" ({time.monotonic() - T0:.0f} с)")
+        for changed in changes:  # K80: чек, сменивший evidence, виден и без bin/evidence
+            print(f"evidence geändert {changed}")
         env["VERIFY_GATE_LOG"] = f"{d}/gate.log"
     else:
         print(f"verify-phase: в стартовом запросе {start or 'docs/PROMPT.txt'} нет bin/gate… — чеки гоняют проверяющие")

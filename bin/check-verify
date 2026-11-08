@@ -70,6 +70,7 @@ p=$(python3 -c 'import string; print("x".join(string.punctuation))')
 [ "$(bin/slug a)" = a ] && [ "$(bin/slug '!b!')" = b ] || fail "слаг из одного знака"
 [ "$(bin/slug a b c d e)" = a-b-c-d-e ] || fail "много аргументов"
 [ "$(bin/slug "$(python3 -c 'print("a " * 500)')")" = "$(python3 -c 'print("-".join(["a"] * 500))')" ] || fail "500 частей: count и maxsplit не режут"
+[ "$(bin/slug "$(python3 -c 'print("A" * 1000)')")" = "$(python3 -c 'print("a" * 1000)')" ] || fail "1000 знаков F1.1 — целиком"
 err=$(bin/slug '!!!' 2>&1 >/dev/null); [ $? -eq 1 ] || fail "!!! — не exit 1"; [ "$err" = "empty slug" ] || fail "нет empty slug"
 bin/slug '' 2>/dev/null; [ $? -eq 1 ] || fail "пустой ввод — не exit 1"
 python3 - <<'PY' || fail "оракул слага"
@@ -240,7 +241,8 @@ def window_env():
 def launch(kind):
     d, sha = eval_fixture(kind) if kind.startswith("eval") else fixture(kind)
     args = {"limit": ["--limit", "20"], "point": ["F1"]}.get(kind, [])
-    r = subprocess.run([f"{REPO}/bin/verify-phase", *args], cwd=d, env=window_env(), capture_output=True, text=True, timeout=2400)
+    r = subprocess.run([f"{REPO}/bin/verify-phase", *args], cwd=d, env=dict(window_env(), VERIFY_GATE_CACHE=tempfile.mkdtemp(prefix="verify-gate-cache-", dir=TMP)),
+                       capture_output=True, text=True, timeout=2400)  # фикстура того же sha из прошлого прогона не отдаёт свой гейт
     name = f"verify-{sha}{'-F1' if kind == 'point' else ''}.txt"
     p = f"{d}/docs/evidence/{name}"
     report = open(p, encoding="utf-8").read() if os.path.isfile(p) else ""
@@ -460,12 +462,15 @@ def launcher():
     fk = tempfile.mkdtemp(prefix="verify-fake-", dir=TMP)
     open(f"{fk}/claude", "w").write(FAKE)
     os.chmod(f"{fk}/claude", 0o755)
-    env = dict(window_env(), FAKE_DIR=fk, PATH=f"{fk}:{os.environ['PATH']}")
+    cache = tempfile.mkdtemp(prefix="verify-gate-cache-", dir=TMP)  # один гейт на HEAD (решение 401): свой кэш, не общий /tmp/two-tier-v3
+    env = dict(window_env(), FAKE_DIR=fk, PATH=f"{fk}:{os.environ['PATH']}", VERIFY_GATE_CACHE=cache)
     full, point = f"{d}/docs/evidence/verify-{sha}.txt", f"{d}/docs/evidence/verify-{sha}-F1.txt"
+    outs = []
 
     def go(feats, *argv):
         open(f"{fk}/report.txt", "w").write(f"VERDICT: PASS\nFEATURES: {feats}\n")
         r = subprocess.run([f"{REPO}/bin/verify-phase", *argv], cwd=d, env=env, capture_output=True, text=True, timeout=120)
+        outs.append(r.stdout + r.stderr)
         o = (r.stdout + r.stderr).strip().splitlines()
         prompt = json.load(open(f"{fk}/argv.json"))[1] if os.path.isfile(f"{fk}/argv.json") else ""
         os.path.isfile(f"{fk}/argv.json") and os.remove(f"{fk}/argv.json")
@@ -482,14 +487,28 @@ def launcher():
     m_ok = rcm == 1 and "вердикта нет" in lm and not os.path.isfile(point)
     rcf, lf, _ = go("F1")
     f_ok = rcf == 1 and "вердикта нет" in lf
-    ok = rc9 == 2 and "F9" in l9 and rcx == 2 and a_ok and p_ok and m_ok and f_ok
+    # один гейт на HEAD: первый вызов гоняет гейт, следующие на том же HEAD берут его лог; новый HEAD и лог старше 12 ч — гейт снова
+    gline = lambda o: next((l for l in o.splitlines() if l.startswith("verify-phase: гейт bin/gate-1")), "нет строки гейта")
+    first, again = gline(outs[2]), gline(outs[3])
+    subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-q", "--allow-empty", "-m", "новый HEAD"], cwd=d, env=GIT_ENV, check=True)
+    go("F1", "F1")
+    moved = gline(outs[-1])
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=d, capture_output=True, text=True).stdout.strip()
+    old = time.time() - 13 * 3600
+    os.utime(f"{cache}/verify-gate-{head}/rc", (old, old))
+    go("F1", "F1")
+    stale = gline(outs[-1])
+    same = "того же HEAD" in again and "rc 0" in again and "того же HEAD" not in first and "rc 0" in first and "того же HEAD" not in moved and "того же HEAD" not in stale
+    ok = rc9 == 2 and "F9" in l9 and rcx == 2 and a_ok and p_ok and m_ok and f_ok and same
     wa = "without args" if "without args" in pa else pa[:80]
     w1 = re.search(r"\{[^}]*\} \(an object value", p1)
     prior_side = launcher_prior(d, go)
     return prior_side, (f"лаунчер с заглушкой claude: F9 → rc {rc9} «{l9}»; F1x → rc {rcx} «{lx}»; без списка → rc {rca}, verify-<sha>.txt — "
             f"{'есть' if a_ok else 'нет'}, «{wa}»; F1 → rc {rc1}, verify-<sha>-F1.txt — {'есть' if p_ok else 'нет'}, "
             f"«{w1.group(0) if w1 else p1[:80]}», полный файл на месте — {'да' if kept else 'нет'}; "
-            f"F1 при FEATURES: F1, F2 → rc {rcm} «{lm}», файла — {'нет' if m_ok else 'есть'}; без списка при FEATURES: F1 → rc {rcf} «{lf}»"), ok
+            f"F1 при FEATURES: F1, F2 → rc {rcm} «{lm}», файла — {'нет' if m_ok else 'есть'}; без списка при FEATURES: F1 → rc {rcf} «{lf}»; "
+            f"один гейт на HEAD: первый вызов — «{first[22:70]}», второй — {'лог того же HEAD' if 'того же HEAD' in again else 'гейт снова'}, "
+            f"новый HEAD — {'лог того же HEAD' if 'того же HEAD' in moved else 'гейт снова'}, лог старше 12 ч — {'лог того же HEAD' if 'того же HEAD' in stale else 'гейт снова'}"), ok
 
 
 def judge(kind, d, rc, text, report, name):
@@ -955,7 +974,8 @@ def f74():
     env80 = dict(window_env(), FAKE_DIR=fk, PATH=f"{fk}:{os.environ['PATH']}")
 
     def clone_gate(cmd):  # лаунчер с заглушкой claude: (код выхода, строки «evidence geändert», строки за строкой гейта)
-        r = subprocess.run([f"{REPO}/bin/verify-phase", "F1"], cwd=k80, env=dict(env80, K80_GATE=cmd), capture_output=True, text=True, timeout=120)
+        own = tempfile.mkdtemp(prefix="verify-gate-cache-k80-", dir=TMP)  # гейт меняется окружением на одном HEAD: кэш гейта HEAD — свой на вызов
+        r = subprocess.run([f"{REPO}/bin/verify-phase", "F1"], cwd=k80, env=dict(env80, K80_GATE=cmd, VERIFY_GATE_CACHE=own), capture_output=True, text=True, timeout=120)
         o = (r.stdout + r.stderr).splitlines()
         at = next((i for i, l in enumerate(o) if "гейт bin/gate-1 — rc" in l), len(o))
         return r.returncode, [l for l in o if "geändert" in l], o[at + 1:]
