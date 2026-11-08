@@ -1,0 +1,3 @@
+#!/bin/sh
+bin/check-deploy && echo "F1 DEPLOY_OK" || exit 1
+echo GATE_OK

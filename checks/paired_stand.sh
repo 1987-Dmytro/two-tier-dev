@@ -1,0 +1,1 @@
+../kit/checks/paired_stand.sh

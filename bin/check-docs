@@ -18,11 +18,20 @@
            в один круг, их ссылки и пути живые; красное — копия README с мёртвой ссылкой;
     F6.3 — bin/check-budget --templates → BUDGET_OK; шаблоны и настройки кита — формат пунктов и таблица судей, без ушедших
            инструментов, строка запуска с предохранителем; красное — PROCESS с Toolgate «да»;
-    F6.4 — строки hooks: и calls: мода limits в записи v3.3, у каждого мода mods/ — свои строки; с claude в PATH —
+    F6.4 — строки hooks: и calls: мода window-guard (вобрал limits, F8.3) в записях новее v3.3, у каждого мода mods/ — свои строки; с claude в PATH —
            `claude plugin validate` и `claude plugin test` мода зелёные и строки совпадают с CHANGELOG (без claude, в CI, — только
-           CHANGELOG, это сказано в строке); красное — запись v3.3 без строк мода.
+           CHANGELOG, это сказано в строке); красное — записи без строк мода;
+  · v3.4 (SPEC-v3.4 F8):
+    F8.1 — запись v3.4 над v3.3: строка таблицы на поле харнеса (https-источник, до и после), строка на снятое, «вошло → вышло» (SPEC §3),
+           блок модов и переехавшие строки Unreleased; README, LAUNCH, dev-system называют механизмы фазы, их ссылки живые: docs=4;
+           красное — на копии в памяти без поля, без снятого, без ячейки «вышло», без слова документа, с мёртвой ссылкой;
+           хук .mjs настроек кита вне списка v3.2 — строкой таблицы с источником в записях новее v3.3 (красное — хук без строки, запись без строки хука, строка без источника);
+           шаг копии профиля вкладки — в docs/LAUNCH.md и bin/two-tier-init;
+    F8.2 — bin/check-budget --templates зелёный, строки модов и профиль кита; шаблон SPEC §2–§5 и (ae)–(ah) против клона telefon
+           (TELEFON_CLONE, нет его — сказано в строке): строка telefon есть в ките или это названная дельта; красное — копия кита во
+           /tmp/two-tier-v3 без каждой фразы договора, шаблон без строки доводки против telefon, профиль с выключенным модом.
 """
-import json, os, re, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys, tempfile
 
 DOCS = ["README.md", "docs/README.md", "docs/dev-system.ru.md", "docs/LAUNCH.md", "CHANGELOG.md"]
 REPO_PATH = re.compile(r"^(bin|kit|intent|claude|docs/(archive|drafts|evidence))/[\w./-]*$")
@@ -105,10 +114,8 @@ say(all(f in lm for f in flags), "LAUNCH.md", f"флагов и команд с�
 # v3.2: поля фазы — каждое строкой таблицы записи v3.2 с источником и столбцами до/после
 v32 = entry(CL, "v3.2", "v3.1")
 rows32 = [r for r in v32.splitlines() if r.startswith("| ") and r.count("|") >= 6 and re.search(r"code\.claude\.com/docs/en/|github\.com/", r)]
-ks = json.loads(read("kit/.claude/settings.json"))
-hooks32 = {os.path.basename(h["args"][0] if h.get("command") in ("node", "python3") and h.get("args") else h.get("command", ""))
-           for g in ks.get("hooks", {}).values() for e in g for h in e.get("hooks", [])}
-need32 = sorted({h for h in hooks32 if h.endswith(".mjs")} | {"toolgate.yaml", "spec-gate.json", "launch.settings.json", "--setting-sources", "--add-dir",
+# хуки записи v3.2 поимённо (kit b5b81cd): хук новее — в своей записи
+need32 = sorted({"abide.mjs", "spec-gate.mjs", "toolgate-deny.mjs"} | {"toolgate.yaml", "spec-gate.json", "launch.settings.json", "--setting-sources", "--add-dir",
                                                              "--no-chrome", "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "docs/PROMPT.txt", "bin/verify-phase", "verify-phase.js"})
 miss = [f for f in need32 if not any(f in r for r in rows32)]
 say(v32 and not miss, "CHANGELOG v3.2", f"полей v3.2 — {len(need32)}, строк таблицы с источником и до/после — {len(rows32)}; без строки — {', '.join(miss) or 'нет'}")
@@ -222,34 +229,207 @@ item("F6.3", b_ok and not g_ret,
 
 
 def f64(e):
-    """Строки hooks: и calls: мода limits в записи v3.3 (без `…` и « - »)."""
-    m = re.search(MOD_LINES.format(m="limits"), e + "\n")
+    """Строки hooks: и calls: мода window-guard в записях новее v3.3 (без `…` и « - »)."""
+    m = re.search(MOD_LINES.format(m="window-guard"), e + "\n")
     return [l.strip().lstrip("- ").strip("`") for l in m.group(1).splitlines()] if m else []
 
 
-cl64 = f64(v33)
+v34 = CL.split("\n## v3.3", 1)[0]  # всё новее v3.3: Unreleased и запись v3.4, где бы ни стояли строки модов; запись v3.3 с limits — история
+cl64 = f64(v34)
 mods = sorted(d for d in os.listdir("mods") if os.path.isfile(f"mods/{d}/.claude-plugin/plugin.json"))
-no_lines = [m for m in mods if not any(re.search(MOD_LINES.format(m=re.escape(m)), e + "\n") for e in (v32, v33))]
-green, ok = f"запись v3.3: строк hooks: и calls: мода limits — {len(cl64)}; моды mods/ без своих строк — {', '.join(no_lines) or 'нет'}", len(cl64) == 2 and not no_lines
+no_lines = [m for m in mods if not any(re.search(MOD_LINES.format(m=re.escape(m)), e + "\n") for e in (v32, v33, v34))]
+market = sorted(p["source"].removeprefix("./") for p in json.loads(read("mods/.claude-plugin/marketplace.json"))["plugins"])  # F8.3: мод в архиве из marketplace не ставится
+green, ok = (f"записи новее v3.3: строк hooks: и calls: мода window-guard — {len(cl64)}; моды mods/ без своих строк — {', '.join(no_lines) or 'нет'}; "
+             f"marketplace {'= mods/' if market == mods else 'не как mods/: ' + ', '.join(market)}"), len(cl64) == 2 and not no_lines and market == mods
 if shutil.which("claude"):
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}  # подписка; модели не зовутся
-    st = lambda: subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "mods/limits"], capture_output=True, text=True).stdout
+    st = lambda: subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "mods/window-guard"], capture_output=True, text=True).stdout
     before = st()
-    v = subprocess.run(["claude", "plugin", "validate", "mods/limits"], capture_output=True, text=True, timeout=120, env=env)
-    t = subprocess.run(["claude", "plugin", "test", "mods/limits"], capture_output=True, text=True, timeout=300, env=env)
+    v = subprocess.run(["claude", "plugin", "validate", "mods/window-guard"], capture_output=True, text=True, timeout=120, env=env)
+    t = subprocess.run(["claude", "plugin", "test", "mods/window-guard"], capture_output=True, text=True, timeout=300, env=env)
     vo, to = v.stdout + v.stderr, t.stdout + t.stderr
     vl = [re.sub(r"^[^.]*?(\./)", r"\1", l).strip() for l in vo.splitlines() if re.search(r"\./\S+ (?:hooks|calls): ", l)]
     passed = (re.search(r"Validation passed[^\n]*", vo) or [None])[0]
     tp, tf = (int(m.group(1)) if m else None for m in (re.search(r"(\d+) pass\b", to), re.search(r"(\d+) fail\b", to)))
     left = st() != before
-    ok = ok and v.returncode == 0 and passed and sorted(vl) == sorted(cl64) and f"«{passed}»" in v33 and t.returncode == 0 and tp and tf == 0 and not left
-    green += (f"; claude plugin validate mods/limits: rc {v.returncode}, «{passed or 'нет Validation passed'}», строк hooks:/calls: {len(vl)}, "
-              f"{'= CHANGELOG' if sorted(vl) == sorted(cl64) else 'не как в CHANGELOG: ' + '; '.join(vl)}; claude plugin test mods/limits: rc {t.returncode}, "
+    ok = ok and v.returncode == 0 and passed and sorted(vl) == sorted(cl64) and re.search(rf"`window-guard`[^\n]*«{re.escape(passed)}»", v34) and t.returncode == 0 and tp and tf == 0 and not left
+    green += (f"; claude plugin validate mods/window-guard: rc {v.returncode}, «{passed or 'нет Validation passed'}», строк hooks:/calls: {len(vl)}, "
+              f"{'= CHANGELOG' if sorted(vl) == sorted(cl64) else 'не как в CHANGELOG: ' + '; '.join(vl)}; claude plugin test mods/window-guard: rc {t.returncode}, "
               f"{tp} pass, {tf} fail; файлов после — {'остались' if left else 'нет'}")
 else:
     green += "; claude нет в PATH (CI) — проверены только строки CHANGELOG"
-r64 = f64(re.sub(r"(`limits`[^\n]*\n)(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n)+", r"\1", v33 + "\n"))
-item("F6.4", ok, green, not r64, f"запись v3.3 без строк мода — строк hooks: и calls: limits {len(r64)}")
+r64 = f64(re.sub(r"(`window-guard`[^\n]*\n)(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n)+", r"\1", v34 + "\n"))
+item("F6.4", ok, green, not r64, f"записи без строк мода — строк hooks: и calls: window-guard {len(r64)}")
+
+# ── v3.4 (SPEC-v3.4 F8) ──────────────────────────────────────────────────────────────────────────────────────────────────────
+FIELDS34 = ["background_tasks", "platform_cap", "permissions.blockWritesOutsideWorkingDirectories", "effortLevel", "ultracode",
+            "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_SUBAGENT_EFFORT", "PermissionDenied", "{features, prior, risk}", "unifiedWindows", "enabledPlugins", "post-commit"]
+RETIRED34 = ["K30", "P1-4", "ultrareview", "blocks 12", "caps.hours", "window_five_hour_pct", "window_repair_pct", "mods/limits"]
+IN34 = ["background_tasks", "PermissionDenied", "blockWritesOutsideWorkingDirectories", "effortLevel", "ultracode", "CLAUDE_CODE_SUBAGENT_MODEL",
+        "CLAUDE_CODE_SUBAGENT_EFFORT", "planka-source", "scope-growth", "planken-inline", "frozen-paths", "risk-tier", "window-guard", "phase-start"]
+MOVED34 = ["`window-guard` 0.1.0", "`phase-start` 0.1.0", "The 5-hour window is gone", "Graphify is in the kit", "`bin/check-harness commit`"]
+PHASE34 = ["background_tasks", "frozen.json", "bin/check-fenster", "checks/paired_stand.sh", "risk:", "docs/evals", "--desktop", "bin/check-versions",
+           "window-guard", "phase-start", "bin/gate-v3.4", "planka-source", "blockWritesOutsideWorkingDirectories"]
+NEED81 = {"README.md": PHASE34 + ["Code tab", "canary", "prior verdict", "Graphify"],
+          "docs/LAUNCH.md": PHASE34 + ["Вкладка Code", "Канарейка", "Прошлый вердикт", "graphify", "/tmp/two-tier-v3", "Bash поле не держит"],
+          "docs/dev-system.ru.md": PHASE34 + ["вкладк", "канарейк", "прошлый вердикт", "Graphify", "/tmp/two-tier-v3", "Bash поле не держит"]}
+
+
+def f81_log(cl):
+    """Что не так с записью v3.4 текста CHANGELOG cl: список строк с именем; пусто — запись полна."""
+    if not re.search(r"^## v3\.4 — \d{4}-\d{2}-\d{2} — ", cl, re.M) or cl.find("\n## v3.4") > cl.find("\n## v3.3"):
+        return ["нет записи «## v3.4 — <дата> — …» над v3.3"]
+    e, un = entry(cl, "v3.4", "v3.3"), cl.split("\n## v3.4", 1)[0]
+    rows5 = [[c.strip() for c in r.strip().strip("|").split("|")] for r in e.splitlines() if r.startswith("| ") and r.count("|") >= 6]
+    rows2 = [[c.strip() for c in r.strip().strip("|").split("|")] for r in e.splitlines() if r.startswith("|") and r.count("|") == 3]
+    good = lambda c: "https://" in c[2] and all(x not in ("", "—", "-") for x in c[3:5])
+    bad = [f"поле {f}" for f in FIELDS34 if not any(f in c[0] and good(c) for c in rows5)]
+    opens = lambda c: re.search(r"https://[^)\s]*#", c[2]) or "измерено" in c[2] or "Source sweep" in c[2]  # источник открывается: якорь, сверка или своя проба (чтение F8.1)
+    bad += [f"источник без якоря {f}" for f in FIELDS34 if any(f in c[0] and good(c) and not opens(c) for c in rows5)]
+    bad += [] if any("CLAUDE_CODE_SUBAGENT_EFFORT" in c[0] and "changelog only" in c[2] for c in rows5) else ["CLAUDE_CODE_SUBAGENT_EFFORT без «changelog only»"]
+    bad += [f"снятое {r}" for r in RETIRED34 if not any(l.startswith("  - ") and f"`{r}`" in l and " — " in l for l in e.splitlines())]
+    bad += [f"вошло без вышло {i}" for i in IN34 if not any(i in c[0] and c[1] not in ("", "—", "-") for c in rows2)]
+    bad += [f"не в записи {m}" for m in MOVED34 if m not in e or m in un]
+    bad += [f"мод {m} без строк validate" for m in ("window-guard", "phase-start") if not re.search(MOD_LINES.format(m=re.escape(m)), e + "\n")]
+    bad += [] if "WINDOW_WARN seven_day=fehlt" in entry(cl, "v3.3", "v3.2") else ["строка долга v3.3 о пропавшем поле без случая ключа"]
+    return bad
+
+
+def f81_doc(doc, text):
+    """Слов фазы нет и мёртвые ссылки документа: список; пусто — документ годен."""
+    return [f"{doc}: {w}" for w in NEED81[doc] if w not in text] + [f"{doc}: мёртвая {d}" for d in links_paths(doc, text)[2]]
+
+
+SPEC_NOW = (re.search(r"SPEC-[^,\s/]+\.md", read("docs/PROMPT.txt")) or [""])[0]
+
+
+def f81_index(text):
+    """docs/README.md: строка «the current phase» называет SPEC стартового запроса (решение 398); пусто — годен."""
+    return [] if SPEC_NOW and any("the current phase" in l and f"`{SPEC_NOW}`" in l for l in text.splitlines()) else [f"docs/README.md: текущая фаза не {SPEC_NOW or 'SPEC запроса'}"]
+
+
+g34 = f81_log(CL)
+g_index = f81_index(read("docs/README.md"))
+r_index = f81_index(read("docs/README.md").replace(f"`{SPEC_NOW}`", "`SPEC-0.md`") + f"\n- `{SPEC_NOW}` на другой строке\n")
+g_docs = {d: f81_doc(d, read(d)) for d in NEED81}
+n_docs = (not g34) + sum(not v for v in g_docs.values())
+
+
+def drop(text, pred):
+    return "\n".join(l for l in text.split("\n") if not pred(l))
+
+
+r_field = f81_log(drop(CL, lambda l: l.startswith("| ") and "PermissionDenied" in l.split("|")[1]))
+r_anchor = f81_log(re.sub(r"^\| workflow `args`.*$", lambda m: re.sub(r"#[\w-]+", "", m[0]), CL, flags=re.M))
+r_ret = f81_log(drop(CL, lambda l: l.startswith("  - `P1-4`")))
+r_out = f81_log(re.sub(r"^(\| lint `risk-tier`[^|]*\|)[^|]*\|$", r"\1 — |", CL, flags=re.M))
+r_mod = f81_log(CL.replace("- `phase-start` 0.1.0 (`mods/phase-start`), «Validation passed»:", "- phase-start, «Validation passed»:"))
+r_word = f81_doc("docs/LAUNCH.md", read("docs/LAUNCH.md").replace("blockWritesOutsideWorkingDirectories", "поле записи"))
+r_dead = f81_doc("README.md", rd + "\n[пропавший](docs/no-such-file.md)\n")
+item("F8.1", n_docs == 4 and not g34 and not g_index,
+     f"docs={n_docs} · CHANGELOG: полей с источником и до/после {len(FIELDS34)}, снятых строкой {len(RETIRED34)}, вошло → вышло {len(IN34)}, строки Unreleased и моды в записи; "
+     f"README.md, docs/LAUNCH.md, docs/dev-system.ru.md: слов фазы {sum(map(len, NEED81.values()))}; docs/README.md называет текущей SPEC запроса; расхождения — {'; '.join(g34 + g_index + [x for v in g_docs.values() for x in v]) or 'нет'}",
+     len(r_index) == 1 and "поле PermissionDenied" in r_field and "источник без якоря {features, prior, risk}" in r_anchor and "снятое P1-4" in r_ret and "вошло без вышло risk-tier" in r_out and "не в записи `phase-start` 0.1.0" in r_mod
+     and r_word == ["docs/LAUNCH.md: blockWritesOutsideWorkingDirectories"] and r_dead == ["README.md: мёртвая docs/no-such-file.md"],
+     f"без строки поля — {'; '.join(r_field)}; источник без якоря — {'; '.join(r_anchor)}; без строки снятого — {'; '.join(r_ret)}; без ячейки «вышло» — {'; '.join(r_out)}; без блока мода — {'; '.join(r_mod)}; "
+     f"LAUNCH без поля — {'; '.join(r_word)}; README с мёртвой ссылкой — {'; '.join(r_dead)}; указатель со старой фазой — {'; '.join(r_index)}")
+
+
+
+def new_hooks(settings, log):
+    """(хуки .mjs настроек вне списка v3.2, те из них без строки таблицы текста log: имя в первой ячейке, https-источник)."""
+    rows = [[c.strip() for c in r.strip().strip("|").split("|")] for r in log.splitlines() if r.startswith("| ") and r.count("|") >= 6]
+    new = sorted(set(re.findall(r"[\w-]+\.mjs", json.dumps(settings.get("hooks", {})))) - set(need32))
+    return new, [h for h in new if not any(h in c[0] and "https://" in c[2] for c in rows)]
+
+
+s34 = json.loads(read("kit/.claude/settings.json"))
+new34, miss34 = new_hooks(s34, v34)
+r_hook = new_hooks({"hooks": {**s34["hooks"], "Probe": [{"hooks": [{"command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/undocumented-new.mjs"]}]}]}}, v34)[1]
+r_row = new_hooks(s34, drop(v34, lambda l: l.startswith("| ") and "permission-denied.mjs" in l))[1]
+r_src = new_hooks(s34, re.sub(r"^(\| [^|\n]*permission-denied\.mjs[^|\n]*\|[^|\n]*\|)[^|\n]*\|", r"\1 — |", v34, flags=re.M))[1]
+say(not miss34 and r_hook == ["undocumented-new.mjs"] and r_row == r_src == ["permission-denied.mjs"], "CHANGELOG новее v3.3",
+    f"хуков .mjs кита вне списка v3.2 — {', '.join(new34) or 'нет'}; без строки с источником — {', '.join(miss34) or 'нет'} · красный образец: кит с новым хуком — без строки: {', '.join(r_hook) or 'нет'}; "
+    f"запись без строки хука — без строки: {', '.join(r_row) or 'нет'}; строка без источника — без строки: {', '.join(r_src) or 'нет'}")
+COPY_STEP = "cp .claude/launch.settings.json .claude/settings.local.json"
+no_step = [d for d in ("docs/LAUNCH.md", "bin/two-tier-init") if COPY_STEP not in read(d)]
+ci_target = re.search(r"^ci:\n((?:\t.*\n)+)", read("Makefile"), re.M)
+say(bool(ci_target) and "bin/check-gate" in ci_target[1], "Makefile ci", "цель ci идёт через bin/check-gate")
+say(not no_step, "профиль вкладки", f"шаг копии «{COPY_STEP}»: нет в — {', '.join(no_step) or 'ничего'}")
+
+TMP = "/tmp/two-tier-v3"
+TELEFON = os.environ.get("TELEFON_CLONE", f"{TMP}/telefon-src")
+SPEC_T, PROC_T = "docs/SPEC.template.md", "docs/PROCESS.template.md"
+DELTAS82 = {"Фича — вертикальный срез": "строка пункта: bin/evidence, spec:", "- **F<i> <имя>**": "метка risk:", "Логика подсчёта": "метка risk:",
+            "- **F1 <имя>**": "метка risk:", "Планка без файла распределения": "planka-source, строка вендора, planken, scope-growth, flaky",
+            "- Фаза доводки": "судья кита — bin/check-frozen-diff", "Стоп — `STOP: <id>`": "вопрос и resume — в трёх строках"}
+
+
+def f82_spec(kit_text, tel_text):
+    """SPEC §2–§5: (строки telefon без пары в ките, названные дельты, строк telefon). Строка дельты годна, только если в ките есть строка с тем же началом."""
+    sec = lambda text, n: next(iter(re.findall(rf"^## {n}\b.*?(?=^## |\Z)", text, re.M | re.S)), "")
+    miss, seen, n = [], set(), 0
+    for s in (2, 3, 4, 5):
+        kit_lines = set(sec(kit_text, s).splitlines())
+        for line in filter(str.strip, sec(tel_text, s).splitlines()):
+            n += 1
+            key = next((k for k in DELTAS82 if line.startswith(k)), None)
+            if line in kit_lines:
+                continue
+            if key and any(x.startswith(key) for x in kit_lines):
+                seen.add(key)
+            else:
+                miss.append(line[:60])
+    return miss, seen, n
+
+
+kit_spec, kit_proc = read(f"kit/{SPEC_T}"), read(f"kit/{PROC_T}")
+if os.path.isfile(f"{TELEFON}/{SPEC_T}") and os.path.isfile(f"{TELEFON}/docs/PROCESS.md"):
+    t_miss, t_seen, t_n = f82_spec(kit_spec, read(f"{TELEFON}/{SPEC_T}"))
+    letters = sorted(set(re.findall(r"\*\*\((a[e-h])\) ", read(f"{TELEFON}/docs/PROCESS.md"))))
+    t_letters = [x for x in ("ae", "af", "ag", "ah") if x not in letters or f"**({x})" not in kit_proc]
+    tel = (f"шаблон SPEC §2–§5 против telefon: строк {t_n}, без пары в ките {len(t_miss)}{': ' + '; '.join(t_miss) if t_miss else ''}, названных дельт {len(t_seen)} "
+           f"({'; '.join(sorted({DELTAS82[k] for k in t_seen}))}); только в ките — строка звена вендора; (ae)–(ah) в PROCESS telefon и в шаблоне кита — {4 - len(t_letters)}/4")
+    r_tel = f82_spec("\n".join(l for l in kit_spec.splitlines() if not l.startswith("- Фаза доводки")), read(f"{TELEFON}/{SPEC_T}"))[0]
+    red_tel = f"шаблон без строки доводки против telefon — без пары: {'; '.join(r_tel)}"
+    tel_ok, red_tel_ok = not t_miss and not t_letters, any(x.startswith("- Фаза доводки") for x in r_tel)
+else:
+    tel, red_tel, tel_ok, red_tel_ok = "клона telefon нет: сверка только фразами договора", "сверки с клоном нет", True, True
+lk = json.loads(read("kit/.claude/launch.settings.json")).get("enabledPlugins", {})
+mods_on = lambda on: [m for m in ("window-guard@two-tier-mods", "phase-start@two-tier-mods") if on.get(m) is not True]
+limits_row = bool(re.search(r"^\| limits \|", kit_proc, re.M))
+os.makedirs(TMP, exist_ok=True)
+c82 = tempfile.mkdtemp(prefix="check-docs-f82-", dir=TMP)
+for top in ("docs", "bin", ".claude", ".abide"):
+    shutil.copytree(f"kit/{top}", f"{c82}/{top}", symlinks=True, ignore=shutil.ignore_patterns("__pycache__"))
+for f in ("CLAUDE.md", "REVIEW.md", "budgets.json"):
+    shutil.copy2(f"kit/{f}", f"{c82}/{f}")
+
+
+def tpl():
+    r = subprocess.run(["bin/check-budget", "--templates"], cwd=c82, capture_output=True, text=True, timeout=120)
+    return r.returncode, r.stdout
+
+
+control = tpl()
+PHRASES82 = [(SPEC_T, "Фаза доводки"), (SPEC_T, "`bin/check-frozen-diff`"), (PROC_T, "**(ae)"), (PROC_T, "**(af)"), (PROC_T, "**(ag)"), (PROC_T, "**(ah)"),
+             (PROC_T, "| `window-guard@two-tier-mods` | да |"), (PROC_T, "| `phase-start@two-tier-mods` | да |"), (PROC_T, "`.claude/settings.local.json`"), (PROC_T, "`/phase`")]
+red82 = []
+for rel, ph in PHRASES82:
+    text = read(f"{c82}/{rel}")
+    with open(f"{c82}/{rel}", "w", encoding="utf-8") as f:
+        f.write(text.replace(ph, ""))
+    rc, o = tpl()
+    red82.append(rc == 1 and any(l.startswith("FAIL contract") and ph in l for l in o.splitlines()))
+    with open(f"{c82}/{rel}", "w", encoding="utf-8") as f:
+        f.write(text)
+shutil.rmtree(c82, ignore_errors=True)
+t_ok = b_ok and control[0] == 0 and tel_ok and not mods_on(lk) and not limits_row
+item("F8.2", t_ok,
+     f"templates={'OK' if t_ok else 'нет'} · bin/check-budget --templates: rc {r.returncode}, копия кита без правки rc {control[0]}; {tel}; "
+     f"строки Environment: limits {'осталась' if limits_row else 'снята'}, window-guard и phase-start «да», в launch settings кита не включены — {', '.join(mods_on(lk)) or 'нет'}",
+     all(red82) and red_tel_ok and mods_on({}) == ["window-guard@two-tier-mods", "phase-start@two-tier-mods"],
+     f"копия кита без фразы договора — красных с именем фразы {sum(red82)}/{len(PHRASES82)}; {red_tel}; профиль без модов — не включены {len(mods_on({}))}")
 
 print("DOCS_OK" if all(out) else "DOCS_FAIL")
 sys.exit(0 if all(out) else 1)

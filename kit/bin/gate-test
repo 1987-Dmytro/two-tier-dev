@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""gate-test <команда теста…> — тест в гейте фазы (SPEC-v3.4 F2.4). Зелёный — `TEST_OK <команда>`, rc 0. Красный (и убитый сигналом) без метки — хвост вывода и
+`TEST_FAIL <команда> rc=<k>`, rc 1: блок. Красный с меткой `flaky` — `FLAKY <команда> rc=<k> · <решение>`, rc 0: гейт зелёный, строка видна.
+Команда, что не запустилась (rc 126, 127, отказ запуска), — не FLAKY и с меткой: тест не шёл, блок.
+Метка — ключ `flaky` в checks/planken.json корня репо (файл тимлида): токены команды целиком (t.sh — это `bash t.sh`, не tests/test.sh) → решение, почему тест не судья
+(настенное время, sleep); исполнитель её не ставит. Пустой ключ, решение пустое или не строкой — не метка. Нет файла, не JSON — меток нет.
+"""
+import json, os, subprocess, sys
+
+
+def labels():
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip() or "."
+    try:
+        with open(os.path.join(top, "checks/planken.json"), encoding="utf-8") as f:
+            flaky = json.load(f).get("flaky")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    if not isinstance(flaky, dict):
+        return {}
+    return {k: v for k, v in flaky.items() if k.strip() and isinstance(v, str) and v.strip()}
+
+
+def main(argv):
+    if not argv:
+        print(__doc__)
+        return 2
+    cmd = " ".join(argv)
+    try:
+        r = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace")
+        rc, text = r.returncode, r.stdout + r.stderr
+    except OSError as e:
+        rc, text = 127, e.__class__.__name__
+    if rc == 0:
+        print(f"TEST_OK {cmd}")
+        return 0
+    why = None if rc in (126, 127) else next((v for k, v in labels().items() if f" {k} " in f" {cmd} "), None)
+    if why:
+        print(f"FLAKY {cmd} rc={rc} · {why}")
+        return 0
+    print("\n".join(text.splitlines()[-5:]))
+    print(f"TEST_FAIL {cmd} rc={rc}")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

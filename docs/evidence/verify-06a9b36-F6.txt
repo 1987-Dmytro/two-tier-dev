@@ -1,0 +1,16 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 2
+FEATURES: F6
+/verify-phase · docs/SPEC-v3.4.md · HEAD 06a9b36 · проверяющие claude-sonnet-5-5 (фич 1 из 9, опровергателей 0) · судья claude-opus-5-5
+
+По F6 свежий прогон зелёный: строка 35 gate.log — HARNESS_OK из bin/check-harness --desktop, файл docs/evidence/F6-check-harness-result.txt кончается на HARNESS_OK, а пункты F6.1–F6.4 проверяющий подтвердил своими командами и сырым выводом (на F6.4 граница класса 60/61/62 → имя/имя/other). Блокирующая строка прошлого вердикта (выжившая мутация {0,60} → {0,59} в ruleOf) закрыта: в коде стоит граница {0,60}, сторона «класс ровно 61 знак — имя правила» есть в evidence, новая мутация счётчика покраснела, кандидатов в блокирующие нет.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F6.4: живого отказа auto mode не наблюдалось — haiku в auto отказался от команды эксфильтрации сам, хук PermissionDenied реальным продуктом не вызван; пункт подтверждён входами формы документации (вне SPEC, не блокирует)
+- F6.4/F6.1 края: ruleOf принимает хвостовой пробел в классе ('[Data Exfiltration ]' → отдельное правило 'Data Exfiltration '); graph_age сравнивает отметку с HEAD точной строкой — короткая или заглавная отметка даёт ложный WARN; post-commit пишет полный sha строчными, путь заказчика не задет (вкус)
+
+## По фичам
+- F6: прошлый вердикт verify-1fbf0c1-F6-F7.txt; чек `gate.log line 35 (F6 HARNESS_OK, from bin/check-harness --desktop in the fresh clone); docs/evidence/F6-check-harness-result.txt ends with HARNESS_OK; own run: bin/check-harness --self-test` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация kit/.claude/hooks/permission-denied.mjs: counter n filter `l?.session === session && l?.rule === rule` -> `l?.session === session` (n counted per session, not per rule; observed Write/no-verdict/2, WebFetch/unavailable/3) → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0

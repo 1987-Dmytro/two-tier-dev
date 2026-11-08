@@ -1,0 +1,9 @@
+{
+  "name": "spec-board",
+  "version": "0.1.0",
+  "description": "/board: the phase board beside the chat — SPEC items against the probe lines of docs/evidence, feature markers, the last spec-gate decision, the verdict and the open STOP; the same line on the status bar. Files only: no model, no network.",
+  "author": {
+    "name": "two-tier-dev"
+  },
+  "types": "./types/index.d.ts"
+}

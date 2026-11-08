@@ -9,8 +9,12 @@ Code rules — closed on refusal: exit 1 with the rule and the file, never the m
                        line under docs/evidence/ or in the message;
   team-lead-files      a staged path of the owner list (budgets.json at HEAD: defaults.owner and project.owner_add) in a commit whose
                        message does not start with «Тимлид:»;
-  no-delete            a staged deletion — a file is retired with `git mv` into docs/archive/.
-  A merge commit is judged by the first two only: its other side carries commits judged where they were made.
+  no-delete            a staged deletion — a file is retired with `git mv` into docs/archive/;
+  frozen-paths         a staged path of a closed module (frozen.json) that the current SPEC does not open to the item ids of the
+                       message, or a module diff over its diff_cap; «Тимлид:» does not pass code paths (SPEC-v3.4 F3.1, F3.2; judge —
+                       bin/check-frozen-diff, the same as in CI).
+  A merge commit: no-delete, team-lead-files and frozen-paths judge only the paths the merge itself changes; a path that came as it is
+  from the other side was judged where it was made. A merge is not sent to abide.
 Model (F2.4) — `abide check --json` on the staged paths against the team lead's rubric .abide/rubric.json, at most 30 s: a rule at
 0.8 or above refuses once, with the rule and the file; the same staged diff once more passes as «rejected» (the executor has the
 last word); 0.5–0.8 passes with a note; an error, a timeout, no key or no abide — a skip, the commit passes.
@@ -119,7 +123,26 @@ def code_rules(msg, merging):
         hit = next((p for p in paths if is_tl(p, own)), None)
         if tl and hit:
             return "team-lead-files", hit
+    hit = frozen(msg)
+    if hit:
+        return "frozen-paths", f"{hit[0]} ({hit[1]})"
     return None
+
+
+def frozen(msg):
+    """(path, reason) of a staged path the lock refuses, or None; no frozen.json or its judge — no rule, an error of the judge — a note."""
+    if not os.path.isfile("bin/check-frozen-diff"):
+        return None
+    try:
+        import importlib.machinery, importlib.util
+        sys.dont_write_bytecode = True
+        loader = importlib.machinery.SourceFileLoader("frozen_judge", "bin/check-frozen-diff")
+        judge = importlib.util.module_from_spec(importlib.util.spec_from_loader("frozen_judge", loader))
+        loader.exec_module(judge)
+        return judge.staged_verdict(msg)
+    except Exception as e:
+        print(f"frozen-paths: judge error ({e.__class__.__name__}) — the rule is skipped", file=sys.stderr)
+        return None
 
 
 def abide(paths):

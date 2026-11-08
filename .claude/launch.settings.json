@@ -1,22 +1,33 @@
 {
+  "ultracode": true,
+  "effortLevel": "xhigh",
+  "subagentPromptCacheTtl": "1h",
   "worktree": {
     "baseRef": "head"
   },
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5",
+    "ENABLE_CLAUDEAI_MCP_SERVERS": "false"
+  },
   "enabledPlugins": {
-    "ponytail@ponytail": true,
-    "pr-review-toolkit@claude-plugins-official": true,
-    "pyright-lsp@claude-plugins-official": true,
+    "typesafe@typesafe-ai": true,
+    "jev-belay@jev-belay": true,
+    "handoff@two-tier-mods": true,
+    "window-guard@two-tier-mods": true,
+    "phase-start@two-tier-mods": true,
+    "spec-board@two-tier-mods": true,
+    "limits@two-tier-mods": false,
+    "ponytail@ponytail": false,
+    "pr-review-toolkit@claude-plugins-official": false,
+    "pyright-lsp@claude-plugins-official": false,
+    "jev-steer-or-queue@jev-steer-or-queue": false,
     "context7@claude-plugins-official": false,
     "commit-commands@claude-plugins-official": false,
     "security-guidance@claude-plugins-official": false,
     "frontend-design@claude-plugins-official": false,
     "code-review@claude-plugins-official": false,
     "serena@claude-plugins-official": false,
-    "typesafe@typesafe-ai": true,
-    "jev-belay@jev-belay": true,
-    "jev-steer-or-queue@jev-steer-or-queue": false,
     "compact-adviser@compact-adviser": false,
-    "handoff@two-tier-mods": true,
     "rust-analyzer-lsp@claude-plugins-official": false,
     "improve@improve": false,
     "drawio@365-skills": false
@@ -27,7 +38,7 @@
         "threshold": 0.75,
         "log": true,
         "shadow": true,
-        "check": "^bin/(check|gate)-"
+        "check": "^(bin/(check|gate)-|make )"
       }
     },
     "handoff@two-tier-mods": {
@@ -36,7 +47,8 @@
         "handoffDir": "handoffs",
         "autoClear": true,
         "minTurns": 2,
-        "language": "ru", "jev": "off"
+        "language": "ru",
+        "jev": "off"
       }
     }
   },
@@ -52,6 +64,8 @@
     "anthropic-skills:google-workspace": "off",
     "anthropic-skills:grilling": "off",
     "anthropic-skills:import-memory": "off",
+    "anthropic-skills:jev-browser": "off",
+    "anthropic-skills:jev-seo": "off",
     "anthropic-skills:morning": "off",
     "anthropic-skills:pdf": "off",
     "anthropic-skills:pptx": "off",
@@ -62,32 +76,51 @@
     "anthropic-skills:skill-creator": "off",
     "anthropic-skills:team-lead": "off",
     "anthropic-skills:team-lead-brief": "off",
-    "anthropic-skills:xlsx": "off"
+    "anthropic-skills:team-lead-spec": "off",
+    "anthropic-skills:xlsx": "off",
+    "graphify": "off",
+    "anthropic-skills:artifact-emulator": "off"
   },
   "permissions": {
     "deny": [
-      "Edit(./intent/**)",
-      "Edit(./docs/SPEC-*.md)",
-      "Edit(./docs/PROMPT.txt)",
-      "Edit(./docs/STATUS.md)",
-      "Edit(./docs/PROCESS.md)",
-      "Edit(./docs/reviews/**)",
-      "Edit(./docs/drafts/**)",
-      "Edit(./claude/**)",
-      "Edit(./.claude/launch.settings.json)",
-      "Edit(./docs/OFFICIAL-SOURCES.md)",
-      "Edit(./docs/archive/team-lead-*.md)",
-      "Edit(./.abide/rubric.json)"
+      "Edit(/intent/**)",
+      "Edit(/docs/SPEC-*.md)",
+      "Edit(/docs/PROMPT.txt)",
+      "Edit(/docs/STATUS.md)",
+      "Edit(/docs/PROCESS.md)",
+      "Edit(/docs/reviews/**)",
+      "Edit(/docs/drafts/**)",
+      "Edit(/claude/**)",
+      "Edit(/.claude/launch.settings.json)",
+      "Edit(/.claude/settings.local.json)",
+      "Edit(/docs/OFFICIAL-SOURCES.md)",
+      "Edit(/docs/archive/team-lead-*.md)",
+      "Edit(/.abide/rubric.json)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/budgets.json)",
+      "mcp__Claude_Browser__*",
+      "mcp__Control_Chrome__*",
+      "mcp__Desktop_Commander__*",
+      "mcp__desktop-commander__*",
+      "mcp__plugin_desktop-commander_desktop-commander__*",
+      "mcp__plugin_pdf-viewer_pdf__*",
+      "mcp__blockscout__*",
+      "mcp__claude-in-chrome__*",
+      "mcp__computer-use__*",
+      "mcp__graphify__*",
+      "mcp__jev-browser__*",
+      "mcp__jev__*",
+      "mcp__ref__*"
     ]
   },
   "autoMode": {
     "environment": [
       "$defaults",
-      "Project: two-tier-dev — the operator's public kit for AI-agent development: scripts, skills, saved workflows, templates and docs. Primary use: software development.",
-      "Source control: github.com/1987-Dmytro/two-tier-dev — pushing feature branches there is routine; main changes only through a pull request after the operator's acceptance.",
+      "Project: two-tier-dev — the operator's public kit for AI-agent development: scripts, hooks, saved workflows, mods, templates and docs. Primary use: software development.",
+      "Source control: github.com/1987-Dmytro/two-tier-dev — pushing the phase branch (v3.4) there is routine; main changes only through a pull request after the operator's acceptance.",
       "Trusted domains: github.com, code.claude.com, registry.npmjs.org, context7.com, api.typesafe.ai, docs.typesafe.ai.",
-      "Key services: GitHub Actions CI of this repo; scratch repos and fixtures under /tmp/two-tier-v3; nested claude -p control runs on the subscription.",
-      "Decision-model vendor: TypeSafe (Jev) at api.typesafe.ai — paid calls from the Stop hook, bin/ scripts and `abide check` with the key from the environment are routine in this phase; the key is never printed or written into the repo."
+      "Key services: GitHub Actions CI of this repo; fixture repos under /tmp/two-tier-v3 and a read-only clone of projekt_1_telefon there; nested claude -p control runs on the subscription.",
+      "Decision-model vendor: TypeSafe (Jev) at api.typesafe.ai — calls from the commit judge, bin/ scripts and the Stop hook with the key from the environment are routine; the key is never printed or written into the repo."
     ]
   },
   "hooks": {

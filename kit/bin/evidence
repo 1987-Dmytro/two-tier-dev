@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""evidence <F> <чек> -- <команда…> — прогон чека с записью в docs/evidence/<F>-<чек>-result.txt (SPEC-v3.4 F1.3).
+
+Первая строка файла — `spec: SPEC-<n>` текущей фазы (правило хука и отчёта: файл фазы docs/PROMPT.txt, иначе docs/GOAL.txt; в его строке
+`Read first:` — первая запись через запятую с именем файла SPEC-*.md): только такие файлы судит spec-gate; вторая — `$ <команда>` одной
+строкой (CR, LF и прочие концы строк в ней экранированы); дальше вывод команды как есть. Домашний каталог в обеих — `~`; HOME пуст
+или `/` — не вычищается ничего. На экран — то же, по мере вывода; пока команда идёт, файл лежит под /tmp/two-tier-v3. Код выхода — код команды, убитая сигналом n — 128+n; файл заменяется
+по её окончании. Нет SPEC или неверные аргументы — код 2, команда не идёт. Команда идёт из корня проекта (git toplevel).
+Команда сменила другой файл под docs/evidence/ — на экран и в файл строка `evidence geändert <файл>` (F7.4, K80); свой файл результата не в счёт, журнал *.jsonl и *.log — только если его прежние байты не начало новых: созданный и дописанный журнал не в счёт. Прогон, идущий параллельно, тоже меняет файлы: его файл здесь тоже назван.
+"""
+import os, re, shutil, subprocess, sys, tempfile
+
+TMP = "/tmp/two-tier-v3"
+JOURNALS = (".jsonl", ".log")
+
+
+def snapshot(own):
+    """Файлы под docs/evidence/, кроме своего файла результата → их байты; не прочитан — None: чек сохраняет свой результат и код выхода."""
+    snap = {}
+    for d, _, names in os.walk("docs/evidence"):
+        for p in (os.path.join(d, n) for n in names):
+            if p != own and os.path.isfile(p):
+                try:
+                    with open(p, "rb") as f:
+                        snap[p] = f.read()
+                except OSError:
+                    snap[p] = None
+    return snap
+
+
+def changed(p, before, after):
+    """Сменён ли файл p: нет в одном снимке или другие байты; журнал создан или дописан — нет."""
+    if p not in before or p not in after:
+        return p in before or not p.endswith(JOURNALS)
+    old, new = before[p], after[p]
+    return old != new and not (p.endswith(JOURNALS) and old is not None and new is not None and new.startswith(old))
+
+
+def main(argv):
+    if len(argv) < 4 or argv[2] != "--" or not re.fullmatch(r"F\d+", argv[0]) or not re.fullmatch(r"[\w.-]+", argv[1]):
+        print(__doc__)
+        return 2
+    feature, check, cmd = argv[0], argv[1], argv[3:]
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    if top:
+        os.chdir(top)
+    prompt = ""
+    for phase in ("docs/PROMPT.txt", "docs/GOAL.txt"):
+        if os.path.isfile(phase):
+            with open(phase, encoding="utf-8") as f:
+                prompt = f.read()
+            break
+    rf = (re.search(r"^Read first:(.*)$", prompt, re.M) or [None, ""])[1]
+    spec = next((p.strip() for p in rf.split(",") if re.search(r"(^|/)SPEC-[^/]+\.md$", p.strip())), None)
+    if not spec:
+        print("evidence: нет SPEC в строке Read first: docs/PROMPT.txt, иначе docs/GOAL.txt — команда не запущена")
+        return 2
+    os.makedirs("docs/evidence", exist_ok=True)
+    path = f"docs/evidence/{feature}-{check}-result.txt"
+    before = snapshot(path)
+    home = os.path.expanduser("~").rstrip("/")  # HOME пуст или «/» — домашнего каталога нет, вычищать нечего
+    scrub = lambda s: s.replace(home, "~") if home else s
+    os.makedirs(TMP, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f"evidence-{feature}-", dir=TMP, text=True)
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
+        # одной строкой: команда не допишет в файл своих строк — экранировано всё, что str.splitlines отчёта считает концом строки
+        shown = re.sub(r"[\r\n\x0b\x0c\x1c-\x1e\x85\u2028\u2029]", lambda c: ascii(c.group())[1:-1], scrub(" ".join(cmd)))
+        out.write(f"spec: {os.path.basename(spec)[:-3]}\n$ {shown}\n")
+        env = dict(os.environ, PYTHONUNBUFFERED="1")
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, text=True, errors="replace")
+        except OSError as e:
+            out.write(f"evidence: команда не запустилась ({e.__class__.__name__})\n")
+            print(f"evidence: команда не запустилась ({e.__class__.__name__})")
+            os.remove(tmp)
+            return 127
+        for line in p.stdout:
+            line = scrub(line)
+            out.write(line)
+            out.flush()
+            sys.stdout.write(line)
+            sys.stdout.flush()
+        rc = p.wait()
+        if rc < 0:  # убита сигналом n — код как в оболочке
+            rc = 128 - rc
+        after = snapshot(path)
+        for q in sorted(q for q in before.keys() | after.keys() if changed(q, before, after)):
+            out.write(f"evidence geändert {q}\n")
+            print(f"evidence geändert {q}", flush=True)
+    os.chmod(tmp, 0o644)
+    shutil.move(tmp, path)  # из /tmp на другой том os.replace не пишет
+    print(f"evidence: {path} — rc {rc}")
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

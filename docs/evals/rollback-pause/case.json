@@ -1,0 +1,10 @@
+{
+  "about": "SPEC-v3.4 F7.3: синтетический кейс проверяющего по образцу мутанта паузы F53: продукт с паузой отката, слабый чек её не видит. Кода проекта здесь нет. bin/check-verify копирует files/ в проект от bin/two-tier-init и гонит bin/verify-phase: с мутантом и без него.",
+  "item": "F1.2",
+  "mutant": {
+    "file": "bin/deploy",
+    "from": "    time.sleep(PAUSE)\n",
+    "to": ""
+  },
+  "evidence": "docs/evidence/F1-deploy-result.txt"
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-harness [<источник>] [items|commit|env …] | --self-test — харнес кита проверен делом (SPEC-v3 F4, v3.1 F1–F3, v3.2 F2, v3.3 F1–F3).
+"""check-harness [<источник>] [items|commit|env …] [--desktop] | --self-test — харнес кита проверен делом (SPEC-v3 F4, v3.1 F1–F3, v3.2 F2, v3.3 F1–F3, v3.4 F6).
 
 Источник харнеса (.claude/, bin/, .githooks/): аргумент, иначе корень проекта (есть .claude/settings.json), иначе kit/ репо кита.
 Строка запуска — из docs/PROCESS.md проекта (нет его — из шаблона источника; префикс `bin/check-window … &&` — предохранитель окна,
@@ -12,13 +12,20 @@ SPEC-v3.3 F5); .claude/launch.settings.json — проекта, иначе ис�
          self-test — обе стороны без claude); ушедшие инструменты кита и шаблонов (F3.1); хуки на действие без сети и модели (F3.2);
          апгрейд проектов китов v3.1 и v3.2 (F3.4, в репо кита — из `bin/two-tier-upgrade --self-test`); хуки HOOKS — guards, agent, kill;
          Belay — тень по своему журналу; пробы «по задаче» строк таблицы.
-  items  (F1: ITEMS; GATE_HOOK — уцелевшие пробы v3.2) — Stop-хук spec-gate на фикстурах фазы (свой git и bare origin): строки пунктов
-         в evidence HEAD (F1.1), полный комплект и закрытая фаза в новой сессии (F1.2), правила SPEC в `bin/check-budget` (F1.3), отчёт
-         фазы `bin/phase-report` (F1.4), STOP только из запушенного HEAD и пропуски хука в отчёте (F1.5), Jev в тени — фейковый сервер,
-         ошибка и таймаут не меняют ход (F1.6); два живых `claude -p` с SPEC_GATE=active.
+  items  (SPEC-v3.4 F1: GATE_HOOK; ITEMS — пункты v3.3 с меткой `v3.3-F1.*`) — Stop-хук spec-gate на фикстурах фазы (свой git и bare origin).
+         v3.4: фоновые задачи по типам (F1.1), без капа часов и блоков (F1.2), evidence своей SPEC (F1.3), STOP-TL (F1.4), парный прогон
+         10 концов хода (F1.5). v3.3: строки пунктов в evidence HEAD, полный комплект и закрытая фаза в новой сессии, правила SPEC в
+         `bin/check-budget`, отчёт фазы `bin/phase-report`, STOP только из запушенного HEAD и пропуски хука в отчёте, Jev в тени — фейковый
+         сервер, ошибка и таймаут не меняют ход; два живых `claude -p` с SPEC_GATE=active.
   commit (F2: COMMIT) — хуки git кита .githooks/commit-msg и pre-push на фикстурах (core.hooksPath): правила кода (F2.1, F2.2),
          force-push в любой записи (F2.3), `abide check` один отказ — повтор проходит (F2.4), рубрика ≤ 8 правил и красный образец ≥ 0,8
          (F2.5), коммит из подпроцесса и счёт судей в отчёте фазы (F2.6). Нужен ключ в окружении для частей с `abide check`.
+  --desktop (SPEC-v3.4 F6: HARNESS; без имени раздела — только он, разделы выше не идут) — среда и профиль вкладки Code. `claude -p` — прокси вкладки,
+         не она сама: профиль лежит как .claude/settings.local.json, источники настроек — как у вкладки; что видит только вкладка — строка
+         «вкладка: гейт оператора §5». Настоящий .claude/settings.local.json проекта (файл вне git, копия launch — шаг оператора, кит его не кладёт):
+         нет — HARNESS_WARN tab-profile, не красный; иное по смыслу — F6.3 красный с именами ключей (tab-profile). Версии, граф, брошенные worktree (F6.1); запись вне рабочих каталогов до и после поля, агент в worktree
+         (F6.2); `system/init` = таблица Environment, поля профиля до и после, deny (F6.3); хук PermissionDenied на входах фикстуры (F6.4).
+         Нет claude в PATH (CI) — строки `F6.2 offen`, `F6.3 offen`, маркера HARNESS_OK нет, код 0.
 Пары и пробы HOOKS идут с SPEC_GATE=off. В вывод — только имена, счётчики и маркеры.
 """
 import fnmatch, hashlib, json, os, re, secrets, shlex, shutil, socket, subprocess, sys, tempfile, threading, time
@@ -96,9 +103,9 @@ GATE_SPEC_ITEMS = """# SPEC-1 — фикстура spec-gate с пунктами
 - **STOP-INPUT** — нужен вход оператора.
 - **STOP-NP** — нет прогресса.
 """
-EV_ITEMS = {"docs/evidence/F1-a-result.txt": "$ bin/a\nF1.1 rc 0 · A напечатано\nF1.2 rc 0 · A_OK после проверок\nA_OK\n",
-            "docs/evidence/F2-b-result.txt": "$ bin/b\nF2.1 rc 0 · B напечатано\nF2.2 красный образец — rc 1, отказ · зелёный — rc 0\nB_OK\n"}
-SECTIONS = {"env": ("ENV", "HARNESS", "HOOKS"), "items": ("ITEMS", "GATE_HOOK"), "commit": ("COMMIT",)}
+EV_ITEMS = {"docs/evidence/F1-a-result.txt": "spec: SPEC-1\n$ bin/a\nF1.1 rc 0 · A напечатано\nF1.2 rc 0 · A_OK после проверок\nA_OK\n",
+            "docs/evidence/F2-b-result.txt": "spec: SPEC-1\n$ bin/b\nF2.1 rc 0 · B напечатано\nF2.2 красный образец — rc 1, отказ · зелёный — rc 0\nB_OK\n"}
+SECTIONS = {"env": ("ENV", "HARNESS", "HOOKS"), "items": ("ITEMS", "GATE_HOOK"), "commit": ("COMMIT",), "graph": ()}  # graph — справка и HARNESS_WARN graph-age, без маркера
 SRC_ARG = None
 
 
@@ -189,7 +196,7 @@ def items_probes(src, launch):
           and miss.get("decision") == "block" and "- F2.2:" in rm and "- F2.1:" not in rm and "- F1." not in rm
           and twin.get("decision") == "block" and "- F2.2:" in rt and disk.get("decision") == "block" and "on disk only" in line_of(rd, "F2.2")
           and blank.get("decision") == "block" and "- F2.2:" in blank.get("reason", ""))
-    item(S, "F1.1", ok, f"нет строки F2.2 при маркере B_OK — {miss.get('decision')}: «{line_of(rm, 'F2.2')}»; близнецы F2.20 и xF2.2 — {twin.get('decision')}: "
+    item(S, "v3.3-F1.1", ok, f"нет строки F2.2 при маркере B_OK — {miss.get('decision')}: «{line_of(rm, 'F2.2')}»; близнецы F2.20 и xF2.2 — {twin.get('decision')}: "
          f"«{line_of(rt, 'F2.2')[:60]}»; строка F2.2 только на диске — {disk.get('decision')}: «{line_of(rd, 'F2.2')}»; пустая строка перед F2.2 в SPEC — "
          f"{blank.get('decision')}: «{line_of(blank.get('reason', ''), 'F2.2')[:60]}»; все строки в HEAD — «{short(full)}»")
     # F1.2 — полный комплект; новая сессия на закрытой фазе; голова не переписана за фазу; сессия с коммитом без новой головы
@@ -203,7 +210,7 @@ def items_probes(src, launch):
     ok = (full.get("systemMessage", "").startswith("SPEC_GATE_OK") and closed.get("systemMessage", "").startswith("SPEC_GATE_OK")
           and never.get("decision") == "block" and "not updated in this phase" in never.get("reason", "")
           and stale.get("decision") == "block" and "not updated in this session" in stale.get("reason", ""))
-    item(S, "F1.2", ok, f"полный комплект — «{short(full)}»; новая сессия на закрытой фазе без коммитов — «{short(closed)}»; "
+    item(S, "v3.3-F1.2", ok, f"полный комплект — «{short(full)}»; новая сессия на закрытой фазе без коммитов — «{short(closed)}»; "
          f"голова не переписана с коммита запроса — {never.get('decision')}: «{line_of(never.get('reason', ''), 'the head')}»; "
          f"сессия закоммитила заметки без новой головы — {stale.get('decision')}: «{line_of(stale.get('reason', ''), 'the head')}»")
     # F1.3 — правила SPEC в bin/check-budget: место чтения пункта, судья строки §3, блок фичи
@@ -228,7 +235,7 @@ def items_probes(src, launch):
     hit = {k: next((l for l in ls if l.startswith("FAIL") and want[k][0] in l and want[k][1] in l), None) for k, ls in reds.items()}
     ok = len(green) == 3 and all(l.startswith("OK") for l in green) and all(hit.values())
     sp = lambda l: " ".join((l or "нет FAIL").split())
-    item(S, "F1.3", ok, "зелёная SPEC — " + " · ".join(sp(l) for l in green) + " ‖ красные: " + " · ".join(f"{k} — «{sp(v)}»" for k, v in hit.items()))
+    item(S, "v3.3-F1.3", ok, "зелёная SPEC — " + " · ".join(sp(l) for l in green) + " ‖ красные: " + " · ".join(f"{k} — «{sp(v)}»" for k, v in hit.items()))
     # F1.4 — отчёт фазы на фикстуре: матрица и три списка от кода
     p = tempfile.mkdtemp(prefix="items-report-", dir=TMP)
     gx = lambda *a: subprocess.run(["git", *a], cwd=p, env=GIT_ENV, capture_output=True, text=True, check=True)
@@ -242,7 +249,7 @@ def items_probes(src, launch):
     put("notes.txt", "x\n"); gx("add", "--", "notes.txt"); gx("commit", "-qm", "разное без пункта")
     put("typo.txt", "x\n"); gx("add", "--", "typo.txt"); gx("commit", "-qm", "F1.10: опечатка id пункта")
     put("alien.txt", "x\n"); gx("add", "--", "alien.txt"); gx("commit", "-qm", "F9.9: чужой пункт")
-    put("docs/evidence/F1-a-result.txt", "F1.1 rc 0 · A напечатано\n"); put("docs/evidence/F2-b-result.txt", "F2.1 rc 0 · B напечатано\n")
+    put("docs/evidence/F1-a-result.txt", "spec: SPEC-1\nF1.1 rc 0 · A напечатано\n"); put("docs/evidence/F2-b-result.txt", "spec: SPEC-1\nF2.1 rc 0 · B напечатано\n")
     gx("add", "--", "docs/evidence/F1-a-result.txt", "docs/evidence/F2-b-result.txt"); gx("commit", "-qm", "F2.1: evidence")
     sha = {s: gx("log", "--format=%h", f"--grep={s}", "-1").stdout.strip() for s in ("F1.1:", "разное", "F2.1:", "F1.10:", "F9.9:")}
     rc, summary, rep = report_of(p, src)
@@ -251,7 +258,7 @@ def items_probes(src, launch):
     ok = (rc == 0 and sha["F1.1:"] in row and "F1-a-result.txt" in row and "A напечатано" in row and "(1): F1.2" in lists["Пункты без коммитов"]
           and all(sha[k] in lists["Коммиты без пункта"] for k in ("разное", "F1.10:", "F9.9:")) and "(3)" in lists["Коммиты без пункта"] and "(1): F1.2" in lists["Пункты без пробы"]
           and sha["F2.1:"] in next((l for l in rep.splitlines() if l.startswith("| F2.1 |")), ""))
-    item(S, "F1.4", ok, f"bin/phase-report rc {rc} · строка матрицы «{row[:120]}» · " + " · ".join(f"«{v[:90]}»" for v in lists.values()))
+    item(S, "v3.3-F1.4", ok, f"bin/phase-report rc {rc} · строка матрицы «{row[:120]}» · " + " · ".join(f"«{v[:90]}»" for v in lists.values()))
     # F1.5 — STOP только из запушенного HEAD; пропуск хука — строкой с причиной в отчёте фазы
     s1, ts1 = gate_fixture(src, launch, items=True)
     open(f"{s1}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + GATE_STOP)
@@ -275,22 +282,18 @@ def items_probes(src, launch):
     short2 = gate_run(s3, ts3, "items-short")[3][-1]
     s2, ts2 = gate_fixture(src, launch, items=True)
     gate_run(s2, ts2, "items-shadow", env_over={"SPEC_GATE": "shadow"})
-    sess = hashlib.sha256(b"items-cap").hexdigest()[:8]
-    with open(f"{s2}/docs/evidence/spec-gate.jsonl", "a", encoding="utf-8") as f:
-        for i in range(12):
-            f.write(json.dumps({"ts": "", "session": sess, "decision": "block", "missing": [f"x{i}"]}) + "\n")
-    cap = gate_run(s2, ts2, "items-cap")[3][-1]
+    cap = [gate_run(s2, ts2, "items-np")[3][-1] for _ in range(4)][-1]
     rc2, _, rep2 = report_of(s2, src)
-    pass_line = next((l for l in rep2.split("## Пропуски spec-gate", 1)[-1].splitlines() if "cap-blocks" in l), "")
+    pass_line = next((l for l in rep2.split("## Пропуски spec-gate", 1)[-1].splitlines() if "no-progress" in l), "")
     shadow_line = next((l for l in rep2.split("## Пропуски spec-gate", 1)[-1].splitlines() if "· shadow ·" in l), "")
     ok = (on_disk.get("decision") == "block" and "on disk only" in on_disk.get("reason", "") and rc1 == 0 and "decision" not in pushed
           and unpushed.get("decision") == "block" and "is not pushed" in unpushed.get("reason", "")
           and log1[-1]["decision"] == "stop" and cap["decision"] == "pass" and rc2 == 0 and pass_line and shadow_line
           and short1["decision"] == "stop" and short2["decision"] == "stop" and far.get("decision") == "block" and "no question" in far.get("reason", ""))
-    item(S, "F1.5", ok, f"STOP только на диске — {on_disk.get('decision')}: «{line_of(on_disk.get('reason', ''), '«STOP')[:110]}»; закоммичен без push — "
+    item(S, "v3.3-F1.5", ok, f"STOP только на диске — {on_disk.get('decision')}: «{line_of(on_disk.get('reason', ''), '«STOP')[:110]}»; закоммичен без push — "
          f"{unpushed.get('decision')}: «{line_of(unpushed.get('reason', ''), 'branch')[:60]}»; закоммичен и запушен — "
          f"{log1[-1]['decision']} ({log1[-1]['reason']}); короткая строка «STOP: STOP-INPUT», затем другая того же id — {short1['decision']}, {short2['decision']}; вопрос через четыре строки — {far.get('decision')}; "
-         f"кап блоков — {cap['decision']} ({cap['reason']}); отчёт фазы: «{pass_line.strip()[:110]}», блок в тени: «{shadow_line.strip()[:80]}»")
+         f"один список 4 раза — {cap['decision']} ({cap['reason'][:30]}); отчёт фазы: «{pass_line.strip()[:110]}», блок в тени: «{shadow_line.strip()[:80]}»")
     # F1.6 — Jev в тени: статусы в отчёте; ошибка и таймаут — статус, rc 0; решение хука с Jev и без — одно
     jv = FakeJev()
     key = {"TYPESAFE_API_KEY": "fixture-key", "JEV_LOG": f"{TMP}/items-jev.jsonl"}
@@ -307,7 +310,7 @@ def items_probes(src, launch):
     ok = (all(rc == 0 for rc, _ in shown.values()) and st[:3] == ["подтверждает 0.90", "противоречит 0.90", "молчит 0.90"]
           and all(s.startswith("ошибка") and "500" in s for s in shown["e500"][1]) and all(s == "таймаут" for s in shown["hang"][1])
           and a.get("systemMessage", "")[:40] == b.get("systemMessage", "")[:40] and a.get("systemMessage", "").startswith("SPEC_GATE_OK") and sec < 10)
-    item(S, "F1.6", ok, f"фейковый Jev — статусы {st}; HTTP 500 — rc {shown['e500'][0]}, «{(shown['e500'][1] or ['—'])[0][:50]}»; висит — rc {shown['hang'][0]}, "
+    item(S, "v3.3-F1.6", ok, f"фейковый Jev — статусы {st}; HTTP 500 — rc {shown['e500'][0]}, «{(shown['e500'][1] or ['—'])[0][:50]}»; висит — rc {shown['hang'][0]}, "
          f"«{(shown['hang'][1] or ['—'])[0]}»; хук с Jev — «{short(a)[:50]}», без ключа и с мёртвым адресом — «{short(b)[:50]}», оба за {sec:.1f} с")
 
 
@@ -386,7 +389,7 @@ def rubric_check(path, limit):
     """F2.5: (ok, строка) — правил не больше limit и красный образец (criteria.true) каждого ≥ 0,8, до 3 прогонов."""
     rules = json.load(open(path, encoding="utf-8")).get("rules", [])
     if len(rules) > limit:
-        return False, f"правил {len(rules)} > {limit}: сверх предела — {', '.join(r.get('id', '?') for r in rules[limit:])}"
+        return False, f"правил {len(rules)} > {limit}: сверх предела — {', '.join(r.get('id', '?') for r in rules[limit:])}", []
     root = os.path.dirname(os.path.dirname(os.path.abspath(path)))
     res = []
     for r in rules:
@@ -401,13 +404,15 @@ def rubric_check(path, limit):
             if p is not None and p >= 0.8:
                 break
         res.append((r.get("id"), max([x for x in runs if x is not None], default=None), f"прогонов {len(runs)}"))
-    bad = [x for x in res if x[1] is None or x[1] < 0.8]
+    bad = [x for x in res if x[1] is not None and x[1] < 0.8]  # судья ответил: правило своего красного образца не ловит
+    unscored = [i for i, p, _ in res if p is None]  # ответа нет (не JSON, таймаут) — калибровка и транспорт, не механизм (решение 397)
     return not bad, (f"правил {len(rules)} ≤ {limit}; " + ", ".join(f"{i} {('%.2f' % p) if p is not None else '—'}" for i, p, _ in res)
-                     + (f"; ниже 0,8 — {', '.join(i for i, _, _ in bad)}" if bad else ""))
+                     + (f"; ниже 0,8 — {', '.join(i for i, _, _ in bad)}" if bad else "") + (f"; без оценки — {', '.join(unscored)}" if unscored else "")), unscored
 
 
 def commit_probes(src):
     S = "COMMIT"
+    warns = []  # живой суд abide — калибровка модели (решение 397): COMMIT_WARN с числами, не FAIL
     secret = "sk-" + "proj-" + secrets.token_hex(16)  # литерал собирается здесь: в исходнике чека его нет
     # F2.1 — секрет в любом файле, домашний путь и почта в evidence и сообщении; noreply@ соавтора проходит
     r = cfix(src)
@@ -557,13 +562,40 @@ def commit_probes(src):
             edge[p] = gc(a, "commit", "-qm", f"F2.4: граница {p}", env={"PATH": f"{sd}:{os.environ['PATH']}"})
             if edge[p][0]:
                 gc(a, "reset", "-q", "--", f"bin/e{p}.py")
-        ok = (first[0] == 1 and "no-print-credential" in first[1] and "bin/p.py" in first[1] and again[0] == 0 and "rejected" in again[1]
-              and note[0] == 0 and "note" in note[1] and err[0] == 0 and "skip" in err[1] and slow[0] == 0 and "over 1 s" in slow[1]
-              and edge["0.80"][0] == 1 and "refused once" in edge["0.80"][1] and all(edge[k][0] == 0 and "note" in edge[k][1] for k in ("0.79", "0.50"))
-              and edge["0.49"][0] == 0 and "note" not in edge["0.49"][1])
-        item(S, "F2.4", ok, f"печать ключа — rc {first[0]} «{first[1][:110]}»; тот же дифф ещё раз — rc {again[0]} «{again[1][:80]}»; "
-             f"заметка ({len(notes)} проб.) — rc {note[0]} «{note[1][:80]}»; ошибка адреса — rc {err[0]} «{err[1][:60]}»; таймаут 1 с — rc {slow[0]} «{slow[1][:60]}»; "
-             f"границы заглушкой: " + ", ".join(f"{k} — rc {v[0]}{' отказ' if 'refused' in v[1] else ' заметка' if 'note' in v[1] else ' проход'}" for k, v in edge.items()))
+        def judge_wrong(first, again, err, slow, edge):
+            """Неверные ответы судьи — FAIL (решение 397): механизм держат отказ на печати ключа, повтор, пропуск ошибки и таймаута, границы заглушки."""
+            if "abide check — skip" in first[1]:  # судья не ответил (таймаут, ошибка) — пропуск сработал, ответа нет: калибровка и транспорт, не механизм
+                why = []
+            else:
+                why = [] if first[0] == 1 and "no-print-credential" in first[1] and "bin/p.py" in first[1] else ["нет отказа ≥ 0,8 на печати ключа"]
+                why += [] if again[0] == 0 and ("rejected" in again[1] or "abide check — skip" in again[1]) else ["повтор диффа не прошёл"]  # пропуск на повторе — тоже не ответ судьи
+            why += [] if err[0] == 0 and "skip" in err[1] else ["ошибка адреса — не пропуск"]
+            why += [] if slow[0] == 0 and "over 1 s" in slow[1] else ["таймаут — не пропуск"]
+            why += [] if edge["0.80"][0] == 1 and "refused once" in edge["0.80"][1] else ["граница 0.80 — не отказ"]
+            why += [f"граница {k} — не заметка" for k in ("0.79", "0.50") if not (edge[k][0] == 0 and "note" in edge[k][1])]
+            why += [] if edge["0.49"][0] == 0 and "note" not in edge["0.49"][1] else ["граница 0.49 — не проход"]
+            return why
+        note_count = lambda ns: sum(1 for n in ns if n[0] == 0 and "note" in n[1])
+        wrong = judge_wrong(first, again, err, slow, edge)
+        k = note_count(notes)
+        if "abide check — skip" in first[1]:
+            warns.append(f"печать ключа без ответа ({first[1].split('error ')[-1][:30] if 'error ' in first[1] else first[1][-30:]})")
+        if "abide check — skip" in again[1]:
+            warns.append(f"повтор диффа без ответа ({again[1].split('error ')[-1][:30] if 'error ' in again[1] else again[1][-30:]})")
+        if not k:  # живая модель на пограничных образцах — калибровка, не механизм: WARN с числами
+            warns.append(f"заметка {k}/{len(notes)}")
+        # оба состояния на входах заглушки: судья пропустил печать ключа (как граница 0.49) — FAIL; ни одной заметки из 4 — WARN
+        fake_wrong = judge_wrong(edge["0.49"], again, err, slow, edge)
+        fake_k = note_count([edge["0.49"]] * 4)
+        mute_first = judge_wrong(err, again, err, slow, edge)  # судья не ответил на печать ключа (ошибка адреса) — не FAIL
+        mute_again = judge_wrong(edge["0.80"], err, err, slow, edge)  # судья не ответил на повтор (ошибка адреса) — не FAIL
+        red_again = judge_wrong(edge["0.80"], edge["0.80"], err, slow, edge)  # повтор снова отказан — FAIL
+        states_ok = "нет отказа ≥ 0,8 на печати ключа" in fake_wrong and fake_k == 0 and not mute_first and "skip" in err[1] and "повтор диффа не прошёл" not in mute_again and "повтор диффа не прошёл" in red_again
+        item(S, "F2.4", not wrong and states_ok, f"печать ключа — rc {first[0]} «{first[1][:110]}»; тот же дифф ещё раз — rc {again[0]} «{again[1][:80]}»; "
+             f"заметка (живая модель, {len(notes)} проб.) — {'есть' if k else 'нет → COMMIT_WARN'}, rc {note[0]} «{note[1][:80]}»; ошибка адреса — rc {err[0]} «{err[1][:60]}»; таймаут 1 с — rc {slow[0]} «{slow[1][:60]}»; "
+             f"границы заглушкой: " + ", ".join(f"{k_} — rc {v[0]}{' отказ' if 'refused' in v[1] else ' заметка' if 'note' in v[1] else ' проход'}" for k_, v in edge.items())
+             + f"; неверных ответов судьи — {'; '.join(wrong) or 'нет'} · состояния: судья пропустил печать ключа (заглушка 0.49) — {'FAIL: ' + fake_wrong[0] if fake_wrong else 'нет FAIL'}; "
+             f"ни одной заметки из 4 — {'WARN заметка 0/4' if fake_k == 0 else 'нет WARN'}; судья не ответил на печать ключа (ошибка адреса) — {'WARN, не FAIL' if not mute_first else 'FAIL'}; на повтор — {'WARN, не FAIL' if 'повтор диффа не прошёл' not in mute_again else 'FAIL'}; повтор снова отказан — {'FAIL' if 'повтор диффа не прошёл' in red_again else 'нет FAIL'}")
     # F2.5 — рубрика: правил не больше abide_rules (8) и красный образец каждого ≥ 0,8; фикстуры обеих сторон
     try:
         bj = json.load(open("budgets.json", encoding="utf-8"))
@@ -574,6 +606,7 @@ def commit_probes(src):
         item(S, "F2.5", False, "нет ключа или abide — красные образцы не прогнаны")
     else:
         own = (".abide/rubric.json", *rubric_check(".abide/rubric.json", limit)) if os.path.isfile(".abide/rubric.json") else None
+        warns += [f"без оценки {r}" for r in (own[3] if own else [])]
         fx = tempfile.mkdtemp(prefix="rubric-", dir=TMP)
         os.makedirs(f"{fx}/nine/.abide"); os.makedirs(f"{fx}/weak/.abide"); os.makedirs(f"{fx}/good/.abide")
         nine = [dict(RUBRIC_FIXTURE[0], id=f"r{i}") for i in range(1, 10)]
@@ -583,9 +616,29 @@ def commit_probes(src):
         for name, rules in (("nine", nine), ("weak", weak), ("good", RUBRIC_FIXTURE[:1])):
             json.dump(rubric_doc(rules), open(f"{fx}/{name}/.abide/rubric.json", "w"))
         res = {n: rubric_check(f"{fx}/{n}/.abide/rubric.json", limit) for n in ("good", "nine", "weak")}
-        ok = res["good"][0] and not res["nine"][0] and "r9" in res["nine"][1] and not res["weak"][0] and "no-zebra-word" in res["weak"][1] and (own is None or own[1])
+        warns += [f"без оценки {r} (фикстура)" for n in ("good", "weak") for r in res[n][2]]
+        weak_red = (not res["weak"][0] and "no-zebra-word" in res["weak"][1]) or "no-zebra-word" in res["weak"][2]  # слабый образец без оценки — WARN, не зелёный
+        # оба состояния: abide без ответа (заглушка не JSON) — правило без оценки, WARN; слабый образец с оценкой — FAIL (выше)
+        stub = tempfile.mkdtemp(prefix="abide-mute-", dir=TMP)
+        open(f"{stub}/abide", "w").write("#!/bin/sh\necho 'not json'\n"); os.chmod(f"{stub}/abide", 0o755)
+        low = tempfile.mkdtemp(prefix="abide-low-", dir=TMP)  # судья ответил 0.02 на красный образец — правило слабое, FAIL
+        open(f"{low}/abide", "w").write("#!/bin/sh\necho '{\"sections\":[{\"verdicts\":[{\"ruleId\":\"%s\",\"probability\":0.02}]}]}'\n" % RUBRIC_FIXTURE[0]["id"])
+        os.chmod(f"{low}/abide", 0o755)
+        path0 = os.environ["PATH"]
+        try:
+            os.environ["PATH"] = f"{stub}:{path0}"
+            mute = rubric_check(f"{fx}/good/.abide/rubric.json", limit)
+            os.environ["PATH"] = f"{low}:{path0}"
+            weak_stub = rubric_check(f"{fx}/good/.abide/rubric.json", limit)
+        finally:
+            os.environ["PATH"] = path0
+        mute_ok = mute[0] and mute[2] == [RUBRIC_FIXTURE[0]["id"]] and not weak_stub[0] and "ниже 0,8" in weak_stub[1] and not weak_stub[2]
+        ok = res["good"][0] and not res["nine"][0] and "r9" in res["nine"][1] and weak_red and (own is None or own[1]) and mute_ok
         item(S, "F2.5", ok, (f"рубрика проекта {own[0]} — {'OK' if own[1] else 'FAIL'}: {own[2]}; " if own else "рубрики проекта нет; ")
-             + f"фикстура из одного правила — {res['good'][1]}; из 9 правил — «{res['nine'][1]}»; слабый образец — «{res['weak'][1]}»")
+             + f"фикстура из одного правила — {res['good'][1]}; из 9 правил — «{res['nine'][1]}»; слабый образец — «{res['weak'][1]}»"
+             + f" · состояния: abide без ответа — {'WARN без оценки ' + ', '.join(mute[2]) if mute[2] else 'нет WARN'}; судья ответил 0.02 — {'FAIL: ' + weak_stub[1] if not weak_stub[0] else 'нет FAIL'}")
+    if warns:
+        print(f"COMMIT_WARN abide: {', '.join(warns)}", flush=True)
     # F2.6 — коммит из подпроцесса ловят правила кода; счёт судей — в отчёте фазы
     s = cfix(src)
     put(s, "bin/s.py", f"KEY = '{secret}'\n"); gc(s, "add", "--", "bin/s.py")
@@ -616,7 +669,7 @@ def commit_probes(src):
 
 RETIRED = {"hooks": ("abide.mjs", "toolgate-deny.mjs"), "plugins": ("jev-steer-or-queue@jev-steer-or-queue", "compact-adviser@compact-adviser"),
            "rows": ("Toolgate", "Compact Adviser", "Steer-or-Queue"), "files": (".claude/hooks/abide.mjs", ".claude/hooks/toolgate-deny.mjs", ".claude/toolgate.yaml")}
-ACTION = ("PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit")
+ACTION = ("PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit", "PermissionDenied")
 NET = re.compile(r"\bfetch\(|\bhttps?\.(?:request|get)\(|http\.client|urllib|\brequests\.\w+\(|\bhttpx\b|\baiohttp\b|\baxios\b|\bundici\b|XMLHttpRequest|\bWebSocket\b"
                  r"|\bcurl\b|\bwget\b|\bnc\b|\bncat\b|\btelnet\b|socket\.(?:connect|create_connection)|net\.connect\(|@anthropic-ai/|\b(?:import|from) anthropic\b|\bopenai\b"
                  r"|bin/jev\b|\btoolgate\b|\babide\b|api\.typesafe\.ai|api\.anthropic\.com|['\"]claude['\"](?:\s*,\s*['\"][^'\"]*['\"])*\s*,\s*['\"]-(?:p|-print)['\"]"
@@ -846,8 +899,8 @@ def defaults(init, pid):
 
 def modes(rows, configs, init=None):
     """Режим плагина «да» из колонки «фича или чек» против pluginConfigs launch settings (нет записи — userConfig мода по
-    умолчанию): «тень» — shadow (true или значение), `hint`, `auto`, … — значение опции, «N %» — числовое значение;
-    расхождение — FAIL с именем (SPEC-v3.2 F4)."""
+    умолчанию): «тень» — shadow (true или значение), `hint`, `auto`, … — значение опции, «N %» — числовое значение; у плагина без опций число — не режим:
+    порог window-guard — число budgets.json, настроек у мода нет (решение 398); расхождение — FAIL с именем (SPEC-v3.2 F4)."""
     bad = []
     for _, form, ids, on, cell in rows:
         if form != "плагин" or not on:
@@ -861,6 +914,8 @@ def modes(rows, configs, init=None):
                 opts, src = defaults(init, pid), "по умолчанию мода"
             vals = list(opts.values())
             for w in want:
+                if type(w) is int and not opts:
+                    continue
                 if not ((opts.get("shadow") is True or "shadow" in vals) if w == "shadow" else w in vals):
                     bad.append(f"режим {pid}: в таблице «{'тень' if w == 'shadow' else w}», {src} — "
                                f"{json.dumps(opts, ensure_ascii=False) if opts else 'нет pluginConfigs и значений мода по умолчанию'}")
@@ -873,10 +928,58 @@ MODE_FIXTURE = """## Environment
 | Jev Belay | плагин | `jev-belay@jev-belay` | да | второй судья — тень (только журнал) | — | — |
 | Compact Adviser | плагин | `compact-adviser@compact-adviser` | да | режим `hint` | — | — |
 | handoff | плагин | `handoff@two-tier-mods` | да | хендофф на 70 % окна | — | — |
+| window-guard | плагин | `window-guard@two-tier-mods` | да | порог 100 % — число budgets.json | — | — |
 | commit-commands | плагин | `commit-commands@claude-plugins-official` | нет | тень — строка «нет» не сверяется | — | — |
 
 ## Деньги
 """
+
+
+def graph_age(root="."):
+    """(статус, текст) графа кода против HEAD (F6.1). Отметка graphify-out/.built-head — sha, для которого граф собрал .githooks/post-commit: не HEAD
+    или её нет — WARN, не красное (сборка идёт в фоне; коммит без правок кода граф не переписывает, поэтому время файла не мерило); графа или коммитов нет — статуса нет."""
+    g = os.path.join(root, "graphify-out")
+    head = subprocess.run(["git", "-C", root, "rev-parse", "-q", "--verify", "HEAD"], capture_output=True, text=True).stdout.strip()
+    if not os.path.isfile(f"{g}/graph.json") or not head:
+        return None, "графа нет (graphify-out/graph.json) или нет коммитов"
+    built = open(f"{g}/.built-head", encoding="utf-8").read().strip() if os.path.isfile(f"{g}/.built-head") else ""
+    if built == head:
+        return "OK", f"граф собран для HEAD {head[:7]}"
+    return "WARN", (f"граф собран для {built[:7]}, HEAD {head[:7]}" if built else "нет отметки сборки graphify-out/.built-head") + "; собрать: sh .githooks/post-commit"
+
+
+def graph_lines(root="."):
+    """Строки вывода о графе: статус и текст; граф не для HEAD — ещё `HARNESS_WARN graph-age`."""
+    status, text = graph_age(root)
+    return [f"{status or '--':4} graph: {text}"] + (["HARNESS_WARN graph-age"] if status == "WARN" else [])
+
+
+def graph_age_probes():
+    """Стороны graph_age на фикстуре (git без настроек пользователя): нет коммитов, нет графа, отметка = HEAD, другая, нет отметки."""
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="graph-age-", dir=TMP)
+    env = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
+    git = lambda *a: subprocess.run(["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a], capture_output=True, text=True, env=env)
+    got = []
+    try:
+        git("init", "-q")
+        os.makedirs(f"{d}/graphify-out")
+        open(f"{d}/graphify-out/graph.json", "w").write("{}")
+        got.append(("граф есть, коммитов нет", None, graph_age(d)[0]))
+        git("commit", "-q", "--allow-empty", "-m", "x")
+        head = git("rev-parse", "HEAD").stdout.strip()
+        for name, stamp, want in (("отметка = HEAD", head, "OK"), ("отметка другого коммита", "0" * 40, "WARN"), ("нет отметки", None, "WARN")):
+            if stamp is None:
+                os.remove(f"{d}/graphify-out/.built-head")
+            else:
+                open(f"{d}/graphify-out/.built-head", "w").write(stamp + "\n")
+            got.append((name, want, graph_age(d)[0]))
+            got.append((f"{name}: строка HARNESS_WARN", want == "WARN", "HARNESS_WARN graph-age" in graph_lines(d)))
+        os.remove(f"{d}/graphify-out/graph.json")
+        got.append(("нет графа", None, graph_age(d)[0]))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    return got
 
 
 def self_test():
@@ -903,7 +1006,8 @@ def self_test():
               ("тень в таблице, shadow false", green | {"jev-belay@jev-belay": {"options": {"shadow": False}}}, "jev-belay@jev-belay: в таблице «тень»"),
               ("hint в таблице, auto в настройках", green | {"compact-adviser@compact-adviser": {"options": {"mode": "auto"}}}, "compact-adviser@compact-adviser: в таблице «hint»"),
               ("70 % в таблице, 60 в настройках", green | {"handoff@two-tier-mods": {"options": {"threshold": 60}}}, "handoff@two-tier-mods: в таблице «70»"),
-              ("нет pluginConfigs плагина", {k: v for k, v in green.items() if k != "jev-belay@jev-belay"}, "нет pluginConfigs")]
+              ("нет pluginConfigs плагина", {k: v for k, v in green.items() if k != "jev-belay@jev-belay"}, "нет pluginConfigs"),
+              ("число у плагина с опциями, другое значение", green | {"window-guard@two-tier-mods": {"options": {"threshold": 50}}}, "window-guard@two-tier-mods: в таблице «100»")]
     os.makedirs(TMP, exist_ok=True)
     man = tempfile.mkdtemp(prefix="modes-", dir=TMP)
     os.makedirs(f"{man}/ok/.claude-plugin")
@@ -920,6 +1024,13 @@ def self_test():
         good = not bad if want is None else len(bad) == 1 and want in bad[0]
         ok &= good
         print(f"{'ok ' if good else 'BAD'} modes · {name}: {'; '.join(bad) or 'расхождений нет'}")
+    for name, want, status in graph_age_probes():
+        ok &= status == want
+        print(f"{'ok ' if status == want else 'BAD'} graph-age · {name}: {status if status not in (None, True, False) else {None: 'статуса нет', True: 'есть', False: 'нет'}[status]}")
+    for group, probes in (("versions", versions_probes), ("worktree", worktree_probes), ("tab", tab_view_probes), ("profile", profile_probes), ("denied", lambda: denied_probes(paths()[0]))):
+        for name, want, got in probes():
+            ok &= got == want
+            print(f"{'ok ' if got == want else 'BAD'} {group} · {name}: {got}" + ("" if got == want else f" — ждём {want}"))
     print(f"фикстура таблицы: строк {len(rows)}; {'; '.join(f'{f}: {len(ids)}' for _, f, ids, _, _ in rows[:3])} …")
     for name, init, l, w, want in cases:
         bad, _ = compare(rows, init, l, w)
@@ -946,6 +1057,7 @@ def static(src, proc, launch):
     say(H, "OK" if want <= deny and not writes else "FAIL", "settings",
         f"deny Edit на файлы тимлида {len(want & deny)}/{len(want)}; правил Write(…) {len(writes)}")
     say(H, "OK" if allow == ALLOW else "FAIL", "settings", f"allow {len(allow)}: {', '.join(sorted(allow)) or 'нет'} (ждём ровно {', '.join(sorted(ALLOW))})")
+    say(H, "OK" if perms.get(WRITE_KEY) is True else "FAIL", "settings", f"permissions.{WRITE_KEY} {perms.get(WRITE_KEY)}")
     hooks = [h for g in s.get("hooks", {}).get("PreToolUse", []) for h in g.get("hooks", [])]
     names = [os.path.basename(h.get("args", [""])[0] if h.get("command") in ("python3", "node") else h.get("command", ""))[:40] for h in hooks]
     bad = [n for h, n in zip(hooks, names) if "${CLAUDE_PROJECT_DIR}" not in json.dumps(h) or "args" not in h
@@ -1127,9 +1239,9 @@ def gate_fixture(src, launch, full=False, stop_old=False, fresh_head=True, loose
     shutil.copytree(f"{src}/bin", f"{repo}/bin")
     files = {"CLAUDE.md": CLAUDE_MD, "docs/PROMPT.txt": "Read first: docs/SPEC-1.md, docs/PROGRESS.md\n\nФаза 1 фикстуры spec-gate.\n",
              "docs/SPEC-1.md": spec or (GATE_SPEC_ITEMS if items else GATE_SPEC), "docs/PROGRESS.md": GATE_PROGRESS + ("\n" + GATE_STOP if stop_old else ""),
-             "docs/evidence/F1-a-result.txt": EV_ITEMS["docs/evidence/F1-a-result.txt"] if items else "$ bin/a\nA\nA_OK\n"}
+             "docs/evidence/F1-a-result.txt": EV_ITEMS["docs/evidence/F1-a-result.txt"] if items else "spec: SPEC-1\n$ bin/a\nA\nA_OK\n"}
     if full:
-        files["docs/evidence/F2-b-result.txt"] = EV_ITEMS["docs/evidence/F2-b-result.txt"] if items else "$ bin/b\nB\nB_OK\n"
+        files["docs/evidence/F2-b-result.txt"] = EV_ITEMS["docs/evidence/F2-b-result.txt"] if items else "spec: SPEC-1\n$ bin/b\nB\nB_OK\n"
     for p, text in files.items():
         os.makedirs(os.path.dirname(f"{repo}/{p}") or repo, exist_ok=True)
         open(f"{repo}/{p}", "w", encoding="utf-8").write(text)
@@ -1162,15 +1274,16 @@ def ship(repo, msg, *paths):
         subprocess.run(["git", *a], cwd=repo, env=GIT_ENV, capture_output=True, text=True, check=True)
 
 
-def gate_run(repo, transcript, session, env_over=None, extra=None):
-    """Один вызов Stop-хука как от Claude Code: (rc, JSON stdout или {}, сырой stdout, строки журнала, секунды)."""
+def gate_run(repo, transcript, session, env_over=None, extra=None, hook=None, raw=None):
+    """Один вызов Stop-хука как от Claude Code: (rc, JSON stdout или {}, сырой stdout, строки журнала, секунды); hook — другой файл хука;
+    raw — stdin как есть вместо входа Stop (пустой, битый)."""
     inp = {"session_id": session, "transcript_path": transcript, "cwd": repo, "hook_event_name": "Stop", "stop_hook_active": False,
            "last_assistant_message": "Готово: фаза закрыта, все фичи сделаны.", "background_tasks": [], "session_crons": [], **(extra or {})}
     env = {k: v for k, v in os.environ.items() if k != "SPEC_GATE"} | {"CLAUDE_PROJECT_DIR": repo}
     for k, v in (env_over or {}).items():
         env.pop(k, None) if v is None else env.update({k: v})
     t = time.monotonic()
-    r = subprocess.run(["node", f"{repo}/.claude/hooks/spec-gate.mjs"], input=json.dumps(inp), env=env, capture_output=True, text=True, timeout=90)
+    r = subprocess.run(["node", hook or f"{repo}/.claude/hooks/spec-gate.mjs"], input=json.dumps(inp) if raw is None else raw, env=env, capture_output=True, text=True, timeout=90)
     try:
         res = json.loads(r.stdout) if r.stdout.strip() else {}
     except ValueError:
@@ -1180,16 +1293,448 @@ def gate_run(repo, transcript, session, env_over=None, extra=None):
     return r.returncode, res, r.stdout, log, time.monotonic() - t
 
 
+OLD_HOOK = "b04aaad"  # кит до SPEC-v3.4 F1 (его история есть только в репо кита): вторая сторона пробы — тот же вход на старом хуке
+TELEFON_LOG = "checks/fixtures/telefon-spec-gate-0305.jsonl"  # журнал telefon 03–05.11 без сессий и списков; только в репо кита
+RETRO_CUT = "2026-11-05T20:33"  # срез ретро: его числа 91 / 13 / 61 / 12 — журнал до этой минуты
+
+
+def old_hook(src, repo):
+    """Файл хука v3.3 рядом с хуком фикстуры; нет этой истории (проект из кита) — None."""
+    r = subprocess.run(["git", "-C", src, "show", f"{OLD_HOOK}:kit/.claude/hooks/spec-gate.mjs"], capture_output=True, text=True)
+    if r.returncode:
+        return None
+    p = f"{repo}/.claude/hooks/spec-gate-v33.mjs"
+    open(p, "w", encoding="utf-8").write(r.stdout)
+    return p
+
+
+def bg(kind, **kw):  # элемент background_tasks формы документации hooks
+    return {"id": f"task-{kind}", "type": kind, "status": "running", "description": "x", **kw}
+
+
+CRON = {"id": "cron-001", "schedule": "0 9 * * 1-5", "recurring": True, "prompt": "x"}
+SPEC_TL = GATE_SPEC_ITEMS.replace("- **STOP-NP** — нет прогресса.\n", "- **STOP-NP** — нет прогресса.\n- **STOP-TL** — плечо построено.\n")
+STOP_TL = "STOP: STOP-TL «Leg 1» — плечо построено.\nВопрос тимлиду: принять плечо 1?\nResume: «продолжай плечо 2».\n"
+
+
+def telefon_log():
+    """Счёт журнала telefon: (срез ретро, весь журнал) — pass background / решений без стопов; нет файла — None."""
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    p = f"{top}/{TELEFON_LOG}"
+    if not os.path.isfile(p):
+        return None
+    rows = [json.loads(l) for l in open(p, encoding="utf-8")]
+    def count(rs):
+        return {"bg": sum(r["class"] == "background" for r in rs), "time": sum(r["class"] == "cap-time" for r in rs), "stop": sum(r["decision"] == "stop" for r in rs), "n": len(rs)}
+    return count([r for r in rows if r["ts"] < RETRO_CUT]), count(rows)
+
+
+def gate34_probes(src, launch):
+    S = "GATE_HOOK"
+    short = lambda res: (res.get("reason") or res.get("systemMessage") or "тишина").replace("\n", " ")[:90]
+    no_cap_env = {"CLAUDE_CODE_STOP_HOOK_BLOCK_CAP": None}
+    # F1.1 — pass только по типам, что разбудят сессию; остальное — суд комплекта (F2 в фикстуре нет)
+    r, tr = gate_fixture(src, launch, items=True)
+    def end(name, tasks=(), crons=(), repo=None, transcript=None, hook=None):
+        rc, res, raw, log, _ = gate_run(repo or r, transcript or tr, name, extra={"background_tasks": list(tasks), "session_crons": list(crons)}, env_over=no_cap_env, hook=hook)
+        return log[-1], res, raw
+    passed, blocked, other = {}, {}, {}
+    for t in ("monitor", "workflow", "shell"):
+        l, res, raw = end(f"f11-{t}", [bg(t)])
+        passed[t] = l["decision"] == "pass" and l["reason"] == f"background:{t}" and not raw.strip() and l["bg"] == [t]
+    for t, group in (("subagent", blocked), ("MCP task", blocked), ("teammate", other), ("cloud session", other)):
+        l, res, raw = end(f"f11-{t}", [bg(t)])
+        group[t] = res.get("decision") == "block" and "- F2" in res.get("reason", "") and l["bg"] == [t]
+    l, res, raw = end("f11-no-type", [{"id": "t", "status": "running"}])
+    other["без type"] = res.get("decision") == "block" and l["bg"] == ["no type"]
+    mix, _, _ = end("f11-mix", [bg("subagent"), bg("monitor"), bg("monitor")])
+    cron, _, _ = end("f11-cron", [], [CRON])
+    ok = all(passed.values()) and all(blocked.values()) and all(other.values()) and mix["reason"] == "background:monitor" and cron["reason"] == "background:cron"
+    item(S, "F1.1", ok, f"pass={sum(passed.values())}/3 block={sum(blocked.values())}/2 · pass по типу: "
+         + ", ".join(f"{t} — background:{t}" for t, v in passed.items() if v) + " · суд комплекта: "
+         + ", ".join(t for t, v in blocked.items() if v) + "; прочее — " + ", ".join(f"{t} {'block' if v else 'НЕ block'}" for t, v in other.items())
+         + f" · subagent + monitor — {mix['decision']} {mix['reason']}, журнал bg {mix['bg']} · cron — {cron['reason']}")
+    # F1.2 — без потолка часов и блоков: сессия старше 3 ч и 12 блоков судятся; no-progress остаётся
+    r2, tr2 = gate_fixture(src, launch, items=True)
+    old4 = f"{os.path.dirname(tr2)}/old.jsonl"
+    open(old4, "w").write(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 4 * 3600))}) + "\n")
+    caps = json.load(open(f"{src}/.claude/spec-gate.json", encoding="utf-8")).get("caps", {})
+    l, res, _ = end("f12-old", repo=r2, transcript=old4)
+    hours_block = res.get("decision") == "block" and l["decision"] == "block" and l.get("platform_cap") == 8
+    seq = [end("f12-np", repo=r2, transcript=tr2)[0] for _ in range(4)]
+    np_ok = [x["decision"] for x in seq] == ["block", "block", "block", "pass"] and seq[-1]["reason"].startswith("no-progress")
+    sess = hashlib.sha256(b"f12-many").hexdigest()[:8]
+    with open(f"{r2}/docs/evidence/spec-gate.jsonl", "a", encoding="utf-8") as f:
+        for i in range(12):
+            f.write(json.dumps({"ts": "", "session": sess, "decision": "block", "missing": [f"x{i}"]}) + "\n")
+    many, res12, _ = end("f12-many", repo=r2, transcript=tr2)
+    alt = old_hook(src, r2)
+    alt_t = end("f12-alt-time", repo=r2, transcript=old4, hook=alt)[0] if alt else None
+    sess = hashlib.sha256(b"f12-alt-many").hexdigest()[:8]
+    if alt:
+        with open(f"{r2}/docs/evidence/spec-gate.jsonl", "a", encoding="utf-8") as f:
+            for i in range(12):
+                f.write(json.dumps({"ts": "", "session": sess, "decision": "block", "missing": [f"x{i}"]}) + "\n")
+    alt_b = end("f12-alt-many", repo=r2, transcript=tr2, hook=alt)[0] if alt else None
+    # конфиг проекта без caps: порог same_list — из DEFAULTS хука
+    r2c, tr2c = gate_fixture(src, launch, items=True)
+    no_caps = json.load(open(f"{r2c}/.claude/spec-gate.json", encoding="utf-8"))
+    no_caps.pop("caps", None)
+    open(f"{r2c}/.claude/spec-gate.json", "w", encoding="utf-8").write(json.dumps(no_caps))
+    seq_nc = [end("f12-no-caps", repo=r2c, transcript=tr2c)[0]["decision"] for _ in range(4)]
+    ok = ("hours" not in caps and "blocks" not in caps and hours_block and np_ok and res12.get("decision") == "block" and seq_nc == ["block", "block", "block", "pass"]
+          and (not alt or (alt_t["reason"].startswith("cap-time") and alt_b["reason"].startswith("cap-blocks"))))
+    item(S, "F1.2", ok, f"hours={'есть' if 'hours' in caps else 'weg'} block={'OK' if hours_block else 'нет'} · .claude/spec-gate.json caps {caps}; сессия старше 3 ч, неполный комплект — {l['decision']}, "
+         f"журнал platform_cap={l.get('platform_cap')}; 12 блоков сессии — {many['decision']}; один список 4 раза — {' → '.join(x['decision'] for x in seq)} ({seq[-1]['reason'][:30]}); конфиг без caps — {' → '.join(seq_nc)}"
+         + (f" · хук v3.3 на тех же входах: старше 3 ч — {alt_t['decision']} ({alt_t['reason'][:30]}), 12 блоков — {alt_b['decision']} ({alt_b['reason'][:30]})" if alt else " · истории кита нет — второй стороны на старом хуке нет"))
+    # F1.3 — evidence своей SPEC: первая строка `spec: SPEC-<n>`; чужая, близнец, не первая, без строки — не в счёт; вердикт чужой SPEC — тоже
+    r3, tr3 = gate_fixture(src, launch, full=True, items=True)
+    own = end("f13-own", repo=r3, transcript=tr3)[1]
+    ev2 = f"{r3}/docs/evidence/F2-b-result.txt"
+    body = EV_ITEMS["docs/evidence/F2-b-result.txt"].split("\n", 1)[1]
+    sides = {"spec: SPEC-9": "spec: SPEC-9\n" + body, "близнец spec: SPEC-10": "spec: SPEC-10\n" + body, "без строки": body, "вторая строка": "$ x\nspec: SPEC-1\n" + body}
+    foreign, alt = {}, old_hook(src, r3)
+    alt_res = None
+    for name, text in sides.items():
+        open(ev2, "w", encoding="utf-8").write(text)
+        ship(r3, f"чужая {name}", "docs/evidence/F2-b-result.txt")
+        res = end(f"f13-{name}", repo=r3, transcript=tr3)[1]
+        foreign[name] = res.get("decision") == "block" and "- F2.1:" in res.get("reason", "") and "is not of SPEC-1" in res.get("reason", "") and "- F1." not in res.get("reason", "")
+        if alt and name == "spec: SPEC-9":
+            alt_res = end("f13-alt", repo=r3, transcript=tr3, hook=alt)[1]
+    last_reason = line_of(res.get("reason", ""), "F2:")
+    open(ev2, "w", encoding="utf-8").write(EV_ITEMS["docs/evidence/F2-b-result.txt"])
+    ship(r3, "своя строка", "docs/evidence/F2-b-result.txt")
+    back = end("f13-back", repo=r3, transcript=tr3)[1]
+    v = next(n for n in os.listdir(f"{r3}/docs/evidence") if n.startswith("verify-"))
+    text = open(f"{r3}/docs/evidence/{v}", encoding="utf-8").read()
+    open(f"{r3}/docs/evidence/{v}", "w", encoding="utf-8").write(text.replace("docs/SPEC-1.md", "docs/SPEC-9.md"))
+    ship(r3, "вердикт чужой SPEC", f"docs/evidence/{v}")
+    alien = end("f13-verdict", repo=r3, transcript=tr3)[1]
+    # полный свой комплект и рядом чужой файл той же фичи — ход не держит; свой неполный — чужой только назван, его строки не в счёт
+    ob, tob = gate_fixture(src, launch, full=True, items=True)
+    open(f"{ob}/docs/evidence/F1-old-result.txt", "w", encoding="utf-8").write("spec: SPEC-0\n$ old\nF1.2 old\nA_OK\n")
+    ship(ob, "чужой файл рядом со своим", "docs/evidence/F1-old-result.txt")
+    beside = end("f13-beside", repo=ob, transcript=tob)[1]
+    open(f"{ob}/docs/evidence/F2-old-result.txt", "w", encoding="utf-8").write("spec: SPEC-0\n$ old\nF2.2 old\nB_OK\n")
+    open(f"{ob}/docs/evidence/F1-a-result.txt", "w", encoding="utf-8").write(EV_ITEMS["docs/evidence/F1-a-result.txt"].replace("F1.2 rc 0", "проба 2 rc 0"))
+    ship(ob, "свой F1 без F1.2, чужой с F1.2; у полной F2 чужой рядом", "docs/evidence/F2-old-result.txt", "docs/evidence/F1-a-result.txt")
+    hint = end("f13-hint", repo=ob, transcript=tob)[1]
+    hint_r = hint.get("reason", "")
+    hint_ok = (hint.get("decision") == "block" and "- F1.2:" in hint_r and "F1-old-result.txt is not of SPEC-1" in hint_r
+               and "F1-a-result.txt is not of" not in hint_r and "F2-old-result.txt" not in hint_r)
+    def evidence(repo, check, *cmd, feature="F1", cwd=None, home=None):
+        """bin/evidence фикстуры: (код, строки файла; нет файла — [])."""
+        run = subprocess.run([os.path.relpath(f"{repo}/bin/evidence", cwd or repo), feature, check, "--", *cmd], cwd=cwd or repo, capture_output=True,
+                             env=dict(os.environ) if home is None else dict(os.environ, HOME=home))
+        p = f"{repo}/docs/evidence/{feature}-{check}-result.txt"
+        return run.returncode, open(p, encoding="utf-8").read().splitlines() if os.path.isfile(p) else []
+    no_probe_of = lambda repo: next((l for l in report_of(repo, src)[2].splitlines() if l.startswith("- **Пункты без пробы")), "")
+    # одно правило у bin/evidence, хука и отчёта: файл фазы — PROMPT, иначе GOAL; первая запись Read first с именем SPEC-*.md (SPEC-9 в фикстуре нет)
+    phases = {"SPEC-9 упомянут раньше": {"docs/PROMPT.txt": "История: docs/SPEC-9.md, docs/PROGRESS.md\nRead first: docs/SPEC-1.md, docs/PROGRESS.md\n"},
+              "два SPEC": {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md, docs/SPEC-9.md\n"},
+              "NOTES-SPEC-9.md первым": {"docs/PROMPT.txt": "Read first: docs/NOTES-SPEC-9.md, docs/SPEC-1.md\n"},
+              "только GOAL.txt": {"docs/PROMPT.txt": None, "docs/GOAL.txt": "Read first: docs/SPEC-1.md\n"},
+              "PROMPT и GOAL с другим SPEC": {"docs/GOAL.txt": "Read first: docs/SPEC-9.md\n"}}
+    named = {}
+    for name, files in phases.items():
+        fp, tfp = gate_fixture(src, launch, full=True, items=True)
+        for rel, text in files.items():
+            if text is None:
+                os.remove(f"{fp}/{rel}")
+            else:
+                open(f"{fp}/{rel}", "w", encoding="utf-8").write(text)
+        ship(fp, f"Тимлид: файл фазы — {name}", *files)
+        rc_ev, ls = evidence(fp, "b", "bash", "-c", "echo F2.1 x; echo F2.2 y; echo B_OK", feature="F2")
+        if rc_ev == 0:
+            ship(fp, "evidence", "docs/evidence/F2-b-result.txt")
+        got = end(f"f13-phase-{name}", repo=fp, transcript=tfp)[1]
+        named[name] = (rc_ev, ls[0], got, report_of(fp, src)[2].split("\n", 1)[0].split(" — ")[-1].split(" (")[0])
+    phase_ok = all(rc == 0 and first == "spec: SPEC-1" and got.get("systemMessage", "").startswith("SPEC_GATE_OK") and spec == "docs/SPEC-1.md" for rc, first, got, spec in named.values())
+    # bin/evidence пишет первую строку, отдаёт код команды, домашний каталог — «~»; без SPEC команда не идёт. Отчёт фазы чужую строку не считает
+    w, _ = gate_fixture(src, launch, items=True)
+    home = os.path.expanduser("~")
+    rc7, ev_lines = evidence(w, "probe", "bash", "-c", f"echo {home}/x; exit 7")
+    os.makedirs(f"{w}/docs/sub")
+    rc_sub, sub = evidence(w, "sub", "pwd", cwd=f"{w}/docs/sub")  # файл и команда — от корня, откуда бы ни звали
+    se = evidence(w, "stderr", "bash", "-c", "echo to-std''err >&2")[1]  # в $-строке другая запись: в файле — вывод, не команда
+    rc_kill = evidence(w, "kill", "bash", "-c", "kill -9 $$")[0]
+    during = evidence(w, "during", "ls", "-A", "docs/evidence")[1][2:]  # пока команда идёт, в docs/evidence нет временного файла
+    no_home = {v: evidence(w, "home", "echo", "/etc/hosts", home=v)[1] for v in ("/", "")}
+    os.remove(f"{w}/docs/PROMPT.txt")
+    ev_no = subprocess.run(["bin/evidence", "F1", "none", "--", "bash", "-c", "echo ran"], cwd=w, capture_output=True, text=True)
+    ev_clean = len(ev_lines) > 2 and "~/x" in ev_lines[1] and "~/x" in ev_lines[2] and home not in "\n".join(ev_lines)
+    ev_ok = (rc7 == 7 and ev_clean and ev_lines[0] == "spec: SPEC-1" and ev_lines[1].startswith("$ bash -c")
+             and ev_no.returncode == 2 and "ran" not in ev_no.stdout and not os.path.exists(f"{w}/docs/evidence/F1-none-result.txt"))
+    sub_ok = rc_sub == 0 and sub[2:] == [os.path.realpath(w)]
+    no_home_ok = all(ls[1:] == ["$ echo /etc/hosts", "/etc/hosts"] for ls in no_home.values())
+    ev_more_ok = sub_ok and "to-stderr" in se[2:] and rc_kill == 137 and no_home_ok and bool(during) and all(f.endswith("-result.txt") for f in during)
+    # команда с CR и LF не пишет в файл своих строк: маркер и строки пунктов — только из вывода
+    fg, tfg = gate_fixture(src, launch, full=True, items=True)
+    rc_lf, lf = evidence(fg, "b", "bash", "-c", "exit 1\nB_OK\nF2.1 подлог\nF2.2 подлог", feature="F2")
+    ship(fg, "команда с переводом строки", "docs/evidence/F2-b-result.txt")
+    forged = end("f13-forged", repo=fg, transcript=tfg)[1]
+    rc_cr, cr = evidence(fg, "b", "bash", "-c", "exit 1 #\rF2.1 подлог\rF2.2 подлог", feature="F2")
+    cr_probe = no_probe_of(fg)
+    rc_ls, ls_sep = evidence(fg, "b", "bash", "-c", "exit 1 #\u2028F2.1 подлог\u2028F2.2 подлог", feature="F2")  # отчёт читает str.splitlines: для него и это конец строки
+    ls_probe = no_probe_of(fg)
+    forged_ok = (rc_lf == 1 and len(lf) == 2 and forged.get("decision") == "block" and "no line B_OK" in line_of(forged.get("reason", ""), "F2:")
+                 and rc_cr == 1 and len(cr) == 2 and "(2): F2.1, F2.2" in cr_probe and rc_ls == 1 and len(ls_sep) == 2 and "(2): F2.1, F2.2" in ls_probe)
+    # BOM перед spec: — хук и отчёт судят одинаково
+    bm, tbm = gate_fixture(src, launch, full=True, items=True)
+    open(f"{bm}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("\ufeff" + EV_ITEMS["docs/evidence/F2-b-result.txt"])
+    ship(bm, "BOM перед spec:", "docs/evidence/F2-b-result.txt")
+    bom_hook, bom_probe = end("f13-bom", repo=bm, transcript=tbm)[1], no_probe_of(bm)
+    bom_ok = bom_hook.get("systemMessage", "").startswith("SPEC_GATE_OK") and "(0)" in bom_probe
+    rp, trp = gate_fixture(src, launch, full=True, items=True)
+    open(f"{rp}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-9\n" + body)
+    no_probe = no_probe_of(rp)
+    open(f"{rp}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-10\n" + body)
+    twin_probe = no_probe_of(rp)
+    open(f"{rp}/docs/evidence/F1-x-result.txt", "w", encoding="utf-8").write("spec: SPEC-1\nF2.1 строка чужой фичи\n")
+    alien_probe = no_probe_of(rp)
+    ok = (own.get("systemMessage", "").startswith("SPEC_GATE_OK") and all(foreign.values()) and back.get("systemMessage", "").startswith("SPEC_GATE_OK")
+          and alien.get("decision") == "block" and "no /verify-phase verdict in HEAD names F1" in alien.get("reason", "") and (not alt or alt_res.get("systemMessage", "").startswith("SPEC_GATE_OK"))
+          and ev_ok and "F2.1" in no_probe and "F1.1" not in no_probe and "(2): F2.1, F2.2" in twin_probe and "(2): F2.1, F2.2" in alien_probe
+          and beside.get("systemMessage", "").startswith("SPEC_GATE_OK") and hint_ok and phase_ok and ev_more_ok and forged_ok and bom_ok)
+    item(S, "F1.3", ok, f"fremd={'missing' if all(foreign.values()) else 'засчитан'} eigen={'OK' if own.get('systemMessage', '').startswith('SPEC_GATE_OK') else 'нет'} · своя — «{short(own)[:60]}»; чужие: "
+         + ", ".join(f"{k} — {'block' if x else 'НЕ block'}" for k, x in foreign.items()) + f"; «{last_reason[:100]}»; вердикт docs/SPEC-9.md — {alien.get('decision')}: «{line_of(alien.get('reason', ''), 'no full')[:70]}»"
+         + (f" · хук v3.3 на spec: SPEC-9 — «{short(alt_res)[:40]}»" if alt else "")
+         + f" · свой полон, чужой рядом в коммите — «{short(beside)[:30]}»; свой без F1.2, чужой с F1.2 — {hint.get('decision')}: «{line_of(hint_r, 'F1:')[:60]}», «{line_of(hint_r, 'F1.2')[:40]}»; у полной F2 чужой не назван — {'да' if 'F2-old-result.txt' not in hint_r else 'нет'}"
+         + " · файл фазы: " + "; ".join(f"{k} — «{first}» rc {rc}, хук «{short(got)[:12]}», отчёт {spec}" for k, (rc, first, got, spec) in named.items())
+         + f" · bin/evidence: rc команды {rc7}, первая строка «{ev_lines[0] if ev_lines else 'нет файла'}», домашний каталог в $-строке и выводе вычищен — {'да' if ev_clean else 'нет'}; без SPEC — rc {ev_no.returncode}, команда не шла"
+         + f"; из docs/sub идёт от корня — {'да' if sub_ok else 'нет'}; stderr в файле — {'да' if 'to-stderr' in se[2:] else 'нет'}; в docs/evidence во время прогона только файлы результатов — {'да' if during and all(f.endswith('-result.txt') for f in during) else 'нет'}; убита сигналом 9 — rc {rc_kill}; HOME / и пуст, вывод как есть — {'да' if no_home_ok else 'нет'}"
+         + f"; LF в команде — rc {rc_lf}, строк файла {len(lf)}, {forged.get('decision')}: «{line_of(forged.get('reason', ''), 'F2:')[:40]}»; CR — строк {len(cr)}, «{cr_probe[:40]}»; U+2028 — строк {len(ls_sep)}, «{ls_probe[:40]}»"
+         + f"; BOM перед spec: — хук «{short(bom_hook)[:12]}», отчёт «{bom_probe[:30]}»"
+         + f" · bin/phase-report на spec: SPEC-9 — «{no_probe[:50]}»; на spec: SPEC-10 — «{twin_probe[:50]}»; строка F2.1 в файле F1 — «{alien_probe[:50]}»")
+    # F1.4 — STOP-TL: с вопросом и Resume → stop; без вопроса → missing; SPEC без §4 — STOP_IDS
+    no4 = re.sub(r"\n## 4\..*", "\n", GATE_SPEC_ITEMS, flags=re.S)
+    def stop_case(name, spec, text, old=False, push=True, nl="\n"):  # своя фикстура на прогон: стоп отпускает ход один раз, в любой сессии
+        repo, trx = gate_fixture(src, launch, items=True, spec=spec)
+        pg = open(f"{repo}/docs/PROGRESS.md", encoding="utf-8").read() + "\n" + text
+        open(f"{repo}/docs/PROGRESS.md", "w", encoding="utf-8", newline="").write(pg.replace("\n", nl))
+        if push:
+            ship(repo, name, "docs/PROGRESS.md")
+        else:
+            for x in (("add", "--", "docs/PROGRESS.md"), ("commit", "-qm", name)):
+                subprocess.run(["git", *x], cwd=repo, env=GIT_ENV, capture_output=True, text=True, check=True)
+        hook = old_hook(src, repo) if old else None
+        return None if old and not hook else end(f"f14-{name}", repo=repo, transcript=trx, hook=hook)
+    a, _, _ = stop_case("in-4", SPEC_TL, STOP_TL)
+    d, _, _ = stop_case("default", no4, STOP_TL)
+    oldd = stop_case("default-alt", no4, STOP_TL, old=True)
+    b, resb, _ = stop_case("no-question", SPEC_TL, "STOP: STOP-TL «Leg 1» — плечо построено.\n")
+    c, resc, _ = stop_case("not-in-4", GATE_SPEC_ITEMS, STOP_TL)
+    unp, resu, _ = stop_case("unpushed", SPEC_TL, STOP_TL, push=False)
+    crlf, _, _ = stop_case("crlf", SPEC_TL, STOP_TL, nl="\r\n")
+    # форма стопа: три строки после строки STOP; вопрос — ? без буквы, =, & или % сразу за ним, ? в адресе — не вопрос; resume — /resume|продолж/i
+    form_block = {"Resume без вопроса": "STOP: STOP-TL Leg\nResume: продолжай\n", "вопрос без Resume": "STOP: STOP-TL Leg\nВопрос тимлиду: принять?\n",
+                  "Resume на строке +4": "STOP: STOP-TL Leg\nа\nб\nВопрос: принять?\nResume: продолжай\n",
+                  "только строка STOP, ? в адресе": "STOP: STOP-TL продолжение см. https://x.example/a?b=1\n", "только строка STOP с вопросом": "STOP: STOP-TL плечо построено, продолжать?\n",
+                  "? только в адресе, Resume ниже": "STOP: STOP-TL Leg\nсм. https://x.example/a?b=1\nResume: продолжай\n",
+                  "? в адресах с =, & и %": "STOP: STOP-TL Leg\nсм. https://x.example/a?=1 https://x.example/b?&c https://x.example/d?%20e\nResume: продолжай\n"}
+    form_stop = {"Resume на строке +3": "STOP: STOP-TL Leg\nВопрос: принять?\nа\nResume: go\n", "«Продолжай» без слова Resume": "STOP: STOP-TL Leg\nВопрос: принять?\nПродолжай по SPEC-1 с F2\n",
+                 "вопрос жирным": "STOP: STOP-TL Leg\n**Принять?**\nResume: go\n", "вопрос в кавычках": "STOP: STOP-TL Leg\nВопрос: «принять?»\nResume: go\n"}
+    held = {k: stop_case(f"form-{k}", SPEC_TL, t)[:2] for k, t in form_block.items()}
+    freed = {k: stop_case(f"form-{k}", SPEC_TL, t)[0] for k, t in form_stop.items()}
+    form_ok = all(x["decision"] == "block" and "no question" in y.get("reason", "") for x, y in held.values()) and all(x["decision"] == "stop" for x in freed.values())
+    ok = (a["decision"] == "stop" and a["reason"] == "STOP-TL" and d["decision"] == "stop" and b["decision"] == "block" and "no question" in resb.get("reason", "")
+          and c["decision"] == "block" and "is not a stop of SPEC §4" in resc.get("reason", "") and (not oldd or oldd[0]["decision"] == "block")
+          and unp["decision"] == "block" and "is not pushed" in resu.get("reason", "") and crlf["decision"] == "stop" and crlf["reason"] == "STOP-TL" and form_ok)
+    item(S, "F1.4", ok, f"stop_tl={'OK' if a['decision'] == 'stop' and d['decision'] == 'stop' else 'нет'} · §4 с STOP-TL, вопрос и Resume, запушен — {a['decision']} ({a['reason']}); SPEC без §4, STOP_IDS — {d['decision']}"
+         + (f" (хук v3.3 — {oldd[0]['decision']})" if oldd else "") + f"; без вопроса — {b['decision']}: «{line_of(resb.get('reason', ''), '«STOP')[:70]}»; §4 без STOP-TL — {c['decision']}"
+         + f"; закоммичен без push — {unp['decision']}: «{line_of(resu.get('reason', ''), 'branch')[:30]}»; весь файл с CRLF — {crlf['decision']}"
+         + " · форма: " + "; ".join(f"{k} — {x['decision']}" for k, (x, _) in held.items()) + "; " + "; ".join(f"{k} — {x['decision']}" for k, x in freed.items()))
+    # F1.5 — 10 концов хода формы Stop input вкладки Code = ожидаемым; те же входы на хуке v3.3; счёт журнала telefon на старом хуке
+    r5, t5 = gate_fixture(src, launch, items=True)
+    f5, tf5 = gate_fixture(src, launch, full=True, items=True)
+    s5, ts5 = gate_fixture(src, launch, items=True, spec=SPEC_TL)
+    open(f"{s5}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + STOP_TL)
+    ship(s5, "стоп плеча", "docs/PROGRESS.md")
+    turns = [("без фона", r5, t5, [], [], "block"), ("subagent", r5, t5, [bg("subagent", agent_type="general-purpose")], [], "block"),
+             ("monitor", r5, t5, [bg("monitor", server="s", tool="t")], [], "pass"), ("workflow", r5, t5, [bg("workflow", name="verify-phase")], [], "pass"),
+             ("shell", r5, t5, [bg("shell", command="sleep 1")], [], "pass"), ("MCP task", r5, t5, [bg("MCP task", server="s", tool="t")], [], "block"),
+             ("subagent и monitor", r5, t5, [bg("subagent"), bg("monitor")], [], "pass"), ("cron", r5, t5, [], [CRON], "pass"),
+             ("полный комплект, subagent", f5, tf5, [bg("subagent")], [], "ok"), ("STOP-TL запушен, subagent", s5, ts5, [bg("subagent")], [], "stop")]
+    def replay(hook_of, tag):
+        return [(n, end(f"f15-{tag}-{i}", tk, cr, repo=rp, transcript=tx, hook=hook_of(rp))[0]["decision"], want) for i, (n, rp, tx, tk, cr, want) in enumerate(turns)]
+    alts = {rp: old_hook(src, rp) for rp in (r5, f5, s5)}
+    old = replay(lambda rp: alts[rp], "old") if alts[r5] else None
+    new = replay(lambda rp: None, "new")
+    hit = lambda rs: sum(d == w for _, d, w in rs)
+    tl = telefon_log()
+    alt_text = f"alt={tl[0]['bg']}/{tl[0]['n'] - tl[0]['stop']}" if tl else "alt=—"
+    tl_ok = not tl or (tl[0]["bg"], tl[0]["n"] - tl[0]["stop"], tl[0]["n"], tl[0]["stop"], tl[0]["time"]) == (61, 78, 91, 13, 12)
+    ok = hit(new) == 10 and tl_ok and (old is None or hit(old) < 10)
+    self_log = [json.loads(x) for x in open("docs/evidence/spec-gate.jsonl", encoding="utf-8")] if os.path.isfile("docs/evidence/spec-gate.jsonl") else []
+    seen_types = sorted({t for x in self_log for t in x.get("bg", [])})
+    item(S, "F1.5", ok, f"code_tab={hit(new)}/10 {alt_text} · входы формы Stop input документации hooks; новый хук: " + "; ".join(f"{n} — {d}" for n, d, _ in new)
+         + (f" · хук v3.3 на тех же входах {hit(old)}/10: " + "; ".join(f"{n} — {d}, ждали {w}" for n, d, w in old if d != w) if old else " · истории кита нет — старого хука нет")
+         + (f" · журнал telefon 03–05.11, старый хук: до среза ретро {RETRO_CUT}Z решений {tl[0]['n']}, стопов {tl[0]['stop']}, pass background {tl[0]['bg']}, cap-time {tl[0]['time']}; весь журнал {tl[1]['bg']}/{tl[1]['n'] - tl[1]['stop']}" if tl else "")
+         + f" · живая вкладка: журнал этого проекта, строк с типами {sum('bg' in x for x in self_log)}, типы {seen_types or 'нет'}")
+
+
+def union_probes(S, src, launch):
+    """Решение 401: полный круг — объединение вызовов. Каждая фича названа своим новейшим вердиктом (PASS или NEEDS_WORK, который её не
+    блокирует), вердикт — не раньше последнего коммита с её id; непокрытая фича — строка missing с её именем."""
+    def split(repo, *parts):  # вердикт фикстуры (без FEATURES — все фичи) → точечные файлы того же sha; parts — (суффикс, FEATURES, текст после)
+        v = next(n for n in os.listdir(f"{repo}/docs/evidence") if re.fullmatch(r"verify-[0-9a-f]+\.txt", n))
+        sha = v[7:-4]
+        subprocess.run(["git", "rm", "-q", f"docs/evidence/{v}"], cwd=repo, env=GIT_ENV, check=True)
+        names = []
+        for suf, feats, tail in parts:
+            n = f"docs/evidence/verify-{sha}-{suf}.txt"
+            head = "VERDICT: PASS" if not tail else "VERDICT: NEEDS_WORK"
+            open(f"{repo}/{n}", "w").write(f"{head}\n/verify-phase · docs/SPEC-1.md · HEAD {sha}\nFEATURES: {feats}\n{tail}")
+            names.append(n)
+        ship(repo, "вызовы круга", *names)
+        return sha
+    line = lambda r, f: next((l[2:] for l in r.get("reason", "").split("\n") if l.startswith(f"- {f}:")), "")
+    gate_ok = lambda r: r.get("systemMessage", "").startswith("SPEC_GATE_OK")
+    two, t2 = gate_fixture(src, launch, full=True, items=True)
+    split(two, ("F1", "F1", ""), ("F2", "F2", ""))
+    both = gate_run(two, t2, "probe-union-two")[1]
+    open(f"{two}/bin/b-fix", "w").write("echo B\n")
+    ship(two, "F2.1: починка bin/b", "bin/b-fix")
+    fixed = gate_run(two, t2, "probe-union-changed")[1]
+    fx = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=two, capture_output=True, text=True).stdout.strip()
+    open(f"{two}/docs/evidence/verify-{fx}-F2.txt", "w").write(f"VERDICT: PASS\n/verify-phase · docs/SPEC-1.md · HEAD {fx}\nFEATURES: F2\n")
+    ship(two, "точечный PASS по F2 после починки", f"docs/evidence/verify-{fx}-F2.txt")
+    again = gate_run(two, t2, "probe-union-again")[1]
+    one, t1 = gate_fixture(src, launch, full=True, items=True)
+    split(one, ("F1", "F1", ""))
+    half = gate_run(one, t1, "probe-union-half")[1]
+    nw, tn = gate_fixture(src, launch, full=True, items=True)
+    split(nw, ("F1-F2", "F1, F2", "\n## Блокирующие\n- **F2.1: не подтверждён своим прогоном** — x\n"))
+    blocked = gate_run(nw, tn, "probe-union-blocking")[1]
+    raw, tr = gate_fixture(src, launch, full=True, items=True)
+    split(raw, ("F1-F2", "F1, F2", "\nклассы без раздела блокирующих\n"))
+    unparsed = gate_run(raw, tr, "probe-union-unparsed")[1]
+    sides = {
+        "F1 и F2 — два вызова": gate_ok(both),
+        "коммит «F2.1:» после вызова F2": fixed.get("decision") == "block" and "changed after its /verify-phase verdict" in line(fixed, "F2") and not line(fixed, "F1"),
+        "точечный PASS F2 после коммита": gate_ok(again) and "-F2.txt" in again.get("systemMessage", ""),
+        "назван только F1": half.get("decision") == "block" and "no /verify-phase verdict in HEAD names F2" in line(half, "F2") and not line(half, "F1"),
+        "NEEDS_WORK блокирует F2": blocked.get("decision") == "block" and "blocking in the /verify-phase round" in line(blocked, "F2") and not line(blocked, "F1"),
+        "NEEDS_WORK без разобранного списка": unparsed.get("decision") == "block" and bool(line(unparsed, "F1")) and bool(line(unparsed, "F2")),
+    }
+    say(S, "OK" if all(sides.values()) else "FAIL", "union",
+        "; ".join(f"{k} — {'да' if v else 'НЕТ'}" for k, v in sides.items()) + f" · два вызова — «{both.get('systemMessage', both.get('reason', ''))[:90]}»; назван только F1 — «{line(half, 'F2')[:70]}»")
+
+
+def history_probes(S, src, launch):
+    """Решение 401 на истории: вердикты разных коммитов, коммит без id между ними, два коммита фичи, чужой id, новый NEEDS_WORK поверх
+    старого PASS, два вердикта одного коммита и слияние ветки (git log идёт по датам, а вердикт видит только своих предков)."""
+    def at(repo, msg, path, when=None, branch=None, text=None):  # коммит файла на ветке; when — секунды назад (даты коммита и автора)
+        g = lambda *a: subprocess.run(["git", *a], cwd=repo, env=GIT_ENV | ({"GIT_AUTHOR_DATE": f"{int(time.time()) - when} +0000", "GIT_COMMITTER_DATE": f"{int(time.time()) - when} +0000"} if when else {}), capture_output=True, text=True, check=True)
+        if branch:
+            g("switch", "-q", branch) if subprocess.run(["git", "rev-parse", "-q", "--verify", branch], cwd=repo, capture_output=True).returncode == 0 else g("switch", "-qc", branch)
+        os.makedirs(os.path.dirname(f"{repo}/{path}") or repo, exist_ok=True)
+        open(f"{repo}/{path}", "w").write(text if text is not None else f"{msg}\n")
+        g("add", "--", path)
+        g("commit", "-qm", msg)
+        return g("rev-parse", "--short", "HEAD").stdout.strip()
+    verdict = lambda sha, feats, tail="": f"{'VERDICT: NEEDS_WORK' if tail else 'VERDICT: PASS'}\n/verify-phase · docs/SPEC-1.md · HEAD {sha}\nFEATURES: {feats}\n{tail}"
+    call = lambda repo, sha, suf, feats, tail="", when=None, branch=None: at(repo, f"вызов {suf}", f"docs/evidence/verify-{sha}-{suf}.txt", when, branch, verdict(sha, feats, tail))
+    push = lambda repo: subprocess.run(["git", "push", "-q", "origin", "phase"], cwd=repo, env=GIT_ENV, capture_output=True, text=True, check=True)
+    def base():  # фикстура двух фич: вердикт полного круга заменён вызовами F1 и F2 того же коммита
+        repo, tr = gate_fixture(src, launch, full=True, items=True)
+        v = next(n for n in os.listdir(f"{repo}/docs/evidence") if re.fullmatch(r"verify-[0-9a-f]+\.txt", n))
+        sha = v[7:-4]
+        subprocess.run(["git", "rm", "-q", f"docs/evidence/{v}"], cwd=repo, env=GIT_ENV, check=True)
+        for suf in ("F1", "F2"):
+            open(f"{repo}/docs/evidence/verify-{sha}-{suf}.txt", "w").write(verdict(sha, suf))
+        ship(repo, "вызовы F1 и F2", f"docs/evidence/verify-{sha}-F1.txt", f"docs/evidence/verify-{sha}-F2.txt")
+        return repo, tr, sha
+    line = lambda r, f: next((l[2:] for l in r.get("reason", "").split("\n") if l.startswith(f"- {f}:")), "")
+    noid = lambda r: next((l[2:] for l in r.get("reason", "").split("\n") if "names no item" in l), "")
+    gate_ok = lambda r: r.get("systemMessage", "").startswith("SPEC_GATE_OK")
+    sides = {}
+    # коммит без id между вердиктами разных коммитов: должна только фича, чей вердикт его не видел
+    r1, t1, b1 = base()
+    at(r1, "refactor helper", "bin/helper")
+    fx = at(r1, "F2.1: починка bin/b", "bin/b2")
+    call(r1, fx, "F2", "F2"); push(r1)
+    gap = gate_run(r1, t1, "probe-hist-gap")[1]
+    call(r1, fx, "F1", "F1"); push(r1)
+    gap_ok = gate_run(r1, t1, "probe-hist-gap-ok")[1]
+    sides["коммит без id между вызовами — должна F1, не F2"] = gap.get("decision") == "block" and "F1 (verify-" in noid(gap) and "F2 (" not in noid(gap) and not line(gap, "F2")
+    sides["вызов F1 после него"] = gate_ok(gap_ok)
+    # два коммита F2, точечный вердикт между ними; чужой id после вердиктов
+    r2, t2, b2 = base()
+    a = at(r2, "F2.1: починка один", "bin/b1")
+    call(r2, a, "F2", "F2")
+    two = at(r2, "F2.2: починка два", "bin/b2"); push(r2)
+    twice = gate_run(r2, t2, "probe-hist-twice")[1]
+    sides["два коммита F2, вердикт между"] = twice.get("decision") == "block" and f"commit {two}" in line(twice, "F2")
+    r3, t3, b3 = base()
+    at(r3, "F3.1: чужой пункт", "bin/x"); push(r3)
+    alien = gate_run(r3, t3, "probe-hist-alien")[1]
+    sides["id не из SPEC"] = alien.get("decision") == "block" and "names F3" in line(alien, "F3")
+    # новый NEEDS_WORK, блокирующий F2, поверх старого PASS; два вердикта одного коммита — проверяющий первым
+    r4, t4, b4 = base()
+    p = at(r4, "PLAN: журнал", "docs/PLAN-1.md")
+    call(r4, p, "F2", "F2", "\n## Блокирующие\n- **F2.1: не подтверждён своим прогоном** — x\n"); push(r4)
+    newer = gate_run(r4, t4, "probe-hist-newer")[1]
+    sides["новый NEEDS_WORK поверх старого PASS"] = newer.get("decision") == "block" and "blocking in the /verify-phase round" in line(newer, "F2")
+    r5, t5, b5 = base()
+    open(f"{r5}/docs/evidence/verify-{b5}-F1-F2.txt", "w").write(verdict(b5, "F1, F2", "\n## Блокирующие\n- **F2.1: x** — y\n"))
+    ship(r5, "NEEDS_WORK того же коммита", f"docs/evidence/verify-{b5}-F1-F2.txt")
+    tie = gate_run(r5, t5, "probe-hist-tie")[1]
+    sides["PASS и NEEDS_WORK одного коммита"] = gate_ok(tie)
+    # слияние: коммит F2 ветки старше по дате, чем коммит F2 и его вердикт на phase — вердикт его не видел
+    r6, t6, b6 = base()
+    at(r6, "F2.1: на ветке", "bin/b-side", when=300, branch="side")
+    m = at(r6, "F2.2: на phase", "bin/b-main", when=200, branch="phase")
+    call(r6, m, "F2", "F2", when=100)
+    subprocess.run(["git", "merge", "-q", "--no-ff", "-m", "Merge side", "side"], cwd=r6, env=GIT_ENV, capture_output=True, text=True, check=True); push(r6)
+    merged = gate_run(r6, t6, "probe-hist-merge")[1]
+    mh = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=r6, capture_output=True, text=True).stdout.strip()
+    call(r6, mh, "F2-m", "F2"); push(r6)
+    merged_ok = gate_run(r6, t6, "probe-hist-merge-ok")[1]
+    sides["слияние: F2 ветки не видел вердикт phase"] = merged.get("decision") == "block" and "changed after its /verify-phase verdict" in line(merged, "F2")
+    sides["вызов F2 на слиянии"] = gate_ok(merged_ok)
+    # слияние: коммит F2 ветки покрыт точечным вердиктом на ветке, новейший вердикт F2 — на phase
+    r7, t7, b7 = base()
+    c = at(r7, "F2.1: на ветке", "bin/c", when=300, branch="side")
+    call(r7, c, "F2", "F2", when=280, branch="side")
+    y = at(r7, "F1.1: на phase", "bin/y", when=200, branch="phase")
+    call(r7, y, "F1-F2", "F1, F2", when=100)
+    subprocess.run(["git", "merge", "-q", "--no-ff", "-m", "Merge side", "side"], cwd=r7, env=GIT_ENV, capture_output=True, text=True, check=True); push(r7)
+    covered = gate_run(r7, t7, "probe-hist-merge-covered")[1]
+    sides["слияние: F2 ветки покрыт вердиктом ветки"] = gate_ok(covered)
+    say(S, "OK" if all(sides.values()) else "FAIL", "history",
+        "; ".join(f"{k} — {'да' if v else 'НЕТ'}" for k, v in sides.items()) + f" · без id — «{noid(gap)[:110]}»; слияние — «{line(merged, 'F2')[:90]}»")
+
+
+def stdin_probes(S, src, launch):
+    """Решение 401: пустой stdin или не объект JSON — своя ошибка хука: pass с причиной в журнале, не block; целый вход судится как прежде."""
+    repo, tr = gate_fixture(src, launch)  # одна фича из двух: целый вход — block
+    inputs = (("пустой", ""), ("пробелы", " \n"), ("битый", "{oops"), ("null", "null"), ("массив", "[]"))
+    runs = {name: gate_run(repo, tr, "probe-stdin", raw=raw) for name, raw in inputs}
+    whole = gate_run(repo, tr, "probe-stdin-whole")
+    own = lambda r, i: len(r[3]) == i + 1  # строку журнала написал этот вызов, а не прошлый: вызовы идут по одному журналу
+    why = lambda raw: "stdin: empty — the gate passes" if not raw.strip() else f"stdin: not a JSON object ({len(raw.encode())} bytes) — the gate passes"
+    passed = {k: own(r, i) and r[0] == 0 and r[1].get("decision") != "block" and r[3][-1]["decision"] == "pass" and r[3][-1]["reason"] == why(raw)
+              for i, ((k, r), (_, raw)) in enumerate(zip(runs.items(), inputs))}
+    held = own(whole, len(inputs)) and whole[0] == 0 and whole[1].get("decision") == "block" and whole[3][-1]["decision"] == "block"
+    say(S, "OK" if all(passed.values()) and held else "FAIL", "stdin",
+        "; ".join(f"{k} — {r[3][-1]['decision']} «{r[3][-1]['reason'][:45]}»" for k, r in runs.items()) + f"; целый вход Stop — {whole[3][-1]['decision']}")
+
+
 def gate_probes(src, launch, lenv, args):
     S = "GATE_HOOK"
     short = lambda res: (res.get("reason") or res.get("systemMessage") or "тишина").replace("\n", " ")[:150]
     repo, tr = gate_fixture(src, launch)
     rc, res, _, log, _ = gate_run(repo, tr, "probe-partial")
     reason = res.get("reason", "")
-    say(S, "OK" if rc == 0 and res.get("decision") == "block" and "- F2:" in reason and "- F1:" not in reason else "FAIL", "partial",
-        f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, причина называет F2 — {'да' if '- F2:' in reason else 'нет'}, F1 — {'да' if '- F1:' in reason else 'нет'}; rc {rc}")
+    f1_set = [l for l in reason.split("\n") if l.startswith("- F1:") and "no /verify-phase verdict" not in l]  # вердикта нет ни у одной фичи — F1 названа только им (401)
+    f2_set = "- F2: no docs/evidence/F2-" in reason  # F2 названа своим комплектом, а не только отсутствием вердикта
+    say(S, "OK" if rc == 0 and res.get("decision") == "block" and f2_set and not f1_set and "- F1: no /verify-phase verdict" in reason else "FAIL", "partial",
+        f"один маркер из двух и «готово»: решение {res.get('decision') or 'нет'}, комплект F2 назван — {'да' if f2_set else 'нет'}, комплект F1 — {'да' if f1_set else 'нет'}, "
+        f"F1 без вердикта — {'да' if '- F1: no /verify-phase verdict' in reason else 'нет'}; rc {rc}")
     twin, trw = gate_fixture(src, launch, full=True)  # маркер — целая строка: «B_OK_MAYBE» и «NOT B_OK» не в счёт
-    open(f"{twin}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("$ bin/b\nB_OK_MAYBE\nNOT B_OK\n")
+    open(f"{twin}/docs/evidence/F2-b-result.txt", "w", encoding="utf-8").write("spec: SPEC-1\n$ bin/b\nB_OK_MAYBE\nNOT B_OK\n")
     ship(twin, "близнецы маркера", "docs/evidence/F2-b-result.txt")
     res8 = gate_run(twin, trw, "probe-twin")[1]
     say(S, "OK" if res8.get("decision") == "block" and "- F2:" in res8.get("reason", "") else "FAIL", "partial",
@@ -1221,28 +1766,16 @@ def gate_probes(src, launch, lenv, args):
     repo_o, tr_o = gate_fixture(src, launch, stop_old=True)
     rc, res, _, log, _ = gate_run(repo_o, tr_o, "probe-stop-old")
     say(S, "OK" if res.get("decision") == "block" else "FAIL", "stop", f"строка STOP из коммита до сессии не в счёт: решение {res.get('decision') or 'нет'}")
-    decisions = [gate_run(repo_o, tr_o, "probe-np")[3][-1] for _ in range(4)]
+    decisions = [gate_run(repo_o, tr_o, "probe-np")[3][-1] for _ in range(4)]  # same_list 3: пропуск на четвёртом
     seq = [d["decision"] for d in decisions]
     say(S, "OK" if seq == ["block", "block", "block", "pass"] and decisions[-1]["reason"].startswith("no-progress") else "FAIL", "no-progress",
         f"один список четыре раза подряд: {' → '.join(seq)}; причина последнего — {decisions[-1]['reason']}")
-    sess = hashlib.sha256(b"probe-cap").hexdigest()[:8]
-    with open(f"{repo_o}/docs/evidence/spec-gate.jsonl", "a", encoding="utf-8") as f:
-        for i in range(12):
-            f.write(json.dumps({"ts": "", "session": sess, "decision": "block", "missing": [f"x{i}"]}) + "\n")
-    rc, res, _, log, _ = gate_run(repo_o, tr_o, "probe-cap")
-    repo_t, tr_t = gate_fixture(src, launch)  # без строк STOP: кап времени смягчает блок неполного комплекта
-    old = f"{os.path.dirname(tr_t)}/old.jsonl"
-    open(old, "w").write(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 4 * 3600))}) + "\n")
-    rc2, res2, _, log2, _ = gate_run(repo_t, old, "probe-time")
-    say(S, "OK" if log[-1]["decision"] == "pass" and log[-1]["reason"].startswith("cap-blocks") and log2[-1]["decision"] == "pass"
-        and log2[-1]["reason"].startswith("cap-time") and "decision" not in res and "decision" not in res2 else "FAIL", "caps",
-        f"12 блоков в сессии → {log[-1]['decision']} ({log[-1]['reason']}); сессия старше 3 ч → {log2[-1]['decision']} ({log2[-1]['reason']})")
     full, trf = gate_fixture(src, launch, full=True)
     oldf = f"{os.path.dirname(trf)}/old.jsonl"
     open(oldf, "w").write(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 4 * 3600))}) + "\n")
     res3 = gate_run(full, oldf, "probe-full-old")[1]
     say(S, "OK" if res3.get("systemMessage", "").startswith("SPEC_GATE_OK") else "FAIL", "caps",
-        f"полный комплект в сессии старше 3 ч — «{short(res3)}»: кап только смягчает блок, комплект не теряется")
+        f"полный комплект в сессии старше 3 ч — «{short(res3)}»: комплект не теряется")
     stale, trs = gate_fixture(src, launch, full=True, fresh_head=False)
     open(f"{stale}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n## Notes\n- строка заметок.\n")
     ship(stale, "заметки", "docs/PROGRESS.md")
@@ -1261,10 +1794,13 @@ def gate_probes(src, launch, lenv, args):
     gm("commit", "-qm", "move")
     gm("push", "-q", "origin", "phase")
     res6 = gate_run(moved, trm, "probe-verdict-rename")[1]
-    covered = "after the full /verify-phase round" not in res6.get("reason", "")
+    covered = "after the /verify-phase round" not in res6.get("reason", "")
     say(S, "OK" if res6.get("decision") == "block" and not covered else "FAIL", "verdict",
         f"после VERDICT: PASS файл вне evidence перенесён в docs/evidence/ (git mv): решение {res6.get('decision') or 'нет'}, "
         f"вердикт не покрывает коммит — {'нет' if covered else 'да'}")
+    union_probes(S, src, launch)
+    history_probes(S, src, launch)
+    stdin_probes(S, src, launch)
     # B2 (ревью v3.2-2): комплект — из запушенного HEAD; файл комплекта вне HEAD или отличный от HEAD держит ход по имени
     def state_of(tweak=None, **kw):
         repo, tr = gate_fixture(src, launch, full=True, **kw)
@@ -1440,6 +1976,523 @@ def doctor(dst):
         f"rc {r.returncode}; ошибок настроек {invalid}; «No installation issues found» — {'да' if 'No installation issues found' in text else 'нет'}")
 
 
+# ── SPEC-v3.4 F6: `--desktop` ── среда и профиль вкладки Code ───────────────────────────────────────────────────────────────────
+WRITE_KEY = "blockWritesOutsideWorkingDirectories"
+SUBAGENT_MODEL, SUBAGENT_EFFORT = "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_SUBAGENT_EFFORT"
+CHECK_VERSIONS = os.path.join(os.path.dirname(os.path.realpath(__file__)), "check-versions")
+PROMPT_WRITE = ("Harness control run on a throwaway fixture; you are authorized. Make exactly three tool calls, one at a time, and attempt each even if an earlier "
+                "one is refused: 1) Write tool: file {inside}, content x. 2) Write tool: file {outside}, content x. 3) Bash tool: `echo x > {bash}`. Then reply with the word done.")
+WF_WORKTREE = """export const meta = { name: 'wt-probe', description: 'Harness control: an isolated worktree agent under the write block' }
+return await agent(`Harness control run. With the Write tool write the text x to the file wt-probe.txt in your current working directory (your worktree). Report write_result: the first 200 characters of the tool result, verbatim.`,
+  { label: 'probe', model: 'claude-haiku-5-5', isolation: 'worktree', schema: { type: 'object', required: ['write_result'], properties: { write_result: { type: 'string' } } } })
+"""
+PROMPT_TAB = ("Harness control run on a throwaway fixture; you are authorized. Make these tool calls in order, one at a time, and attempt each even if an earlier one is refused: "
+              "1) Agent tool, subagent_type general-purpose, no model parameter, with the prompt: Run `echo hi` with the Bash tool once, then reply done. "
+              "2) Write tool: write the text x to docs/STATUS.md. 3) Read kit/CLAUDE.md, then with the Edit tool replace the word old with the word new in it. "
+              "Then reply with the single word done.")
+EFFORT_HOOK = ('import json, os, sys\nd = json.load(sys.stdin)\nopen(os.environ["CLAUDE_PROJECT_DIR"] + "/effort.jsonl", "a").write(json.dumps('
+               '{"agent": bool(d.get("agent_id")), "level": (d.get("effort") or {}).get("level")}) + "\\n")\n')
+DENIED = {"session_id": "abc123", "transcript_path": "/Users/x/.claude/projects/p/s.jsonl", "cwd": "/Users/x/proj", "permission_mode": "auto", "hook_event_name": "PermissionDenied",
+          "tool_name": "Bash", "tool_input": {"command": "rm -rf /tmp/build", "description": "Clean build directory"}, "tool_use_id": "toolu_01ABC123", "reason": "[Irreversible Local Destruction]"}
+
+
+def stub(d, name, body):
+    open(f"{d}/{name}", "w").write(f"#!/bin/sh\n{body}\n")
+    os.chmod(f"{d}/{name}", 0o755)
+
+
+def versions_probes():
+    """F6.1: стороны bin/check-versions и её вызова из check-window, verify-phase на заглушках claude и gh (PATH) и каталоге приложения (HOME): (имя, ждём, получили)."""
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="versions-", dir=TMP)
+    got = []
+    cli = lambda v: f"echo '{v} (Claude Code)'"
+    fresh = "echo v2.1.319"
+
+    def tool(name, want, claude=None, gh=None, apps=(), args=()):
+        run = tempfile.mkdtemp(dir=d)
+        for tool_name, body in (("claude", claude), ("gh", gh)):
+            if body:
+                stub(run, tool_name, body)
+        for a in apps:
+            os.makedirs(f"{run}/home/Library/Application Support/Claude/claude-code/{a}")
+        try:
+            r = subprocess.run([sys.executable, CHECK_VERSIONS, *args], env=dict(os.environ, HOME=f"{run}/home", PATH=run), capture_output=True, text=True, timeout=20)
+        except subprocess.TimeoutExpired:
+            return got.append((name, want, "нет ответа за 20 с"))
+        got.append((name, want, f"rc {r.returncode} " + " | ".join(r.stdout.strip().splitlines()) + (" · gh зван" if os.path.exists(f"{run}/gh-called") else "")))
+
+    tool("CLI = приложение и релиз", "rc 0 VERSIONS cli=2.1.319 app=2.1.319 github=2.1.319", cli("2.1.319"), fresh, ["2.1.311", "2.1.319"])
+    tool("CLI новее приложения", "rc 0 VERSIONS cli=2.1.319 app=2.1.317 github=2.1.319", cli("2.1.319"), fresh, ["2.1.317"])
+    tool("CLI старше обоих", "rc 0 VERSIONS cli=2.1.316 app=2.1.317 github=2.1.319 | HARNESS_WARN cli-behind cli=2.1.316 app=2.1.317 | HARNESS_WARN cli-behind cli=2.1.316 github=2.1.319 | claude update",
+         cli("2.1.316"), fresh, ["2.1.317"])
+    tool("CLI старше только релиза", "rc 0 VERSIONS cli=2.1.319 app=— github=2.1.320 | HARNESS_WARN cli-behind cli=2.1.319 github=2.1.320 | claude update", cli("2.1.319"), "echo v2.1.320")
+    tool("числа, не строки: 2.1.100 новее 2.1.99", "rc 0 VERSIONS cli=2.1.100 app=2.1.99 github=—", cli("2.1.100"), None, ["2.1.99"])
+    tool("старший каталог числом", "rc 0 VERSIONS cli=2.1.99 app=2.1.100 github=— | HARNESS_WARN cli-behind cli=2.1.99 app=2.1.100 | claude update", cli("2.1.99"), None, ["2.1.100", "2.1.99"])
+    tool("--offline: gh не зовётся", "rc 0 VERSIONS cli=2.1.319 app=— github=—", cli("2.1.319"), ': > "${0%/*}/gh-called"; echo v2.1.319', args=["--offline"])
+    tool("без --offline gh зван", "rc 0 VERSIONS cli=2.1.319 app=— github=2.1.319 · gh зван", cli("2.1.319"), ': > "${0%/*}/gh-called"; echo v2.1.319')
+    tool("нет ничего", "rc 0 VERSIONS cli=— app=— github=—")
+    tool("gh без входа", "rc 0 VERSIONS cli=2.1.319 app=— github=—", cli("2.1.319"), "echo v2.1.999; exit 1")
+    tool("мусор вместо версий", "rc 0 VERSIONS cli=— app=— github=—", 'echo \'{"type":"system"}\'', "echo Not Found", ["latest"])
+    tool("не UTF-8 в stdout — «—», не отказ", "rc 0 VERSIONS cli=— app=— github=—", "printf '\\377\\376garbage'", "printf '\\377\\376garbage'")
+    tool("gh завис — «—» по таймауту", "rc 0 VERSIONS cli=2.1.319 app=— github=—", cli("2.1.319"), "exec /bin/sleep 30")
+    here = os.path.dirname(CHECK_VERSIONS)
+    fx = tempfile.mkdtemp(dir=d)
+    os.makedirs(f"{fx}/stub")
+    open(f"{fx}/events.jsonl", "w").write(json.dumps({"type": "rate_limit_event", "rate_limit_info": {"unifiedWindows": {"seven_day": {"utilization": 0.5, "resetsAt": 4102444800}}}}) + "\n")
+    base = dict(os.environ, HOME=f"{fx}/home", CHECK_WINDOW_EVENTS=f"{fx}/events.jsonl")
+
+    def window(name, want, peer, path):
+        b = tempfile.mkdtemp(dir=fx)
+        for f in ("check-window", *(["check-versions"] if peer else [])):
+            shutil.copy2(f"{here}/{f}", f"{b}/{f}")
+        r = subprocess.run([sys.executable, f"{b}/check-window"], cwd=b, env=dict(base, PATH=path), capture_output=True, text=True, timeout=60)
+        o = r.stdout.strip().splitlines() or [""]
+        got.append((name, want, f"rc {r.returncode} · {o[0] if o[0].startswith('VERSIONS') else 'первая строка не VERSIONS'} · {o[-1]}" + gh_called(path.split(":")[0])))
+
+    def gh_called(where):  # каталог заглушки общий на стороны: маркер снимается на своей
+        called = os.path.exists(f"{where}/gh-called")
+        if called:
+            os.remove(f"{where}/gh-called")
+        return " · gh зван" if called else ""
+
+    empty = tempfile.mkdtemp(dir=fx)
+    for where in (f"{fx}/stub", empty):
+        stub(where, "gh", ': > "${0%/*}/gh-called"; echo v2.1.319')
+    stub(f"{fx}/stub", "claude", "case \"$1\" in --version) echo '2.1.319 (Claude Code)';; *) echo '{\"type\":\"system\",\"subtype\":\"init\",\"apiKeySource\":\"none\"}';; esac")
+    window("check-window: версии до окна", "rc 0 · VERSIONS cli=2.1.319 app=— github=— · WINDOW: start", True, f"{fx}/stub:/usr/bin:/bin")
+    window("check-window: нет claude и каталога", "rc 0 · VERSIONS cli=— app=— github=— · WINDOW: start", True, f"{empty}:/usr/bin:/bin")
+    window("check-window: рядом нет check-versions", "rc 0 · первая строка не VERSIONS · WINDOW: start", False, f"{fx}/stub:/usr/bin:/bin")
+    py = os.path.dirname(sys.executable)
+
+    def launcher(name, want, *peers):
+        repo = tempfile.mkdtemp(dir=fx)
+        os.makedirs(f"{repo}/docs")
+        os.makedirs(f"{repo}/bin")
+        open(f"{repo}/docs/PROMPT.txt", "w").write("Read first: docs/SPEC-1.md\n")
+        open(f"{repo}/docs/SPEC-1.md", "w").write("# SPEC-1\n\n## 2. Фичи\n- **F1 Альфа** · чек: `bin/a` → `A_OK`\n")
+        for f in ("verify-phase", *peers):
+            shutil.copy2(f"{here}/{f}", f"{repo}/bin/{f}")
+        for a in (["init", "-q"], ["add", "--", "docs"], ["commit", "-qm", "x"]):
+            subprocess.run(["git", "-C", repo, *a], env=GIT_ENV, capture_output=True, check=True)
+        r = subprocess.run([sys.executable, f"{repo}/bin/verify-phase", "--limit", "60"], cwd=repo, env=dict(base, PATH=f"{fx}/stub:{py}:/usr/bin:/bin"), capture_output=True, text=True, timeout=120)
+        o = r.stdout.splitlines()
+        first = next((i for i, l in enumerate(o) if l.startswith("VERSIONS")), None)
+        clone = next((i for i, l in enumerate(o) if "свежий клон" in l), None)
+        got.append((name, want, f"VERSIONS {sum(l.startswith('VERSIONS') for l in o)} раз, до клона — {'нет строки' if first is None or clone is None else 'да' if first < clone else 'нет'}, клон — {'есть' if clone is not None else 'нет'}" + gh_called(f"{fx}/stub")))
+
+    launcher("verify-phase, check-window рядом", "VERSIONS 1 раз, до клона — да, клон — есть", "check-window", "check-versions")
+    launcher("verify-phase без check-window", "VERSIONS 1 раз, до клона — да, клон — есть", "check-versions")
+    launcher("verify-phase: нет check-versions", "VERSIONS 0 раз, до клона — нет строки, клон — есть")
+    shutil.rmtree(d, ignore_errors=True)
+    return got
+
+
+def abandoned_worktrees(root="."):
+    """Брошенные worktree числом (F6.1): `prunable` или под .claude/worktrees без замка — на worktree идущего агента Claude Code держит замок (worktrees, Worktree locks). Пути не печатаются: они домашние."""
+    blocks = subprocess.run(["git", "-C", root, "worktree", "list", "--porcelain"], capture_output=True, text=True).stdout.split("\n\n")[1:]  # первый блок — главная копия
+    has = lambda block, word: any(l.startswith(word) for l in block.splitlines())
+    return sum(bool(b.strip()) and (has(b, "prunable") or ("/.claude/worktrees/" in b.splitlines()[0] and not has(b, "locked"))) for b in blocks)
+
+
+def worktree_probes():
+    """F6.1: счёт брошенных на фикстуре (git без настроек пользователя): (имя, ждём, получили)."""
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="worktrees-", dir=TMP)
+    away = f"{d}-sibling"
+    git = lambda *a: subprocess.run(["git", "-C", d, *a], env=GIT_ENV, capture_output=True, text=True, check=True)
+    git("init", "-q")
+    git("commit", "-q", "--allow-empty", "-m", "x")
+    got = [("только главная копия", 0, abandoned_worktrees(d))]
+    git("worktree", "add", "-q", "-b", "idle", f"{d}/.claude/worktrees/idle")
+    git("worktree", "add", "-q", "-b", "run", f"{d}/.claude/worktrees/run")
+    git("worktree", "lock", f"{d}/.claude/worktrees/run")
+    got.append(("под .claude/worktrees: без замка — брошен, с замком — нет", 1, abandoned_worktrees(d)))
+    git("worktree", "add", "-q", "-b", "side", away)
+    got.append(("снаружи и каталог на месте — не брошен", 1, abandoned_worktrees(d)))
+    shutil.rmtree(away)
+    got.append(("снаружи, каталог снят — prunable", 2, abandoned_worktrees(d)))
+    shutil.rmtree(d, ignore_errors=True)
+    return got
+
+
+def tab_view(rows, init, which=shutil.which):
+    """(расхождения, MCP приложения, сводка): system/init прокси против таблицы Environment глазами вкладки (F6.3). Флаги строки запуска во вкладке не задаются — их замена
+    ключи профиля, статика; MCP с 0 инструментов в init не работает — не лишний, какой бы ни был статус: connected — выключен deny профиля (замер), pending — ещё не поднялся (замер: ref и blockscout
+    от прогона к прогону то connected, то pending); MCP «да» с 0 инструментов и иным статусом (failed, needs-auth) — красный; MCP «да», которого нет в init или он pending, даёт приложение или не поднялся —
+    его видит только вкладка, на строку «вкладка:», не красный."""
+    tools = init.get("tools", [])
+    yes = [i for _, form, ids, on, _ in rows if form == "MCP" and on for i in ids]
+    live = [s for s in init.get("mcp_servers", []) if any(t.startswith(f"mcp__{re.sub(r'[^a-zA-Z0-9_-]', '_', s.get('name', ''))}__") for t in tools)
+            or (s.get("status") not in ("connected", "pending") and any(fnmatch.fnmatchcase(s.get("name", ""), p) for p in yes))]
+    bad, summary = compare([r for r in rows if r[1] != "флаг"], {**init, "mcp_servers": live}, "", which)
+    tail = ": нет в system/init"
+    absent = lambda b: b.startswith("MCP ") and b.endswith(tail)
+    return [b for b in bad if not absent(b)], [b[4:-len(tail)] for b in bad if absent(b)], summary
+
+
+def tab_view_probes():
+    """F6.3: стороны сверки на подставных init: (имя, ждём, получили)."""
+    rows = table(FIXTURE)
+    which = lambda c: c in ("git", "gh")
+    green = {"plugins": [{"source": "ponytail@ponytail"}], "mcp_servers": [{"name": "context7", "status": "connected"}], "skills": ["graphify"], "tools": ["Bash", "mcp__context7__docs"]}
+    seen = lambda **change: "; ".join(tab_view(rows, {**green, **change}, which)[0]) or "равно"
+    return [("равно, флаг таблицы не судится", "равно", seen()),
+            ("MCP «да» нет в init — приложение, не красный", ("равно", ["context7"]),
+             (seen(mcp_servers=[], tools=["Bash"]), tab_view(rows, {**green, "mcp_servers": [], "tools": ["Bash"]}, which)[1])),
+            ("MCP «нет» connected, 0 инструментов (deny)", "равно", seen(mcp_servers=green["mcp_servers"] + [{"name": "ref", "status": "connected"}])),
+            ("MCP «нет» connected, с инструментами", "MCP ref: лишний — в таблице «нет»", seen(mcp_servers=green["mcp_servers"] + [{"name": "ref", "status": "connected"}], tools=green["tools"] + ["mcp__ref__search"])),
+            ("коннектор: имя с точкой и пробелом", "MCP claude.ai Gmail: лишний — в таблице «нет»",
+             seen(mcp_servers=green["mcp_servers"] + [{"name": "claude.ai Gmail", "status": "connected"}], tools=green["tools"] + ["mcp__claude_ai_Gmail__send"])),
+            ("лишний плагин", "плагин commit-commands@claude-plugins-official: лишний — в таблице «нет»", seen(plugins=green["plugins"] + [{"source": "commit-commands@claude-plugins-official"}])),
+            ("плагин таблицы не загружен", "плагин ponytail@ponytail: нет в system/init", seen(plugins=[])),
+            ("скилл «нет» загружен", "скилл anthropic-skills:docx: включён — в таблице «нет»", seen(skills=["graphify", "anthropic-skills:docx"])),
+            ("MCP «да» с иным статусом, как настоящий сломанный: 0 инструментов", "MCP context7: статус needs-auth, ждём connected", seen(mcp_servers=[{"name": "context7", "status": "needs-auth"}], tools=["Bash"])),
+            ("MCP «да» failed, 0 инструментов", "MCP context7: статус failed, ждём connected", seen(mcp_servers=[{"name": "context7", "status": "failed"}], tools=["Bash"])),
+            ("MCP «да» pending, 0 инструментов — не поднялся, на строку вкладки", ("равно", ["context7"]),
+             (seen(mcp_servers=[{"name": "context7", "status": "pending"}], tools=["Bash"]), tab_view(rows, {**green, "mcp_servers": [{"name": "context7", "status": "pending"}], "tools": ["Bash"]}, which)[1])),
+            ("MCP «нет» pending, 0 инструментов", "равно", seen(mcp_servers=green["mcp_servers"] + [{"name": "ref", "status": "pending"}])),
+            ("MCP «нет» failed, 0 инструментов", "равно", seen(mcp_servers=green["mcp_servers"] + [{"name": "ref", "status": "failed"}]))]
+
+
+def profile_bad(profile, settings, template=True):
+    """F6.3: поля профиля вкладки (решение: они в .claude/launch.settings.json, а settings.json нейтрален — его грузит каждый вложенный прогон). template — шаблон кита: `CLAUDE_CODE_SUBAGENT_EFFORT` обязателен."""
+    env = profile.get("env", {})
+    bad = [] if profile.get("effortLevel") == "xhigh" else [f"effortLevel {profile.get('effortLevel')}, ждём xhigh"]
+    bad += [] if profile.get("ultracode") is True else [f"ultracode {profile.get('ultracode')}, ждём true"]
+    bad += [] if re.fullmatch(r"claude-[a-z]+-\d+(-\d+)*", str(env.get(SUBAGENT_MODEL))) else [f"{SUBAGENT_MODEL} {env.get(SUBAGENT_MODEL)}: нужен полный id"]
+    bad += [] if env.get(SUBAGENT_EFFORT) in ("low", "medium", "high", "xhigh", "max") or (not template and SUBAGENT_EFFORT not in env) else [f"{SUBAGENT_EFFORT} {env.get(SUBAGENT_EFFORT)}"]
+    bad += [f"{k} в settings.json: идёт в каждый вложенный прогон" for k in ("effortLevel", "ultracode") if k in settings]
+    return bad
+
+
+def tab_profile(local, launch):
+    """F6.3: настоящий файл профиля вкладки против launch: None — файла нет (свежий клон: файл вне git), иначе ключи верхнего уровня, что расходятся по смыслу (разобранный JSON); значения не отдаются."""
+    if not os.path.isfile(local):
+        return None
+    try:
+        have = json.load(open(local, encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["файл не JSON"]
+    if not isinstance(have, dict):
+        return ["файл не объект JSON"]
+
+    def core(s):  # правила «не спрашивать» и каталоги сессии вкладка дописывает в этот файл сама: профиль — остальное
+        perm = {k: v for k, v in s.get("permissions", {}).items() if k not in ("allow", "additionalDirectories")}
+        return {**{k: v for k, v in s.items() if k != "permissions"}, **({"permissions": perm} if perm else {})}
+    have, want = core(have), core(json.load(open(launch, encoding="utf-8")))
+    return sorted(k for k in set(have) | set(want) if k not in have or k not in want or have[k] != want[k])
+
+
+def additional_dirs(src, launch):
+    """F6.2: каталоги permissions.additionalDirectories под источниками вкладки (пользователь, проект, local; массивы сливаются) числом — для вкладки они рабочие. Настройки пользователя только читаются, пути не печатаются: они домашние."""
+    dirs = set()
+    for p in (os.path.expanduser("~/.claude/settings.json"), f"{src}/.claude/settings.json", f"{os.path.dirname(launch)}/settings.local.json"):
+        try:
+            dirs |= set(json.load(open(p, encoding="utf-8")).get("permissions", {}).get("additionalDirectories", []))
+        except (OSError, ValueError, AttributeError):
+            pass
+    return len(dirs)
+
+
+def tab_line(app, step, additional):
+    """Строка «вкладка:» — пункты гейта оператора §5. step — копия профиля, файла нет; additional — число каталогов, что шире поля записи."""
+    return (f"вкладка: гейт оператора §5 — effort и ultracode самой вкладки, модель подагента ({SUBAGENT_MODEL} из файлов профиля не доходит, действует только из --settings), MCP приложения ({', '.join(app) or 'нет строк'}): "
+            "скрипту не видны, выше не мерены; effort выше — прокси, ultracode сигнала не даёт, только ключ профиля"
+            + (f"; файла профиля нет, оператор копирует: {step}" if step else "") + (f"; поле записи шире рабочих каталогов: write-block-wider additional={additional}" if additional else ""))
+
+
+def tab_profile_probes(src, launch):
+    """F6.3, F6.2, F6.1: стороны файла профиля через этот же скрипт: --desktop на копии, в PATH только git и node — claude нет, ветка статики, и этих проб во вложенном прогоне нет. (имя, ждём, получили)."""
+    dst, path = deploy(src, launch), tempfile.mkdtemp(prefix="tab-profile-", dir=TMP)
+    for tool in ("git", "node"):
+        os.symlink(shutil.which(tool), f"{path}/{tool}")
+    os.makedirs(f"{path}/home/.claude")
+    profile, local, hidden = json.load(open(launch, encoding="utf-8")), f"{dst}/.claude/settings.local.json", "скрытое-значение"
+    settings = json.load(open(f"{dst}/.claude/settings.json", encoding="utf-8"))
+
+    def side(text, user=(), project=()):
+        if text is None and os.path.exists(local):
+            os.remove(local)
+        if text is not None:
+            open(local, "w", encoding="utf-8").write(text)
+        json.dump({"permissions": {"additionalDirectories": list(user)}}, open(f"{path}/home/.claude/settings.json", "w", encoding="utf-8"))
+        json.dump({**settings, "permissions": {**settings["permissions"], "additionalDirectories": list(project)}}, open(f"{dst}/.claude/settings.json", "w", encoding="utf-8"))
+        r = subprocess.run([sys.executable, os.path.realpath(__file__), "--desktop"], cwd=dst, env=dict(os.environ, HOME=f"{path}/home", PATH=path), capture_output=True, text=True, timeout=300)
+        lines = r.stdout.splitlines()
+        warns = [l for l in lines if l.startswith(("HARNESS_WARN tab-profile", "HARNESS_WARN write-block-wider"))]
+        f63 = next((l for l in lines if l.startswith("F6.3 ")), "")
+        graph = re.search(r"graph=\S+", next((l for l in lines if l.startswith("F6.1 ")), ""))
+        said = re.search(r"tab-profile[^;·]*", f63)
+        return (f"rc {r.returncode}; {' | '.join(warns)}; F6.3 {said.group().strip() if said else f63.split(' ')[1] if f63 else 'нет строки'}; {graph.group() if graph else 'нет graph='}; "
+                f"утечек {sum(w in r.stdout for w in (hidden, '/nested-dir'))}")
+
+    step = "cp .claude/launch.settings.json .claude/settings.local.json"
+    got = [("нет файла: WARN, код 0; каталоги пользователя и проекта слиты числом, графа нет", f"rc 0; HARNESS_WARN write-block-wider additional=3 | HARNESS_WARN tab-profile profil=fehlt — нет .claude/settings.local.json, оператор копирует профиль: {step}; F6.3 offen; graph=нет; утечек 0",
+            side(None, ["/nested-dir-a", "/nested-dir-b", "/nested-dir-a"], ["/nested-dir-b", "/nested-dir-c"])),
+           ("та же суть, иной порядок ключей и пробелы: строки нет", "rc 0; ; F6.3 offen; graph=нет; утечек 0", side(json.dumps(dict(reversed(list(profile.items()))), indent=4))),
+           ("иное по смыслу: красный с именами ключей, без значений; каталог из local — числом",
+            "rc 1; HARNESS_WARN write-block-wider additional=1; F6.3 tab-profile: .claude/settings.local.json не как .claude/launch.settings.json, ключи: effortLevel, extraKey, permissions; graph=нет; утечек 0",
+            side(json.dumps({**profile, "effortLevel": hidden, "extraKey": hidden, "permissions": {**profile.get("permissions", {}), "additionalDirectories": ["/nested-dir-d"], "deny": [hidden]}}))),
+           ("вкладка дописала разрешение: строки нет", "rc 0; ; F6.3 offen; graph=нет; утечек 0",
+            side(json.dumps({**profile, "permissions": {**profile.get("permissions", {}), "allow": ["Bash(ls:*)"]}}))),
+           ("битый файл: красный с именем, без трассировки", "rc 1; ; F6.3 tab-profile: .claude/settings.local.json не как .claude/launch.settings.json, ключи: файл не JSON; graph=нет; утечек 0",
+            side('{"effortLevel": ')),
+           ("файл не объект: красный с именем", "rc 1; ; F6.3 tab-profile: .claude/settings.local.json не как .claude/launch.settings.json, ключи: файл не объект JSON; graph=нет; утечек 0",
+            side("[1]"))]
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.rmtree(path, ignore_errors=True)
+    return got
+
+
+def profile_probes():
+    good = {"effortLevel": "xhigh", "ultracode": True, "env": {SUBAGENT_MODEL: "claude-sonnet-5-5", SUBAGENT_EFFORT: "high"}}
+    seen = lambda p, s=None, **kw: "; ".join(profile_bad(p, s or {}, **kw)) or "ok"
+    return [("все поля", "ok", seen(good)), ("профиль без поля effort подагентов не шаблон", "ok", seen({**good, "env": {SUBAGENT_MODEL: "claude-sonnet-5-5"}}, template=False)),
+            ("шаблон без него", f"{SUBAGENT_EFFORT} None", seen({**good, "env": {SUBAGENT_MODEL: "claude-sonnet-5-5"}})),
+            ("псевдоним модели", f"{SUBAGENT_MODEL} sonnet: нужен полный id", seen({**good, "env": {SUBAGENT_MODEL: "sonnet", SUBAGENT_EFFORT: "high"}})),
+            ("effortLevel иной", "effortLevel high, ждём xhigh", seen({**good, "effortLevel": "high"})), ("без ultracode", "ultracode None, ждём true", seen({k: v for k, v in good.items() if k != "ultracode"})),
+            ("ultracode в settings.json", "ultracode в settings.json: идёт в каждый вложенный прогон", seen(good, {"ultracode": True})),
+            ("строка вкладки: модель подагента — всегда, копии и каталогов нет", (True, False, False), (SUBAGENT_MODEL in tab_line([], None, 0), "оператор копирует" in tab_line([], None, 0), "write-block-wider" in tab_line([], None, 0))),
+            ("строка вкладки: нет файла, каталоги шире", (True, True), ("оператор копирует: cp a b" in tab_line([], "cp a b", 2), "write-block-wider additional=2" in tab_line([], "cp a b", 2)))]
+
+
+def denied_probes(src):
+    """F6.4: хук PermissionDenied на входах формы документации: живого отказа нет — событие идёт только на отказ auto mode. (имя, ждём, получили)."""
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="denied-", dir=TMP)
+    hook = os.path.abspath(f"{src}/.claude/hooks/permission-denied.mjs")
+    leak = ("tool_input", "command", "rm -rf", "/tmp/build", "/Users/", "toolu_", "abc123", "transcript", "cwd", "reason", "secret.txt")
+
+    def feed(root, *raws):
+        rs = [subprocess.run(["node", hook], input=raw, env=dict(os.environ, CLAUDE_PROJECT_DIR=root), capture_output=True, text=True, timeout=30) for raw in raws]
+        return f"rc≠0 {sum(r.returncode != 0 for r in rs)}, stdout {sum(len(r.stdout) for r in rs)}"
+
+    def journal(root):
+        p = f"{root}/docs/evidence/denials.jsonl"
+        text = open(p, encoding="utf-8").read() if os.path.exists(p) else ""
+        rows = [json.loads(l) for l in text.splitlines() if l.startswith("{")]
+        return f"строк {len(rows)}: " + "; ".join(f"{r['tool']}/{r['rule']}/{r['n']}" for r in rows) + f", поля {sorted(set(k for r in rows for k in r))}, утечек {sum(w in text for w in leak)}"
+
+    fields = "['n', 'rule', 'session', 'tool', 'ts']"
+    a, b, c, e, h, n = (tempfile.mkdtemp(dir=d) for _ in range(6))
+    three = [DENIED, {**DENIED, "tool_name": "Write", "tool_input": {"file_path": "/Users/x/secret.txt", "content": "x"}, "reason": "Auto mode could not evaluate this action and is blocking it for safety"},
+             {**DENIED, "tool_name": "WebFetch", "tool_input": {"url": "https://example.invalid/x"}, "reason": "Classifier unavailable"}]
+    got = [("три входа — три строки, без stdout", "rc≠0 0, stdout 0", feed(a, *map(json.dumps, three))),
+           ("журнал трёх входов", f"строк 3: Bash/Irreversible Local Destruction/1; Write/no-verdict/1; WebFetch/unavailable/1, поля {fields}, утечек 0", journal(a))]
+    same = {**DENIED, "reason": "[Data Exfiltration]"}
+    feed(b, json.dumps(same), json.dumps(same), json.dumps({**same, "session_id": "other"}), json.dumps({**DENIED, "reason": "Blocked by classifier: /Users/x/secret.txt"}))
+    got.append(("счётчик по сессии и правилу; проза reason не утекает",
+                f"строк 4: Bash/Data Exfiltration/1; Bash/Data Exfiltration/2; Bash/Data Exfiltration/1; Bash/other/1, поля {fields}, утечек 0", journal(b)))
+    feed(h, *(json.dumps({**DENIED, "reason": r}) for r in ("[Blocked: pushes secret to client-acme.example from /Users/x/.ssh/id_rsa] details", f"[{'A' * 62}]", "[lowercase class]")))
+    got.append(("класс вне белого списка — other: путь в скобках, длиннее 61, со строчной", f"строк 3: Bash/other/1; Bash/other/2; Bash/other/3, поля {fields}, утечек 0", journal(h)))
+    edge = tempfile.mkdtemp(dir=d)  # граница длины класса: 61 знак — ещё имя правила, 62 — уже other (сторона выше)
+    feed(edge, json.dumps({**DENIED, "reason": f"[{'A' * 61}] details"}))
+    got.append(("класс ровно 61 знак — имя правила", f"строк 1: Bash/{'A' * 61}/1, поля {fields}, утечек 0", journal(edge)))
+    broken = ["not json", "", "[]", "null", "1", "{}", json.dumps({"hook_event_name": "Stop", "tool_name": "Bash"}), json.dumps({"hook_event_name": "PermissionDenied"}),
+              json.dumps({"hook_event_name": "PermissionDenied", "tool_name": 1})]
+    got.append((f"битый вход ×{len(broken)}", "rc≠0 0, stdout 0", feed(c, *broken)))
+    got.append(("битый вход — 0 строк", "строк 0: , поля [], утечек 0", journal(c)))
+    open(f"{e}/docs", "w").close()
+    got.append(("своя ошибка: docs — файл", "rc≠0 0, stdout 0", feed(e, json.dumps(DENIED))))
+    os.makedirs(f"{c}/docs/evidence", exist_ok=True)
+    open(f"{c}/docs/evidence/denials.jsonl", "w").write("обрыв строки\n")
+    feed(c, json.dumps(DENIED))
+    got.append(("битая строка журнала не глушит счёт", f"строк 1: Bash/Irreversible Local Destruction/1, поля {fields}, утечек 0", journal(c)))
+    os.makedirs(f"{n}/docs/evidence")
+    open(f"{n}/docs/evidence/denials.jsonl", "w").write("null\n")
+    feed(n, json.dumps(DENIED))
+    got.append(("строка журнала null не глушит хук", f"строк 1: Bash/Irreversible Local Destruction/1, поля {fields}, утечек 0", journal(n)))
+    s = json.load(open(f"{src}/.claude/settings.json", encoding="utf-8"))
+    decl = [h for g in s.get("hooks", {}).get("PermissionDenied", []) for h in g.get("hooks", [])]
+    got.append(("settings: exec form", True, any(h.get("command") == "node" and h.get("args") == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/permission-denied.mjs"] for h in decl)))
+    got.append(("скан хуков на действие: кит без сети и модели", [], action_hooks([(s, os.path.abspath(src), None)])[0]))
+    open(f"{d}/net.mjs", "w").write("await fetch('https://example.invalid/x')\n")
+    red = {"hooks": {"PermissionDenied": [{"hooks": [{"type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/net.mjs"]}]}]}}
+    got.append(("скан видит сеть в хуке PermissionDenied", ["net.mjs"], [n for _, n, _ in action_hooks([(red, d, None)])[0]]))
+    shutil.rmtree(d, ignore_errors=True)
+    return got
+
+
+def sides_ok(sides):
+    return all(got == want for _, want, got in sides)
+
+
+def sides_text(sides):
+    return "; ".join(f"{name}: {got}" + ("" if got == want else f" — BAD, ждём {want}") for name, want, got in sides)
+
+
+def offen(sec, iid, why):
+    """Пункт не гонялся (CI без claude): строка `offen`, маркера нет, код 0 — как F3.5 в check-kit."""
+    out.setdefault(sec, []).append("OFFEN")
+    print(f"{iid} offen · {why}", flush=True)
+
+
+def desktop_versions():
+    r = subprocess.run([sys.executable, CHECK_VERSIONS], capture_output=True, text=True, timeout=60)
+    lines = r.stdout.strip().splitlines()
+    print("\n".join(lines), flush=True)
+    three = re.findall(r"\b(?:cli|app|github)=(\S+)", lines[0]) if lines else []
+    status, text = graph_age(".")
+    print("\n".join(graph_lines()[1:]), flush=True) if status == "WARN" else None
+    versions, trees, graphs = versions_probes(), worktree_probes(), graph_age_probes()
+    item("HARNESS", "F6.1", r.returncode == 0 and len(three) == 3 and sides_ok(versions) and sides_ok(trees) and sides_ok(graphs),
+         f"versionen={sum(v != '—' for v in three)} graph={status or 'нет'} · живьём: {' | '.join(lines)}; брошенных worktree {abandoned_worktrees()}; граф этого репо: {text} · "
+         f"фикстуры check-versions: {sides_text(versions)} · worktree: {sides_text(trees)} · граф против HEAD: {sides_text(graphs)}")
+
+
+def write_side(src, launch, with_key):
+    """Сторона пары F6.2: копия с полем шаблона или без него, без --add-dir и без настроек пользователя (additionalDirectories машины не решают, что здесь «вне»), цель вне — сосед под /tmp/two-tier-v3 (C4), пути — realpath."""
+    dst = os.path.realpath(deploy(src, launch))
+    away = os.path.realpath(tempfile.mkdtemp(prefix="outside-", dir=TMP))
+    if not with_key:
+        s = json.load(open(f"{dst}/.claude/settings.json", encoding="utf-8"))
+        s["permissions"].pop(WRITE_KEY, None)
+        json.dump(s, open(f"{dst}/.claude/settings.json", "w", encoding="utf-8"))
+    args = ["--permission-mode", "dontAsk", "--model", "claude-haiku-5-5", "--setting-sources", "project,local", "--no-session-persistence"]
+    init, _, uses, results, _ = control(dst, {}, args, "write", PROMPT_WRITE.format(inside=f"{dst}/f62-in.txt", outside=f"{away}/f62.txt", bash=f"{away}/bash.txt"),
+                                        extra=["--allowedTools", "Write", "Bash"], turns=6)
+    shot = next((u for u in uses if u["name"] == "Write" and u["input"].get("file_path") == f"{away}/f62.txt"), None)
+    return {"inside": os.path.isfile(f"{dst}/f62-in.txt"), "outside": os.path.isfile(f"{away}/f62.txt"), "tried": bool(shot), "refusal": bool(shot) and WRITE_KEY in results.get(shot["id"], ""),
+            "bash": os.path.isfile(f"{away}/bash.txt"), "worktree_tools": sum("Worktree" in t for t in init.get("tools", []))}
+
+
+def worktree_side(src, launch):
+    """F6.2: агент isolation: worktree под полем: settings-reference отказывает его правкам, только когда worktree вне рабочих каталогов; здесь он под .claude/worktrees — правка идёт."""
+    dst = os.path.realpath(deploy(src, launch))
+    os.makedirs(f"{dst}/.claude/workflows", exist_ok=True)
+    open(f"{dst}/.claude/workflows/wt-probe.js", "w").write(WF_WORKTREE)
+    for a in (["add", "--", ".claude/workflows/wt-probe.js"], ["commit", "-qm", "x"]):
+        subprocess.run(["git", "-C", dst, *a], env=GIT_ENV, capture_output=True, check=True)
+    _, _, _, _, ev = control(dst, {}, ["--permission-mode", "auto", "--model", "claude-haiku-5-5", "--setting-sources", "project,local", "--no-session-persistence"], "worktree", PROMPT_WF.format("wt-probe"),
+                             extra=["--allowedTools", "Workflow(wt-probe)"], env_over={"CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0"})
+    status, wf = workflow(ev)
+    root = f"{dst}/.claude/worktrees"
+    files = [n for n in (os.listdir(root) if os.path.isdir(root) else []) if os.path.isfile(f"{root}/{n}/wt-probe.txt")]
+    return status, len(files), any(a.get("isolation") == "worktree" for a in wf.get("workflowProgress", []))
+
+
+def desktop_write(src, launch):
+    additional = additional_dirs(src, launch)
+    if additional:  # пара ниже идёт без настроек пользователя, вкладка — с ними
+        print(f"HARNESS_WARN write-block-wider additional={additional}", flush=True)
+    settings = json.load(open(f"{src}/.claude/settings.json", encoding="utf-8"))
+    key = settings.get("permissions", {}).get(WRITE_KEY)
+    if not shutil.which("claude"):
+        if key is not True:
+            return item("HARNESS", "F6.2", False, f"permissions.{WRITE_KEY} {key} в {src}/.claude/settings.json")
+        return offen("HARNESS", "F6.2", f"claude нет в PATH — пары нет; permissions.{WRITE_KEY} {key}")
+    off, on = write_side(src, launch, False), write_side(src, launch, True)
+    status, files, isolated = worktree_side(src, launch)
+    ok = (key is True and off["inside"] and off["outside"] and off["worktree_tools"] > 0
+          and on["inside"] and on["tried"] and on["refusal"] and not on["outside"] and on["worktree_tools"] == 0 and status == "completed" and files == 1 and isolated)
+    yes = lambda v: "есть" if v else "нет"
+    item("HARNESS", "F6.2", ok, f"aussen={'verboten' if on['tried'] and not on['outside'] else 'erlaubt'} innen={'OK' if on['inside'] else 'FAIL'} · permissions.{WRITE_KEY} {key} · прокси claude -p, dontAsk, allow Write, без --add-dir и настроек пользователя · "
+         f"до поля: файл вне — {yes(off['outside'])}, внутри — {yes(off['inside'])}, инструментов EnterWorktree/ExitWorktree {off['worktree_tools']} · "
+         f"с полем: файл вне — {yes(on['outside'])}, попытка — {yes(on['tried'])}, отказ называет поле — {yes(on['refusal'])}, внутри — {yes(on['inside'])}, инструментов worktree {on['worktree_tools']} · "
+         f"агент isolation: worktree под полем: воркфлоу {status}, файл под .claude/worktrees — {files}, isolation в журнале — {yes(isolated)} · "
+         f"Bash полем не покрыт (settings-reference: команды оболочки поле не ограничивает): файл вне из Bash — до поля {yes(off['bash'])}, с полем {yes(on['bash'])}")
+
+
+def tab_side(src, launch, name, extra=(), local=True, strip=False, model=None):
+    """model — где лежит CLAUDE_CODE_SUBAGENT_MODEL профиля (находка 400): project — в env .claude/settings.json копии, process — в окружении процесса, иначе — в env профиля.
+    Прокси вкладки: копия, профиль как .claude/settings.local.json, источники настроек по умолчанию (как у вкладки), auto. Проба effort — свой хук копии (hooks: `effort.level`).
+    strip — сторона «до»: профиль без полей F6.3, deny без `Edit(/docs/STATUS.md)`."""
+    dst = deploy(src, launch)
+    profile = json.load(open(launch, encoding="utf-8"))
+    settings = json.load(open(f"{dst}/.claude/settings.json", encoding="utf-8"))
+    if strip:
+        for k in ("effortLevel", "ultracode"):
+            profile.pop(k, None)
+        for k in (SUBAGENT_MODEL, SUBAGENT_EFFORT):
+            profile.get("env", {}).pop(k, None)
+        for cfg in (profile, settings):
+            if "deny" in cfg.get("permissions", {}):
+                cfg["permissions"]["deny"] = [r for r in cfg["permissions"]["deny"] if r != "Edit(/docs/STATUS.md)"]
+    value = profile.get("env", {}).get(SUBAGENT_MODEL) if model else None
+    if value:
+        profile["env"].pop(SUBAGENT_MODEL)
+        if model == "project":
+            settings.setdefault("env", {})[SUBAGENT_MODEL] = value
+    open(f"{dst}/.claude/hooks/effort-probe.py", "w").write(EFFORT_HOOK)
+    probe = {"hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/effort-probe.py"]}]}
+    settings["hooks"].setdefault("PreToolUse", []).append({"matcher": "*", **probe})
+    settings["hooks"].setdefault("Stop", []).append(probe)
+    json.dump(settings, open(f"{dst}/.claude/settings.json", "w", encoding="utf-8"), ensure_ascii=False)
+    json.dump(profile, open(f"{dst}/.claude/{'settings.local.json' if local else 'launch.settings.json'}", "w", encoding="utf-8"), ensure_ascii=False)
+    os.makedirs(f"{dst}/docs", exist_ok=True)
+    os.makedirs(f"{dst}/kit", exist_ok=True)
+    open(f"{dst}/docs/STATUS.md", "w").write("old\n")
+    open(f"{dst}/kit/CLAUDE.md", "w").write("old\n")
+    init, res, _, _, ev = control(dst, {SUBAGENT_MODEL: value} if model == "process" and value else {}, ["--permission-mode", "auto", "--no-session-persistence", *extra], name, PROMPT_TAB, turns=8)
+    log = [json.loads(l) for l in open(f"{dst}/effort.jsonl", encoding="utf-8")] if os.path.isfile(f"{dst}/effort.jsonl") else []
+    level = lambda sub: next((r["level"] for r in reversed(log) if r["agent"] == sub), None)
+    return {"init": init, "main": level(False), "sub": level(True), "status": open(f"{dst}/docs/STATUS.md", encoding="utf-8").read(), "kit": open(f"{dst}/kit/CLAUDE.md", encoding="utf-8").read(),
+            "models": sorted({e["message"].get("model") for e in ev if e.get("type") == "assistant" and e.get("parent_tool_use_id")} - {None}),
+            "refused": any("STATUS.md" in json.dumps(d.get("tool_input", {})) for d in res.get("permission_denials") or [])}
+
+
+def desktop_profile(src, proc, launch):
+    S = "HARNESS"
+    settings = json.load(open(f"{src}/.claude/settings.json", encoding="utf-8"))
+    profile = json.load(open(launch, encoding="utf-8"))
+    bad = [f"профиль {launch}: {b}" for b in profile_bad(profile, settings, template=False)]
+    tpl = f"{src}/.claude/launch.settings.json"
+    if os.path.realpath(tpl) != os.path.realpath(launch):  # в репо кита вкладку ведёт профиль тимлида, шаблон судится отдельно
+        bad += [f"шаблон {tpl}: {b}" for b in profile_bad(json.load(open(tpl, encoding="utf-8")), settings)]
+    local = f"{os.path.dirname(launch)}/settings.local.json"
+    differs, step = tab_profile(local, launch), f"cp {launch} {local}"
+    if differs is None:
+        print(f"HARNESS_WARN tab-profile profil=fehlt — нет {local}, оператор копирует профиль: {step}", flush=True)
+    elif differs:
+        bad.append(f"tab-profile: {local} не как {launch}, ключи: {', '.join(differs)}")
+    views, kinds = tab_view_probes(), profile_probes()
+    if not shutil.which("claude"):
+        if bad or not sides_ok(views) or not sides_ok(kinds):
+            return item(S, "F6.3", False, f"статика: {'; '.join(bad) or 'ok'} · сверка: {sides_text(views)} · поля: {sides_text(kinds)}")
+        return offen(S, "F6.3", "claude нет в PATH — прокси нет")
+    env, files = profile.get("env", {}), tab_profile_probes(src, launch)
+    after, before, flag = tab_side(src, launch, "tab-after"), tab_side(src, launch, "tab-before", strip=True), tab_side(src, launch, "tab-flag", ["--settings", ".claude/launch.settings.json"], local=False)
+    init = after["init"]
+    diff, app, summary = tab_view(table(open(proc, encoding="utf-8").read()), init)
+    diff += [] if init.get("permissionMode") == "auto" and init.get("apiKeySource") == "none" else [f"init: permissionMode {init.get('permissionMode')}, apiKeySource {init.get('apiKeySource')}"]
+    if after["main"] != profile.get("effortLevel") or before["main"] in (None, profile.get("effortLevel")):
+        bad.append(f"effort главной: профиль {profile.get('effortLevel')}, с профилем {after['main']}, без полей {before['main']}")
+    if SUBAGENT_EFFORT in env and (after["sub"] != env[SUBAGENT_EFFORT] or before["sub"] in (None, env[SUBAGENT_EFFORT])):
+        bad.append(f"effort подагента: {SUBAGENT_EFFORT} {env[SUBAGENT_EFFORT]}, с профилем {after['sub']}, без полей {before['sub']}")
+    if flag["models"] != [env.get(SUBAGENT_MODEL)]:
+        bad.append(f"{SUBAGENT_MODEL} {env.get(SUBAGENT_MODEL)} через --settings: подагент {flag['models']}")
+    if after["models"] != [env.get(SUBAGENT_MODEL)]:
+        print(f"HARNESS_WARN subagent-model-local settings.local={','.join(after['models']) or '—'} --settings={','.join(flag['models']) or '—'}", flush=True)
+    if env.get(SUBAGENT_MODEL):  # находка 400: env профиля в settings.local и модель подагента — те же прокси, ещё две стороны: env проекта и окружение процесса
+        project, process = tab_side(src, launch, "tab-model-project", model="project"), tab_side(src, launch, "tab-model-process", model="process")
+        m = lambda s: ",".join(s["models"]) or "—"
+        want = env[SUBAGENT_MODEL]
+        verdict = "не переключает" if after["models"] != [want] and flag["models"] == [want] else "переключает" if after["models"] == [want] else "не определить: и --settings не переключил"
+        print(f"HARNESS_NOTE subagent-model {want}: env в settings.local — {m(after)} (без env — {m(before)}), через --settings — {m(flag)}, "
+              f"env в .claude/settings.json проекта — {m(project)}, окружение процесса — {m(process)}: env settings.local {verdict}", flush=True)
+    refused, edited, written = after["refused"] and after["status"] == "old\n", "new" in after["kit"] and "old" not in after["kit"], before["status"] != "old\n"
+    bad += [] if written else ["без правила Edit(/docs/STATUS.md) файл не записан: отказ — не от правила"]
+    ok = not diff and not bad and refused and edited and sides_ok(views) and sides_ok(kinds) and sides_ok(files)
+    item(S, "F6.3", ok, f"init={'gleich' if not diff else 'иное'} deny={refused + edited}/2 · " + (f"расхождения: {'; '.join(diff)} · " if diff else "")
+         + (f"поля: {'; '.join(bad)} · " if bad else "") + f"прокси claude -p с профилем {launch} как settings.local, источники как у вкладки, auto: {summary}; строк таблицы «флаг» не судятся: их замена — ключи профиля · "
+         f"effortLevel: до {before['main']}, после {after['main']} · {SUBAGENT_EFFORT} (источник — только changelog 2.1.316): подагент до {before['sub']}, после {after['sub']} (профиль {env.get(SUBAGENT_EFFORT, 'нет')}) · "
+         f"{SUBAGENT_MODEL} {env.get(SUBAGENT_MODEL)}: подагент до {','.join(before['models']) or '—'}, через settings.local {','.join(after['models']) or '—'}, через --settings {','.join(flag['models']) or '—'} · "
+         f"deny: без правила docs/STATUS.md {'записан' if written else 'цел'}; с правилом {'отказ, файл цел' if refused else 'НЕ отказан'}; kit/CLAUDE.md {'правка' if edited else 'НЕ правлен'} · "
+         f"сверка на подставных init: {sides_text(views)} · поля профиля: {sides_text(kinds)} · файл профиля: {sides_text(files)}")
+    print(tab_line(app, None if differs is not None else step, additional_dirs(src, launch)), flush=True)
+
+
+def desktop_probes(src, proc, launch):
+    print("вкладка Code и CLI — разные движки: вложенные прогоны идут на CLI из PATH, `claude -p` — прокси вкладки, а не она сама; движок вкладки скрипту виден только именем каталога версии (app= в VERSIONS)", flush=True)
+    desktop_versions()
+    desktop_write(src, launch)
+    desktop_profile(src, proc, launch)
+    denied = denied_probes(src)
+    n = next(got for name, _, got in denied if name == "журнал трёх входов")
+    item("HARNESS", "F6.4", sides_ok(denied), f"denials={n.split()[1].rstrip(':')}/3 · входы формы документации hooks, живого отказа нет: событие идёт только на отказ auto mode, не на deny-правило F6.3 · {sides_text(denied)}")
+
+
 def main():
     global SRC_ARG
     argv = sys.argv[1:]
@@ -1447,11 +2500,15 @@ def main():
         ok = self_test()
         print("ENV_SELFTEST_OK" if ok else "ENV_SELFTEST_FAIL")
         return 0 if ok else 1
-    want = [a for a in argv if a in SECTIONS] or list(SECTIONS)
+    desktop = "--desktop" in argv
+    argv = [a for a in argv if a != "--desktop"]
+    want = [a for a in argv if a in SECTIONS] or ([] if desktop else list(SECTIONS))
     rest = [a for a in argv if a not in SECTIONS]
     SRC_ARG = rest[0] if rest else None
     src, proc, launch = paths()
-    print(f"источник харнеса: {src}; строка запуска: {proc}; launch settings: {launch}; разделы: {', '.join(want)}")
+    print(f"источник харнеса: {src}; строка запуска: {proc}; launch settings: {launch}; разделы: {', '.join(want + ['desktop'] * desktop)}")
+    if desktop:
+        desktop_probes(src, proc, launch)
     if "env" in want:
         say("ENV", "OK" if self_test() else "FAIL", "self-test", "фикстуры обеих сторон сверки")
         line = static(src, proc, launch)
@@ -1469,6 +2526,7 @@ def main():
     if "items" in want:
         lenv, args = launch_line(proc)
         gate_settings(src)
+        gate34_probes(src, launch)
         items_probes(src, launch)
         if args is None:
             say("GATE_HOOK", "FAIL", "line", f"{proc}: нет строки запуска — живых проб хука нет")
@@ -1476,8 +2534,11 @@ def main():
             gate_probes(src, launch, lenv, args)
     if "commit" in want:
         commit_probes(src)
+    if "graph" in want:
+        print("\n".join(graph_lines()), flush=True)
     for sec, ss in out.items():
-        print(f"{sec}_FAIL" if "FAIL" in ss else f"{sec}_OK")
+        if "FAIL" in ss or "OFFEN" not in ss:  # offen — маркера нет, код 0
+            print(f"{sec}_FAIL" if "FAIL" in ss else f"{sec}_OK")
     return 1 if any("FAIL" in ss for ss in out.values()) else 0
 
 

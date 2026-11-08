@@ -1,40 +1,51 @@
 #!/usr/bin/env node
-// spec-gate — the kit's Stop hook (SPEC-v3.2 F2, SPEC-v3.3 F1): the end of a turn is held by the items of the phase SPEC, not by words.
+// spec-gate — the kit's Stop hook (SPEC-v3.2 F2, SPEC-v3.3 F1, SPEC-v3.4 F1): the end of a turn is held by the items of the phase SPEC, not by words.
 //
 // Code only, $0, no network. The phase SPEC (first `Read first:` of the start prompt) has feature lines (`- **F<n>` … `чек: `cmd` →
-// `MARKER``) and under each its items (`  - `F<n>.<k>` …`). The set: per feature a file docs/evidence/F<n>-*-result.txt with the
+// `MARKER``) and under each its items (`  - `F<n>.<k>` …`). The set: per feature a file docs/evidence/F<n>-*-result.txt whose first
+// line is `spec: SPEC-<n>` of this SPEC (bin/evidence writes it; a file of another SPEC does not count and is only named as a hint
+// while the feature's own set is incomplete, SPEC-v3.4 F1.3) with the
 // marker on a line of its own and, per item, a line «F<n>.<k> <raw output of its probe>» in one of the feature's evidence files; the
 // branch pushed (HEAD = origin/<branch>); the head of docs/PROGRESS.md (its «## Голова» section) names what is done, the operator's
 // next step and when, and was rewritten — in this session when the session committed anything beyond evidence, else in this phase
-// (since the last commit of the start prompt: a fresh context on a closed phase is not held); a VERDICT: PASS of a full
-// /verify-phase round for HEAD or an ancestor (or a NEEDS_WORK one whose blocking features are then verified again), and for every
-// feature changed after it (item ids at the start of the commit message) a point verdict that names it (`FEATURES: F<n>, …`) without
-// blocking it, at or after its last change (SPEC-v3.3 F4.4, §5).
+// (since the last commit of the start prompt: a fresh context on a closed phase is not held); a full /verify-phase round of this SPEC —
+// the union of its calls (decision 401): every feature of the SPEC named (`FEATURES: F<n>, …`; a verdict without the line names them
+// all) by its newest verdict committed at HEAD for HEAD or an ancestor, a PASS or a NEEDS_WORK whose parsed blocking list leaves it
+// out; every commit with its id (item ids at the start of the commit message) seen by a verdict that verifies it; a commit naming no
+// item that the verdict of some feature did not see holds the turn and names those features (SPEC-v3.3 F4.4, §5). «Seen» is ancestry,
+// not the date order of git log: a merged branch brings older dates. An uncovered feature is a missing line by its name.
 // The set is judged as pushed: the start prompt, the SPEC, docs/PROGRESS.md, the evidence files of the SPEC's features and the
 // verdict files are read from HEAD, and any of them that `git status` shows as changed, untracked or deleted (eol conversion and
 // filters as git applies them) holds the turn by its name. Logs that checks and hooks append (docs/evidence/*.jsonl) and the phase
 // report are not part of the set.
 // A STOP line counts only from the pushed HEAD (SPEC-v3.3 F1.5): a new line `STOP: <id>` with a reason of SPEC §4 and, within
-// the next three lines, a question (?) and a resume line ends the turn once. It is new when its text from «STOP:» on starts neither
+// the next three lines (not on the STOP line itself; LF or CRLF), a question (a ? with no word, =, & or % right after it, so not one
+// inside a URL) and a resume line ends the turn once. It is new when its text from «STOP:» on starts neither
 // like a STOP line of the PROGRESS committed before the session nor like a stop already honored (the log keeps their marks): its
 // first 60 characters, or all of a shorter line — an edited tail, «— снят» at the end or a bullet in front keep a line old.
 // The full set → SPEC_GATE_OK and the turn ends; otherwise the end of the turn is blocked and the reason is the list of what is
 // missing, built by code. Jev is not asked here: its one cell — an item against the raw output of its probe — is in the phase
 // report, in the shadow (SPEC-v3.3 F1.6).
-// Guards: a cap of blocks and of hours per session and the same list blocked `same_list` times in a row turn a block into a pass
-// (`cap-…`, `no-progress`), never an OK; AGENT_STOP is stronger than the hook; background tasks or session crons → pass (the
-// session waits to be woken up); an unreadable .claude/spec-gate.json → pass with the reason. Every decision is a line of
-// docs/evidence/spec-gate.jsonl; a pass there, with its reason, is a line of the phase report (F1.5).
+// Guards: the same list blocked `same_list` times in a row turns a block into a pass (`no-progress`), never an OK; the platform itself
+// ends the turn after 8 continuations in a row (hooks: «8-consecutive-continuation cap … resets each time Claude calls a tool»; the
+// journal carries `platform_cap`), so the hook keeps no cap of blocks and none of hours (SPEC-v3.4 F1.2). AGENT_STOP is stronger than
+// the hook. Background work → pass only for what wakes the session: a task of type monitor, workflow or shell (hooks, Stop input
+// `background_tasks[].type`) or a session cron; a subagent or anything else leaves the set to be judged (SPEC-v3.4 F1.1). An
+// unreadable .claude/spec-gate.json → pass with the reason. Every decision is a line of docs/evidence/spec-gate.jsonl with the types
+// of the background tasks; a pass there, with its reason, is a line of the phase report (F1.5).
 // Modes off · shadow · active: SPEC_GATE from the environment, else `mode` of .claude/spec-gate.json (the team lead's file).
 // `claude -p` of acceptance and of the control pairs runs with SPEC_GATE=off. The hook never prints a permission decision; on its
-// own error it exits 0.
+// own error it exits 0, and an empty stdin or one that is not a JSON object is its own error too: pass with the reason in the log (decision 401).
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const DEFAULTS = { mode: 'active', caps: { blocks: 12, hours: 3, same_list: 3 } }
-const STOP_IDS = ['STOP-PAY', 'STOP-SCOPE', 'STOP-INPUT', 'STOP-NP']
+const DEFAULTS = { mode: 'active', caps: { same_list: 3 } }
+const STOP_IDS = ['STOP-PAY', 'STOP-SCOPE', 'STOP-INPUT', 'STOP-NP', 'STOP-TL']
+const WAKES = ['monitor', 'workflow', 'shell']  // background task types that wake the session; the rest (subagent, teammate, cloud session, MCP task, a raw type) do not hold the judge back
+const PLATFORM_CAP = Number(process.env.CLAUDE_CODE_STOP_HOOK_BLOCK_CAP) || 8
+const NO_TRANSCRIPT_MS = 3 * 3600e3  // no readable transcript: the session is taken to have started this long ago
 const LABELS = [/Сделано|Done/i, /Следующий шаг|Next step/i, /Когда закончим|When/i]  // the template's three labels of the head
 const t0 = Date.now()
 
@@ -146,13 +157,14 @@ function head(progress) {
   return (m ? m[0] : progress.split('\n').slice(0, 20).join('\n')).trim().slice(0, 4000)
 }
 
-function verdicts(root, sha) {  // verdict files committed at HEAD for HEAD or an ancestor: {file, sha, pass, scope: null = full round, blocking}
+function verdicts(root, sha, specPath) {  // verdict files of this SPEC committed at HEAD for HEAD or an ancestor: {file, sha, pass, scope: null = full round, blocking}
   const out = []
   for (const f of headNames(root, 'docs/evidence')) {
     const m = f.match(/^verify-([0-9a-f]{7,40})(?:-[\w.-]+)?\.txt$/)
     const text = m && atHead(root, `docs/evidence/${f}`)
     const v = text && text.split('\n')[0].trim()
     if (v !== 'VERDICT: PASS' && v !== 'VERDICT: NEEDS_WORK') continue
+    if (path.basename((text.match(/^\/verify-phase · (\S+) · /m) || [])[1] || '') !== path.basename(specPath)) continue  // a verdict of another SPEC does not count
     const full = git(root, 'rev-parse', '--verify', '-q', `${m[1]}^{commit}`)
     if (!full || !isAncestor(root, full, sha)) continue
     const scope = (text.match(/^FEATURES:\s*(.+)$/m) || [])[1]
@@ -163,35 +175,45 @@ function verdicts(root, sha) {  // verdict files committed at HEAD for HEAD or a
   return out
 }
 
-function coverage(root, sha, ids) {  // what the verdicts leave uncovered — [] when HEAD is covered (SPEC-v3.3 F4.4)
-  const all = verdicts(root, sha)
-  const isFull = v => !v.scope || ids.every(i => v.scope.includes(i))
-  const dist = v => Number(git(root, 'rev-list', '--count', `${v.sha}..${sha}`) ?? 1e9)
-  const full = all.filter(isFull).sort((a, b) => dist(a) - dist(b) || b.pass - a.pass)[0]  // the newest full round, PASS or NEEDS_WORK
-  // a feature counts as verified at v.sha when v names it and does not block it (a NEEDS_WORK verdict without a parsed blocking list verifies nothing)
-  const verifies = (v, f) => v !== full && v.scope?.includes(f) && (v.pass || (v.blocking.length > 0 && !v.blocking.includes(f)))
-  const vs = all.filter(v => v.pass || v.blocking.length)
-  if (!full) return { missing: [`no full /verify-phase round for HEAD ${sha.slice(0, 7)} or an ancestor in HEAD (docs/evidence/verify-<sha>.txt)`] }
-  const missing = [], last = {}
-  // SPEC-v3.3 §5: the blocking findings of the one full round are fixed, then only the touched features are verified again
-  const failed = full.pass ? [] : full.blocking.length ? full.blocking : ids
-  for (const f of failed) last[f] = full.sha
+function coverage(root, sha, ids, specPath) {  // what the verdicts leave uncovered — [] when HEAD is covered (SPEC-v3.3 F4.4, decision 401)
+  const all = verdicts(root, sha, specPath)
+  const unseen = new Map(all.map(v => [v, new Set((git(root, 'rev-list', `${v.sha}..${sha}`) || '').split('\n').filter(Boolean))]))  // what a verdict did not see
+  const saw = (v, c) => !unseen.get(v).has(c.sha)
+  const names = (v, f) => !v.scope || v.scope.includes(f)  // no FEATURES line — a round of every feature: one file with all is the special case
+  // v verifies f when it names it and does not block it; a NEEDS_WORK verdict without a parsed blocking list blocks all it names
+  const verifies = (v, f) => names(v, f) && (v.pass || (v.blocking.length > 0 && !v.blocking.includes(f)))
+  // the verdict of a feature: its newest naming one (fewest commits it did not see); at the same commit one that verifies it comes first
+  const newest = f => all.filter(v => names(v, f)).sort((a, b) => unseen.get(a).size - unseen.get(b).size || verifies(b, f) - verifies(a, f))[0]
+  const of = Object.fromEntries(ids.map(f => [f, newest(f)]))
+  const s7 = x => x.slice(0, 7)
+  const missing = ids.filter(f => !of[f]).map(f => `${f}: no /verify-phase verdict in HEAD names ${f} for HEAD ${s7(sha)} or an ancestor (docs/evidence/verify-<sha>[-F…].txt) — the full round is the union of the calls: every feature named by a PASS, or by a NEEDS_WORK that does not block it`)
+  const used = [...new Set(Object.values(of).filter(Boolean))]
+  if (!used.length) return { missing }
   const own = p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md' || /^docs\/PLAN-[^/]+\.md$/.test(p)  // the executor's report files
-  for (const c of commits(root, `${full.sha}..${sha}`)) {
-    if (c.subj.startsWith('Тимлид:') || c.files.every(own)) continue
+  const skip = c => c.subj.startsWith('Тимлид:') || c.files.every(own)
+  // the commits some used verdict did not see: one range on a line of history, the union of the ranges after a merge (git log orders by date)
+  const late = new Map()
+  for (const v of used) if (unseen.get(v).size) for (const c of commits(root, `${v.sha}..${sha}`)) if (!late.has(c.sha) && !skip(c)) late.set(c.sha, c)
+  const changes = {}  // feature → its commits that some used verdict did not see
+  for (const c of late.values()) {
     const fs_ = [...new Set(((c.subj.match(/^((?:F\d+\.\d+[,;\s]*)+)/) || [])[1] || '').match(/F\d+(?=\.)/g) || [])]
-    if (!fs_.length) missing.push(`commit ${c.sha.slice(0, 7)} «${c.subj.slice(0, 60)}» after the full /verify-phase round ${full.sha.slice(0, 7)} changes ${c.files.slice(0, 3).join(', ')} and names no item: no point verdict can cover it`)
-    for (const f of fs_) if (!last[f] || last[f] === full.sha) last[f] = c.sha  // newest first: the first seen is the last change of the feature
+    for (const f of fs_) (changes[f] ||= []).push(c)
+    if (fs_.length) continue
+    const owed = ids.filter(f => of[f] && !saw(of[f], c)).map(f => `${f} (${of[f].file})`)  // covered once each of them has a verdict at or after it
+    missing.push(`commit ${s7(c.sha)} «${c.subj.slice(0, 60)}» after the /verify-phase round of ${owed.join(', ')} changes ${c.files.slice(0, 3).join(', ')} and names no item: it is covered when each of these features has a verdict at or after it`)
   }
-  for (const [f, c] of Object.entries(last)) {
-    if (!vs.some(v => verifies(v, f) && isAncestor(root, c, v.sha))) {
-      missing.push(c === full.sha ? `${f}: blocking in the full /verify-phase round ${full.sha.slice(0, 7)} (${full.file}) — no point VERDICT: PASS that names ${f} after it`
-        : `${f}: changed after the full /verify-phase round ${full.sha.slice(0, 7)} (commit ${c.slice(0, 7)}) — no point VERDICT: PASS that names ${f} at or after it`)
-    }
+  for (const f of [...ids, ...Object.keys(changes).filter(f => !ids.includes(f))]) {
+    const v = of[f] ?? (of[f] = newest(f))
+    if (!v) { if (!ids.includes(f)) missing.push(`${f}: commit ${s7(changes[f][0].sha)} names ${f}, and no /verify-phase verdict in HEAD names it`); continue }
+    if (!verifies(v, f)) { missing.push(`${f}: blocking in the /verify-phase round ${s7(v.sha)} (${v.file}) — no point VERDICT: PASS that names ${f} after it`); continue }
+    // every change of f its verdict did not see needs a verdict that verifies f and saw it — not only the first one git log lists
+    const open = (changes[f] || []).find(c => !saw(v, c) && !all.some(w => verifies(w, f) && saw(w, c)))
+    if (open) missing.push(`${f}: changed after its /verify-phase verdict ${s7(v.sha)} (${v.file}, commit ${s7(open.sha)}) — no point VERDICT: PASS that names ${f} at or after it`)
   }
-  const point = vs.filter(v => Object.keys(last).some(f => verifies(v, f)))
-  return { missing, used: [full.file, ...point.map(v => v.file)].join(', ') }
+  return { missing, used: used.map(v => v.file).join(', ') }
 }
+
+const bgTypes = input => (Array.isArray(input.background_tasks) ? input.background_tasks : []).map(t => String(t?.type ?? 'no type')).sort()
 
 function decide(input, root, cfg, log) {
   const prior = log.filter(l => l.session === input.session)
@@ -203,12 +225,13 @@ function decide(input, root, cfg, log) {
   const specPath = rf.split(',').map(s => s.trim()).find(s => /(^|\/)SPEC-[^/]+\.md$/.test(s))
   const spec = specPath && (atHead(root, specPath) ?? read(path.join(root, specPath)))
   if (!spec) return { decision: 'pass', reason: `no SPEC in Read first of ${promptFile}` }
-  if ((input.background_tasks || []).length || (input.session_crons || []).length) {
-    return { decision: 'pass', reason: `background: tasks ${(input.background_tasks || []).length}, crons ${(input.session_crons || []).length}` }
-  }
-  const start = sessionStart(input.transcript_path) ?? t0 - cfg.caps.hours * 3600e3
+  const wakes = [...new Set(bgTypes(input).filter(t => WAKES.includes(t)))]
+  if ((input.session_crons || []).length) wakes.push('cron')
+  if (wakes.length) return { decision: 'pass', reason: `background:${wakes.join(',')}` }
+  const start = sessionStart(input.transcript_path) ?? t0 - NO_TRANSCRIPT_MS
 
   const feats = features(spec)
+  const specName = path.basename(specPath).replace(/\.md$/, '')  // the first line of an evidence file of this SPEC: `spec: SPEC-<n>`
   const missing = []
   const isEvidence = n => !n.includes('/') && (/^verify-[0-9a-f]{7,40}(?:-[\w.-]+)?\.txt$/.test(n) || feats.some(f => n.startsWith(`${f.id}-`) && n.endsWith('-result.txt')))
   const loose = Object.entries(changed(root, [promptFile, specPath, 'docs/PROGRESS.md', 'docs/evidence']))
@@ -222,17 +245,22 @@ function decide(input, root, cfg, log) {
     if (!f.marker) { missing.push(`${f.id}: the SPEC line names no check marker (\`чек: \`…\` → \`MARKER\`\`)`); continue }
     const mine = n => n.startsWith(`${f.id}-`) && n.endsWith('-result.txt')
     const lines = text => (text || '').split('\n').map(l => l.trim())
-    const atH = evHead.filter(mine).map(n => [n, lines(atHead(root, `docs/evidence/${n}`))])
-    const onD = evDisk.filter(mine).map(n => [n, lines(read(path.join(evDir, n)))])
+    const ofSpec = ([, ls]) => ls[0] === `spec: ${specName}`
+    const atH = evHead.filter(mine).map(n => [n, lines(atHead(root, `docs/evidence/${n}`))]).filter(ofSpec)
+    const onD = evDisk.filter(mine).map(n => [n, lines(read(path.join(evDir, n)))]).filter(ofSpec)
     const names = [...new Set([...evHead, ...evDisk].filter(mine))]
     const where = test => [atH.find(([, ls]) => ls.some(test))?.[0], onD.find(([, ls]) => ls.some(test))?.[0]]
     const [hit, disk] = where(l => [f.marker, `${f.id} ${f.marker}`].includes(l))
     if (!names.length) { missing.push(`${f.id}: no docs/evidence/${f.id}-*-result.txt${f.items.length ? ` — items ${f.items.join(', ')} without a probe line` : ''}`); continue }
-    if (!hit) missing.push(disk ? `${f.id}: the line ${f.marker} is in docs/evidence/${disk} on disk only, not in HEAD` : `${f.id}: no line ${f.marker} in docs/evidence/${names.join(', docs/evidence/')}`)
+    const gaps = []
+    if (!hit) gaps.push(disk ? `${f.id}: the line ${f.marker} is in docs/evidence/${disk} on disk only, not in HEAD` : `${f.id}: no line ${f.marker} in docs/evidence/${names.join(', docs/evidence/')}`)
     for (const id of f.items) {  // the probe line of an item: its id, a space and the raw output of its probe
       const [h, d] = where(l => l.startsWith(`${id} `) && l.length > id.length + 1)
-      if (!h) missing.push(d ? `${id}: its probe line is in docs/evidence/${d} on disk only, not in HEAD` : `${id}: no probe line «${id} <raw output>» in docs/evidence/${names.join(', docs/evidence/')} at HEAD`)
+      if (!h) gaps.push(d ? `${id}: its probe line is in docs/evidence/${d} on disk only, not in HEAD` : `${id}: no probe line «${id} <raw output>» in docs/evidence/${names.join(', docs/evidence/')} at HEAD`)
     }
+    // a file of another SPEC holds nothing by itself: next to a complete own set it is not named at all
+    if (gaps.length) for (const n of names.filter(n => !atH.some(x => x[0] === n) && !onD.some(x => x[0] === n))) missing.push(`${f.id}: docs/evidence/${n} is not of ${specName} — its first line is not «spec: ${specName}», its lines do not count`)
+    missing.push(...gaps)
   }
   if (!feats.length) missing.push(`${specPath}: no feature lines «- **F<n> …»`)
   const sha = git(root, 'rev-parse', 'HEAD')
@@ -252,7 +280,7 @@ function decide(input, root, cfg, log) {
     if (!hd || (ref && hd === head(ref))) missing.push(`the head of docs/PROGRESS.md was not updated in this ${worked ? 'session' : 'phase'}`)
     else if (!LABELS.every(r => r.test(hd))) missing.push('the head of docs/PROGRESS.md does not say what is done («Сделано»), the operator\'s next step («Следующий шаг оператора») and when («Когда закончим»)')
   }
-  const cov = sha ? coverage(root, sha, feats.map(f => f.id)) : { missing: ['no HEAD'] }
+  const cov = sha ? coverage(root, sha, feats.map(f => f.id), specPath) : { missing: ['no HEAD'] }
   missing.push(...cov.missing)
 
   const reasons = stopReasons(spec)
@@ -263,18 +291,15 @@ function decide(input, root, cfg, log) {
   for (const m of fresh(disk).filter(m => !atHeadStops.some(h => canon(h[0]) === canon(m[0])))) {
     missing.push(`«${canon(m[0]).slice(0, 60)}» is in docs/PROGRESS.md on disk only: a STOP counts from the pushed HEAD — commit and push it`)
   }
-  const plines = progress.split('\n')
-  const formed = m => { const i = plines.indexOf(m[0]); const near = plines.slice(i, i + 4).join('\n'); return i >= 0 && near.includes('?') && /resume|продолж/i.test(near) }
+  const plines = progress.split(/\r?\n/)  // m[0] carries no \r: in a CRLF file the lines must not either
+  const formed = m => { const i = plines.indexOf(m[0]); const near = plines.slice(i + 1, i + 4).join('\n'); return i >= 0 && /\?(?![\w=&%])/.test(near) && /resume|продолж/i.test(near) }
   for (const m of atHeadStops.filter(m => !reasons.includes(m[1]))) missing.push(`«STOP: ${m[1]}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
   for (const m of atHeadStops.filter(m => reasons.includes(m[1]) && !formed(m))) missing.push(`«STOP: ${m[1]}» has no question (?) and resume line within the next three lines`)
   const valid = atHeadStops.filter(m => reasons.includes(m[1]) && formed(m))
 
   if (valid.length && pushed) return { decision: 'stop', reason: valid.map(m => m[1]).join(', '), stops: valid.map(m => stopMark(m[0])) }
   if (!missing.length) return { decision: 'ok', reason: `SPEC_GATE_OK: features ${feats.length}, items ${items}, pushed ${sha.slice(0, 7)}, ${cov.used}` }
-  // the guards only turn a block into a pass: the set is evaluated first, so a full set or a new STOP is never lost to a cap
-  const blocks = prior.filter(l => l.decision === 'block').length
-  if (blocks >= cfg.caps.blocks) return { decision: 'pass', reason: `cap-blocks: ${blocks} blocks in this session`, missing }
-  if (t0 - start > cfg.caps.hours * 3600e3) return { decision: 'pass', reason: `cap-time: the session is older than ${cfg.caps.hours} h`, missing }
+  // the guard only turns a block into a pass: the set is evaluated first, so a full set or a new STOP is never lost to it
   const last = prior.slice(-cfg.caps.same_list)
   const same = l => JSON.stringify(l || [])
   if (last.length === cfg.caps.same_list && last.every(l => l.decision === 'block' && same(l.missing) === same(missing))) {
@@ -288,10 +313,14 @@ function main() {
   try {
     raw = fs.readFileSync(0, 'utf8')
   } catch {}
-  let input = {}
+  let input = null
   try {
     input = JSON.parse(raw)
   } catch {}
+  // the hook's own error: no Stop input to judge — the turn passes, the reason goes to the log (decision 401)
+  const mute = input && typeof input === 'object' && !Array.isArray(input) ? null
+    : raw.trim() ? `stdin: not a JSON object (${Buffer.byteLength(raw)} bytes) — the gate passes` : 'stdin: empty — the gate passes'
+  if (mute) input = {}
   const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd()
   let cfg = DEFAULTS
   let broken = null
@@ -308,13 +337,13 @@ function main() {
   const log = (read(logPath) || '').split('\n').filter(Boolean).flatMap(l => { try { return [JSON.parse(l)] } catch { return [] } })
   let d
   try {
-    d = broken ? { decision: 'pass', reason: broken } : decide(input, root, cfg, log)
+    d = broken || mute ? { decision: 'pass', reason: broken || mute } : decide(input, root, cfg, log)
   } catch (e) {
     d = { decision: 'pass', reason: `error: ${e.name}: ${String(e.message).slice(0, 120)}` }
   }
   if (!d) return
   const line = { ts: new Date().toISOString(), session: input.session, mode, decision: d.decision, reason: d.reason, missing: d.missing || [], stops: d.stops || [],
-    stop_hook_active: !!input.stop_hook_active, ms: Date.now() - t0 }
+    bg: bgTypes(input), platform_cap: PLATFORM_CAP, stop_hook_active: !!input.stop_hook_active, ms: Date.now() - t0 }
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
     fs.appendFileSync(logPath, JSON.stringify(line) + '\n')

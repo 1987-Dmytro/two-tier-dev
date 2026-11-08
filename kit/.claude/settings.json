@@ -5,6 +5,7 @@
   "worktree": { "baseRef": "head" },
   "workflowSizeGuideline": "medium",
   "permissions": {
+    "blockWritesOutsideWorkingDirectories": true,
     "allow": ["Bash(bin/check-*)", "Bash(bin/gate-*)", "Bash(make ci)"],
     "deny": [
       "Edit(/intent/**)",
@@ -19,7 +20,9 @@
       "Edit(/.claude/launch.settings.json)",
       "Edit(/.claude/spec-gate.json)",
       "Edit(/.abide/rubric.json)",
-      "Edit(/budgets.json)"
+      "Edit(/budgets.json)",
+      "Edit(/checks/planken.json)",
+      "Edit(/frozen.json)"
     ]
   },
   "hooks": {
@@ -35,6 +38,13 @@
         "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/refuse_sweeping_commands.py"], "timeout": 30 }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/permission-denied.mjs"], "timeout": 10 }
         ]
       }
     ],

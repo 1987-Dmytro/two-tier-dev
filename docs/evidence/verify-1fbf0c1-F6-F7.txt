@@ -1,0 +1,21 @@
+VERDICT: NEEDS_WORK
+КЛАССЫ: блокирующих 1 (мутация 1), повторов 0, named 6
+FEATURES: F6, F7
+/verify-phase · docs/SPEC-v3.4.md · HEAD 1fbf0c1 · проверяющие claude-sonnet-5-5 (фич 2 из 9, опровергателей 1) · судья claude-opus-5-5
+
+Блокирующих находок для решения нет. Свежие чеки зелёные и с маркерами: в docs/evidence/F6-check-harness-result.txt последняя строка HARNESS_OK, в docs/evidence/F7-check-verify-result.txt — VERIFY_OK, и все пункты F6.1–F6.4 и F7.1–F7.4 подтверждены собственными командами проверяющего с сырым выводом; прошлые вердикты обеих фич — PASS без блокирующих. Единственный кандидат в блокирующие — выжившая мутация хука permission-denied.mjs (граница {0,60}→{0,59}, check-harness --self-test остался зелёным). По заданию её блокирует код, поэтому я её сюда не включаю; остальные находки — граничные случаи и формулировки, они ушли в named_not_built.
+
+## Блокирующие
+- **F6: мутация выжила — kit/.claude/hooks/permission-denied.mjs: ruleOf regex class length bound {0,60} -> {0,59}: a 61-character bracket class [AAAA...] is logged as rule other instead of by its name (confirmed by running the hook: original gives rule A..., mutant gives other)** · чек `python3 kit/bin/check-harness --self-test (includes denied_probes, which the --desktop run also uses)` остался зелёным
+
+## Named, not built
+- F6.1: строка evidence — «versionen=3 graph=нет», а пункт называет «graph=OK»; в свежем клоне нет graphify-out/. С собранным графом поведение верное (OK для HEAD 1fbf0c1, при устаревшем штампе HARNESS_WARN graph-age).
+- F6.1: graph_age сравнивает .built-head с HEAD как точные строки, поэтому короткий sha или sha в верхнем регистре даёт путаный WARN «граф собран для 36f08cc, HEAD 36f08cc». post-commit кита пишет полный sha, так что на обычном пути всё верно.
+- F6.3: в env профиля запуска есть только CLAUDE_CODE_SUBAGENT_MODEL, а CLAUDE_CODE_SUBAGENT_EFFORT нет, хотя в пункте написано «CLAUDE_CODE_SUBAGENT_*». Решение записано в evidence: у этой переменной есть только источник в changelog.
+- F6.3: compare/tab_view падают с AttributeError, если у плагина в init source=null (kit/bin/check-harness, строка 854). Реальный init так не отдаёт, вход гипотетический.
+- F6.4: хук пишет пустой tool_name строкой с tool '', а tool_name с переводом строки пишет как есть. Счётчик n не защищён блокировкой, поэтому два параллельных отказа одной сессии по одному правилу могут получить одинаковый n.
+- F7.3: в живом eval-круге проверяющий нашёл ещё выжившую мутацию bin/check-deploy. Это синтетическая фикстура, а не продукт F7, и критерий кейса (F1.2 не подтверждён своим прогоном) выполнен: eval_caught: True.
+
+## По фичам
+- F6: прошлый вердикт verify-265eaa4-F6-F8.txt; чек `bin/check-harness --desktop` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация kit/.claude/hooks/permission-denied.mjs: ruleOf regex class length bound {0,60} -> {0,59}: a 61-character bracket class [AAAA...] is logged as rule other instead of by its name (confirmed by running the hook: original gives rule A..., mutant gives other) → green; находок 6, блокирующих-кандидатов 1, опровергнуто 0
+- F7: risk low; прошлый вердикт verify-502f935-F5-F7.txt; чек `grep -n '^F7 ' /tmp/two-tier-v3/verify-1fbf0c1-n4ns2c43/gate.log; tail -1 docs/evidence/F7-check-verify-result.txt` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутаций нет; находок 1, блокирующих-кандидатов 0, опровергнуто 0

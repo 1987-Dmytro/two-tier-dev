@@ -1,0 +1,9 @@
+#!/bin/sh
+fail() { echo "FAIL: $1"; exit 1; }
+good=$(bin/deploy ok) || fail "ok: не exit 0"
+bad=$(bin/deploy bad) && fail "bad: не exit 1"
+case "$good" in *health=OK*) ;; *) fail "нет health=OK" ;; esac
+case "$bad" in *"rollback r1"*) ;; *) fail "нет rollback r1" ;; esac
+echo "F1.1 $(echo "$good" | tail -1)"
+echo "F1.2 $(echo "$bad" | tail -1)"
+echo DEPLOY_OK

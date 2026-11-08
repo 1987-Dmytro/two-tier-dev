@@ -1,0 +1,24 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 9
+FEATURES: F6, F8
+/verify-phase · docs/SPEC-v3.4.md · HEAD 265eaa4 · проверяющие claude-sonnet-5-5 (фич 2 из 9, опровергателей 0) · судья claude-opus-5-5
+
+Свежие прогоны F6 (`HARNESS_OK`) и F8 (`GATE_OK`) зелёные, маркеры есть и в `docs/evidence`, все пункты подтверждены собственными командами проверяющего на обеих сторонах, мутанты убиты, а инварианты §3 в представленных данных не нарушены. Кандидатов в блокирующие нет, а девять оставшихся находок — крайние случаи или расхождения формулировок: `graph=нет` названо в PROGRESS, `/phase halt` записан в PROCESS.md тимлида и работает в скретч-тесте, поэтому ни одна не попадает под правила (a)–(f).
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F6.1: строка evidence — `graph=нет`, в пункте `graph=OK`: в репо нет `graphify-out/`, сторона OK показана только фикстурой; расхождение названо тимлиду в PROGRESS.
+- F6.1: `graph_age` падает с UnicodeDecodeError на `.built-head` не в UTF-8: под `--desktop` трассировка вместо WARN.
+- F6.1: отметка `.built-head` с коротким sha или в верхнем регистре даёт ложный `HARNESS_WARN graph-age`; post-commit кита пишет полный sha, так что случай возможен только с отметкой, сделанной вручную.
+- F6.4: `permission-denied.mjs` дописывает строку, не проверяя конец журнала: после обрезанной строки запись склеивается с ней и счётчик n начинается заново.
+- F8.3: порог `window_seven_day_pct` = 100 по решению 398, поэтому deny срабатывает только выше 100 %; с рабочим порогом сторона видна при 100.5 %, остальные — на подставленных 85 и 10.
+- F8.3: window-guard отказывает при NaN и принимает отрицательный порог из `budgets.json`; вход нереалистичен.
+- F8.4: в пункте названы `/resume` и `/halt`, в моде — `/phase resume` и `/phase halt`: `/resume` — встроенная команда; поправка 398 пишет `/phase resume`, а `/phase halt` — только PROCESS.md (файл тимлида), CHANGELOG и README; текст пункта SPEC про `/halt` не поправлен.
+- F8.4: `/phase resume` отказывает на законной строке Resume с `<` и `>` или `|` (регулярка незаполненной формы); отказ безопасный: ничего не отправлено, строку вводит оператор.
+- F8: в логе гейта `GATE_WARN abide-live` — судья abide ответил CHECK_TIMEOUT на пробах печати и длины ключа, живого ответа в этом прогоне нет; по решению 397 это WARN, не FAIL.
+
+## По фичам
+- F6: чек `bin/check-harness --desktop` rc 0, маркер есть (gate_log); пунктов своим прогоном 4/4; мутация kit/.claude/hooks/permission-denied.mjs: removed the hook_event_name === 'PermissionDenied' guard, so any event with a tool_name writes a denial line (behaviour changed: a non-PermissionDenied input now logs a line) → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0
+- F8: чек `bin/gate-v3.4 (not rerun: 581 s in the launcher's fresh-clone log); read: /tmp/two-tier-v3/verify-265eaa4-8fnlxn_8/gate.log and docs/evidence/F8-gate-result.txt` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутация mods/window-guard/hooks/register.ts: tool.call guard: `week.percentUsed <= limit` changed to `week.percentUsed < limit` (a week exactly at the threshold gets denied) → red; мутация mods/phase-start/hooks/register.ts: branch check `current !== wanted` changed to `!current.startsWith(wanted)` (a branch that only starts like the named one is accepted) → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0

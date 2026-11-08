@@ -1,0 +1,25 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 9
+FEATURES: F1, F2, F9
+/verify-phase · docs/SPEC-v3.4.md · HEAD 9b9ae69 · проверяющие claude-sonnet-5-5 (фич 3 из 9, опровергателей 0) · судья claude-opus-5-5
+
+По F1, F2 и F9 свежие прогоны чеков зелёные с маркерами GATE_HOOK_OK, BUDGET_LINT_OK и MODS_OK. Каждый пункт F1.1–F1.5, F2.1–F2.4 и F9.1–F9.2 подтверждён собственной командой проверяющего и её сырым выводом, все мутации продукта покраснели. Кандидатов в блокирующие после опровергателя не осталось. Оставшиеся находки касаются краёв вне пунктов готовности (валидация конфига, якорь регулярки поправок, таймаут gate-test, косметика пульта) и файла тимлида, поэтому все они неблокирующие.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F1: caps.same_list не проверяется. При 0 первый же block превращается в pass «no-progress», а строка вроде "3" молча выключает защиту. Конфиг принадлежит тимлиду, пункты F1.2 не нарушены.
+- F1: пустой или непарсящийся stdin Stop судится как пустой вход и даёт block с exit 0, а по конвенции ход при собственной ошибке хука должен проходить. Это не пункт F1, эффект ограничен платформенным лимитом в 8 продолжений.
+- F1: evidence F1-check-harness-result.txt записан на 280433b. С тех пор менялись check-harness и launch.settings.json, хук не менялся. Свежий прогон проб F1 на 9b9ae69 зелёный (GATE_HOOK OK).
+- F2: регулярка AMEND не привязана к началу строки и не пропускает код и комментарии. Пример строки «Поправка …: слово оператора <дата>» в code fence, inline-коде, HTML-комментарии или с несуществующей датой 31.04 засчитывается как поправка к новой фиче (edge.sh A, B, C, E, G).
+- F2: у gate-test нет таймаута в subprocess.run, поэтому зависший тест держит gate бесконечно. Кроме того, значения planken 1 или 2 дают planken-inline на любую одиночную цифру в тексте SPEC.
+- F9: /board не отвечает, если чтение repo/root бросает исключение: collect() вызывается вне try в command.run.
+- F9: в качестве открытого STOP показывается первая строка STOP: в PROGRESS, а не последняя. Сейчас в PROGRESS одна строка STOP, так что реальный пульт показывает верно.
+- F9: два события session.start заводят два таймера clock.every, и пульт перерисовывается дважды в минуту. Журнал gate со значением null показывается как «журнал не JSON».
+- F9: docs/PROCESS.md (файл тимлида) в строке 26 всё ещё пишет spec-board «нет», а шаблон кита и профиль пишут «да». Чек сверяет только шаблон, правка за тимлидом.
+
+## По фичам
+- F1: прошлый вердикт verify-62f123a-F1.txt; чек `bin/check-harness (marker GATE_HOOK_OK): gate.log line 'F1 GATE_HOOK_OK' read; marker on line 162 of docs/evidence/F1-check-harness-result.txt; own re-run of the F1 probes only: python3 .vfx/g34.py (check-harness gate34_probes) -> GATE_HOOK OK` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутация kit/.claude/hooks/spec-gate.mjs: WAKES = ['monitor','workflow','shell'] -> ['monitor','workflow'] (shell no longer wakes, F1.1) → red; мутация kit/.claude/hooks/spec-gate.mjs: STOP line formed(): dropped the resume-line requirement (F1.4) → red; мутация kit/.claude/hooks/spec-gate.mjs: ofSpec: first line must be 'spec: SPEC-n' -> accepted in first two lines (F1.3) → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0
+- F2: прошлый вердикт verify-be5c7a5-F1-F2-F3.txt; чек `bin/check-budget --lints` rc 0, маркер есть (own_run); пунктов своим прогоном 4/4; мутация kit/bin/gate-test: flaky label match changed from whole-token ' {k} ' in ' {cmd} ' to substring 'k in cmd' → red; мутация kit/bin/check-budget: rule_planken: dropped the (?!\d) lookahead after the corridor number, so 33000 counts as inline 3300 (confirmed on the product: f23 case G 'number 33000' printed WARN planken-inline instead of OK) → red; находок 2, блокирующих-кандидатов 0, опровергнуто 0
+- F9: чек `bin/check-kit mods` rc 0, маркер есть (own_run); пунктов своим прогоном 2/2; мутация mods/spec-board/hooks/board.ts: hasMarker: own.some(...) -> own.every(...) (a feature with several own evidence files shows no marker unless every file carries it) → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0

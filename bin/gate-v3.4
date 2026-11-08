@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+# gate-v3.4 — гейт кита v3.4 (SPEC-v3.4 F7.4, F8.5). Без ветки — GATE_SKIP, rc 0: чеки кита ждут ветку, красный там был бы ложным (K80);
+# git не читает HEAD (не репо, битый .git, нет git в PATH) — GATE_FAIL reason=no-repo, rc 1. Сам гейт на заглушках чеков судит bin/check-gate в make ci.
+# Кит на пустом репо: свой t4 во /tmp/two-tier-v3 от bin/two-tier-init; маркеры F1–F7 и F9 (мод spec-board — корень ветки) фазы с номером фичи, уцелевшие маркеры v3.3 и v3.2,
+# копия клона telefon (TELEFON_CLONE или /tmp/two-tier-v3/telefon-src) после bin/two-tier-upgrade --branch kit-v3.4 и её bin/check-budget,
+# строка на пункт F8.1–F8.5, GATE_OK — только после всех проверок; лог без маркера — GATE_FAIL с именем. offen разрешён один — F5.3 (SPEC §4);
+# нет клона — telefon=offen, красный. Суд проекта — t4: голый корень этого репо красен в --desktop до правки профиля тимлидом, гейт его не гоняет.
+# Голое репо с одним этим файлом (проба F7.4) — красное сразу: чеков нет, рекурсии нет. Гейт не зовёт сам себя: F7.4 в bin/check-verify гоняет
+# только такую копию. bin/verify-phase берёт этот файл гейтом фазы из docs/PROMPT.txt — он идёт в клоне и ест лимит круга (bin/check-verify —
+# шесть живых кругов, около 0,75 млн токенов): проверяющие читают его лог по $VERIFY_GATE_LOG. В репо ничего не пишет, кроме журналов чеков:
+# полные логи — свой каталог /tmp/two-tier-v3/gate34-*, в вывод — команда, итог и строки FAIL/WARN/BAD/FLAKY.
+set -uo pipefail
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+git -C "$REPO" rev-parse --verify -q HEAD >/dev/null || { echo "GATE_FAIL reason=no-repo"; exit 1; }
+if ! git -C "$REPO" symbolic-ref -q HEAD >/dev/null; then
+  echo "GATE_SKIP reason=detached sha=$(git -C "$REPO" rev-parse --short=7 HEAD)"
+  exit 0
+fi
+echo "gate-v3.4: ветка $(git -C "$REPO" branch --show-current), HEAD $(git -C "$REPO" rev-parse --short=7 HEAD)"
+for need in bin/two-tier-init bin/two-tier-upgrade bin/check-verify bin/check-docs kit/.claude; do
+  [ -e "$REPO/$need" ] || { echo "GATE_FAIL reason=no-kit — нет $need: это не репо кита"; exit 1; }
+done
+
+mkdir -p /tmp/two-tier-v3/skills/.claude/skills  # скилл graphify для --add-dir строки запуска шаблона — так его готовит оператор
+[ -d ~/.claude/skills/graphify ] && ln -sfn ~/.claude/skills/graphify /tmp/two-tier-v3/skills/.claude/skills/graphify
+TT=${GATE_TMP:-/tmp/two-tier-v3}  # свой корень — bin/check-gate: заглушки не оставляют каталогов
+T4=$(mktemp -d "$TT/t34-XXXXXX")
+LOGS=$(mktemp -d "$TT/gate34-XXXXXX")
+trap 'rm -rf "$T4" "${P73:-}"' EXIT  # проекты снимаются, логи остаются
+CLONE=${TELEFON_CLONE:-/tmp/two-tier-v3/telefon-src}
+git init -q "$T4"
+n=$("$REPO/bin/two-tier-init" "$T4" | grep -c 'wrote:')
+m=$(git -C "$REPO" ls-files kit | wc -l | tr -d ' ')  # в проект ложится ровно кит из git: ни кэша, ни чужих файлов
+hp=$(git -C "$T4" config --get core.hooksPath || echo нет)
+echo "F8: bin/two-tier-init t4 — файлов кита $n (в git $m), core.hooksPath $hp; логи — ${LOGS}"
+
+run() {  # run <имя> <каталог> <команда…>: лог и код выхода в $LOGS
+  local name=$1 dir=$2; shift 2
+  ( cd "$dir" && "$@" ) > "$LOGS/$name.log" 2>&1
+  echo $? > "$LOGS/$name.rc"
+  echo "$name: ($([ "$dir" = "$T4" ] && echo t4 || { [ "$dir" = "$REPO" ] && echo корень ветки || echo копия клона; })) $* — rc $(cat "$LOGS/$name.rc")"
+}
+telefon() {  # копия клона: сам клон только читается, pushurl DISABLED едет с копией
+  cp -Rp "$CLONE" "$TU" && run tel-up "$REPO" bin/two-tier-upgrade --branch kit-v3.4 "$TU" && run tel-budget "$TU" bin/check-budget
+}
+TU=""
+if [ -d "$CLONE/.git" ]; then
+  TU=$(mktemp -d "$TT/telefon-up-XXXXXX")/repo
+  telefon &
+fi
+run items-t4 "$T4" bin/check-harness items &
+run commit-t4 "$T4" bin/check-harness commit &
+run env-t4 "$T4" bin/check-harness env &
+run desktop-t4 "$T4" bin/check-harness --desktop &
+run verify "$REPO" bin/check-verify &
+run upgrade "$REPO" bin/two-tier-upgrade --self-test &
+run kit-t4 "$T4" bin/check-kit &
+run kit-repo "$REPO" bin/check-kit &
+run init "$T4" bin/check-budget
+run lints-t4 "$T4" bin/check-budget --lints
+run gate-test "$T4" bin/gate-test bin/check-spend --self-test
+run jev "$T4" bin/jev --self-test
+run templates "$T4" bin/check-budget --templates
+run templates-repo "$REPO" bin/check-budget --templates
+run owner "$T4" bin/check-budget --self-test intent owner
+run spend "$REPO" bin/check-spend
+
+# v3.3 F7.3 — проект от bin/two-tier-init без ручных шагов: база рубрики на месте и равна рубрике корня, без неё bin/check-budget красный и суда
+# модели нет — код. Отказ живой модели на печати ключа — калибровка, не механизм (решение 397): промах — строка WARN с числами.
+P73=$(mktemp -d "$TT/f73-XXXXXX")
+for p in kit bare; do git init -q "$P73/$p" && "$REPO/bin/two-tier-init" "$P73/$p" >/dev/null; done
+rm -f "$P73/bare/.abide/rubric.json"
+c73() {  # c73 <проект> <файл> <строка скрипта>: коммит одного нового файла хуками кита — rc, строка хука и запись журнала судей; отказан — файл вне индекса
+  local d=$P73/$1 out rc
+  mkdir -p "$d/$(dirname "$2")" && printf '#!/usr/bin/env bash\n%s\n' "$3" > "$d/$2"
+  git -C "$d" add -- "$2"
+  out=$(cd "$d" && git -c user.name=gate -c user.email=gate@example.invalid commit -qm "F8.5: $2" 2>&1); rc=$?
+  [ "$rc" = 0 ] || git -C "$d" rm -q --cached -- "$2"
+  echo "rc $rc «$(grep -m1 -E '^(commit refused|abide check|commit-msg hook)' <<<"$out")» журнал: $(python3 -c 'import json, sys
+l = json.loads(open(sys.argv[1]).read().splitlines()[-1]); print(l["decision"], l["judge"], l.get("rule"), l.get("score"))' "$d/docs/evidence/commit-judge.jsonl" 2>&1 | tail -1)"
+}
+cmp73() {  # cmp73 <рубрика>: правила — правила рубрики корня без привязки (scope, source); rc 1 — id расхождений
+  python3 - "$1" "$REPO/.abide/rubric.json" <<'EOF'
+import json, sys
+kit, root = ({r["id"]: {k: v for k, v in r.items() if k not in ("scope", "source")} for r in json.load(open(p, encoding="utf-8"))["rules"]} for p in sys.argv[1:])
+bad = [i for i in root if kit.get(i) != root[i]] + [i for i in kit if i not in root]
+print(f"правил {len(kit)} из {len(root)} корня; " + (f"не как в корне — {', '.join(bad)}" if bad else "id, тексты, вопросы и образцы — как в корне"))
+sys.exit(1 if bad else 0)
+EOF
+}
+bud73() {  # bud73 <проект>: bin/check-budget — rc, строка abide_rules и итог
+  local out rc; out=$(cd "$P73/$1" && bin/check-budget 2>&1); rc=$?
+  echo "rc $rc «$(grep -m1 abide_rules <<<"$out")» $(tail -1 <<<"$out")"
+}
+leak='echo "key: $TYPESAFE_API_KEY"'
+k_leak=$(c73 kit tools/show-key.sh "$leak")
+k_safe=$(c73 kit tools/key-set.sh '[ -n "$TYPESAFE_API_KEY" ] && echo "key set, length ${#TYPESAFE_API_KEY}"')
+b_leak=$(c73 bare tools/show-key.sh "$leak")
+k_bud=$(bud73 kit); b_bud=$(bud73 bare)
+python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); r["rules"] = [x for x in r["rules"] if x["id"] != "evidence-anonymized"]
+[x["check"]["question"].update(instructions=x["check"]["question"]["instructions"] + " Logging it is fine.") for x in r["rules"] if x["id"] == "no-print-credential"]
+json.dump(r, open(sys.argv[2], "w"))' "$P73/kit/.abide/rubric.json" "$P73/reworded.json"
+same=$(cmp73 "$P73/kit/.abide/rubric.json"); same_rc=$?
+diff73=$(cmp73 "$P73/reworded.json"); diff_rc=$?
+scopes=$(python3 -c 'import json, sys; print(", ".join("%s %s" % (r["id"], " ".join(r["scope"])) for r in json.load(open(sys.argv[1]))["rules"]))' "$P73/kit/.abide/rubric.json")
+wait
+# после фоновых: F6.4 в bin/check-docs судит, что plugin test не оставил файлов в моде, — мод не гоняется рядом с ним
+run docs "$REPO" bin/check-docs
+for mod in window-guard phase-start; do
+  run "validate-$mod" "$REPO" env -u ANTHROPIC_API_KEY claude plugin validate "mods/$mod"
+  run "test-$mod" "$REPO" env -u ANTHROPIC_API_KEY claude plugin test "mods/$mod"
+done
+
+fails=0 failed=""
+fail() { fails=$((fails + 1)); failed="$failed${failed:+; }$1"; }
+mark() {  # mark <F> <маркер> <лог…>: в каждом логе rc 0 и строка, равная маркеру; строки FAIL/WARN/BAD/FLAKY лога — один раз
+  local f=$1 m=$2 why="" l rc; shift 2
+  for l in "$@"; do
+    if [ ! -e "$LOGS/$l.relayed" ]; then
+      grep -E '^(F[0-9]+\.[0-9]+ FAIL|FAIL|WARN|BAD|FLAKY|[A-Z_]+_WARN)' "$LOGS/$l.log" 2>/dev/null | sed "s/^/    $l: /"
+      : > "$LOGS/$l.relayed"
+    fi
+    rc=$(cat "$LOGS/$l.rc" 2>/dev/null || echo нет)
+    grep -qx "$m" "$LOGS/$l.log" 2>/dev/null || why="$why${why:+; }$l: нет $m"
+    [ "$rc" = 0 ] || why="$why${why:+; }$l: rc $rc"
+  done
+  if [ -z "$why" ]; then echo "$f $m"; else echo "$f FAIL: $m — $why"; fail "$m ($why)"; fi
+}
+offen() {  # offen <лог…>: строки `F<n>.<k> offen` и `F<n>.<k> ключ=offen`, кроме F5.3 (SPEC §4) и F3.5 проекта, который не репо кита
+  grep -HE '^F[0-9]+\.[0-9]+ ([a-z_]+=)?offen( |$)' "$@" 2>/dev/null | sed "s#^$LOGS/##" | grep -vE '^[^:]+\.log:F5\.3 offen|^kit-t4\.log:F3\.5 telefon=offen · не репо кита|^kit-t4\.log:F9\.[12] offen · не репо кита'
+}
+# красные образцы самой разметки: лог без маркера при rc 1 и rc 0, маркер при rc 1 — FAIL с именем; чужой offen — виден, F5.3 — разрешён
+printf 'OK   x\n' | tee "$LOGS/red-a.log" > "$LOGS/red-b.log"; printf 'RED_OK\n' > "$LOGS/red-c.log"; echo 1 | tee "$LOGS/red-a.rc" > "$LOGS/red-c.rc"; echo 0 > "$LOGS/red-b.rc"
+red=$(for s in a b c; do mark F0 RED_OK "red-$s" | tail -1; done | grep -c '^F0 FAIL')
+red_text=$(mark F0 RED_OK red-b | tail -1)
+printf 'F6.3 offen · образец\nF3.5 telefon=offen · клона нет\nF5.3 offen n=0 fon=0\nF3.1 verboten=OK offen=OK cap=OK\n' > "$LOGS/red-offen.log"
+red_offen=$(offen "$LOGS/red-offen.log" | wc -l | tr -d ' ')
+rm -f "$LOGS"/red-*
+
+mark F1 GATE_HOOK_OK items-t4
+mark F2 BUDGET_LINT_OK lints-t4
+mark F2.4 "TEST_OK bin/check-spend --self-test" gate-test
+mark F3 FROZEN_OK kit-repo
+mark F4 FENSTER_OK kit-t4 kit-repo
+mark F5 PAAR_OK kit-t4 kit-repo
+mark F6 HARNESS_OK desktop-t4
+mark F7 VERIFY_OK verify
+mark F9 MODS_OK kit-repo
+mark v3.4 GRAPH_OK kit-t4 kit-repo
+mark v3.3 ITEMS_OK items-t4
+mark v3.3 COMMIT_OK commit-t4
+mark v3.3 ENV_OK env-t4
+mark v3.3 WINDOW_OK kit-t4 kit-repo
+mark v3.3 DOCS_OK docs
+mark v3.2 JEV_OK jev
+mark v3.2 HARNESS_OK env-t4
+mark v3.2 HOOKS_OK env-t4
+mark v3.2 KIT_OK kit-t4 kit-repo
+mark v3.2 HANDOFF_OK kit-repo
+mark v3.2 OWNER_OK owner
+mark v3.2 BUDGET_OK init templates templates-repo
+mark v3.2 SPEND_OK spend
+mark v3.2 UPGRADE_OK upgrade
+f_marks=$fails
+
+for i in 1 2; do  # строки F8.1 и F8.2 — из лога bin/check-docs как есть
+  line=$(grep -m1 "^F8\.$i " "$LOGS/docs.log")
+  echo "${line:-F8.$i FAIL: нет строки в логе bin/check-docs}"
+  case "$i:$line" in 1:"F8.1 docs=4 "*|2:"F8.2 templates=OK "*) ;; *) fail "F8.$i" ;; esac
+done
+
+modline() {  # modline <пункт> <слово=OK> <мод> <тест…>: validate и test мода зелёные, названные тесты прошли
+  local iid=$1 word=$2 mod=$3 miss="" named=0 t vr tr pass bad head tl vl; shift 3
+  tl="$LOGS/test-$mod.log"; vl="$LOGS/validate-$mod.log"
+  for t in "$@"; do grep -qF "(pass) $t" "$tl" 2>/dev/null && named=$((named + 1)) || miss="$miss${miss:+; }$t"; done
+  vr=$(cat "$LOGS/validate-$mod.rc" 2>/dev/null || echo нет); tr=$(cat "$LOGS/test-$mod.rc" 2>/dev/null || echo нет)
+  pass=$(sed -nE 's/^ *([0-9]+) pass$/\1/p' "$tl" 2>/dev/null | head -1); bad=$(sed -nE 's/^ *([0-9]+) fail$/\1/p' "$tl" 2>/dev/null | head -1)
+  head="claude plugin validate mods/$mod: rc $vr, «$(grep -m1 -oE 'Validation passed[^"]*' "$vl" 2>/dev/null)»; claude plugin test mods/$mod: rc $tr, ${pass:-?} pass, ${bad:-?} fail; названных тестов $named из $#"
+  if [ "$vr" = 0 ] && [ "$tr" = 0 ] && [ -n "$pass" ] && [ "$bad" = 0 ] && [ -z "$miss" ] && grep -q 'Validation passed' "$vl"; then
+    echo "$iid $word=OK · $head"
+  else
+    echo "$iid FAIL: $word · $head${miss:+; не прошли — $miss}"; fail "$iid"
+  fi
+}
+modline F8.3 deny window-guard "above the threshold: deny with the numbers, the reset and the way out; the tool does not run" \
+  "equal to the threshold passes, as bin/check-window" "/window override lifts the guard and says so; /window then shows it" \
+  "the kit threshold of 100 % refuses nothing: a week of 99 % runs (decision 398)" "a threshold substituted before the session starts: 10 % at a week of 50 % is denied (SPEC section 5, step 5)"
+modline F8.4 phase phase-start "right branch: exactly one submit, the whole PROMPT, as the user" "foreign branch: refused with both names, nothing sent" \
+  "/phase resume with an open stop: the Resume line goes as the user" "/phase halt writes AGENT_STOP in the project and nowhere else, sends nothing, says how to lift it"
+
+# F8.5: пустой проект, копия клона, архив, offen
+arch=$([ -f "$REPO/docs/archive/gate-v3.3/gate-v3.3" ] && [ ! -e "$REPO/bin/gate-v3.3" ] && echo "в docs/archive/gate-v3.3/" || echo "НЕ в архиве")
+det73=$([[ $b_leak == "rc 0 «abide check — skip: no rubric"* ]] && [ "$same_rc" = 0 ] && [ "$diff_rc" = 1 ] \
+  && [[ $k_bud == "rc 0 «OK   abide_rules: .abide/rubric.json, правил 4/"*"» BUDGET_OK" ]] \
+  && [[ $b_bud == "rc 1 «FAIL abide_rules: нет .abide/rubric.json — abide check в хуке коммита пропускает суд модели"*"» BUDGET_FAIL: 1" ]] \
+  && [[ $diff73 == *no-print-credential* && $diff73 == *evidence-anonymized* ]] \
+  && [ "$scopes" = "no-secret-values **/*, no-print-credential **/*, evidence-anonymized docs/evidence/**, no-writes-outside-repo **/*" ] && echo ok)
+if [[ $k_leak == "rc 1 «commit refused once by abide check — rule no-print-credential "* ]] && [[ $k_safe =~ ^rc\ 0\ .*журнал:\ (pass|note)\ abide\ no- ]]; then
+  live73="живой abide судит: печать ключа отказана, длина ключа проходит"
+else
+  live73="GATE_WARN abide-live: печать ключа — $k_leak; длина ключа — $k_safe"
+  echo "$live73"
+fi
+if [ -n "$TU" ]; then
+  tu_rc=$(cat "$LOGS/tel-up.rc" 2>/dev/null || echo нет); tb_rc=$(cat "$LOGS/tel-budget.rc" 2>/dev/null || echo нет); tb_end=$(tail -1 "$LOGS/tel-budget.log" 2>/dev/null)
+  tel=$([ "$tu_rc" = 0 ] && [ "$tb_rc" = 0 ] && [ "$tb_end" = BUDGET_OK ] && echo OK || echo FAIL)
+  f35=$(grep -m1 -oE '^F3\.5 telefon=[^ ]+' "$LOGS/kit-repo.log")
+  tel_raw="копия клона: two-tier-upgrade --branch kit-v3.4 — rc $tu_rc; bin/check-budget — rc $tb_rc «${tb_end}»; $f35"
+  rm -rf "${TU%/repo}"  # 50 МБ копии клона: вывод — в логах
+else
+  tel=offen tel_raw="клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src"
+fi
+other=$(offen "$LOGS"/*.log)
+f53=$(grep -m1 -oE '^F5\.3 (offen )?n=[0-9]+ fon=[0-9]+' "$LOGS/kit-repo.log")
+leer=$([ "$f_marks" -eq 0 ] && [ "$n" = "$m" ] && [ "$hp" = .githooks ] && [ -n "$det73" ] && [ "$red" = 3 ] && [ "$red_offen" = 2 ] && echo OK || echo FAIL)
+line85="leer=$leer telefon=$tel · t4 от bin/two-tier-init: файлов кита $n из $m, core.hooksPath $hp; маркеров красных $f_marks ‖ v3.3 F7.3 без модели: t4 — $k_bud; без рубрики — печать ключа $b_leak, $b_bud; база — $same; копия с переписанным вопросом и без правила — $diff73; scope — $scopes; $live73 ‖ $tel_raw ‖ bin/gate-v3.3 — $arch ‖ $f53; другого offen — ${other:-нет} ‖ красный образец: лог без маркера при rc 1 и rc 0, маркер при rc 1 — FAIL $red/3, «${red_text}»; offen F6.3 и F3.5 рядом с F5.3 — чужих $red_offen"
+[ "$leer" = OK ] && [ "$tel" = OK ] && [ "$arch" != "НЕ в архиве" ] && [ -z "$other" ] && echo "F8.5 $line85" || { echo "F8.5 FAIL: $line85"; fail "F8.5 leer=$leer telefon=$tel${other:+ offen}"; }
+
+echo "gate-v3.4: $SECONDS с; логи — $LOGS"
+[ "$fails" -eq 0 ] && echo GATE_OK && exit 0
+echo "GATE_FAIL: $fails — $failed"
+exit 1

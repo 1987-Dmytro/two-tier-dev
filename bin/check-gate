@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""check-gate — код самого bin/gate-v3.4 без модели и сети, в make ci (SPEC-v3.4 F7.4, F8.5). GATE_SELFTEST_OK или exit 1.
+
+  · скрипт один в каталоге, форма пробы F7.4: не репо, битый .git, нет git в PATH — GATE_FAIL reason=no-repo, rc 1; detached HEAD — GATE_SKIP, rc 0;
+    на ветке — без пропуска. Так судятся гейт и его две строки из kit/docs/PROCESS.template.md: их берёт гейт проекта (K80);
+  · гейт на заглушках чеков (настоящие — он сам, bin/two-tier-init и хуки кита): все маркеры — GATE_OK; лог без маркера — GATE_FAIL с именем, rc 1;
+    файл кита вне git — счёт файлов, leer=FAIL; чужой offen, гейта v3.3 нет в архиве, клона telefon нет — строка F8.5, rc 1. Живой гейт (bin/gate-v3.4) судит настоящие чеки, этот файл — только его развилки.
+"""
+import os, re, shlex, shutil, subprocess, sys, tempfile
+from concurrent.futures import ThreadPoolExecutor
+
+REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+TMP = "/tmp/two-tier-v3"
+ENV = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY") and not k.startswith("GIT_")}
+ENV.update(GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.invalid",
+           GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
+STUB = r"""#!/usr/bin/env bash
+# заглушка чека: маркеры по имени и аргументам; STUB_DROP — маркер, которого нет в выводе; STUB_OFFEN — лишняя строка лога check-kit
+case "${0##*/}" in graphify|abide) exit 1 ;; esac
+if [ "${0##*/} $*" = "check-budget " ] && [ ! -f .abide/rubric.json ]; then
+  printf '%s\n' "FAIL abide_rules: нет .abide/rubric.json — abide check в хуке коммита пропускает суд модели" "BUDGET_FAIL: 1"
+  exit 1
+fi
+case "${0##*/} $*" in
+  "check-harness items") printf '%s\n' ITEMS_OK GATE_HOOK_OK ;;
+  "check-harness commit") echo COMMIT_OK ;;
+  "check-harness env") printf '%s\n' ENV_OK HARNESS_OK HOOKS_OK ;;
+  "check-harness --desktop") echo HARNESS_OK ;;
+  "check-verify ") echo VERIFY_OK ;;
+  "check-kit ") printf '%s\n' KIT_OK WINDOW_OK FENSTER_OK GRAPH_OK PAAR_OK HANDOFF_OK FROZEN_OK MODS_OK ${STUB_OFFEN:+"$STUB_OFFEN"} ;;
+  "check-budget ") printf '%s\n' "OK   abide_rules: .abide/rubric.json, правил 4/8" BUDGET_OK ;;
+  "check-budget --lints") echo BUDGET_LINT_OK ;;
+  "check-budget --templates") echo BUDGET_OK ;;
+  "check-budget --self-test intent owner") echo OWNER_OK ;;
+  "check-spend ") echo SPEND_OK ;;
+  "gate-test bin/check-spend --self-test") echo "TEST_OK bin/check-spend --self-test" ;;
+  "jev --self-test") echo JEV_OK ;;
+  "two-tier-upgrade --self-test") echo UPGRADE_OK ;;
+  "check-docs ") printf '%s\n' "F8.1 docs=4 заглушка" "F8.2 templates=OK заглушка" DOCS_OK ;;
+  "claude plugin validate "*) echo "Validation passed" ;;
+  "claude plugin test "*) printf '(pass) %s\n' @NAMES@; printf ' %s\n' "1 pass" "0 fail" ;;
+esac | grep -vxF "${STUB_DROP:-@}"
+exit 0
+"""
+out = []
+
+
+def say(ok, item, msg):
+    out.append(bool(ok))
+    print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}", flush=True)
+
+
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def put(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(path, 0o755)
+
+
+def git(cwd, *a):
+    return subprocess.run(["git", *a], cwd=cwd, env=ENV, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def run(script, cwd, **env):
+    r = subprocess.run([script], cwd=cwd, env={**ENV, **env}, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                       encoding="utf-8", errors="replace", timeout=120)
+    return r.returncode, r.stdout.splitlines()
+
+
+def alone(name, text, branch_rc):
+    """Стороны преамбулы у скрипта text, одного в своём каталоге; branch_rc — код на ветке, где идёт его тело."""
+    home = f"{TOP}/{name}"
+    for side in ("plain", "broken", "repo"):
+        put(f"{home}/{side}/bin/gate", text)
+    os.mkdir(f"{home}/broken/.git")
+    nogit = f"{home}/nogit"
+    os.mkdir(nogit)
+    for tool in ("bash", "dirname"):
+        os.symlink(shutil.which(tool), f"{nogit}/{tool}")
+    repo = f"{home}/repo"
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "--", "bin/gate")
+    git(repo, "commit", "-qm", "гейт")
+    sha = git(repo, "rev-parse", "--short=7", "HEAD")
+
+    def no_repo(side, cwd, **env):
+        rc, o = run(f"{cwd}/bin/gate", cwd, **env)
+        say(rc == 1 and o == ["GATE_FAIL reason=no-repo"], f"{name}, {side}", f"rc {rc} «{' ⏎ '.join(o)}»")
+
+    no_repo("не репо", f"{home}/plain")
+    no_repo("битый .git", f"{home}/broken")
+    no_repo("нет git в PATH", f"{home}/plain", PATH=nogit)
+    git(repo, "checkout", "-q", "--detach")
+    rc, o = run(f"{repo}/bin/gate", repo)
+    say(rc == 0 and o == [f"GATE_SKIP reason=detached sha={sha}"], f"{name}, detached HEAD", f"rc {rc} «{' ⏎ '.join(o)}»")
+    git(repo, "switch", "-q", "main")
+    rc, o = run(f"{repo}/bin/gate", repo)
+    say(rc == branch_rc and not any("GATE_SKIP" in l or "no-repo" in l for l in o), f"{name}, на ветке", f"rc {rc} «{o[-1] if o else ''}»")
+
+
+os.makedirs(TMP, exist_ok=True)
+TOP = tempfile.mkdtemp(prefix="check-gate-", dir=TMP)
+gate = read(f"{REPO}/bin/gate-v3.4")
+alone("гейт", gate, 1)
+lines = re.findall(r"`(git [^`]*GATE_(?:FAIL reason=no-repo|SKIP reason=detached)[^`]*)`", read(f"{REPO}/kit/docs/PROCESS.template.md"))
+say(len(lines) == 2, "шаблон PROCESS", f"строк преамбулы {len(lines)} из 2")
+alone("шаблон", "#!/usr/bin/env bash\n" + "\n".join(lines) + "\necho тело\n", 0)
+
+F = f"{TOP}/fixture"
+for top in ("kit", "bin", ".abide"):
+    shutil.copytree(f"{REPO}/{top}", f"{F}/{top}", symlinks=True, ignore=shutil.ignore_patterns("__pycache__"))
+put(f"{F}/docs/archive/gate-v3.3/gate-v3.3", "")
+stub = STUB.replace("@NAMES@", " ".join(map(shlex.quote, re.findall(r'"([^"$]+)"', gate[gate.index("modline F8.3"):gate.index("# F8.5:")]))))
+for path in [f"{F}/kit/bin/{c}" for c in ("check-harness", "check-kit", "check-budget", "check-spend", "gate-test", "jev", "two-tier-upgrade")] \
+        + [f"{F}/bin/{c}" for c in ("check-verify", "check-docs")] + [f"{TOP}/stubs/{c}" for c in ("claude", "graphify", "abide")] + [f"{TOP}/telefon/bin/check-budget"]:
+    put(path, stub)
+put(f"{TOP}/telefon/.abide/rubric.json", "")
+os.mkdir(f"{TOP}/telefon/.git")
+git(F, "init", "-q", "-b", "main")
+git(F, "add", "--", "kit", "bin", ".abide", "docs")
+git(F, "commit", "-qm", "фикстура")
+gate_env = dict(PATH=f"{TOP}/stubs:{ENV['PATH']}", TELEFON_CLONE=f"{TOP}/telefon", GATE_TMP=f"{TOP}/tmp")
+os.mkdir(f"{TOP}/tmp")
+
+
+def stubbed(repo, **env):
+    rc, o = run(f"{repo}/bin/gate-v3.4", repo, **{**gate_env, **env})
+    return rc, o, f"rc {rc} «{o[-1] if o else ''}»; {next((l for l in o if l.startswith('F8:')), 'нет строки F8:').split(', core')[0]}"
+
+
+stray = f"{TOP}/fixture-stray"
+shutil.copytree(F, stray, symlinks=True)
+put(f"{stray}/kit/zz-stray", "")
+noarch = f"{TOP}/fixture-noarch"
+shutil.copytree(F, noarch, symlinks=True)
+os.remove(f"{noarch}/docs/archive/gate-v3.3/gate-v3.3")
+with ThreadPoolExecutor() as ex:  # гейты рядом: один идёт 10–20 с
+    runs = [ex.submit(stubbed, F), ex.submit(stubbed, F, STUB_DROP="JEV_OK"), ex.submit(stubbed, stray), ex.submit(stubbed, F, STUB_OFFEN="F6.3 offen · заглушка"),
+            ex.submit(stubbed, noarch), ex.submit(stubbed, F, TELEFON_CLONE=f"{TOP}/no-clone")]
+(rc, o, text), (rc2, o2, text2), (rc3, o3, text3), (rc4, o4, text4), (rc5, o5, text5), (rc6, o6, text6) = [r.result() for r in runs]
+say(rc == 0 and o[-1:] == ["GATE_OK"] and any(l.startswith("F8.5 leer=OK telefon=OK") for l in o), "заглушки, все маркеры", text)
+say(rc2 == 1 and "GATE_OK" not in o2 and "JEV_OK (jev: нет JEV_OK)" in o2[-1] and o2[-1].startswith("GATE_FAIL: "), "заглушки, лог без маркера JEV_OK", text2)
+say(rc3 == 1 and "GATE_OK" not in o3 and o3[-1:] == ["GATE_FAIL: 1 — F8.5 leer=FAIL telefon=OK"], "заглушки, файл кита вне git", text3)
+say(not [n for n in os.listdir(f"{TOP}/tmp") if n.startswith(("t34-", "f73-"))], "заглушки, гейт снял свои проекты", f"t34-* и f73-* под GATE_TMP: {len([n for n in os.listdir(TOP + '/tmp') if n.startswith(('t34-', 'f73-'))])}")
+say(rc4 == 1 and "GATE_OK" not in o4 and o4[-1:] == ["GATE_FAIL: 1 — F8.5 leer=OK telefon=OK offen"], "заглушки, чужой offen", text4)
+say(rc5 == 1 and "GATE_OK" not in o5 and o5[-1:] == ["GATE_FAIL: 1 — F8.5 leer=OK telefon=OK"] and any("НЕ в архиве" in l for l in o5), "заглушки, гейта v3.3 нет в архиве", text5)
+say(rc6 == 1 and "GATE_OK" not in o6 and o6[-1:] == ["GATE_FAIL: 1 — F8.5 leer=OK telefon=offen"], "заглушки, клона telefon нет", text6)
+shutil.rmtree(TOP, ignore_errors=True)
+
+print("GATE_SELFTEST_OK" if all(out) else "GATE_SELFTEST_FAIL")
+sys.exit(0 if all(out) else 1)

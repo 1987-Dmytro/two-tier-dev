@@ -13,3 +13,33 @@
 {"ts": "2026-10-10T15:47:58Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
 {"ts":"2026-10-10T16:10:43.764Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":371,"input_tokens":300,"output_tokens":20}
 {"ts":"2026-10-10T17:01:45.149Z","caller":"phase-report","model":"jev-1.13.0","questions":31,"status":200,"version":"jev-1.13.0","ms":468,"input_tokens":16020,"output_tokens":1326}
+{"ts":"2026-11-06T15:11:54.498Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":767,"input_tokens":300,"output_tokens":20}
+{"ts": "2026-11-06T15:16:53Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 1, "calls": 0, "input_tokens": 0}
+{"ts": "2026-11-06T16:40:36Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 1, "calls": 0, "input_tokens": 0}
+{"ts": "2026-11-06T19:47:21Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 1, "calls": 0, "input_tokens": 0}
+{"ts": "2026-11-06T19:52:29Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 1, "calls": 0, "input_tokens": 0}
+{"ts": "2026-11-06T20:53:25Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 1, "calls": 0, "input_tokens": 0}
+{"ts": "2026-11-06T21:00:02Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 1, "calls": 0, "input_tokens": 0}
+{"ts": "2026-11-07T07:35:35Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
+{"ts": "2026-11-07T07:35:55Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2196}
+{"ts": "2026-11-07T07:59:02Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
+{"ts": "2026-11-07T08:35:25Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2198}
+{"ts": "2026-11-07T08:49:21Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2192}
+{"ts": "2026-11-07T09:19:33Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
+{"ts": "2026-11-07T09:49:31Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
+{"ts":"2026-11-07T15:33:13.452Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":8695,"input_tokens":300,"output_tokens":20}
+{"ts": "2026-11-07T19:11:27Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2192}
+{"ts": "2026-11-07T19:26:46Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2196}
+{"ts": "2026-11-07T19:46:55Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2192}
+{"ts":"2026-11-07T20:51:20.758Z","caller":"phase-report","model":"jev-1.13.0","questions":36,"status":200,"version":"jev-1.13.0","ms":8161,"input_tokens":20477,"output_tokens":1541}
+{"ts":"2026-11-07T20:53:45.844Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":5521,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-11-07T22:26:39.483Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":369,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-11-08T09:36:47.417Z","caller":"phase-report","model":"jev-1.13.0","questions":38,"status":200,"version":"jev-1.13.0","ms":590,"input_tokens":21501,"output_tokens":1627}
+{"ts":"2026-11-08T09:36:55.801Z","caller":"phase-report","model":"jev-1.13.0","questions":38,"status":200,"version":"jev-1.13.0","ms":529,"input_tokens":21501,"output_tokens":1627}
+{"ts":"2026-11-08T09:36:59.823Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":366,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-11-08T10:06:23.181Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":505,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-11-08T10:06:28.326Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":373,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-11-08T10:06:32.006Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":407,"input_tokens":300,"output_tokens":20}
+{"ts": "2026-11-08T13:14:49Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
+{"ts": "2026-11-08T17:16:35Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2192}
+{"ts":"2026-11-08T17:29:01.989Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":383,"input_tokens":300,"output_tokens":20}
