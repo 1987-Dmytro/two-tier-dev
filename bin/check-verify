@@ -708,7 +708,7 @@ def lint_side(base, *spec_lines, issue=False, cut=False, planken=None, tl_edit=N
         g("clone", "-q", "--depth", "1", f"file://{d}", f"{d}/cut")
         cwd = f"{d}/cut"
     r = subprocess.run([f"{REPO}/bin/check-budget"], cwd=cwd, capture_output=True, text=True)
-    return r.returncode, line(r.stdout, r"^\w+ +risk-tier:")[:110], line(r.stdout, r"^BUDGET_(FAIL|WARN) risk-tier")
+    return r.returncode, line(r.stdout, r"^\w+ +risk-tier:"), line(r.stdout, r"^BUDGET_(FAIL|WARN) risk-tier")  # строка целиком: обрезает печать, не сверка
 
 
 def f71(s, h, crep):

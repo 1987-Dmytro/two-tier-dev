@@ -3,3 +3,4 @@
 {"cli": "2.1.319", "features": ["F1"], "sec": 819, "wf_sec": 804, "bash": 7, "fon": 0, "moved": 0, "status": "completed", "backfill": true}
 {"cli": "2.1.319", "features": ["F6", "F8"], "limit": 1800, "sec": 1422, "wf_sec": 773, "bash": 19, "fon": 2, "moved": 2, "status": "completed"}
 {"cli": "2.1.319", "features": ["F5", "F7"], "limit": 1800, "sec": 1394, "wf_sec": 743, "bash": 16, "fon": 5, "moved": 0, "status": "completed"}
+{"cli": "2.1.319", "features": ["F1", "F2", "F9"], "limit": 1800, "sec": 1341, "wf_sec": 787, "bash": 23, "fon": 0, "moved": 0, "status": "completed"}
