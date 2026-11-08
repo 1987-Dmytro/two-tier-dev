@@ -15,6 +15,7 @@
     "handoff@two-tier-mods": true,
     "window-guard@two-tier-mods": true,
     "phase-start@two-tier-mods": true,
+    "spec-board@two-tier-mods": true,
     "limits@two-tier-mods": false,
     "ponytail@ponytail": false,
     "pr-review-toolkit@claude-plugins-official": false,
