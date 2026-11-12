@@ -1,0 +1,16 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 1
+FEATURES: F8, F9
+/verify-phase · docs/SPEC-v3.5.md · HEAD 28eeeae · проверяющие claude-opus-5-5 (фич 2 из 9, опровергателей 0) · судья claude-opus-5-5
+
+F8 и F9 доказаны своими чеками. Свежий прогон гейта зелёный и с маркерами: F8 VERIFY_OPUS_OK, GATE35_OK. Маркеры есть и в evidence: docs/evidence/F8-check-verify-result.txt и docs/evidence/F9-gate-result.txt. Все пункты F8.1–F8.5 и F9.1–F9.5 чекер подтвердил своими командами и их сырым выводом. Так, F8.1 краснеет на мутанте с claude-sonnet-5-5, F8.3 отвергает пару «до» без токенов и пару с «до» новее правки, F9.1 краснеет на 8001/8000, а F9.5 даёт красный гейт без клона и ловит чужой id F2.9. Кандидатов в блокирующие, переживших опровержение, нет. Единственная находка — шум в диагнозе F9.5 без клона — пункт не нарушает, поэтому она не блокирует.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F9.5 (не блокирует): без клона telefon bin/gate-v3.5 кроме статуса telefon=offen показывает ещё leer=FAIL и FROZEN_OK (v3.4-F3.5), а все три — от одной недостающей входной вещи. Гейт красный, как требует F9.5, но в диагнозе лишний шум: GATE35_FAIL: 3 вместо одной причины.
+
+## По фичам
+- F8: risk low; чек `bin/check-verify --gate (gate.log line 35: "F8 VERIFY_OPUS_OK"; re-run in worktree)` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+- F9: risk low; чек `bin/gate-v3.5 (fresh-clone gate log /tmp/two-tier-v3/verify-28eeeae-s58ev9fh/gate.log, lines 73-79; evidence docs/evidence/F9-gate-result.txt line 81 = GATE35_OK, first line spec: SPEC-v3.5)` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутаций нет; находок 1, блокирующих-кандидатов 0, опровергнуто 0

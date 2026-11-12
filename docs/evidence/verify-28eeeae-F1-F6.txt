@@ -1,0 +1,22 @@
+VERDICT: NEEDS_WORK
+КЛАССЫ: блокирующих 2 (мутация 2), повторов 0, named 6
+FEATURES: F1, F6
+/verify-phase · docs/SPEC-v3.5.md · HEAD 28eeeae · проверяющие claude-opus-5-5 (фич 2 из 9, опровергателей 2) · судья claude-opus-5-5
+
+По F1 и F6 свежие прогоны bin/check-kit на 28eeeae зелёные и дают маркеры HANDOFF_TAB_OK и OPERATOR_WORD_OK; каждый пункт F1.1–F1.5 и F6.1–F6.5 подтверждён собственной командой проверяющего и её сырым выводом, нарушений инвариантов и дыр безопасности не найдено. Оба кандидата в блокирующие — выжившие мутации (запас перевзвода threshold−20→−10 в mods/handoff и сравнение `>`→`>=` с запасом в kit/bin/operator-word); код блокирует их сам, поэтому сюда они не вынесены, а остальные находки не противоречат пунктам и ушли в named_not_built.
+
+## Блокирующие
+- **F1: мутация выжила — mods/handoff/hooks/register.tsx: re-arm line `if (percent < threshold - 20) st.isArmed = true` -> `threshold - 10` (a second handoff after the fill drops to 25 with threshold 40, which F1.4 forbids)** · чек `claude plugin test mods/handoff (the tests F1.4 of bin/check-kit runs; its own isArmed-removal mutant applied on top of this one still goes red, so check-kit F1.4 stays green too)` остался зелёным
+- **F6: мутация выжила — kit/bin/operator-word: `if lines > cap:` -> `if lines >= cap:` (a diff exactly at the reserve, which is not over it, is refused)** · чек `bin/check-kit operator` остался зелёным
+
+## Named, not built
+- F1: `/handoff status` и `/handoff last` в свежем проекте без handoffs/ показывают «last» из другого проекта: lastPath лежит в сторе плагина, а стор не привязан к проекту. Это вне пунктов F1.1–F1.5.
+- F9.5 (гейт): bin/gate-v3.5 принял evidence F1 @ f197008, сверив только mods/handoff. С тех пор менялись bin/check-kit, kit/bin/check-harness, kit/budgets.json и kit/.claude/launch.settings.json. Это уже, чем правило переиспользования в SPEC §5. Свежий прогон F1 на HEAD зелёный, так что F1 это не задевает.
+- F6: operator-word при stdin не в UTF-8 обнуляет файл окна: open('w') срабатывает до UnicodeEncodeError. Коммита нет, но обещание «файл цел» нарушено. Это вне перечня отказов F6.3, файл восстанавливается через git checkout.
+- F6: operator-word падает с трейсбеком, а не строкой отказа, в двух случаях: новый файл в ещё не созданной подпапке окна и путь-каталог внутри окна. Файл цел, коммита нет.
+- F6: линт владения в bin/check-budget не проверяет запас диффа. Коммит «Оператор:» в обход хука, внутри окна, но сверх запаса, проходит как «в окне». Это улучшение вне формулировки F6.4.
+- F6: правило team-lead-session срабатывает только при CLAUDECODE == "1", а при CLAUDECODE=true «Тимлид:» проходит хук. Это только ужесточение: Claude Code ставит CLAUDECODE=1.
+
+## По фичам
+- F1: risk high; чек `bin/check-kit handoff (fresh run in worktree at 28eeeae; gate.log took F1 HANDOFF_TAB_OK from docs/evidence/F1-check-kit-result.txt @ f197008; evidence file line 8 = HANDOFF_TAB_OK)` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутация mods/handoff/hooks/register.tsx: re-arm line `if (percent < threshold - 20) st.isArmed = true` -> `threshold - 10` (a second handoff after the fill drops to 25 with threshold 40, which F1.4 forbids) → green; мутация mods/handoff/hooks/register.tsx: budgetThreshold: `p !== undefined && (d === undefined || p <= d) ? p : d` -> `p !== undefined ? p : d` (project may loosen the threshold) → red; мутация kit/.claude/launch.settings.json: autoCompactWindow 600000 -> 500000 → red; находок 3, блокирующих-кандидатов 1, опровергнуто 0
+- F6: risk high; чек `bin/check-kit operator (own run, 71 s; gate log line 33: "F6 OPERATOR_WORD_OK"; docs/evidence/F6-check-kit-result.txt ends with OPERATOR_WORD_OK)` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутация kit/bin/operator-word: `if lines > cap:` -> `if lines >= cap:` (a diff exactly at the reserve, which is not over it, is refused) → green; мутация kit/.githooks/commit-msg: team-lead-session: `os.environ.get("CLAUDECODE") == "1"` -> `== "true"` (a «Тимлид:» commit from a session passes) → red; мутация kit/bin/phase-report: `leg = leg or kind != "Тимлид:"` -> `leg = True` (the issuance «Тимлид:» counts as part of the leg) → red; мутация kit/bin/check-budget: rule_owner: `if out_:` -> `if out_ and not win:` (an «Оператор:» commit outside an existing window passes the lint) → red; находок 5, блокирующих-кандидатов 1, опровергнуто 0

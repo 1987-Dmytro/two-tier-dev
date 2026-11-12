@@ -1,0 +1,17 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 1
+FEATURES: F4, F5, F7
+/verify-phase · docs/SPEC-v3.5.md · HEAD 28eeeae · проверяющие claude-opus-5-5 (фич 3 из 9, опровергателей 0) · судья claude-opus-5-5
+
+Свежий прогон bin/check-budget --lints зелёный (rc=0) и печатает все три маркера: PLANKA_EARLY_OK, SPEC_PATHS_OK и SPEC_REVIEW_OK. Все пункты F4.1–F4.3, F5.1–F5.4 и F7.1–F7.4 подтверждены собственными фикстурами проверяющего с реальным bin/check-budget: на гнилом входе получен FAIL, на здоровом OK, кандидатов в блокирующие нет, а единственная находка (WARN spec-paths в SPEC тимлида) к «готово» фич не относится.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F5: на собственной docs/SPEC-v3.5.md линт печатает WARN spec-paths: пути kit/.claude/agents/evaluator.md и bin/check-procs не в HEAD и не в строке «Новые пути:». Это только WARN, потому что SPEC уже выдана; править её должен тимлид, в «готово» F5 это не входит (повтор: bin/check-budget --lints | grep 'WARN spec-paths').
+
+## По фичам
+- F4: risk low; чек `bin/check-budget --lints` rc 0, маркер есть (own_run); пунктов своим прогоном 3/3; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+- F5: risk low; чек `bin/check-budget --lints (gate.log line 32: "F5 SPEC_PATHS_OK"; own run in worktree: rc=0, 23 s, SPEC_PATHS_OK count 1, ends BUDGET_LINT_OK; docs/evidence/F5-budget-result.txt contains SPEC_PATHS_OK after F5.1-F5.4 lines)` rc 0, маркер есть (own_run); пунктов своим прогоном 4/4; мутаций нет; находок 1, блокирующих-кандидатов 0, опровергнуто 0
+- F7: risk low; чек `bin/check-budget --lints (gate.log line 34 'F7 SPEC_REVIEW_OK'; own fresh run in worktree, 23 s)` rc 0, маркер есть (own_run); пунктов своим прогоном 4/4; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0
