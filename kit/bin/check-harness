@@ -2099,9 +2099,19 @@ def stop_probes(src, launch):
     open(fresh, "w").write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}) + "\n")
     res2 = gate_run(r, fresh, "probe-resume-next")
     kept = last_line(res1).get("resumed") or []
+
+    def word_at(text, dt):  # слово оператора в транскрипте через dt с от сейчас (стоп закоммичен сейчас)
+        w, tw = gate_fixture(src, launch)
+        stop_now(w, f"{STOP_L}\nВопрос оператору: выдать ли ключ фикстуры?\nResume: {resume}\n")
+        with open(tw, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + dt)), "message": {"role": "user", "content": text}}, ensure_ascii=False) + "\n")
+        return dec(gate_run(w, tw, "probe-word"))
+    prefix = word_at("Resume: ключ у оператора, иду дальше", 2)  # не строка Resume стопа, но начинается с «Resume:» — слово
+    before = word_at(resume, -300)  # строка Resume стопа до его коммита — не слово
     sides = [dec(code), dec(snyat), dec(res1), dec(res2)]
-    item(S, "F3.2", sides == ["block"] * 4 and bool(kept), f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
-         f"слово Resume (строка Resume стопа после его коммита), потом коммит только в docs/evidence/ — {sides[2]}, в журнале resumed {kept}; новая сессия без слова — {sides[3]}")
+    item(S, "F3.2", sides == ["block"] * 4 and bool(kept) and prefix == "block" and before == "stop", f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
+         f"слово Resume (строка Resume стопа после его коммита), потом коммит только в docs/evidence/ — {sides[2]}, в журнале resumed {kept}; новая сессия без слова — {sides[3]}; "
+         f"сообщение «Resume: …» не строкой стопа — {prefix}; строка Resume за 5 мин до коммита стопа — {before}")
     # F3.3 — стоп с текстом стопа прошлой фазы: новый стоп; хук v3.4 — «старый»
     p, tp = gate_fixture(src, launch, stop_old=True)
     pg = open(f"{p}/docs/PROGRESS.md", encoding="utf-8").read()
