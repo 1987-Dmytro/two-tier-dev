@@ -1,8 +1,8 @@
 spec: SPEC-v3.5
 $ bin/check-harness stop
 источник харнеса: kit; строка запуска: docs/PROCESS.md; launch settings: .claude/launch.settings.json; разделы: stop
-F3.1 neu=stop,stop alt=stop,block · стоп запушен, после него коммит только в docs/evidence/: та же сессия — stop, stop; новая сессия — stop; хук v3.4 (6cd2177) — stop, block
-F3.2 code=block snyat=block resume=block,block · коммит кода после стопа — block; «— снят» в конце строки — block; слово Resume (строка Resume стопа после его коммита), потом коммит только в docs/evidence/ — block, в журнале resumed ['1237454489c0:3f85c44c62fd']; новая сессия без слова — block
-F3.3 neu=stop alt=block · та же строка стопа была в PROGRESS до сессии (прошлая фаза), снята, в новой фазе снова запушена: хук — stop; хук v3.4 (6cd2177) — block
-F3.4 form=3/3 · без вопроса и Resume — block, названо — да; STOP-PAY вне §4 — block, названо — да; только на диске — block, названо — да · красная: оформленный и запушенный — stop
+F3.1 neu=stop,stop alt=stop,block · стоп запушен, после него коммит только в docs/evidence/: та же сессия — stop, stop; новая сессия — stop; затем коммит только docs/PLAN-1.md — stop, только головы PROGRESS — stop; хук v3.4 (6cd2177) — stop, block
+F3.2 code=block snyat=block resume=block,block · коммит кода после стопа — block; «— снят» в конце строки — block; слово Resume (строка Resume стопа после его коммита), потом коммит только в docs/evidence/ — block, в журнале resumed ['8aab7390a7d7:3f85c44c62fd']; новая сессия без слова — block
+F3.3 neu=stop alt=block · та же строка стопа была в PROGRESS до сессии (прошлая фаза), снята, коммит кода, в новой фазе снова запушена: хук — stop; хук v3.4 (6cd2177) — block
+F3.4 form=4/4 · без вопроса и Resume — block, названо — да; слова «продолжать» и resume в вопросе, строки Resume нет — block, названо — да; STOP-PAY вне §4 — block, названо — да; только на диске — block, названо — да · красная: оформленный и запушенный — stop
 GATE_STOP_OK

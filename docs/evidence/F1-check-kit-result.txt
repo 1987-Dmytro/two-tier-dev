@@ -6,6 +6,3 @@ F1.1 neu=40,10 alt=fehlt · хост вкладки (stream-json в обе ст�
 F1.2 datei=0,1 reset=1 · тот же хост: файлов handoff-*.md в handoffs/ до команды — 0, после /handoff now — 1; событие conversation_reset — 1; запрос продолжения после /clear ушёл и получил ответ
 F1.3 fl=desktop,none auto=1,0 · хост, порог 10 (project.handoff_threshold_pct): без поверхности — «handoff: handoff · context 0% of 1000000 tokens · threshold 10% (budgets.json) · surface n»; после чтения fill/ — заполнение 26% окна 1000000, хендоффов 0; ui_attach desktop — «handoff: handoff · context 26% of 1000000 tokens · threshold 10% (budg», следующий ход — хендоффов 1, /clear и запрос продолжения ушли
 HANDOFF_TAB_OK
-evidence geändert docs/evidence/F4-budget-result.txt
-evidence geändert docs/evidence/F5-budget-result.txt
-evidence geändert docs/evidence/F7-budget-result.txt
