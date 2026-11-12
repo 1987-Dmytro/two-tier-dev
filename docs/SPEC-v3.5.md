@@ -31,9 +31,9 @@
   - `F1.5` шаблоны: `handoff_threshold_pct` 40, порог из правила `modes` снят; `autoCompactWindow` 600000 → `effectiveWindow` 580000, без поля 980000 — `F1.5 fenster=580000,980000 modes=raus`
 - **F2 Phasen-Session** · судят только сессию фазы · risk: high · готово: F2.1–F2.5 · чек: `bin/check-harness` → `GATE_SESSION_OK` · служит: S7 · after: —
   - `F2.1` после `/phase` и `/phase resume` id сессии в метке; до команды и без записи — нет — `F2.1 marke=0,1,1 mut=0,0,0` в `F2-check-harness-result.txt`
-  - `F2.2` ответвления фикстуры (9, и без метки), служебная при метке → `pass not the phase session`; хук v3.4, мутант — `block` — `F2.2 neu=10/10 ohne=9/9 alt=0/9 mut=block`
-  - `F2.3` вне метки с запросом, Resume или продолжением хендоффа до первого ответа → суд; служебная без файла метки — v3.4 — `F2.3 block=4/4`
-  - `F2.4` после `/clear` на хосте вкладки новый id в метке, судится; головы после сброса (фикстура) — не ответвление; без записи — `pass` — `F2.4 clear=block reset=6/6 mut=pass`
+  - `F2.2` ответвления фикстуры (9, и без метки), служебная при метке → `pass not the phase session`, после сброса (6) — нет; хук v3.4, мутант — `block` — `F2.2 neu=10/10 ohne=9/9 reset=0/6 alt=0/9 mut=block`
+  - `F2.3` вне метки с запросом, Resume или продолжением хендоффа до первого ответа → суд; служебная без метки — v3.4 — `F2.3 block=4/4`
+  - `F2.4` после `/clear` на хосте новый id в метке, судится; без записи — `pass` — `F2.4 clear=block mut=pass`
   - `F2.5` `steer.sh` отдаёт `STEER.md` сессии фазы, без метки — любой; метка под `.gitignore` — `F2.5 steer=1,0,1 ignore=OK`
 - **F3 Offener Stopp** · открытый стоп отпускает ход повторно · risk: high · готово: F3.1–F3.4 · чек: `bin/check-harness` → `GATE_STOP_OK` · служит: S7, S3 · after: F2
   - `F3.1` открытый стоп в запушенном HEAD, коммитов вне отчётных файлов после него нет → каждый конец хода `stop`; хук v3.4 — второй `block` — `F3.1 neu=stop,stop alt=stop,block` в `F3-check-harness-result.txt`
