@@ -708,7 +708,7 @@ def lint_base():
     subprocess.run([f"{REPO}/bin/two-tier-init", d], capture_output=True, check=True)
     os.makedirs(f"{d}/intent", exist_ok=True)
     open(f"{d}/intent/INTENT.md", "w", encoding="utf-8").write("**S1** — x\n")
-    open(f"{d}/docs/PROMPT.txt", "w", encoding="utf-8").write("Read first: docs/SPEC-1.md\n")
+    open(f"{d}/docs/PROMPT.txt", "w", encoding="utf-8").write("Read first: docs/SPEC-1.md\nBranch phase-1 only.\n")  # SPEC-v3.5 F5.4: ветка формой /phase
     return d
 
 
@@ -721,7 +721,8 @@ def lint_side(base, *spec_lines, issue=False, cut=False, planken=None, tl_edit=N
     shutil.copytree(base, d, symlinks=True, dirs_exist_ok=True)
     g = lambda *a: subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *a], cwd=d, env=GIT_ENV, capture_output=True, check=True, text=True)
     pin = g("hash-object", "intent/INTENT.md").stdout[:12]
-    open(f"{d}/docs/SPEC-1.md", "w", encoding="utf-8").write(f"# SPEC-1\n\n**intent:** `intent/INTENT.md @ {pin}`\n\n## 2. Фичи\n" + "\n".join(spec_lines) + "\n\n## 3. Инварианты\n")
+    open(f"{d}/docs/SPEC-1.md", "w", encoding="utf-8").write(f"# SPEC-1\n\n**intent:** `intent/INTENT.md @ {pin}`\n\n## 2. Фичи\n" + "\n".join(spec_lines) + "\n\n## 3. Инварианты\n"
+                                                             "\n## 5. Артефакт закрытия\n- Судьи деплоя и регрессии, изменённые фазой, на базе: нет.\n")  # SPEC-v3.5 F5.1
     if planken is not None:
         open(f"{d}/checks/planken.json", "w", encoding="utf-8").write(planken)
     if issue or cut or tl_edit:
@@ -751,6 +752,9 @@ def lint_side(base, *spec_lines, issue=False, cut=False, planken=None, tl_edit=N
     if cut:
         g("clone", "-q", "--depth", "1", f"file://{d}", f"{d}/cut")
         cwd = f"{d}/cut"
+    spin = subprocess.run(["git", "hash-object", "docs/SPEC-1.md"], cwd=cwd, capture_output=True, text=True).stdout[:12]  # SPEC-v3.5 F7: PASS свежего проверяющего с пином SPEC
+    os.makedirs(f"{cwd}/docs/reviews", exist_ok=True)
+    open(f"{cwd}/docs/reviews/1-spec.md", "w", encoding="utf-8").write(f"PASS\nблокирующих 0, named 0\nspec: docs/SPEC-1.md @ {spin}\n")
     r = subprocess.run([f"{REPO}/bin/check-budget"], cwd=cwd, capture_output=True, text=True)
     return r.returncode, line(r.stdout, r"^\w+ +risk-tier:"), line(r.stdout, r"^BUDGET_(FAIL|WARN) risk-tier")  # строка целиком: обрезает печать, не сверка
 
