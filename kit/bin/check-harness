@@ -914,7 +914,7 @@ def modes(rows, configs, init=None):
                 opts, src = defaults(init, pid), "по умолчанию мода"
             vals = list(opts.values())
             for w in want:
-                if type(w) is int and not opts:
+                if type(w) is int and (not opts or re.search(r"`\w+_pct`", cell)):  # SPEC-v3.5 F1: число ключа budgets.json, названного в ячейке, — не опция мода
                     continue
                 if not ((opts.get("shadow") is True or "shadow" in vals) if w == "shadow" else w in vals):
                     bad.append(f"режим {pid}: в таблице «{'тень' if w == 'shadow' else w}», {src} — "
@@ -1018,7 +1018,14 @@ def self_test():
     init = lambda d: {"plugins": [{"source": "handoff@two-tier-mods", "path": f"{man}/{d}"}]}
     mcases += [("нет pluginConfigs, 70 — по умолчанию мода", nohand, None, init("ok")),
                ("нет pluginConfigs, по умолчанию 60", nohand, "handoff@two-tier-mods: в таблице «70», по умолчанию мода", init("bad"))]
+    mrows35 = table(MODE_FIXTURE.replace("хендофф на 70 % окна", "хендофф на 40 % окна — порог `handoff_threshold_pct` budgets.json"))
+    mcases35 = [("порог ключом budgets.json в ячейке — не сверяется (SPEC-v3.5 F1)", mrows35, green | {"handoff@two-tier-mods": {"options": {"handoffDir": "handoffs"}}}, None)]
     ok = True
+    for name, rows35, cfg, want in mcases35:
+        bad = modes(rows35, cfg)
+        good = not bad if want is None else len(bad) == 1 and want in bad[0]
+        ok &= good
+        print(f"{'ok ' if good else 'BAD'} modes · {name}: {'; '.join(bad) or 'расхождений нет'}")
     for name, cfg, want, *ini in mcases:
         bad = modes(mrows, cfg, ini[0] if ini else None)
         good = not bad if want is None else len(bad) == 1 and want in bad[0]

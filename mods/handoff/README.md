@@ -21,6 +21,13 @@
 числа и решение (`hint` · `auto` · `below` · `stale` · `error`), без текста. Сам `compact-adviser` 0.1.12 с Claude Code
 2.1.287+ молчит: он включается только при `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, которую Claude Code больше не читает.
 
+**Вкладка Code (0.4.0, SPEC-v3.5 F1).** `/handoff` регистрируется везде, где мод загружен: хост вкладки стартует как SDK
+(`isInteractive` false) и подключает поверхность позже. Сам мод пишет хендофф только в сессии человека — REPL или подключённая
+поверхность (`session.attach`, защёлка), как `spec-board` и `window-guard`; в `claude -p` поверхностей нет. Порог — ключ
+`handoff_threshold_pct` в `budgets.json` проекта (defaults, проект только ужесточает — правило `window-guard`); нет ключа — опция
+`threshold` настроек пользователя, иначе 70. `/handoff status` печатает порог с источником и поверхность:
+`threshold 40% (budgets.json) · surface desktop`. Поле `autoCompactWindow` 600000 профиля — страховка: пока мод работает, сжатие не срабатывает.
+
 **Кнопки.** Полоса над промптом: `контекст 43% · хендофф @70%  [ Хендофф → свежий контекст ]  [ Только файл ]  [ Compact ]  Скрыть`.
 Горячие клавиши, когда полоса держит фокус (ctrl+x tab): `h` — хендофф + `/clear` + продолжение, `f` — только файл,
 `c` — `/compact` Claude Code (путь Compact Adviser). После `/clear` полоса возвращается сразу, а не после следующего хода.
@@ -38,7 +45,7 @@
 
 | поле | по умолчанию | смысл |
 |---|---|---|
-| `threshold` | 70 | % заполнения окна, после которого хендофф пишется сам (10–95) |
+| `threshold` | 70 | запасной порог: % заполнения окна, после которого хендофф пишется сам (10–95); `handoff_threshold_pct` budgets.json сильнее |
 | `handoffDir` | `handoffs` | каталог относительно корня проекта |
 | `autoClear` | true | после файла — `/clear` и продолжение |
 | `minTurns` | 2 | не хэндоффить раньше N промптов |
@@ -56,5 +63,5 @@ claude plugin marketplace add ~/Desktop/Projects/two-tier-dev/mods
 claude plugin install handoff@two-tier-mods --scope user
 ```
 
-**Проверка.** `claude plugin validate mods/handoff` · `claude plugin test mods/handoff` (18 тестов: полоса на terminal и desktop, Jev hint · auto · ниже планки · чужая модель · нет ключа · устаревший ответ · off · ниже 10 %, `/clear`, Compact) ·
+**Проверка.** `claude plugin validate mods/handoff` · `claude plugin test mods/handoff` (25 тестов: регистрация в хосте вкладки, порог budgets.json, поверхность в статусе, авто только при поверхности, второй хендофф и подагент (F1.4), полоса на terminal и desktop, Jev hint · auto · ниже планки · чужая модель · нет ключа · устаревший ответ · off · ниже 10 %, `/clear`, Compact) ·
 `tsc -p` по tsconfig из заголовка `claude-code.d.ts`.

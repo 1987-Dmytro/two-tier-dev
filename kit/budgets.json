@@ -20,6 +20,7 @@
     "abide_rules": 8,
     "spec_block_chars": 900,
     "window_seven_day_pct": 100,
+    "handoff_threshold_pct": 40,
     "owner": [
       "intent/",
       "docs/SPEC-*.md",

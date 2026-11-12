@@ -32,7 +32,7 @@ test('prompts name the directory, the stamp and the sections', () => {
   expect(resumePrompt('en', 'handoffs/handoff-x.md')).toContain('handoffs/handoff-x.md')
 })
 
-test('session.start registers /handoff only for an interactive session', async ($, on) => {
+test('session.start registers /handoff everywhere: a hosted session (the Code tab) too', async ($, on) => {
   const registered: string[] = []
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => {
@@ -40,8 +40,6 @@ test('session.start registers /handoff only for an interactive session', async (
     return { value: { command: e.name } }
   })
   await $.session.start({ cwd: '/tmp/p', surface: null, isInteractive: false })
-  expect(registered).toEqual([])
-  await $.session.start({ cwd: '/tmp/p', surface: 'terminal', isInteractive: true })
   expect(registered).toEqual(['handoff'])
 })
 
@@ -274,4 +272,126 @@ test('after /clear the band comes back at once, and Compact runs the host compac
   expect(compacted).toBe(1)
   const after = await $.ui.mount({ plugin: 'handoff', surface: 'terminal', component: 'AbovePrompt', props: BAND })
   expect(await after.find({ type: 'Text', text: /compact: nothing to compact/ })).toBeDefined()
+})
+
+// SPEC-v3.5 F1: a person's session (the REPL or an attached surface), the threshold of budgets.json, the surface in the status.
+type Host = { fills: number[]; budgets?: string; surfaces: string[]; written: string[]; commands: string[]; submitted: string[] }
+
+/** A hosted session (isInteractive false): each turn reads the next fill of `fills`; budgets.json is `budgets` (undefined: no file). */
+function hosted(on: any, h: Host) {
+  on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
+  on('command.register', ($: any, e: any) => ({ value: { command: e.name } }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: 1000, window: 1000000, percent: h.fills[0] ?? 0 }, rateLimits: [] } }))
+  on('session.turns', () => ({ value: 5 }))
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.repo', () => ({ value: { root: '/repo' } }))
+  on('session.surfaces', () => ({ value: h.surfaces }))
+  on('env.get', () => ({ value: undefined }))
+  on('fs.read', ($: any, e: any) => (e.path === '/repo/budgets.json' && h.budgets !== undefined ? { value: h.budgets } : { deny: 'no such file' }))
+  on('fs.write', ($: any, e: any) => {
+    h.written.push(e.path)
+    return { value: undefined }
+  })
+  on('model.fork', () => ({ value: { isAnswered: true as const, text: 'slug: x\n# Хендофф\n## 3. Следующее\n- шаг', usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } } }))
+  on('command.run', ($: any, e: any) => {
+    h.commands.push(e.command)
+    return {}
+  })
+  on('prompt.submit', ($: any, e: any) => {
+    h.submitted.push(e.text)
+    return { text: e.text }
+  })
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
+  on('turn.complete', ($: any, e: any) => ({ text: e.answer }))
+  on('store.set', () => ({ value: undefined }))
+  on('store.get', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.log', () => ({ value: undefined }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.attach', ($: any, e: any) => ({ clientId: e.clientId }))
+}
+const hostOf = (fills: number[], extra: Partial<Host> = {}): Host => ({ fills, surfaces: [], written: [], commands: [], submitted: [], ...extra })
+const BUDGETS = (d: number, p?: number) => JSON.stringify({ defaults: { handoff_threshold_pct: d }, project: p === undefined ? {} : { handoff_threshold_pct: p } })
+const handoffs = (h: Host) => h.written.filter(p => /\/handoff-[^/]+\.md$/.test(p)).length
+
+async function turns($: any, clock: any, h: Host, n: number, agentId?: string) {
+  for (let i = 0; i < n; i++) {
+    await $.turn.start({ text: 'шаг', turnId: `t${i}` })
+    await $.turn.complete({ answer: 'ok', durationMs: 10, isAborted: false, turnId: `t${i}`, reason: 'answer', ...(agentId ? { agentId } : {}) })
+    await clock.advance(1000) // the handoff leaves on a 250 ms timer
+    h.fills.shift()
+  }
+}
+
+test('threshold: handoff_threshold_pct of budgets.json, project only tightens; no file — the option', { options: { threshold: 70, jev: 'off' } }, async ($, on) => {
+  const h = hostOf([5], { budgets: BUDGETS(40) })
+  hosted(on, h)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  const status = async () => (await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)).text
+  expect(await status()).toContain('threshold 40% (budgets.json)')
+  h.budgets = BUDGETS(40, 10)
+  expect(await status()).toContain('threshold 10% (budgets.json)')
+  h.budgets = BUDGETS(40, 60) // project never loosens
+  expect(await status()).toContain('threshold 40% (budgets.json)')
+  h.budgets = undefined
+  expect(await status()).toContain('threshold 70% (option)')
+})
+
+test('status names the surface: none in a hosted session without one, desktop once attached', { options: { jev: 'off' } }, async ($, on) => {
+  const h = hostOf([5], { budgets: BUDGETS(40) })
+  hosted(on, h)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  const status = async () => (await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)).text
+  expect(await status()).toContain('surface none')
+  h.surfaces = ['desktop']
+  await $.session.attach({ surface: 'desktop', clientId: 'probe' } as any)
+  expect(await status()).toContain('surface desktop')
+})
+
+test('no REPL and no surface: past the threshold the mod writes no handoff by itself', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+  const h = hostOf([50, 50], { budgets: BUDGETS(40) })
+  hosted(on, h)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await turns($, clock, h, 2)
+  expect(handoffs(h)).toBe(0)
+})
+
+test('a surface attached: past the budgets.json threshold the handoff is written, /clear runs, the resume prompt goes', { options: { jev: 'off', minTurns: 0, autoClear: true } }, async ($, on) => {
+  const h = hostOf([50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
+  hosted(on, h)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await $.session.attach({ surface: 'desktop', clientId: 'probe' } as any)
+  await turns($, clock, h, 1)
+  expect(handoffs(h)).toBe(1)
+  expect(h.commands).toContain('clear')
+  expect(h.submitted.some(s => s.includes('handoffs/handoff-'))).toBe(true)
+})
+
+test('F1.4 above the threshold − 20: no second handoff', { options: { jev: 'off', minTurns: 0, autoClear: false } }, async ($, on) => {
+  const h = hostOf([50, 45, 30, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
+  hosted(on, h)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await turns($, clock, h, 4)
+  expect(handoffs(h)).toBe(1)
+})
+
+test('F1.4 after the fill drops below the threshold − 20: the next crossing hands off again', { options: { jev: 'off', minTurns: 0, autoClear: false } }, async ($, on) => {
+  const h = hostOf([50, 10, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
+  hosted(on, h)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await turns($, clock, h, 3)
+  expect(handoffs(h)).toBe(2)
+})
+
+test('F1.4 a subagent turn never hands off', { options: { jev: 'off', minTurns: 0, autoClear: false } }, async ($, on) => {
+  const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
+  hosted(on, h)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await turns($, clock, h, 2, 'agent-1')
+  expect(handoffs(h)).toBe(0)
 })
