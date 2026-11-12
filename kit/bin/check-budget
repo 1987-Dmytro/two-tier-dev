@@ -1337,6 +1337,10 @@ def lints():
         ("без строки", "FAIL", "в §5 нет строки", bj(spec5())),
         ("плейсхолдер шаблона", "FAIL", "в §5 нет строки", bj(spec5(basis.format("<n из m | нет>")))),
         ("строка вне §5", "FAIL", "в §5 нет строки", bj(spec5(sec1=basis.format("нет")))),
+        ("правка тимлида после запроса, evidence этой SPEC в HEAD", "WARN", "фаза была: evidence этой SPEC в HEAD",
+         lr(rule_basis, spec5(), commits=[("Тимлид: правка SPEC", {"docs/SPEC-1.md": spec5() + "Правка.\n"}, []),
+                                          ("Тимлид: evidence", {"docs/evidence/F1-x-result.txt": "spec: SPEC-1\nF1.1 x\n"}, [])])),
+        ("та же правка без evidence", "FAIL", "в §5 нет строки", lr(rule_basis, spec5(), commits=[("Тимлид: правка SPEC", {"docs/SPEC-1.md": spec5() + "Правка.\n"}, [])])),
         ("нет", "OK", "— есть", bj(spec5(basis.format("нет")))),
         ("2 из 3", "OK", "— есть", bj(spec5(basis.format("2 из 3")))),
     ])

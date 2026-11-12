@@ -58,6 +58,7 @@
     "anthropic-skills:morning": "off",
     "anthropic-skills:pdf": "off",
     "anthropic-skills:pptx": "off",
+    "anthropic-skills:process-hygiene": "off",
     "anthropic-skills:role-checker": "off",
     "anthropic-skills:role-hypothesis-generator": "off",
     "anthropic-skills:role-hypothesis-judge": "off",

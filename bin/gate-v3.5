@@ -10,7 +10,7 @@
 evidence; F8 — `bin/check-verify --gate` (воркфлоу и лаунчер без правок с коммита evidence F8 — маркер из него). В репо ничего не пишет,
 кроме журналов чеков; полные логи — свой каталог /tmp/two-tier-v3/gate35-*, в вывод — команда, код выхода и строки FAIL/WARN/BAD/FLAKY.
 """
-import glob, json, os, re, signal, subprocess, sys, tempfile, time
+import glob, json, os, re, shutil, signal, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor
 
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -55,8 +55,8 @@ def log(name):
 relayed = set()
 
 
-def mark(f, marker, *names, rcs):
-    """В каждом логе rc 0 и строка, равная маркеру; строки FAIL/WARN/BAD/FLAKY лога — один раз."""
+def mark(f, marker, *names, rcs, quiet=False):
+    """В каждом логе rc 0 и строка, равная маркеру; строки FAIL/WARN/BAD/FLAKY лога — один раз. quiet — красный образец: строки не печатает."""
     why = []
     for n in names:
         if n not in relayed:
@@ -68,7 +68,8 @@ def mark(f, marker, *names, rcs):
             why.append(f"{n}: нет {marker}")
         if rcs.get(n) != 0:
             why.append(f"{n}: rc {rcs.get(n, 'нет')}")
-    print(f"{f} {marker}" if not why else f"{f} FAIL: {marker} — {'; '.join(why)}", flush=True)
+    if not quiet:
+        print(f"{f} {marker}" if not why else f"{f} FAIL: {marker} — {'; '.join(why)}", flush=True)
     if why:
         fails.append(f"{marker} ({'; '.join(why)})")
 
@@ -123,7 +124,7 @@ init = subprocess.run([f"{REPO}/bin/two-tier-init", T5], capture_output=True, te
 n_init = sum(1 for l in init.stdout.splitlines() if "wrote:" in l)
 m_kit = len(git("ls-files", "kit").stdout.splitlines())
 hp = git("config", "--get", "core.hooksPath", cwd=T5).stdout.strip() or "нет"
-print(f"F9.5: bin/two-tier-init t5 — файлов кита {n_init} (в git {m_kit}), core.hooksPath {hp}; логи — {LOGS}", flush=True)
+print(f"t5: bin/two-tier-init — файлов кита {n_init} (в git {m_kit}), core.hooksPath {hp}; логи — {LOGS}", flush=True)
 
 ev_ok = {f: fresh(ev, paths) for f, (_, ev, paths) in LIVE.items()}
 for f, (ok, why) in ev_ok.items():
@@ -162,7 +163,7 @@ with open(f"{LOGS}/red-c.log", "w") as f:
 n0 = len(fails)
 for n, rc in (("red-a", 0), ("red-c", 1)):
     relayed.add(n)
-    mark("F0", "RED_OK", n, rcs={n: rc})
+    mark("F0", "RED_OK", n, rcs={n: rc}, quiet=True)
 red_marks = len(fails) - n0
 del fails[n0:]
 
@@ -244,6 +245,8 @@ line95 = (f"leer={leer} rot={rot}/2 · t5 от bin/two-tier-init: файлов �
 ok95 = leer == "OK" and tel == "OK" and not bad_items and not other and rot == 2
 print(f"F9.5 {line95}" if ok95 else f"F9.5 FAIL: {line95}", flush=True)
 fails += [] if ok95 else [f"F9.5 leer={leer} telefon={tel}{' items' if bad_items else ''}{' offen' if other else ''}"]
+shutil.rmtree(T5, ignore_errors=True)  # проекты снимаются, логи остаются
+shutil.rmtree(red_dir, ignore_errors=True)
 print(f"gate-v3.5: {int(time.monotonic() - t0)} с; логи — {LOGS}")
 if not fails:
     print("GATE35_OK")

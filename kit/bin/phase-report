@@ -8,6 +8,9 @@
   · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
     отказы и отклонённые — поимённо, их читает тимлид;
   · пропуски spec-gate — строки docs/evidence/spec-gate.jsonl с решением pass и причиной (кап, no-progress, ошибка, AGENT_STOP, фон);
+  · пропуски сессии исполнителя (SPEC-v3.5 §5): решения pass «not the phase session» журнала spec-gate — всего и сессий из метки .claude/phase-session.json
+    (их хеш, как в журнале; ожидается 0); цена круга F8.3 — по последнему завершённому прогону каждой фикстуры в docs/evidence/verify-runs.jsonl до и после
+    правки воркфлоу kit/.claude/workflows/verify-phase.js (wf — хеш файла на родителе коммита правки и в HEAD): секунды и токены;
   · слово оператора и тимлида (SPEC-v3.5 F6.5): коммиты «Оператор:» и «Тимлид:» плеча — sha, пути, слово; плечо — от первого коммита не «Тимлид:»
     после последнего коммита стартового запроса (docs/PROMPT.txt): «Тимлид:» сразу за ним — выдача, не плечо;
   · метрики ретро (SPEC-v3.4 F5.4): кругов до PASS — по вердиктам этой SPEC docs/evidence/verify-<sha>[-F<n>…].txt в порядке истории; откатов деплоя — строки ROLLBACK_OK после выкатки на линию, по одной на выкатку,
@@ -17,7 +20,7 @@
     строками docs/evidence/jev-labels.jsonl. В Jev уходят только текст пунктов и строки проб.
 Печатает путь и счёт; rc 0, кроме неверных аргументов (2).
 """
-import glob, json, os, re, subprocess, sys, tempfile, time
+import glob, hashlib, json, os, re, subprocess, sys, tempfile, time
 
 TMP = "/tmp/two-tier-v3"
 FEATURE = re.compile(r"^- \*\*(F\d+)\b")
@@ -100,6 +103,37 @@ def words():
         leg = leg or kind != "Тимлид:"
         if leg and kind:
             out.append((kind.rstrip(":"), sha, [n.strip("\n") for n in names.split("\0") if n.strip("\n")], subj[len(kind):].strip()))
+    return out
+
+
+def not_phase(gate):
+    """(pass «not the phase session» всего, из них сессий метки): хеш сессии — первые 8 знаков sha256 её id, как пишет хук."""
+    try:
+        j = json.loads(read(".claude/phase-session.json") or "null")
+    except ValueError:
+        j = None
+    ids = j if isinstance(j, list) else (j or {}).get("sessions", []) if isinstance(j, dict) else []
+    marked = {hashlib.sha256(str(s).encode()).hexdigest()[:8] for s in ids}
+    np = [g for g in gate if g.get("decision") == "pass" and str(g.get("reason", "")).startswith("not the phase session")]
+    return len(np), sum(1 for g in np if g.get("session") in marked)
+
+
+def price_f83():
+    """Цена круга F8.3: {сторона: (фикстур, секунд, токенов)} по последнему завершённому прогону каждой фикстуры до и после правки воркфлоу; нет данных — {}."""
+    wf = "kit/.claude/workflows/verify-phase.js"
+    edit = git("log", "-1", "--format=%H", "--", wf).strip()
+    if not edit or not os.path.isfile(wf):
+        return {}
+    sides = {"до": git("rev-parse", f"{edit}^:{wf}").strip()[:12], "после": git("hash-object", wf).strip()[:12]}
+    last = {}
+    for r in jsonl("docs/evidence/verify-runs.jsonl"):
+        for side, h in sides.items():
+            if r.get("fixture") and r.get("status") == "completed" and r.get("wf") == h and isinstance(r.get("tokens"), int):
+                last[(side, r["fixture"])] = r
+    out = {}
+    for side in sides:
+        rs = [r for (s, _), r in last.items() if s == side]
+        out[side] = (len(rs), sum(r.get("sec") or 0 for r in rs), sum(r["tokens"] for r in rs))
     return out
 
 
@@ -241,6 +275,8 @@ def main(argv):
     L += ["", "## Пропуски spec-gate", "", f"Решений хука: {len(gate)} — блоков {sum(g.get('decision') == 'block' for g in gate)}, "
           f"OK {sum(g.get('decision') == 'ok' for g in gate)}, стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.", ""]
     L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- нет"]
+    n_np, n_np_own = not_phase(gate)
+    L += ["", f"Пропусков «not the phase session»: {n_np}; из них сессий метки `.claude/phase-session.json` — {n_np_own} (ожидается 0)."]
     said = words()
     n_op, n_tl = sum(k == "Оператор" for k, *_ in said), sum(k == "Тимлид" for k, *_ in said)
     L += ["", "## Слово оператора и тимлида", "", f"Коммитов плеча «Оператор:» — {n_op}, «Тимлид:» — {n_tl} (ожидается 0, кроме слова оператора в окне доводки SPEC §3).", ""]
@@ -259,6 +295,8 @@ def main(argv):
     detail = "; ".join(x for x in (", ".join(f"{f} {k}" for f, k in sorted(took.items(), key=lambda x: int(x[0][1:]))),
                                    "без PASS: " + ", ".join(f"{f} — {k}" for f, k in sorted(going.items(), key=lambda x: int(x[0][1:]))) if going else "") if x)
     L += ["", "## Метрики ретро", "", f"- Кругов до PASS: {n_rounds}" + (f" ({detail})" if detail else ""), f"- Откатов деплоя: {n_back} из {n_line}", f"- Поправок объёма: {n_amend}"]
+    price = price_f83()
+    L += [f"- Цена круга F8.3 (последний завершённый прогон каждой фикстуры): " + "; ".join(f"{s} — фикстур {n}, {sec} с, {tok} токенов" for s, (n, sec, tok) in price.items())] if price else []
     counts = {}
     for v in status.values():
         k = v.split()[0].rstrip(":")
@@ -267,7 +305,7 @@ def main(argv):
     with open("docs/evidence/phase-report.md", "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
     print(f"phase-report: docs/evidence/phase-report.md — пунктов {len(items)}, с пробой {len(items) - len(no_probe)}, без коммитов {len(no_commit)}, "
-          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}; слово оператора {n_op}, тимлида {n_tl}; "
+          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}, not the phase session {n_np} (метки {n_np_own}); слово оператора {n_op}, тимлида {n_tl}; "
           f"кругов до PASS {n_rounds}, откатов {n_back} из {n_line}, поправок {n_amend}; Jev — {jev_note}")
     return 0
 
