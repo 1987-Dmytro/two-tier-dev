@@ -30,6 +30,9 @@
     F8.2 — bin/check-budget --templates зелёный, строки модов и профиль кита; шаблон SPEC §2–§5 и (ae)–(ah) против клона telefon
            (TELEFON_CLONE, нет его — сказано в строке): строка telefon есть в ките или это названная дельта; красное — копия кита во
            /tmp/two-tier-v3 без каждой фразы договора, шаблон без строки доводки против telefon, профиль с выключенным модом.
+  · v3.5 (SPEC-v3.5 F9): F9.2 — запись v3.5 CHANGELOG: поле autoCompactWindow с https-источником и парой 580000/980000, вошли семь, сняты три, строка
+    замены telefon-части v3.4-F3.5; красное — копия без источника поля и без снятого; F9.3 — шаблон PROCESS и kit/CLAUDE.md: слово — главной сессии,
+    боковой чат — вопросы, суд по REVIEW.md — на Opus: docs=2/2; красное — копия без фразы.
 """
 import json, os, re, shutil, subprocess, sys, tempfile
 
@@ -430,6 +433,50 @@ item("v3.4-F8.2", t_ok,
      f"строки Environment: limits {'осталась' if limits_row else 'снята'}, window-guard и phase-start «да», в launch settings кита не включены — {', '.join(mods_on(lk)) or 'нет'}",
      all(red82) and red_tel_ok and mods_on({}) == ["window-guard@two-tier-mods", "phase-start@two-tier-mods"],
      f"копия кита без фразы договора — красных с именем фразы {sum(red82)}/{len(PHRASES82)}; {red_tel}; профиль без модов — не включены {len(mods_on({}))}")
+
+
+# --- v3.5 (SPEC-v3.5 F9.2, F9.3) ---------------------------------------------------------------------------------------
+PAIR95 = ("580000", "980000")  # effectiveWindow с autoCompactWindow 600000 и без него (замер 12.11, --debug-file)
+F3_5_LINE = "The telefon part of v3.4-F3.5 is replaced"
+
+
+def f92(cl):
+    """(feld, rein, raus, расхождения) записи v3.5 CHANGELOG cl: строка поля autoCompactWindow с https-источником, парой и до/после; вошли — семь, сняты — три; строка замены F3.5."""
+    e = entry(cl, "v3.5", "v3.4")
+    rows = [[c.strip() for c in r.strip().strip("|").split("|")] for r in e.splitlines() if r.startswith("| ") and r.count("|") >= 6]
+    feld = sum(1 for c in rows if "autoCompactWindow" in c[0] and "https://" in c[2] and all(x not in ("", "—", "-") for x in c[3:5])
+               and all(n in " ".join(c) for n in PAIR95))
+    block = lambda head: (e.split(head, 1)[1].split("\n- **", 1)[0] if head in e else "")
+    rein = len([l for l in block("**Entered — seven**").splitlines() if l.startswith("  - `")])
+    raus = len([l for l in block("**Retired — three**").splitlines() if l.startswith("  - `")])
+    bad = ([] if e else ["нет записи «## v3.5» над v3.4"]) + ([] if feld == 1 else [f"строк поля autoCompactWindow с источником и парой {feld}"]) \
+        + ([] if rein == 7 else [f"вошли {rein}, не 7"]) + ([] if raus == 3 else [f"сняты {raus}, не 3"]) + ([] if F3_5_LINE in e else ["нет строки замены v3.4-F3.5"])
+    return feld, rein, raus, bad
+
+
+g92 = f92(CL)
+red_src = f92(re.sub(r"\[model-config\]\(https://[^)]*\)", "model-config", CL))
+red_out = f92(CL.replace("  - `evaluator` — the agent on Haiku", "  - evaluator — the agent on Haiku", 1))
+item("F9.2", not g92[3], f"feld={g92[0]} rein={g92[1]} raus={g92[2]} · CHANGELOG, запись v3.5 над v3.4: поле `autoCompactWindow` — https-источник, пара {'/'.join(PAIR95)}, до и после; "
+     f"«Entered — seven», «Retired — three», строка замены telefon-части v3.4-F3.5; расхождения — {'; '.join(g92[3]) or 'нет'}",
+     red_src[0] == 0 and red_src[3] and red_out[2] == 2 and red_out[3],
+     f"копия без https-источника поля — feld={red_src[0]} «{'; '.join(red_src[3])}»; без снятого `evaluator` — raus={red_out[2]} «{'; '.join(red_out[3])}»")
+
+PHRASES93 = {"kit/docs/PROCESS.template.md": ["Слово исполнителю — в главную сессию фазы", "боковой чат", "для вопросов", "Суд по `REVIEW.md`", "на `claude-opus-5-5`"],
+             "kit/CLAUDE.md": ["Слово оператора — в главную сессию фазы", "боковой чат — для вопросов", "суд по нему — на `claude-opus-5-5`"]}
+
+
+def f93(texts):
+    """Документы, где есть все фразы F9.3: слово — главной сессии, боковой чат — вопросы, суд по REVIEW.md — на Opus; и чего нет."""
+    miss = {f: [w for w in ws if w not in texts[f]] for f, ws in PHRASES93.items()}
+    return sum(not m for m in miss.values()), [f"{f}: {w}" for f, m in miss.items() for w in m]
+
+
+texts93 = {f: read(f) for f in PHRASES93}
+n93, miss93 = f93(texts93)
+red93 = [f93({**texts93, f: texts93[f].replace(ws[0], "")}) for f, ws in PHRASES93.items()]
+item("F9.3", n93 == 2, f"docs={n93}/2 · " + "; ".join(f"{f}: фраз {len(ws)}" for f, ws in PHRASES93.items()) + f"; нет — {'; '.join(miss93) or 'ничего'}",
+     all(n == 1 and m for n, m in red93), "копия без первой фразы — " + "; ".join(f"docs={n}/2 «{m[0] if m else 'всё есть'}»" for n, m in red93))
 
 print("DOCS_OK" if all(out) else "DOCS_FAIL")
 sys.exit(0 if all(out) else 1)

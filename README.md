@@ -1,4 +1,4 @@
-# two-tier-dev — a development cycle for one operator and two AI tiers (kit v3.4)
+# two-tier-dev — a development cycle for one operator and two AI tiers (kit v3.5)
 
 **Operator · Team lead (Cowork, skills `team-lead` v6, `team-lead-brief`, `grilling`) · Executor (Claude Code,
 `claude-opus-5-5`, auto mode, ultracode) · `/verify-phase` (a saved workflow that renders the acceptance verdict).** The operator decides three
@@ -43,9 +43,18 @@ v3.4 (07.11.2026) moves into the kit what held in the telefon project, and repai
 - **Graphify** is rebuilt by `.githooks/post-commit`; the mods `window-guard` (absorbs `limits`) and `phase-start` give the tab `/window` and `/phase`;
 - `bin/gate-v3.4` judges all of it on a project from `bin/two-tier-init` and on a copy of the telefon clone.
 
+v3.5 (12.11.2026) takes the operator's hands out of a phase:
+- **context in the Code tab:** the mod `handoff` 0.4.0 answers `/handoff` in every session, hands off by itself at `handoff_threshold_pct` of `budgets.json` (40) only in a person's session, and the profile carries `autoCompactWindow` 600000;
+- **a judge of the phase session only:** `.claude/phase-session.json`, written by the mod `phase-start`, names the phase session; `spec-gate` releases forks and side chats, an open stop holds until code or the Resume word;
+- **the spec read before signing:** the issue lints `planka-early`, `basis-judge`, `spec-paths` and the lock `spec-review` — a `PASS` of a fresh Opus reviewer with the spec's pin (`REVIEW.md`, «Спека до подписи»);
+- **the operator's word as a command:** `bin/operator-word` changes a team-lead file of the finishing window of SPEC §3 and commits «Оператор: …»; «Тимлид:» from a Claude Code session is refused;
+- **acceptance on Opus:** every stage of `/verify-phase` runs on `claude-opus-5-5`, the agent `evaluator` is retired;
+- `bin/gate-v3.5` judges the phase, taking the markers of live checks from their evidence while the mod, the hook and the workflow are unchanged.
+
 Three judges, by the cost of a question, still hold: **code** where a file answers, **Jev** where a bounded question repeats (now in
 the shadow), **a fresh agent** (`/verify-phase`) where the work must be reproduced. Why: [`intent/INTENT.md`](intent/INTENT.md). The phase
-that built v3.4: [`docs/SPEC-v3.4.md`](docs/SPEC-v3.4.md), [`docs/PLAN-v3.4.md`](docs/PLAN-v3.4.md), [`docs/PROGRESS.md`](docs/PROGRESS.md);
+that built v3.5: [`docs/SPEC-v3.5.md`](docs/SPEC-v3.5.md), [`docs/PLAN-v3.5.md`](docs/PLAN-v3.5.md), [`docs/PROGRESS.md`](docs/PROGRESS.md);
+v3.4: [`docs/SPEC-v3.4.md`](docs/SPEC-v3.4.md), [`docs/PLAN-v3.4.md`](docs/PLAN-v3.4.md);
 v3.3: [`docs/SPEC-v3.3.md`](docs/SPEC-v3.3.md), [`docs/PLAN-v3.3.md`](docs/PLAN-v3.3.md); v3.2: [`docs/SPEC-v3.2.md`](docs/SPEC-v3.2.md), [`docs/PLAN-v3.2.md`](docs/PLAN-v3.2.md); v3.1: [`docs/SPEC-v3.1.md`](docs/SPEC-v3.1.md),
 [`docs/PLAN-v3.1.md`](docs/PLAN-v3.1.md); v3: [`docs/SPEC-v3.md`](docs/SPEC-v3.md), [`docs/PLAN-v3.md`](docs/PLAN-v3.md). History: [`CHANGELOG.md`](CHANGELOG.md).
 The whole system in the operator's language: [`docs/dev-system.ru.md`](docs/dev-system.ru.md).
@@ -84,7 +93,7 @@ GATE     the operator runs the product and judges it by the success signals of t
 | `bin/verify-phase [F<n> …]` | the saved workflow `/verify-phase` from a fresh clone of the pushed HEAD: per feature a fresh check run, then edge cases and mutations by the feature's `risk:` (`high` — at least 2, `low` — none); the prior verdict goes in and a repeat is marked «повтор»; refuters; a judge; with a list — only those features (`FEATURES:` in the verdict); a counts-only line per run in `docs/evidence/verify-runs.jsonl` | `VERDICT: PASS` |
 | `bin/check-verify` | `/verify-phase` checks only the named features, a surviving mutation and green evidence over a broken product are not PASS, a point PASS after a fix passes `spec-gate`; the risk tier, the prior verdict, the eval case of `docs/evals/`, `GATE_SKIP` on a detached HEAD; six live rounds, about 0.75M tokens | `VERIFY_OK` |
 | `bin/phase-report` | the phase report `phase-report.md` in `docs/evidence/`: items × commits, probe, observation; items without commits, commits without an item, items without a probe; commit-judge counts; the hook's passes; Jev's status in the shadow | — |
-| `bin/check-kit [frozen\|fenster\|graph\|paar]` | the kit's skills `plan-phase` and `accept`, the workflow and its launcher, an evaluator without Write and Edit · the `handoff` mod · the window guard on given events · closed modules, the passport, `regress`, the upgrade of a telefon clone · the deploy window, the live check, the canary · Graphify · the pair stand | `KIT_OK` · `HANDOFF_OK` · `WINDOW_OK` · `FROZEN_OK` · `FENSTER_OK` · `GRAPH_OK` · `PAAR_OK` |
+| `bin/check-kit [frozen\|fenster\|graph\|paar\|handoff\|operator\|telefon]` | the kit's skills `plan-phase` and `accept`, the workflow and its launcher, no agent `evaluator` · the `handoff` mod, live in a tab-like host · the operator's word · the v3.5 lints on a copy of the telefon clone · the window guard on given events · closed modules, the passport, `regress`, the upgrade of a telefon clone · the deploy window, the live check, the canary · Graphify · the pair stand | `KIT_OK` · `HANDOFF_OK` · `WINDOW_OK` · `FROZEN_OK` · `FENSTER_OK` · `GRAPH_OK` · `PAAR_OK` |
 | `bin/check-harness --desktop` | the Code tab's profile on a `claude -p` proxy: versions, abandoned worktrees, `blockWritesOutsideWorkingDirectories` before and after, `system/init` against the Environment table, deny pairs, `PermissionDenied` | `HARNESS_OK` |
 | `bin/check-versions` | `VERSIONS cli= app= github=`; the CLI behind GitHub — `HARNESS_WARN cli-behind` and the line `claude update`; installs nothing | — |
 | `bin/check-frozen-diff` · `bin/check-passport` | the lock of a closed module in CI; a module's fingerprints against its passport | `FROZEN_DIFF_OK` · `PASSPORT_OK` |
@@ -94,6 +103,8 @@ GATE     the operator runs the product and judges it by the success signals of t
 | `bin/two-tier-upgrade <path>` | a live project moves to the kit on branch `kit-v3` without losing history: the retired hooks and plugins leave, the previous files go to the archive; `--self-test` on a fixture | `UPGRADE_OK` |
 | `bin/check-docs` | links in these documents are alive; CHANGELOG covers every harness field with its source, what was retired and what left for what entered; the templates pass and equal telefon's by SPEC §2–§5 and (ae)–(ah) | `DOCS_OK` |
 | `bin/gate-v3.4` | the kit on a project from `bin/two-tier-init`: the markers of F1–F7 and the surviving ones of v3.3 and v3.2, a line per item F8.1–F8.5, a copy of the telefon clone after `bin/two-tier-upgrade`; a log without its marker names it; only `F5.3 offen` is allowed; the gates of v3 to v3.3 are in `docs/archive/` | `GATE_OK` |
+| `bin/operator-word <path> -m "<word>"` | the operator's word as a command: a team-lead file of the finishing window of SPEC §3 gets stdin, the commit is «Оператор: <word>»; outside the window, without it or over the diff reserve — refused, the file intact | — |
+| `bin/gate-v3.5` | the phase v3.5 on a project from `bin/two-tier-init` and on this repository: the markers of F1–F8 and the surviving ones of v3.4 and earlier, the lines F9.1–F9.4, a line per item of the spec in its evidence exactly once; the live F1, F2 and F8 come from their evidence while the mod, the hook and the workflow are unchanged since it; no telefon clone or a foreign item line — red | `GATE35_OK` |
 
 `ABIDE_OK` and `TOOLGATE_OK` are retired markers: the per-edit Abide hooks and the Toolgate hook left the kit in v3.3.
 
@@ -117,8 +128,8 @@ commit hook and by the ownership lint: a commit that changes one of them must st
 | `kit/.claude/workflows/verify-phase.js` | the saved workflow `/verify-phase`, the feature list and the prior verdicts through `args`; its copy in `.claude/workflows/` lets this repository accept its own phases |
 | `kit/.claude/hooks/` | `kill-switch.sh` (`continue: false`), `steer.sh` (a factual note, to the main session only), `refuse_sweeping_commands.py`, `spec-gate.mjs` (Stop, by the items), `permission-denied.mjs` (counters of auto-mode denials) |
 | `kit/.claude/spec-gate.json` | the gate's mode, caps and the question of the Jev cell — a team-lead file |
-| `mods/` | marketplace `two-tier-mods`: `handoff` (a handoff document and a fresh context at 70 % of the window), `window-guard` (absorbs `limits`: the status line of the windows; a tool call is refused above the week's threshold until `/window override`), `phase-start` (`/phase` sends the start prompt on its branch; `/phase resume`, `/phase halt`) |
-| `kit/.claude/skills/` · `kit/.claude/agents/evaluator.md` | `plan-phase`, `accept`; the evaluator |
+| `mods/` | marketplace `two-tier-mods`: `handoff` (a handoff document and a fresh context at `handoff_threshold_pct` of `budgets.json`, 40 % of the window; automatic only in a person's session), `window-guard` (absorbs `limits`: the status line of the windows; a tool call is refused above the week's threshold until `/window override`), `phase-start` (`/phase` sends the start prompt on its branch; `/phase resume`, `/phase halt`) |
+| `kit/.claude/skills/` | `plan-phase`, `accept`; the agent `evaluator` left in v3.5 (`docs/archive/evaluator.md`) |
 | `.github/workflows/two-tier.yml` | CI of this repository; the same file ships in `kit/.github/` |
 | `docs/evals/` | eval cases for the checker: `rollback-pause`, run live by `bin/check-verify` |
 | `docs/archive/` | everything retired, moved and never deleted: v1, the v2 kit (`kit-v2/`), the v3.2 hooks of Abide and Toolgate (`kit-v3.2/`), the `limits` mod (`mods-limits/`), PROGRESS, PLAN, evidence and gates of earlier phases |
@@ -142,5 +153,5 @@ This repository is not a kit install itself (there is no `.claude/` in its root)
 
 ## Status
 
-v3, v3.1, v3.2 and v3.3 are accepted and merged (PR #1 to PR #4). v3.4 is built on branch `v3.4` and waits for acceptance; `main` is
-v3.3 until the operator merges.
+v3 to v3.4 are accepted and merged (v3.4 — PR #7). v3.5 is built on branch `v3.5` and waits for the team lead's acceptance; `main` is
+v3.4 until the operator merges.

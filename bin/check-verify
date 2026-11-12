@@ -1168,7 +1168,10 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--gate"]:
         how, why = gate_decision(REPO)
         print(f"VERIFY_GATE {how} · {why}", flush=True)
-        if how == "evidence":
-            print(f"VERIFY_OPUS_OK — из {EVIDENCE_F8} коммита evidence", flush=True)
-            sys.exit(0)
+        if how == "evidence":  # маркеры — строками из файла evidence того коммита, как их напечатал полный прогон
+            ev = subprocess.run(["git", "log", "-1", "--format=%H", "--", EVIDENCE_F8], cwd=REPO, capture_output=True, text=True).stdout.strip()
+            have = subprocess.run(["git", "show", f"{ev}:{EVIDENCE_F8}"], cwd=REPO, capture_output=True, text=True).stdout.splitlines()
+            for m in ("VERIFY_OK", "VERIFY_OPUS_OK"):
+                print(m if m in have else f"--   {m}: нет в {EVIDENCE_F8} @ {ev[:7]}", flush=True)
+            sys.exit(0 if "VERIFY_OPUS_OK" in have else 1)
     sys.exit(main())

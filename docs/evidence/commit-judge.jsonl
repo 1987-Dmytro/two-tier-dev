@@ -206,3 +206,4 @@
 {"ts": "2026-11-12T20:11:52Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/check-verify"], "score": 0.13, "diff": "2bbc8a5ced769302", "ms": 862}
 {"ts": "2026-11-12T20:16:30Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/two-tier-upgrade"], "score": 0.34, "diff": "15fb501a2cb39a68", "ms": 786}
 {"ts": "2026-11-12T20:16:32Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F8-check-verify-result.txt"], "score": 0.1, "diff": "20b52759a04fab91", "ms": 962}
+{"ts": "2026-11-12T20:23:45Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.24, "diff": "13375a5aed9e6180", "ms": 1334}

@@ -19,7 +19,7 @@
 - **F4, F5, F7:** `kit/bin/check-budget` (`planka-early`, `basis-judge`, `spec-paths`, `spec-review`, `--templates`), `kit/docs/SPEC.template.md` (§1 «Новые пути:», §2 пункт-отчёт, §5 строка базы), `kit/docs/PLAN.template.md`, `kit/REVIEW.md` (раздел «Спека до подписи»), `kit/docs/PROCESS.template.md` (строка проверяющего).
 - **F6:** `kit/bin/operator-word` (новый) + symlink `bin/operator-word`, `kit/.githooks/commit-msg` («Оператор:» в окне, «Тимлид:» при `CLAUDECODE=1`), `kit/bin/check-budget` (`owner`), `kit/bin/phase-report` (список), `kit/docs/SPEC.template.md` §3, фикстуры «Тимлид:» в `check-harness`, `check-kit`, `check-verify`, `check-budget` — git без `CLAUDECODE`; `kit/bin/check-kit` (раздел `operator`).
 - **F8:** `kit/.claude/workflows/verify-phase.js` + `.claude/workflows/verify-phase.js` (все стадии Opus), `git mv kit/.claude/agents/evaluator.md docs/archive/`, `kit/REVIEW.md` (шапка), `kit/bin/check-kit` (без evaluator), `kit/bin/two-tier-upgrade` (evaluator — в архив запуска), `bin/check-verify`.
-- **F9:** `kit/budgets.json` (`team_lead_spec_copy_chars` 8000), `kit/bin/check-budget` (размер), `CHANGELOG.md`, `README.md`, `docs/README.md`, `docs/dev-system.ru.md`, `kit/CLAUDE.md`, `kit/docs/PROCESS.template.md`, `bin/check-docs`, `bin/gate-v3.5` (новый), `bin/check-gate` (заглушки и для гейта v3.5; `Makefile` вне разрешённых путей — CI его не меняет, `make ci` уже зовёт `bin/check-gate`).
+- **F9:** `kit/budgets.json` (`team_lead_spec_copy_chars` 8000), `kit/bin/check-budget` (размер), `CHANGELOG.md`, `README.md`, `docs/README.md`, `docs/dev-system.ru.md`, `kit/CLAUDE.md`, `kit/docs/PROCESS.template.md`, `bin/check-docs`, `bin/gate-v3.5` (новый, Python), `kit/bin/two-tier-upgrade` (строки `.gitignore` кита — к строкам проекта), `kit/bin/check-kit` (раздел `telefon`, ретаргет v3.4-F3.5); `bin/gate-v3.4` и `bin/check-gate` — как есть.
 - Не создаётся: файлы тимлида (`budgets.json`, `CLAUDE.md`, PROCESS, рубрика, `.claude/launch.settings.json`) — их правки строкой в Notes; ключи v3.5 в корень вносит тимлид.
 
 ## Порядок
@@ -87,3 +87,4 @@
 
 ## Отклонения от SPEC и документации
 1. Счёт строк прошлых фаз до префиксов (SPEC §3) — из evidence v3.4 этих чеков (дёшево, без живых кругов): `bin/check-harness` F2.x 6, F3.x 4; `bin/check-kit` F9.x 2 (гейт v3.5 его зовёт); после префиксов — 0.
+2. `bin/check-gate` судит только `bin/gate-v3.4` (оба остаются): заглушек гейта v3.5 в `make ci` нет — его развилки судят красные образцы F9.5 в самом гейте (SPEC их не требует в CI).

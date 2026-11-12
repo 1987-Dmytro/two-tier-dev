@@ -61,6 +61,9 @@ bin/check-window && ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode a
 
 `git clone -q --branch <ветка выдачи> <репо> /tmp/two-tier-v3/spec-review-<фаза> && cd /tmp/two-tier-v3/spec-review-<фаза> && env -u ANTHROPIC_API_KEY claude -p --model claude-opus-5-5 --permission-mode dontAsk --allowedTools "Read" "Bash(git log:*)" "Bash(git show:*)" "Bash(git hash-object:*)" "Bash(ls:*)" -- "Прочитай docs/SPEC-<n>.md по разделу «Спека до подписи» REVIEW.md и верни вердикт этой формы"`
 
+## Слово оператора и боковой чат
+Слово исполнителю — в главную сессию фазы (её называет `.claude/phase-session.json`, его ведёт мод `phase-start`); боковой чат (`/btw`) — для вопросов: он ничего не возвращает в главную нить, и `spec-gate` его не судит. Файл тимлида в окне доводки (SPEC §3) меняет только `bin/operator-word`. Суд по `REVIEW.md` — приёмка `/verify-phase` и свежий проверяющий спеки — идёт на `claude-opus-5-5`.
+
 ## Деньги
 1. **Потолок проекта:** <€> — слово оператора и константа предохранителя.
 2. **Лимиты подписки:** планка на фазу исполнителя — <N> % недели (обычная фаза — 15 %, D4 two-tier-dev); исполнитель работает под ultracode, его веер воркфлоу ест лимиты быстрее. Плечо, плечо починки и `bin/verify-phase` стартуют при неделе не выше `window_seven_day_pct` (в ките 100 %, решение 398: чек печатает числа и не отказывает; проект ужесточает порог в `project`): это держит `bin/check-window` строки запуска, обход — флагом `--override` словом оператора. `/usage` до и после плеча записывает тимлид в STATUS; превышение — на ретро, ultracode сгоряча не выключается.
