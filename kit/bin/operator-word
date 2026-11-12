@@ -49,7 +49,7 @@ def main(argv):
     top = git("rev-parse", "--show-toplevel").stdout.strip()
     if not top:
         return refuse("не репозиторий git")
-    path = os.path.relpath(os.path.abspath(argv[0]), top)
+    path = os.path.relpath(os.path.realpath(argv[0]), os.path.realpath(top))
     os.chdir(top)
     if path.startswith("..") or path.startswith(".git/"):
         return refuse(f"{argv[0]} вне репозитория")

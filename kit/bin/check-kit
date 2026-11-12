@@ -1902,14 +1902,18 @@ def section_operator():
     fx = {}
     for name, cmd in (("bin/check-harness commit", ["bin/check-harness", "commit"]), ("bin/check-kit frozen", ["bin/check-kit", "frozen"])):
         r = subprocess.run(cmd, env=sess, capture_output=True, text=True, timeout=900)
-        bad = [l.split()[0] for l in r.stdout.splitlines() if re.match(r"^\S+ FAIL: ", l) or re.match(r"^[A-Z_]+_FAIL$", l)]
-        fx[name] = (r.returncode, bad, "COMMIT_OK" in r.stdout.splitlines() if "harness" in name else None)
-    fix_ok = all(rc_ == 0 and not bad and mk is not False for rc_, bad, mk in fx.values())
+        out = r.stdout.splitlines()
+        # суд модели без ключа или abide (CI) краснеет не от CLAUDECODE: его строки вне счёта, тогда и маркер с rc не судятся
+        nokey = [l.split()[0] for l in out if re.match(r"^\S+ FAIL: нет ключа", l)]
+        bad = [l.split()[0] for l in out if (re.match(r"^\S+ FAIL: ", l) and l.split()[0] not in nokey) or (re.match(r"^[A-Z_]+_FAIL$", l) and not nokey)]
+        fx[name] = (0 if nokey and not bad else r.returncode, bad, (None if nokey else "COMMIT_OK" in out) if "harness" in name else None, nokey)
+    fix_ok = all(rc_ == 0 and not bad and mk is not False for rc_, bad, mk, _ in fx.values())
     p("F6.4", op_ja and op_nein and tl_nein and fix_ok,
       f"op={'ja' if op_ja else 'nein'},{'nein' if op_nein else 'ja'} tl={'nein' if tl_nein else 'ja'} fixturen={'OK' if fix_ok else 'FAIL'} · хук: «Оператор:» в окне — rc {op_in[0]}; "
       f"вне окна — rc {op_out[0]} «{op_out[1][:90]}»; дифф сверх запаса — rc {op_big[0]}; мимо хука → bin/check-budget rc {rb} «{own_fail[:110]}», BUDGET_FAIL owner — "
       f"{'есть' if 'BUDGET_FAIL owner' in ob.splitlines() else 'нет'} · «Тимлид:» при CLAUDECODE=1 — rc {tl_in[0]} «{tl_in[1][:80]}», без — rc {tl_out[0]} · из сессии (CLAUDECODE=1): "
-      + "; ".join(f"{n} — rc {rc_}, красных строк {len(bad)}{', COMMIT_OK' if mk else ''}" for n, (rc_, bad, mk) in fx.items()))
+      + "; ".join(f"{n} — rc {rc_}, красных строк {len(bad)}{', COMMIT_OK' if mk else ''}{f' (без ключа или abide вне счёта: {chr(32).join(nk)})' if nk else ''}"
+                  for n, (rc_, bad, mk, nk) in fx.items()))
     # F6.5 — bin/phase-report: «Оператор:» и «Тимлид:» плеча (после коммита запроса; «Тимлид:» сразу за ним — выдача)
     def leg(dd, commits):
         for msg_, rel, text in commits:
