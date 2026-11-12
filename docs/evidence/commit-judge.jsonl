@@ -200,3 +200,4 @@
 {"ts": "2026-11-12T19:45:00Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-budget"], "score": 0.14, "diff": "53550dc6199bc3ce", "ms": 1650}
 {"ts": "2026-11-12T19:46:24Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F4-budget-result.txt"], "score": 0.07, "diff": "96c7f36b050f12f6", "ms": 1168}
 {"ts": "2026-11-12T19:47:36Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F1-check-kit-result.txt"], "score": 0.07, "diff": "19909442133b246a", "ms": 854}
+{"ts": "2026-11-12T19:53:59Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.18, "diff": "ec114143d0399809", "ms": 2179}
