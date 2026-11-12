@@ -11,7 +11,7 @@
   - `$.command.register (window-guard): /window listed` · `… (phase-start): /phase listed` · `… (spec-board): /board listed`; строки `$.command.register (handoff)` нет.
 - **Команды** приходят событием `system/commands_changed` (в `system/init` команд модов ещё нет): `phase`, `board`, `window` — есть, `handoff` — нет. Сообщение `/handoff status` ушло модели обычным текстом: 6 ходов работы вместо ответа мода.
 - **Опции мода.** С записью в личных настройках движок об опциях молчит; без неё пишет `plugin handoff: no pluginConfigs["handoff@two-tier-mods"].options in user, --settings or managed settings (project settings are not read); every option is its default`. Порог 40 из профиля проекта до мода не доходит.
-- **Проба ретро — копия мода, где команда регистрируется всегда:** `/handoffp status` → `handoff · context 2% of 1000000 tokens · threshold 40% · auto-clear on · dir handoffs/ · last: —` (порог подан через `--settings`); `/handoffp now` → `$.model.fork` 9,4 с → файл в `handoffs/` → `conversation_reset trigger=clear` → сообщение мода «Свежий контекст после хендоффа. Прочитай … и продолжай с раздела „3. Следующее“» → сессия продолжила.
+- **Проба ретро — копия мода, где команда регистрируется всегда:** `/handoffp status` → `handoff · context 2% of 1000000 tokens · threshold 40% · auto-clear on · dir handoffs/ · last: —` (порог подан через `--settings`); `/handoffp now` → `$.model.fork` 9,4 с → файл в `handoffs/` → `conversation_reset trigger=clear` → сообщение мода о свежем контексте → сессия продолжила.
 - **Поле сжатия.** Без поля: `autocompact: tokens=… level=ok effectiveWindow=980000`. С `"autoCompactWindow": 600000` в `.claude/settings.local.json` проекта: `effectiveWindow=580000` (запас движка 20 тыс.). На пороге движок пишет `autocompact: routing through reactive (thresholdSource=settings)` (проба ретро на 100000: восемь `compact_boundary trigger=auto` у 72–79 тыс. токенов).
 - **Ряд SPEC-11 для порога 40 %:** после сжатия первый запрос 103–127 тыс. токенов, за 20 мин 148–426 тыс., за час до 501 тыс.; при 400 тыс. — ранняя оценка ≈ 20 хендоффов на фазу такого размера. Мод 0.3.0 взводится снова, когда заполнение упало ниже порога − 20 (`isArmed`), и не срабатывает раньше `minTurns` запросов.
 - **Побочный эффект пробы с включённым плагином:** движок дописывает запись в `installed_plugins.json` пользователя (`Added handoff@two-tier-mods installation for scope local (<каталог стенда>)`) — вне объёма v3.5, каталоги стендов держать под `/tmp/two-tier-v3`.
@@ -25,7 +25,6 @@
 |---|---|---|---|
 | токены воркфлоу | 71 245 · 79 405 · 72 039 | 77 790 · 80 421 · 77 480 | 72 039 → 77 790 (×1,08) |
 | секунды воркфлоу | 70 · 112 · 88 | 109 · 129 · 110 | 88 → 110 (×1,25) |
-| секунды лаунчера | 85 · 128 · 106 | 123 · 143 · 126 | 106 → 126 (×1,19) |
 | вес по прайсу API, usd (подписка — не счёт, а мера веса) | 0,525 · 0,609 · 0,470 | 0,801 · 0,878 · 0,738 | 0,525 → 0,801 (×1,53) |
 | вердикт | PASS ×3 | PASS ×3 | тот же |
 
