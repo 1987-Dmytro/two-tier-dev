@@ -56,6 +56,11 @@ bin/check-window && ENABLE_CLAUDEAI_MCP_SERVERS=false claude --permission-mode a
 ## Запуск во вкладке Code приложения Claude
 Локальная сессия вкладки на папке проекта, Worktree выключен, ветка фазы выбрана на диске; облако для исполнителя не используется. Приложение читает те же файлы настроек, что CLI, но не флаги строки: их роль берёт `.claude/settings.local.json` — копия `.claude/launch.settings.json`, вне git. Фазу стартует `/phase` мода `phase-start`, окно судит мод `window-guard`, а не `bin/check-window` строки. Отличия от терминала, замеренные прокси `claude -p`: `permissions.blockWritesOutsideWorkingDirectories` отказывает Write и Edit во `/tmp/two-tier-v3` (`--add-dir` нет), Bash поле не держит; `CLAUDE_CODE_SUBAGENT_MODEL` из профиля не доходит до подагентов (`HARNESS_WARN subagent-model-local`); `autoMode` из профиля не читается. Профиль судит `bin/check-harness --desktop`; effort и ultracode самой вкладки скрипту не видны — гейт оператора. Подробно — `docs/LAUNCH.md`.
 
+## Свежий проверяющий спеки
+До «принято» SPEC читает свежая сессия верхнего уровня, не субагент: свежий клон ветки выдачи во `/tmp/two-tier-v3`, только чтение, вердикт формой `REVIEW.md` (раздел «Спека до подписи») — в `docs/reviews/<фаза>-spec.md` со строкой `spec: <путь> @ <пин>`:
+
+`git clone -q --branch <ветка выдачи> <репо> /tmp/two-tier-v3/spec-review-<фаза> && cd /tmp/two-tier-v3/spec-review-<фаза> && env -u ANTHROPIC_API_KEY claude -p --model claude-opus-5-5 --permission-mode dontAsk --allowedTools "Read" "Bash(git log:*)" "Bash(git show:*)" "Bash(git hash-object:*)" "Bash(ls:*)" -- "Прочитай docs/SPEC-<n>.md по разделу «Спека до подписи» REVIEW.md и верни вердикт этой формы"`
+
 ## Деньги
 1. **Потолок проекта:** <€> — слово оператора и константа предохранителя.
 2. **Лимиты подписки:** планка на фазу исполнителя — <N> % недели (обычная фаза — 15 %, D4 two-tier-dev); исполнитель работает под ultracode, его веер воркфлоу ест лимиты быстрее. Плечо, плечо починки и `bin/verify-phase` стартуют при неделе не выше `window_seven_day_pct` (в ките 100 %, решение 398: чек печатает числа и не отказывает; проект ужесточает порог в `project`): это держит `bin/check-window` строки запуска, обход — флагом `--override` словом оператора. `/usage` до и после плеча записывает тимлид в STATUS; превышение — на ретро, ultracode сгоряча не выключается.
