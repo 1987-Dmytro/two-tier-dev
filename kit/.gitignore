@@ -1,0 +1,6 @@
+# per-machine files of a session, outside git (SPEC-v3.5 F2): the Code-tab profile (a copy of .claude/launch.settings.json)
+# and the mark of the phase session (the phase-start mod writes it, spec-gate and steer.sh read it)
+.claude/settings.local.json
+.claude/phase-session.json
+# handoff mod: handoffs written from the live transcript
+handoffs/

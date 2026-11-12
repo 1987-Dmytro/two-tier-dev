@@ -1,7 +1,7 @@
 {
   "name": "phase-start",
-  "version": "0.1.0",
-  "description": "/phase sends docs/PROMPT.txt as your message on the branch the phase names and refuses on another; /phase resume sends the Resume line of the open STOP; /phase halt writes AGENT_STOP.",
+  "version": "0.2.0",
+  "description": "/phase sends docs/PROMPT.txt as your message on the branch the phase names and refuses on another; /phase resume sends the Resume line of the open STOP; /phase halt writes AGENT_STOP; the session that sent the prompt is named in .claude/phase-session.json for spec-gate.",
   "author": {
     "name": "two-tier-dev"
   }

@@ -9,6 +9,10 @@
 // the call resolves only when that turn starts.
 // Registered everywhere, not under isInteractive: a host like the Code tab starts as the SDK does (false), and in a `claude -p` run the
 // command does nothing unless typed.
+// The mark of the phase session (SPEC-v3.5 F2): once the prompt or the Resume line went as the person's words, the session's id
+// ($.session.id(), the transcript file's name — the hook's session_id) is added to .claude/phase-session.json of the session root
+// (outside git); after /clear (classic.SessionStart, source clear) the new id is added when this process marked the one before. A fork
+// is never added. spec-gate and steer.sh only read the file. No file written: the hook judges such a session by its first words.
 
 import type { EngineInterface, Register } from 'claude-code'
 import { branchOf, resumeOf } from './text'
@@ -34,12 +38,49 @@ async function currentBranch($: EngineInterface, root: string): Promise<string> 
   }
 }
 
-async function submit($: EngineInterface, text: string): Promise<void> {
+export const MARK = '.claude/phase-session.json'
+
+// Adds the id to the mark; the file keeps the last 50 ids. A file that is not ours (not JSON) is written anew. true — written.
+export async function markSession($: EngineInterface, root: string, id: string): Promise<boolean> {
+  const path = `${root}/${MARK}`
+  let sessions: string[] = []
+  const old = await readOr($, path)
+  try {
+    const j = JSON.parse(old ?? '{}')
+    if (Array.isArray(j?.sessions)) sessions = j.sessions.filter((s: unknown): s is string => typeof s === 'string')
+  } catch {
+    /* not ours: written anew */
+  }
+  if (!sessions.includes(id)) sessions.push(id)
+  try {
+    await $.fs.write(path, `${JSON.stringify({ sessions: sessions.slice(-50), updated: new Date(await $.clock.now()).toISOString() }, null, 2)}\n`)
+    return true
+  } catch (err) {
+    $.ui.toast(`phase mark not written: ${reason(err)}`)
+    return false
+  }
+}
+
+type Marked = { id?: string }
+
+// submit, and the id it marked is the one /clear carries on.
+async function send($: EngineInterface, mark: Marked, text: string, root: string): Promise<void> {
+  mark.id = (await submit($, text, root)) ?? mark.id
+}
+
+// Sends the words as the person's; once they went, the session's id goes into the mark. undefined — not sent or not marked.
+async function submit($: EngineInterface, text: string, root: string): Promise<string | undefined> {
   try {
     const r = await $.prompt.submit({ text, asUser: true })
-    if (r.drop !== undefined) $.ui.toast(`not sent: ${r.drop}`)
+    if (r.drop !== undefined) return void $.ui.toast(`not sent: ${r.drop}`)
   } catch (err) {
-    $.ui.toast(`not sent: ${reason(err)}`)
+    return void $.ui.toast(`not sent: ${reason(err)}`)
+  }
+  try {
+    const id = await $.session.id()
+    return (await markSession($, root, id)) ? id : undefined
+  } catch (err) {
+    return void $.ui.toast(`phase mark not written: ${reason(err)}`)
   }
 }
 
@@ -54,6 +95,7 @@ async function halt($: EngineInterface, root: string): Promise<string> {
 
 export const register: Register = on => {
   let startDir: string | undefined
+  const mark: Marked = {} // the id this process marked last: /clear carries the mark to the next id; a reload starts over
   const sent = new Set<string>()  // immediate идёт и посреди хода: повтор той же команды не должен прийти словами оператора второй раз
 
   on('session.start', async ($, e, next) => {
@@ -65,6 +107,19 @@ export const register: Register = on => {
       immediate: true,
     })
     return next(e)
+  })
+
+  // /clear gives the session a new id: the phase goes on under it (SPEC-v3.5 F2.4). A fork and a resumed session are not added.
+  on('classic.SessionStart', async ($, e, next) => {
+    const result = await next(e)
+    if (e.source !== 'clear' || mark.id === undefined) return result
+    try {
+      const id = typeof e.session_id === 'string' && e.session_id ? e.session_id : await $.session.id()
+      if (id !== mark.id && (await markSession($, await $.session.root(), id))) mark.id = id
+    } catch {
+      /* no id: the hook judges the session by its first words */
+    }
+    return result
   })
 
   on('command.run', { command: 'phase' }, async ($, e) => {
@@ -84,12 +139,12 @@ export const register: Register = on => {
       if (/<[^<>]+>|\|/.test(line)) return refuse(`the Resume line has an unfilled <…> or | alternatives; type your answer to it: ${line}`)
       if (sent.has(line)) return refuse(`this Resume line already went in this session; type it if you mean it again: ${line}`)
       sent.add(line)
-      $.clock.after(0, () => submit($, line))
+      $.clock.after(0, () => send($, mark, line, root))
       return { text: `the Resume line goes as your message: ${line}` }
     }
     if (sent.has(prompt)) return refuse('docs/PROMPT.txt already went in this session; type it if you mean it again')
     sent.add(prompt)
-    $.clock.after(0, () => submit($, prompt))
+    $.clock.after(0, () => send($, mark, prompt, root))
     return { text: `docs/PROMPT.txt goes as your message, on branch ${wanted}.` }
   })
 }
