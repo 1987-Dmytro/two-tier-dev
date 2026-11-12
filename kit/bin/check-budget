@@ -113,8 +113,21 @@ def load_budgets(path="budgets.json"):
             new = {}
         if new:
             b.update(new)
+            KIT_NEW.update(new)
             out.append(("WARN", "budgets", f"ключей кита нет в budgets.json — {', '.join(sorted(new))}: взяты из {kit}; вносит тимлид"))
     return b, out
+
+
+KIT_NEW = set()  # ключи кита, взятые load_budgets из kit/budgets.json: их нет в budgets.json корня
+
+
+def rule_spec_copy(b):
+    """SPEC-v3.5 F9.1: копия скилла team-lead-spec у тимлида (docs/drafts/team-lead-spec.md) — не длиннее team_lead_spec_copy_chars.
+    Нет ключа или файла — строки нет; ключ взят из кита, а не из budgets.json корня, — WARN: ключ и ужатую копию вносит тимлид."""
+    f, key = "docs/drafts/team-lead-spec.md", "team_lead_spec_copy_chars"
+    if key not in b or not os.path.isfile(f):
+        return []
+    return [check(key, len(read(f)), b[key], f"{f}{', ключ кита — вносит тимлид' if key in KIT_NEW else ''}", "WARN" if key in KIT_NEW else "FAIL")]
 
 
 def phase():
@@ -561,10 +574,14 @@ VERDICT_PIN = re.compile(r"^spec:\s*(\S+)\s*@\s*([0-9a-f]{12})\s*$")  # F7: тр
 
 
 def issue_weight(spec, prompt):
-    """FAIL до выдачи; выданная SPEC или идущая фаза — WARN (правит тимлид); обрезанная история — WARN."""
+    """FAIL до выдачи; выданная SPEC, идущая фаза или evidence этой SPEC в HEAD (фаза была: так её видно и после слияния и правки тимлида — копия
+    клона telefon, SPEC-11) — WARN (правит тимлид); обрезанная история — WARN. Линты выдачи SPEC-v3.5: planka-early, basis-judge, spec-paths."""
     if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
         return "WARN", " (история git обрезана: выдана ли SPEC — не определить)"
-    return ("WARN", " (SPEC уже выдана: правит тимлид)") if issued(spec, prompt) or in_flight(spec, prompt) else ("FAIL", "")
+    if issued(spec, prompt) or in_flight(spec, prompt):
+        return "WARN", " (SPEC уже выдана: правит тимлид)"
+    ev = spec_evidence_in_head(spec)
+    return ("WARN", f" (фаза была: evidence этой SPEC в HEAD — {ev}; правит тимлид)") if ev else ("FAIL", "")
 
 
 def landing_tables(text):
@@ -716,7 +733,7 @@ def rule_spec_review(b):
     return [(weight, "spec-review", f"{spec} @ {pin}: нет PASS свежего проверяющего с этим пином — {why}{note}")]
 
 
-RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_risk, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide, rule_frozen,
+RULES = [rule_sizes, rule_spec_copy, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_risk, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide, rule_frozen,
          rule_planka_early, rule_basis, rule_spec_paths, rule_spec_review]
 
 
@@ -1400,6 +1417,23 @@ def lints():
     emit("F7.4", v74 and r74[0], f"zeile={'OK' if v74 else 'нет'} rot={'OK' if r74[0] else 'нет'} · {vor} · без строки проверяющего — «{r74[1][:160]}»")
     if all(ok_all[-4:]):
         print("SPEC_REVIEW_OK")
+
+    # F9.1 — копия team-lead-spec у тимлида не длиннее team_lead_spec_copy_chars: знаки, не байты; ключ из кита, а не из budgets.json корня, — WARN
+    key91 = "team_lead_spec_copy_chars"
+    lim91 = json.loads(read(f"{kroot}/budgets.json"))["defaults"].get(key91) or 8000
+
+    def copy_side(n, kit_key=False):
+        own = json.loads(budgets)
+        own["defaults"].pop(key91, None) if kit_key else own["defaults"].update({key91: lim91})
+        fs = {"budgets.json": json.dumps(own, ensure_ascii=False), "docs/drafts/team-lead-spec.md": "я" * n, ".abide/rubric.json": read(f"{kroot}/.abide/rubric.json")}
+        if kit_key:
+            fs["kit/budgets.json"] = json.dumps({"defaults": {**own["defaults"], key91: lim91}}, ensure_ascii=False)
+        rc_, lines = plain(fs)
+        return rc_, next((" ".join(l.split()) for l in lines if re.match(rf"(OK|WARN|FAIL) +{key91}:", l)), "нет строки")
+    over, at, kitw = copy_side(lim91 + 1), copy_side(lim91), copy_side(lim91 + 1, kit_key=True)
+    ok91 = over[0] == 1 and over[1].startswith(f"FAIL {key91}") and at[0] == 0 and at[1].startswith(f"OK {key91}") and kitw[1].startswith(f"WARN {key91}") and kitw[0] == 0
+    emit("F9.1", ok91, f"spec={over[1].split()[0]},{at[1].split()[0]} · ключ {key91} {lim91} в budgets.json: копия {lim91 + 1} знаков (кириллица — знаки, не байты) — rc {over[0]} «{over[1]}»; "
+                       f"{lim91} — rc {at[0]} «{at[1]}» · ключ только в kit/budgets.json — rc {kitw[0]} «{kitw[1]}»")
 
     cur = rule_planka(dict(b)) + rule_scope(dict(b)) + rule_planken(dict(b)) + rule_planka_early(dict(b)) + rule_basis(dict(b)) + rule_spec_paths(dict(b)) + rule_spec_review(dict(b))
     for s_, r_, m_ in cur:
