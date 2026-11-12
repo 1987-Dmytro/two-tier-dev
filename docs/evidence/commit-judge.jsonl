@@ -208,3 +208,5 @@
 {"ts": "2026-11-12T20:16:32Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F8-check-verify-result.txt"], "score": 0.1, "diff": "20b52759a04fab91", "ms": 962}
 {"ts": "2026-11-12T20:23:45Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.24, "diff": "13375a5aed9e6180", "ms": 1334}
 {"ts": "2026-11-12T20:29:41Z", "decision": "pass", "judge": "abide", "rule": "no-print-credential", "files": ["bin/gate-v3.5"], "score": 0.25, "diff": "3b7a16ec52f523d2", "ms": 2771}
+{"ts": "2026-11-12T20:44:38Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/gate-v3.5"], "score": 0.15, "diff": "dd31f93ca5ecd846", "ms": 1694}
+{"ts": "2026-11-12T20:50:28Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.1, "diff": "0f73c46585d7bd7c", "ms": 1075}

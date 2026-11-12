@@ -8,7 +8,7 @@ F4.1 rot=FAIL · bin/check-budget на фикстуре формы F58.1 — rc 
 F4.2 otchet=OK datei=OK · пункт с «отчёт:» — OK; «Отчёт:» с заглавной — OK; планка с файлом распределения — OK; ранняя без связи с пунктом — OK
 F4.3 vorlage=OK rot=OK · --templates шаблонов kit/ — rc 0, OK contract: kit/docs/SPEC.template.md: фраз 19, нет — ничег… · без строки в §2 SPEC — «FAIL contract: kit/docs/SPEC.template.md: фраз 19, нет — Пункт ранней планки — отчёт» · без строки в PLAN — «FAIL contract: kit/docs/PLAN.template.md: фраз 2, нет — Пункт ранней планки — отчёт»
 PLANKA_EARLY_OK
-F5.1 ohne=FAIL mit=OK · bin/check-budget на фикстуре — rc 1 «BUDGET_FAIL basis-judge» · без строки — FAIL; плейсхолдер шаблона — FAIL; строка вне §5 — FAIL; нет — OK; 2 из 3 — OK
+F5.1 ohne=FAIL mit=OK · bin/check-budget на фикстуре — rc 1 «BUDGET_FAIL basis-judge» · без строки — FAIL; плейсхолдер шаблона — FAIL; строка вне §5 — FAIL; правка тимлида после запроса, evidence этой SPEC в HEAD — WARN; та же правка без evidence — FAIL; нет — OK; 2 из 3 — OK
 F5.2 fehlt=FAIL vorlage=OK · bin/check-budget на фикстуре — rc 1 «BUDGET_FAIL spec-paths bin/nope» · путь вне HEAD — FAIL; цель make вне Makefile — FAIL; путь в запросе — FAIL · шаблон: --templates шаблонов kit/ — rc 0, «OK spec-paths: docs/SPEC-1.md, docs/PROMPT.txt: путей и целей make 0, все в HEAD, в «Новые пути:» или вне суда; ветка — »
 F5.3 ok=5/5 · путь из HEAD — OK; путь из «Новые пути:» — OK; шаблон <…> и * — OK; вне репо /tmp и ~ — OK; под .gitignore — OK · красные без условия: тот же путь вне HEAD — FAIL; без «Новые пути:» — FAIL; без <…> и * — FAIL; внутри репо — FAIL; без строки .gitignore — FAIL
 F5.4 spec11=4/4 · путь профиля — FAIL «profiles/tab-code-v2.json: profiles/tab-code-v2.json (docs/SPEC-1.md: нет в HEAD и в строке «Новые пути:»)»; файл ревью — FAIL «docs/reviews/2026-11-09-spec11.md: docs/reviews/2026-11-09-spec11.md (docs/SPEC-1.md: нет в HEAD и в строке «Н»; make <цель> --флаг — FAIL «make check-live --ab: make check-live --ab (docs/SPEC-1.md: make не принимает флаг после цели)»; запрос без branch <b> only|from — FAIL «ветка: ветка (docs/PROMPT.txt: не названа формой /phase — «branch <b> only» или «branch <b> from <c>»)»
@@ -18,10 +18,11 @@ F7.2 ohne=FAIL mit=OK · bin/check-budget на фикстуре — rc 1 «BUDGE
 F7.3 fail=3/3 evidence=WARN · NEEDS_WORK с её пином — FAIL; PASS с пином другой версии — FAIL; коммит после запроса без PASS — FAIL · evidence этой SPEC в HEAD — WARN
 F7.4 zeile=OK rot=OK · --templates шаблонов kit/ — rc 0 · без строки проверяющего — «FAIL contract: kit/docs/PROCESS.template.md: фраз 18, нет — claude -p --model claude-opus-5-5»
 SPEC_REVIEW_OK
+F9.1 spec=FAIL,OK · ключ team_lead_spec_copy_chars 8000 в budgets.json: копия 8001 знаков (кириллица — знаки, не байты) — rc 1 «FAIL team_lead_spec_copy_chars: docs/drafts/team-lead-spec.md 8001/8000»; 8000 — rc 0 «OK team_lead_spec_copy_chars: docs/drafts/team-lead-spec.md 8000/8000» · ключ только в kit/budgets.json — rc 0 «WARN team_lead_spec_copy_chars: docs/drafts/team-lead-spec.md, ключ кита — вносит тимлид 8001/8000»
 OK   planka-source: docs/SPEC-v3.5.md: планок 3, у всех файл распределения или «ранняя»
 OK   scope-growth: docs/SPEC-v3.5.md: фич на выдаче 9, сейчас 9, поправок: 0
 OK   planka-early: docs/SPEC-v3.5.md: ранних планок 3, связанных пунктов без «отчёт:» — нет
 OK   basis-judge: docs/SPEC-v3.5.md: строка «Судьи деплоя и регрессии, изменённые фазой, на базе:» в §5 — есть
-WARN spec-paths: bin/check-procs: bin/check-procs (docs/SPEC-v3.5.md: нет в HEAD и в строке «Новые пути:») (SPEC уже выдана: правит тимлид)
-WARN spec-review: docs/SPEC-v3.5.md @ 740ff1fda7f2: нет PASS свежего проверяющего с этим пином — docs/reviews/v3.5-spec.md: NEEDS_WORK @ 73ea6b9ed7ec — пин другой версии (фаза начата: evidence этой SPEC в HEAD — docs/evidence/F2-check-harness-result.txt)
+WARN spec-paths: kit/.claude/agents/evaluator.md, bin/check-procs: kit/.claude/agents/evaluator.md (docs/SPEC-v3.5.md: нет в HEAD и в строке «Новые пути:»); bin/check-procs (docs/SPEC-v3.5.md: нет в HEAD и в строке «Новые пути:») (SPEC уже выдана: правит тимлид)
+WARN spec-review: docs/SPEC-v3.5.md @ 740ff1fda7f2: нет PASS свежего проверяющего с этим пином — docs/reviews/v3.5-spec.md: NEEDS_WORK @ 73ea6b9ed7ec — пин другой версии (фаза начата: evidence этой SPEC в HEAD — docs/evidence/F1-check-kit-result.txt)
 BUDGET_LINT_OK
