@@ -184,6 +184,7 @@ const STOP_ONE = /^[ \t]*(?:[-*][ \t]*)?STOP:[ \t]*STOP-[A-Z]+\b/m
 const LIFTED = /[—–-]+\s*снят\S*\s*$/i
 const RESUME_LINE = /^[ \t]*(?:[-*][ \t]*)?\**Resume:\**[ \t]*(\S.*)$/i
 const CONTINUE_LINE = /^[ \t]*(?:[-*][ \t]*)?(Продолж[^?]*)$/i
+const RESUME_MARK = /(?:^|\s)\**Resume:\**[ \t]*\S/im  // the form check: a Resume line, or «Resume: …» after the question on its line — not the word alone
 function openStop(progress) {
   const sections = progress.split(/^(?=## )/m)
   const section = sections.find(s => s.startsWith('## Open stop')) ?? sections.find(s => !s.startsWith('## Closed') && STOP_ONE.test(s)) ?? ''
@@ -431,7 +432,7 @@ function decide(input, root, cfg, log) {
   if (open && !open.lifted) {
     const id = (open.line.match(/STOP:[ \t]*(STOP-[A-Z]+)/) || [])[1]
     if (!reasons.includes(id)) missing.push(`«STOP: ${id}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
-    else if (!(/\?(?![\w=&%])/.test(open.near) && /resume|продолж/i.test(open.near))) missing.push(`«STOP: ${id}» has no question (?) and resume line within the next three lines`)
+    else if (!(/\?(?![\w=&%])/.test(open.near) && (open.resume || RESUME_MARK.test(open.near)))) missing.push(`«STOP: ${id}» has no question (?) and resume line within the next three lines`)
     else {
       const at = stopCommit(root, open.line)
       const mark = at && `${at.slice(0, 12)}:${sha12(canon(open.line))}`
