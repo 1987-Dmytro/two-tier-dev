@@ -1,0 +1,9 @@
+spec: SPEC-v3.5
+$ bin/check-harness session
+источник харнеса: kit; строка запуска: docs/PROCESS.md; launch settings: .claude/launch.settings.json; разделы: session
+F2.2 neu=10/10 ohne=9/9 reset=0/6 alt=0/9 mut=block · головы checks/fixtures/telefon-spec11-transcript-heads.jsonl: ответвлений 9, после сброса 6, главная — block; метка — главная и сбросы, как пишет мод; служебная при метке — pass; хук v3.4 (6cd2177) — ответвления судит; мутант без правила ответвления — block
+F2.3 block=4/4 · файл метки называет другую сессию: запрос — block; Resume — block; хендофф — block; служебная без файла — block · красная: служебная при файле — pass «not the phase session: .claude/phase-session.json does not n»
+F2.5 steer=1,0,1 ignore=OK · сессия из метки — заметка есть; чужая при метке — нет, STEER.md остался — «заметка F2.5»; без метки — есть · git check-ignore .claude/phase-session.json: .gitignore кита (kit/.gitignore, его кладёт bin/two-tier-init) — rc 0, без него — rc 1
+F2.1 marke=0,1,1 mut=0,0,0 · хост вкладки (stream-json в обе стороны, без -p), копия мода phase-start — --plugin-dir, установленный выключен; до команды id в .claude/phase-session.json — 0; после /phase — 1; файл снят, после /phase resume (строка Resume ушла словами — 1) — 1; копия без записи метки — 0,0,0
+F2.4 clear=block mut=pass · хост, SPEC_GATE=shadow (решение пишется в журнал, ход не держится): /phase, /clear — conversation_reset 1, новый id — да, в метке — 1, конец хода после /clear — block «4 missing»; копия без записи на classic.SessionStart — pass «not the phase session: .claude/phase-session.json does not n», в метке — 0
+GATE_SESSION_OK
