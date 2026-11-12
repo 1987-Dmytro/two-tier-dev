@@ -210,3 +210,5 @@
 {"ts": "2026-11-12T20:29:41Z", "decision": "pass", "judge": "abide", "rule": "no-print-credential", "files": ["bin/gate-v3.5"], "score": 0.25, "diff": "3b7a16ec52f523d2", "ms": 2771}
 {"ts": "2026-11-12T20:44:38Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["bin/gate-v3.5"], "score": 0.15, "diff": "dd31f93ca5ecd846", "ms": 1694}
 {"ts": "2026-11-12T20:50:28Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.1, "diff": "0f73c46585d7bd7c", "ms": 1075}
+{"ts": "2026-11-12T20:53:07Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F4-budget-result.txt"], "score": 0.06, "diff": "062a68db1c83caec", "ms": 1458}
+{"ts": "2026-11-12T21:12:18Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.24, "diff": "972ec3ea3b304dee", "ms": 869}
