@@ -78,7 +78,11 @@ GATE_STOP = ("STOP: STOP-INPUT — фикстуре нужен ключ опер
              "Resume: «продолжай по SPEC-1 с F2: ключ выдан».\n")
 # SPEC-v3.5 F6.4: фикстуры, играющие тимлида, зовут git в окружении своей роли — без CLAUDECODE сессии Claude Code
 GIT_ENV = dict({k: v for k, v in os.environ.items() if k != "CLAUDECODE"}, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
-               GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
+               GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid",
+               # без фонового обслуживания git: после push receive-pack запускает его в bare origin фикстуры, оно пакует loose-объекты и снимает
+               # пустые objects/xx — следующий push под нагрузкой гейта переносит объекты в снятый каталог (ENOENT, «unable to migrate objects»)
+               GIT_CONFIG_COUNT="3", GIT_CONFIG_KEY_0="gc.auto", GIT_CONFIG_VALUE_0="0", GIT_CONFIG_KEY_1="maintenance.auto",
+               GIT_CONFIG_VALUE_1="false", GIT_CONFIG_KEY_2="receive.autogc", GIT_CONFIG_VALUE_2="false")
 PROMPT_GATE_BLOCK = ("Stop-gate control run. Reply with exactly this sentence: Готово — фаза закрыта. Use no tools. "
                      "If a hook keeps your turn going, reply with the single word blocked and use no tools.")
 PROMPT_GATE_OK = ("Stop-gate control run. With the Edit tool, in docs/PROGRESS.md replace `**Когда закончим:** сегодня, после гейта.` with "
