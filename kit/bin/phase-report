@@ -8,6 +8,8 @@
   · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
     отказы и отклонённые — поимённо, их читает тимлид;
   · пропуски spec-gate — строки docs/evidence/spec-gate.jsonl с решением pass и причиной (кап, no-progress, ошибка, AGENT_STOP, фон);
+  · слово оператора и тимлида (SPEC-v3.5 F6.5): коммиты «Оператор:» и «Тимлид:» плеча — sha, пути, слово; плечо — от первого коммита не «Тимлид:»
+    после последнего коммита стартового запроса (docs/PROMPT.txt): «Тимлид:» сразу за ним — выдача, не плечо;
   · метрики ретро (SPEC-v3.4 F5.4): кругов до PASS — по вердиктам этой SPEC docs/evidence/verify-<sha>[-F<n>…].txt в порядке истории; откатов деплоя — строки ROLLBACK_OK после выкатки на линию, по одной на выкатку,
     против деплоев на линию в docs/evidence/deploy-window.log; поправок объёма — строки «Поправка» §0 SPEC. Данных нет — нули;
   · ячейка Jev в тени: один вопрос `choice` на пункт — пункт против сырого вывода его пробы (`questions.item_status` в
@@ -84,6 +86,21 @@ def phase_commits():
         m = IDS.match(subj)
         out.append({"sha": sha, "subj": subj, "ids": re.findall(r"F\d+\.\d+", m.group(1)) if m else [], "tl": subj.startswith("Тимлид:")})
     return base[:7], out
+
+
+def words():
+    """[(вид, sha, [пути], слово)] — коммиты «Оператор:» и «Тимлид:» плеча (F6.5)."""
+    start = git("log", "-1", "--format=%H", "--", "docs/PROMPT.txt").strip()
+    raw = git("log", "--reverse", "--no-merges", "-z", "--name-only", "--format=%x01%h %s", f"{start}..HEAD" if start else "HEAD")
+    out, leg = [], False
+    for chunk in raw.split("\x01")[1:]:
+        head, _, names = chunk.partition("\0")
+        sha, _, subj = head.partition(" ")
+        kind = next((k for k in ("Оператор:", "Тимлид:") if subj.startswith(k)), None)
+        leg = leg or kind != "Тимлид:"
+        if leg and kind:
+            out.append((kind.rstrip(":"), sha, [n.strip("\n") for n in names.split("\0") if n.strip("\n")], subj[len(kind):].strip()))
+    return out
 
 
 def probes(spec):
@@ -224,6 +241,10 @@ def main(argv):
     L += ["", "## Пропуски spec-gate", "", f"Решений хука: {len(gate)} — блоков {sum(g.get('decision') == 'block' for g in gate)}, "
           f"OK {sum(g.get('decision') == 'ok' for g in gate)}, стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.", ""]
     L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- нет"]
+    said = words()
+    n_op, n_tl = sum(k == "Оператор" for k, *_ in said), sum(k == "Тимлид" for k, *_ in said)
+    L += ["", "## Слово оператора и тимлида", "", f"Коммитов плеча «Оператор:» — {n_op}, «Тимлид:» — {n_tl} (ожидается 0, кроме слова оператора в окне доводки SPEC §3).", ""]
+    L += [f"- `{sha}` · {k} · {', '.join(cell(x, 60) for x in paths[:3]) or '—'} · {cell(w, 120)}" for k, sha, paths, w in said] or ["- нет"]
     took, going = rounds(spec)
     n_rounds = max(took.values(), default=0)
     deploy_log = read("docs/evidence/deploy-window.log").splitlines()
@@ -246,7 +267,8 @@ def main(argv):
     with open("docs/evidence/phase-report.md", "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
     print(f"phase-report: docs/evidence/phase-report.md — пунктов {len(items)}, с пробой {len(items) - len(no_probe)}, без коммитов {len(no_commit)}, "
-          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}; кругов до PASS {n_rounds}, откатов {n_back} из {n_line}, поправок {n_amend}; Jev — {jev_note}")
+          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}; слово оператора {n_op}, тимлида {n_tl}; "
+          f"кругов до PASS {n_rounds}, откатов {n_back} из {n_line}, поправок {n_amend}; Jev — {jev_note}")
     return 0
 
 

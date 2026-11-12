@@ -9,6 +9,9 @@ Code rules — closed on refusal: exit 1 with the rule and the file, never the m
                        line under docs/evidence/ or in the message;
   team-lead-files      a staged path of the owner list (budgets.json at HEAD: defaults.owner and project.owner_add) in a commit whose
                        message does not start with «Тимлид:»;
+  team-lead-session    a commit «Тимлид:» from a Claude Code session (CLAUDECODE=1): the team lead commits from their own shell (SPEC-v3.5 F6);
+  operator-window      a commit «Оператор:» (bin/operator-word) with a staged path outside the finishing window of SPEC §3 at HEAD
+                       («Окно доводки: открыто `<путь>` · запас диффа <N>»), no window, or a diff (added + deleted lines) over the reserve;
   no-delete            a staged deletion — a file is retired with `git mv` into docs/archive/;
   frozen-paths         a staged path of a closed module (frozen.json) that the current SPEC does not open to the item ids of the
                        message, or a module diff over its diff_cap; «Тимлид:» does not pass code paths (SPEC-v3.4 F3.1, F3.2; judge —
@@ -78,6 +81,23 @@ def owner():
     return own + ["docs/PROMPT.txt"] if "docs/GOAL.txt" in own and "docs/PROMPT.txt" not in own else own
 
 
+WINDOW = re.compile(r"Окно доводки:\s*открыто\s+(.*?)\s*·\s*запас диффа\s+(\d+)")  # SPEC-v3.5 F6: та же строка, что читает bin/operator-word
+
+
+def op_window():
+    """([пути], запас) окна доводки §3 SPEC фазы в HEAD или None."""
+    m = re.search(r"^Read first:\s*([^,\s]+)", git("show", "HEAD:docs/PROMPT.txt"), re.M)
+    text = git("show", f"HEAD:{m.group(1)}") if m and re.fullmatch(r"(.*/)?SPEC-[^/]+\.md", m.group(1)) else ""
+    sec3 = re.search(r"^## 3\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    w = WINDOW.search(sec3.group(1)) if sec3 else None
+    paths = re.findall(r"`([^`\s]+)`", w.group(1)) if w else []
+    return (paths, int(w.group(2))) if paths else None
+
+
+def in_window(path, paths):
+    return any(path == w or (w.endswith("/") and path.startswith(w)) for w in paths)
+
+
 def is_tl(path, own):
     return any(path.startswith(e) if e.endswith("/") else fnmatch.fnmatchcase(path, e) for e in own)
 
@@ -114,15 +134,27 @@ def code_rules(msg, merging):
     for p, lines in added.items():
         if p.startswith("docs/evidence/") and private_in("\n".join(lines)):
             return "evidence-anonymized", p
-    own, tl = owner(), not msg.startswith("Тимлид:")
+    own, tl, op = owner(), not msg.startswith("Тимлид:"), msg.startswith("Оператор:")
+    if not tl and os.environ.get("CLAUDECODE") == "1":
+        return "team-lead-session", "the commit message"
+    win = op_window() if op else None
     for st, paths in staged():
         if merging and all(from_other_side(p, st == "D" or (st[:1] == "R" and p == paths[0])) for p in paths):
             continue  # слияние: эту правку судили там, где её сделали
         if st == "D":
             return "no-delete", paths[0]
+        if op:  # слово оператора — только пути окна доводки
+            out = next((p for p in paths if not (win and in_window(p, win[0]))), None)
+            if out:
+                return "operator-window", out
+            continue
         hit = next((p for p in paths if is_tl(p, own)), None)
         if tl and hit:
             return "team-lead-files", hit
+    if op and win:
+        n = sum(int(a) + int(d) for l in git("diff", "--cached", "--numstat").splitlines() for a, d, *_ in [l.split("\t")] if a.isdigit() and d.isdigit())
+        if n > win[1]:
+            return "operator-window", f"diff {n} lines over the window reserve {win[1]}"
     hit = frozen(msg)
     if hit:
         return "frozen-paths", f"{hit[0]} ({hit[1]})"
