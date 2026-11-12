@@ -370,11 +370,12 @@ test('a surface attached: past the budgets.json threshold the handoff is written
 })
 
 test('F1.4 above the threshold − 20: no second handoff', { options: { jev: 'off', minTurns: 0, autoClear: false } }, async ($, on) => {
-  const h = hostOf([50, 45, 30, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
+  // 25 and 20 — not below 40 − 20: no re-arm (a margin of 10 or `<=` would re-arm and hand off twice)
+  const h = hostOf([50, 45, 25, 20, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
   await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
-  await turns($, clock, h, 4)
+  await turns($, clock, h, 5)
   expect(handoffs(h)).toBe(1)
 })
 
