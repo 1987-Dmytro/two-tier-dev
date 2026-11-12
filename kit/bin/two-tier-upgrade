@@ -24,6 +24,7 @@ import io, json, os, shutil, subprocess, sys, tarfile, tempfile, time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]) or ".", ".."))
 KIT = os.path.join(ROOT, "kit") if os.path.isdir(os.path.join(ROOT, "kit", ".claude")) else ROOT
 IF_ABSENT = ["CLAUDE.md", "budgets.json"]          # файлы с фактами проекта: ставятся, только если их нет
+GITIGNORE = ".gitignore"  # v3.5, F9.4: строки кита дописываются в .gitignore проекта, его строки остаются; нет файла — ставится кита
 LS = ".claude/launch.settings.json"
 TL_IN_KIT = [LS, ".claude/spec-gate.json"]  # файлы тимлида: апгрейд их не пишет (плагины в LS — коммитом «Тимлид: …»)
 RUBRIC = ".abide/rubric.json"  # v3.3, F7.3: база рубрики кита — файл тимлида: нет в проекте — своим коммитом «Тимлид: …», есть — не трогается
@@ -33,7 +34,7 @@ TL_IF_ABSENT = {RUBRIC: "база рубрики кита: abide check суди�
 IN_PROJECT = KIT == ROOT and os.path.exists(os.path.join(ROOT, ".git"))  # копия скрипта в проекте: дерево вокруг — проект, не кит
 KIT_FILES = [] if IN_PROJECT else sorted(r for r in (os.path.relpath(os.path.join(d, f), KIT) for d, _, fs in os.walk(KIT)
                                                      if not {".git", "__pycache__"} & set(os.path.relpath(d, KIT).split(os.sep)) for f in fs)
-                                         if r not in IF_ABSENT + TL_IN_KIT + list(TL_IF_ABSENT))  # дерево кита, как у bin/two-tier-init
+                                         if r not in IF_ABSENT + TL_IN_KIT + list(TL_IF_ABSENT) + [GITIGNORE])  # дерево кита, как у bin/two-tier-init
 ACT = [".claude/hooks/abide.mjs", ".claude/hooks/toolgate-deny.mjs"]  # v3.3, F3.1: судьи на действие ушли из кита
 TL_RETIRED = [".claude/toolgate.yaml"]  # ушедший файл тимлида: в архив коммитом «Тимлид: …»
 RETIRED = [".claude/hooks/verify-gate.sh", ".claude/hooks/track-read.sh", ".claude/hooks/commit-on-stop.sh",
@@ -115,6 +116,13 @@ def upgrade(target):
                     continue
                 old.append(rel)
             copies.append((rel, src))
+        gi_kit = read(os.path.join(KIT, GITIGNORE)) if os.path.isfile(os.path.join(KIT, GITIGNORE)) else ""
+        gi_have = read(T(GITIGNORE)) if os.path.isfile(T(GITIGNORE)) else None
+        gi_need = [l for l in gi_kit.splitlines() if l.strip() and not l.startswith("#") and l not in (gi_have or "").splitlines()]
+        if gi_kit and gi_have is None:
+            texts.append((GITIGNORE, gi_kit))
+        elif gi_need:
+            texts.append((GITIGNORE, gi_have + ("\n" if gi_have and not gi_have.endswith("\n") else "") + "# two-tier-dev kit (two-tier-upgrade)\n" + "\n".join(gi_need) + "\n"))
         for rel in RETIRED:
             if os.path.isfile(T(rel)):
                 (tl_mv if rel in TL_RETIRED else tl_old if is_tl(rel) else old).append(rel)
@@ -370,15 +378,19 @@ def self_test():
     subprocess.run(["git", "clone", "-q", src, v31], env=ENV, check=True)
     g(v31, "remote", "remove", "origin")
     intent = "**S1** — оператор получает x\n"
-    goal = "Read first: docs/SPEC-1.md, docs/PROGRESS.md\n\nEND STATE (met when one holds):\n(A) F1 is closed.\n"
+    goal = "Read first: docs/SPEC-1.md, docs/PROGRESS.md\n\nEND STATE (met when one holds):\n(A) F1 is closed.\nBranch phase-1 only.\n"  # v3.5, F5.4: ветка формой /phase
     own = '{"version": 1, "rules": [{"id": "own-rule"}]}\n'  # своя рубрика тимлида проекта (F7.3): апгрейд её не трогает
     blob = intent.encode()
     pin = __import__("hashlib").sha1(b"blob %d\0" % len(blob) + blob).hexdigest()[:12]
-    spec1 = f"# SPEC-1\n\n**intent:** `intent/INTENT.md @ {pin}`\n\n- **F1 x** · оператор получает x · готово: x · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n"
+    spec1 = (f"# SPEC-1\n\n**intent:** `intent/INTENT.md @ {pin}`\n\n## 1. Дизайн\n- **Новые пути:** `bin/x`\n\n## 2. Фичи\n"  # v3.5: SPEC в форме выдачи — «Новые пути:», §5 судей на базе (F5)
+             "- **F1 x** · оператор получает x · готово: x · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n\n## 5. Артефакт закрытия\n"
+             "- Судьи деплоя и регрессии, изменённые фазой, на базе: нет.\n")
+    sblob = spec1.encode()
+    review = f"PASS\nблокирующих 0, named 0\nspec: docs/SPEC-1.md @ {__import__('hashlib').sha1(b'blob %d' % len(sblob) + bytes([0]) + sblob).hexdigest()[:12]}\n"  # v3.5, F7
     for rel, text in {"budgets.json": read(os.path.join(KIT, "budgets.json")), "intent/INTENT.md": intent, "docs/GOAL.txt": goal,
-                      "docs/SPEC-1.md": spec1, RUBRIC: own}.items():
+                      "docs/SPEC-1.md": spec1, "docs/reviews/1-spec.md": review, RUBRIC: own}.items():
         write(f"{v31}/{rel}", text)
-    g(v31, "add", "--", "budgets.json", "intent/INTENT.md", "docs/GOAL.txt", "docs/SPEC-1.md", RUBRIC)
+    g(v31, "add", "--", "budgets.json", "intent/INTENT.md", "docs/GOAL.txt", "docs/SPEC-1.md", "docs/reviews/1-spec.md", RUBRIC)
     g(v31, "commit", "-qm", "Тимлид: фаза 1 кита v3.1 — SPEC и стартовый запрос")
     r3 = run(v31)
     print("  прогон v3.1: " + " | ".join(r3.stdout.splitlines()))
@@ -453,7 +465,7 @@ def self_test():
         r31 = subprocess.run([sys.executable, f"{k31}/kit/bin/two-tier-upgrade", p31], env=ENV, capture_output=True, text=True)
         base31 = f"{fix}/p31-base"  # после апгрейда китом v3.1, до фазы: основа U-D
         shutil.copytree(p31, base31, symlinks=True)
-        phase = {"intent/INTENT.md": intent, "docs/GOAL.txt": goal, "docs/SPEC-1.md": spec1}
+        phase = {"intent/INTENT.md": intent, "docs/GOAL.txt": goal, "docs/SPEC-1.md": spec1, "docs/reviews/1-spec.md": review}
         def put_phase(d, msg):
             for rel, text in phase.items():
                 write(f"{d}/{rel}", text)
@@ -574,7 +586,7 @@ def self_test():
         subprocess.run(["bash", f"{kit_at(rev)}/bin/two-tier-init", d], env=ENV, capture_output=True, check=True)
         g(d, "add", "--", *g(d, "ls-files", "-o", "-z").stdout.split("\0")[:-1])
         g(d, "commit", "-qm", f"проект на ките {rev} (two-tier-init)")
-        ph = {"intent/INTENT.md": intent, prompt: goal, "docs/SPEC-1.md": spec1, "docs/PROGRESS.md": "# PROGRESS — фаза 1\n"}
+        ph = {"intent/INTENT.md": intent, prompt: goal, "docs/SPEC-1.md": spec1, "docs/reviews/1-spec.md": review, "docs/PROGRESS.md": "# PROGRESS — фаза 1\n"}
         for rel, text in ph.items():
             write(f"{d}/{rel}", text)
         g(d, "add", "--", *ph)
