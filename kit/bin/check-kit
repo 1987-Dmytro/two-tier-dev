@@ -1872,8 +1872,11 @@ def section_operator():
     rc, msg = opw(d, "docs/STATUS.md", "x", "s2\n")
     subj, files_ = sh(["git", "log", "-1", "--format=%s"], d)[1], sh(["git", "show", "--name-only", "--format=", "HEAD"], d)[1].split()
     ok62 = rc == 0 and subj == "Оператор: x" and read(f"{d}/docs/STATUS.md") == "s2\n" and files_ == ["docs/STATUS.md"]
+    da = op_project()  # свой проект: d дальше служит F6.4
+    rc_at, msg_at = opw(da, "docs/STATUS.md", "y", "a\nb\nc\nd\n")  # дифф ровно в запас (−s1 +4 = 5): не сверх запаса — коммит
+    ok62 = ok62 and rc_at == 0 and sh(["git", "log", "-1", "--format=%s"], da)[1] == "Оператор: y"
     p("F6.2", ok62, f"offen={'commit' if ok62 else 'нет'} · bin/operator-word docs/STATUS.md -m \"x\" (stdin «s2», окно `docs/STATUS.md` · запас 5) — rc {rc} «{msg[:120]}»; "
-                    f"HEAD «{subj}», пути {', '.join(files_) or '—'}")
+                    f"HEAD «{subj}», пути {', '.join(files_) or '—'}; дифф ровно в запас 5 — rc {rc_at} «{msg_at[:90]}»")
     # F6.3 — отказ, файл цел, коммита нет: путь вне окна, SPEC без окна, дифф сверх запаса
     def refused(dd, rel, word, text):
         before, h0 = read(f"{dd}/{rel}"), head_of(dd)
@@ -1904,7 +1907,7 @@ def section_operator():
         r = subprocess.run(cmd, env=sess, capture_output=True, text=True, timeout=900)
         out = r.stdout.splitlines()
         # суд модели без ключа или abide (CI) краснеет не от CLAUDECODE: его строки вне счёта, тогда и маркер с rc не судятся
-        nokey = [l.split()[0] for l in out if re.match(r"^\S+ FAIL: нет ключа", l)]
+        nokey = [l.split()[0] for l in out if re.match(r"^\S+ FAIL: нет (ключа|abide)", l)]
         bad = [l.split()[0] for l in out if (re.match(r"^\S+ FAIL: ", l) and l.split()[0] not in nokey) or (re.match(r"^[A-Z_]+_FAIL$", l) and not nokey)]
         fx[name] = (0 if nokey and not bad else r.returncode, bad, (None if nokey else "COMMIT_OK" in out) if "harness" in name else None, nokey)
     fix_ok = all(rc_ == 0 and not bad and mk is not False for rc_, bad, mk, _ in fx.values())
