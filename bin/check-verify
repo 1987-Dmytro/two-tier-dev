@@ -803,7 +803,7 @@ def f71(s, h, crep):
     src, launch = gate_sources()
     repo, tr = h.gate_fixture(src, launch, full=True, items=True, spec=h.GATE_SPEC_ITEMS.replace(AFTER, AFTER + " · risk: high"))
     gated = h.gate_run(repo, tr, "f71-label")[1].get("systemMessage", "")
-    probe("F7.1", high and low and plain and item and few and surv and live and lint and gated.startswith("SPEC_GATE_OK: features 2, items 4"),
+    probe("v3.4-F7.1", high and low and plain and item and few and surv and live and lint and gated.startswith("SPEC_GATE_OK: features 2, items 4"),
           f"high={'voll' if high and few else 'нет'} lint={'OK' if lint else 'нет'} · заглушка: high, 2 мутанта → {verdict('high_two')}, в запросе «at least 2 distinct» и шаг 3, minItems {minimum('high_two', 'verify:F1')}; "
           f"low → в запросе только шаги 1–2, minItems {minimum('high_two', 'verify:F2')}, «{line(rep('high_two'), '^- F2: ')[:40]}»; без метки — один мутант, minItems {minimum('all', 'verify:F1')}; метка в тексте пункта → {verdict('item_label')}, не high · "
           f"high, мало мутантов → {verdict('high_one')} «{short['high_one'][:60]}»; два одинаковых → «{short['high_dup'][7:40]}»; один пропущен → «{short['high_skip'][7:40]}»; выживший → «{line(rep('high_green'), 'мутация выжила')[:50]}» · "
@@ -851,7 +851,7 @@ def f72(s, h, prior_side, prep):
         and "F2: blocking in the" in gate_block.get("reason", "") and "- F1:" not in gate_block.get("reason", "")
     live = "прошлый вердикт verify-0000000-F1.txt; " in by_feature(prep) and prep.startswith("VERDICT: ") and second(prep).startswith("КЛАССЫ: блокирующих ")
     prior_ok, prior_text = prior_side
-    probe("F7.2", prior_ok and fed and repeat and over_keys and no_scratch and fresh_ok and shape and klasse and gated and live,
+    probe("v3.4-F7.2", prior_ok and fed and repeat and over_keys and no_scratch and fresh_ok and shape and klasse and gated and live,
           f"prior={'OK' if prior_ok and fed else 'нет'} klasse={'OK' if klasse else 'нет'} · {prior_text} · заглушка: повтор выжившего — «{rep_line[:50]}…{rep_line[-34:]}»; пункта — «{line(rep('prior_item'), 'F1.2')[-34:]}»; судьи — «{line(rep('judge_rep'), 'дефисы')[-34:]}»; шестой и дальше по ключу — «{line(rep('prior_more'), 'F1.2')[-34:]}», ключ в запросе проверяющего — {'нет' if over_keys else 'есть'}; mktemp в запросах — {'нет' if no_scratch else 'есть'}; "
           f"без пометки — другой файл, другой пункт, прошлый PASS, судья без флага, судья без прошлого, нет прошлого: «повтор (» {'есть' if not fresh_ok else 'нет'}; "
           f"args строкой JSON → {calls('json_str')}; только prior → {calls('prior_all')} · вторая строка: «{second(rep('all'))}»; «{second(rep('prior_rep'))}»; «{second(rep('mix'))}» · "
@@ -883,7 +883,7 @@ def f73(live, s):
     criterion = eval_caught(report("NEEDS_WORK", item), case) and eval_caught(rep("holds_false"), case) and not any(eval_caught(v, case) for v in not_caught.values())
     item_line = lambda k: line(live[k][4], rf"^- \*\*{case['item']}")[:90]
     show = lambda k: f"rc {live[k][2]}, «{live[k][4].splitlines()[0] if live[k][4] else 'нет файла'}», «{item_line(k)}» → {mark[k]}"
-    probe("F7.3", res["eval"] and not res["eval-clean"] and measured and criterion,
+    probe("v3.4-F7.3", res["eval"] and not res["eval-clean"] and measured and criterion,
           f"eval={int(res['eval'])}/1 · с мутантом ({case['mutant']['file']}, пауза {paused['eval']} мс): {show('eval')} · без мутанта (пауза {paused['eval-clean']} мс): {show('eval-clean')} · "
           f"критерий на образцах: пункт кейса в блокирующих с причиной «свой прогон не подтвердил» — поимка {'да' if criterion else 'нет'}; не поимка: {', '.join(not_caught)}")
 
@@ -989,7 +989,7 @@ def f74():
         ("новый файл в новом подкаталоге", after_gate("mkdir docs/evidence/n; echo x > docs/evidence/n/a.txt", "docs/evidence/n/a.txt")),
     ]
     clone_ok = all(c[1][0] for c in clone_sides)
-    probe("F7.4", gate_ok and ev_ok and un_ok and clone_ok, f"detached={'SKIP' if gate_ok else 'нет'} · без ветки: rc {drc} «{dout}» · на ветке, голый скрипт: rc {brc} «{' ⏎ '.join(bout.splitlines())[-110:]}» · evidence: "
+    probe("v3.4-F7.4", gate_ok and ev_ok and un_ok and clone_ok, f"detached={'SKIP' if gate_ok else 'нет'} · без ветки: rc {drc} «{dout}» · на ветке, голый скрипт: rc {brc} «{' ⏎ '.join(bout.splitlines())[-110:]}» · evidence: "
           + "; ".join(f"{n} — {'; '.join(r[1]) or 'молчит'}" for n, r, _ in got)
           + f" · файл не читается: чек rc {un_made[0]}, результат {'есть' if un_made[2] else 'нет'}; следующий чек rc {un_next[0]}, результат {'есть' if un_next[2] else 'нет'} · гейт в клоне лаунчера: "
           + "; ".join(f"{n} — rc {c[1]}, {'; '.join(c[2]) or 'молчит'}" for n, c in clone_sides))

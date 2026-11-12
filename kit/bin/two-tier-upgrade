@@ -621,7 +621,7 @@ def self_test():
             ok34 &= good and redok
             sides.append(f"{name}: до — {len(red)} FAIL «{'; '.join(red)}»"
                          + (f" (китом v3.2 rc {r32.returncode})" if d == q31r else "") + f"; после — {raw}")
-        print(f"F3.4 {'' if ok34 else 'FAIL: '}" + " · ".join(sides))
+        print(f"v3.3-F3.4 {'' if ok34 else 'FAIL: '}" + " · ".join(sides))
         ok &= ok34
         write(f"{pj}/.githooks/pre-commit", "#!/bin/sh\necho 'судья проекта: отказ (фикстура)' >&2\nexit 1\n")
         os.chmod(f"{pj}/.githooks/pre-commit", 0o755)

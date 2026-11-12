@@ -12,9 +12,9 @@
 Разделы v3.4: frozen (F3: замок, паспорт, регрессия в деплое, апгрейд клона telefon — FROZEN_OK), fenster (F4: окно деплоя, живой канал, канарейка,
 шаблоны — FENSTER_OK), graph (Graphify: `.githooks/post-commit`, первая сборка bin/two-tier-init, отчёт апгрейда, живой прогон при CLI в PATH — GRAPH_OK), paar (F5: пара одного часа, планка звена вендора, журнал bin/verify-phase, метрики bin/phase-report, окно без ключа недели — PAAR_OK); с именем раздела идёт только он, без имени — всё.
 mods (F9: мод mods/spec-board — `claude plugin validate|test`, названные тесты фикстуры 2/1/1 и 1/1/2, -p и подагенты без рисования, без модели и
-сети, строка в marketplace, строка шаблона Environment и профиль кита — MODS_OK); не репо кита или нет claude в PATH — строки `F9.<k> offen`, маркера нет, код 0.
-Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — F3.5 не гонялся: строка `F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
-F5.3 закрывается замером: n ≥ 2 на обеих сторонах пары ≤2.1.316 и ≥2.1.318 в docs/evidence/verify-runs.jsonl; меньше или журнала нет — строка `F5.3 offen n=<k> fon=<m>`, PAAR_OK печатается (SPEC-v3.4 §4). Судит и считается только дошедший прогон (status completed): дольше своего лимита (limit строки; в старой строке его нет — лимит bin/verify-phase) — FAIL; упавший запуск — не замер, VERIFY_TIMEOUT — счётчик timeout=<k>.
+сети, строка в marketplace, строка шаблона Environment и профиль кита — MODS_OK); не репо кита или нет claude в PATH — строки `v3.4-F9.<k> offen`, маркера нет, код 0.
+Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — v3.4-F3.5 не гонялся: строка `v3.4-F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
+F5.3 закрывается замером: n ≥ 2 на обеих сторонах пары ≤2.1.316 и ≥2.1.318 в docs/evidence/verify-runs.jsonl; меньше или журнала нет — строка `v3.4-F5.3 offen n=<k> fon=<m>`, PAAR_OK печатается (SPEC-v3.4 §4). Судит и считается только дошедший прогон (status completed): дольше своего лимита (limit строки; в старой строке его нет — лимит bin/verify-phase) — FAIL; упавший запуск — не замер, VERIFY_TIMEOUT — счётчик timeout=<k>.
 """
 import json, os, re, shutil, subprocess, sys, tempfile, time
 
@@ -322,7 +322,7 @@ def section_frozen():
     cp += [fz_rc(0, "«Тимлид:» чинит замок", set_lock(d, {"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}})),
            fz_rc(0, "после починки", commit(d, "F1.1: x", "src/demo/x.py", "x\n"))]
     (vb_ok, vb_raw), (of_ok, of_raw), (cp_ok, cp_raw), (ci_ok, ci_raw) = fz_join(vb), fz_join(of), fz_join(cp), fz_join(ci)
-    probe("F3.1", vb_ok and of_ok and cp_ok and ci_ok, f"verboten={'OK' if vb_ok else 'нет'} offen={'OK' if of_ok else 'нет'} cap={'OK' if cp_ok else 'нет'} · запрет: {vb_raw} · открыто: {of_raw} · предел: {cp_raw} · CI: {ci_raw}")
+    probe("v3.4-F3.1", vb_ok and of_ok and cp_ok and ci_ok, f"verboten={'OK' if vb_ok else 'нет'} offen={'OK' if of_ok else 'нет'} cap={'OK' if cp_ok else 'нет'} · запрет: {vb_raw} · открыто: {of_raw} · предел: {cp_raw} · CI: {ci_raw}")
     # F3.2 — «Тимлид:» замок кода не обходит (K79)
     lock = {"basis": None, "module": {"demo": demo(pfade=["src/demo/", "docs/DEMO.md"])}}
     opened = {"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]}, pfade=["src/demo/", "docs/DEMO.md"])}}
@@ -376,7 +376,7 @@ def section_frozen():
     d = project({"basis": "0000000", "module": {"demo": demo()}}, extra={"budgets.json": no_own})
     tl.append(fz_rc(0, "«Тимлид:» чинит basis замка, строки в owner нет", commit(d, "Тимлид: замок", "frozen.json", json.dumps(lock, ensure_ascii=False))))
     tl_ok, tl_raw = fz_join(tl)
-    probe("F3.2", tl_ok, f"tl={'OK' if tl_ok else 'нет'} · {tl_raw}")
+    probe("v3.4-F3.2", tl_ok, f"tl={'OK' if tl_ok else 'нет'} · {tl_raw}")
     # F3.3 — паспорт: расхождение без <МОДУЛЬ>_OFFEN → DEPLOY_FAIL step=passport
     passport = {"file": "docs/DEMO.md", "fingerprints": {"src": ["src/demo/"]}}
     lock = {"basis": None, "module": {"demo": demo(passport={"file": "docs/DEMO.md", "fingerprints": {"src": ["src/demo/"], "texte": ["docs/texte.md"]}})}}
@@ -448,7 +448,7 @@ def section_frozen():
     put(d, "src/demo/a.py", "a = 2\n")
     op += [fz_rc(0, "SPEC — первая запись SPEC-*.md, DEMO_OFFEN=SPEC-2", check(d, DEMO_OFFEN="SPEC-2"), "PASSPORT_OFFEN"), fz_rc(1, "DEMO_OFFEN=SPEC-1 из чужого имени", check(d, DEMO_OFFEN="SPEC-1"), "PASSPORT_FAIL")]
     (ps_ok, ps_raw), (op_ok, op_raw) = fz_join(ps), fz_join(op)
-    probe("F3.3", ps_ok and op_ok, f"pass={'OK' if ps_ok else 'нет'} offen={'OK' if op_ok else 'нет'} · паспорт: {ps_raw} · открыто: {op_raw}")
+    probe("v3.4-F3.3", ps_ok and op_ok, f"pass={'OK' if ps_ok else 'нет'} offen={'OK' if op_ok else 'нет'} · паспорт: {ps_raw} · открыто: {op_raw}")
     # F3.4 — шаг regress: DEPLOY_OK только после REGRESS_OK; судится stdout, stderr идёт мимо
     d = project({"basis": None, "module": {}})
     red = lambda label, got, step="regress": (got[0] == 1 and f"DEPLOY_FAIL step={step}" in got[1] and "DEPLOY_OK" not in got[1], f"{label} — rc {got[0]} «{tail(got[1])}»")
@@ -466,14 +466,14 @@ def section_frozen():
                              red("нет REGRESS_CMD и Makefile", sh(["bash", "scripts/deploy.sh"], d, env=no_regress)),
                              red("DEPLOY_CMD=false", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false")), "rollout"),
                              red("DEPLOY_CMD=exit 3", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="exit 3")), "rollout")])
-    probe("F3.4", two == 2 and rg_ok, f"regress={two}/2 · REGRESS_OK — rc {a[0]} «{tail(a[1], 2)}» · REGRESS_FAIL — rc {b[0]} «{tail(b[1], 2)}» · {rg_raw}")
+    probe("v3.4-F3.4", two == 2 and rg_ok, f"regress={two}/2 · REGRESS_OK — rc {a[0]} «{tail(a[1], 2)}» · REGRESS_FAIL — rc {b[0]} «{tail(b[1], 2)}» · {rg_raw}")
     # F3.5 — апгрейд копии клона telefon: замок и хук работают, bin/check-budget проекта зелёный; нет клона или не репо кита — offen и без маркера
     clone = os.environ.get("TELEFON_CLONE", f"{TMP}/telefon-src")
     up = os.path.abspath(f"{root}/bin/two-tier-upgrade")
     upgrade = lambda *a: sh([up, *a], os.getcwd(), env=dict(os.environ))
     skipped = root != "kit" or not os.path.isdir(f"{clone}/.git")
     if skipped:
-        probe("F3.5", True, f"telefon=offen · {'не репо кита' if root != 'kit' else 'клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src (ветка linie-1)'}")
+        probe("v3.4-F3.5", True, f"telefon=offen · {'не репо кита' if root != 'kit' else 'клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src (ветка linie-1)'}")
     else:
         d = fz_copy(clone)
         head0 = head(d)
@@ -506,7 +506,7 @@ def section_frozen():
         ok = (dash[0] == 2 and "--branch" in dash[1] and same_branch[0] == 1 and "--branch" in same_branch[1] and rc_up == 0 and c1[0] == 1 and src_file in c1[1] and c2[0] == 1 and c3[0] == 0 and c4[0] == 0 and c5[0] == 1 and "frozen.json" in c5[1] and c6[0] == 1 and "checks/planken.json" in c6[1]
               and rc_b == 0 and text_b.splitlines()[-1] == "BUDGET_OK" and frozen_line.startswith("OK") and "FROZEN_DIFF_OK" in frozen_line and list(lock_ok["module"]) == ["telefon", "backoffice", "command-center"]
               and rc_ph == 1 and past_line.startswith("FAIL") and "FROZEN_DIFF_FAIL" in past_line and src_file in past_line and rc_abs == 0 and installed and subject.startswith("Тимлид: frozen.json"))
-        probe("F3.5", ok, f"telefon={'OK' if ok else 'нет'} · копия клона, {spec_now.group(1) if spec_now else '?'}; --branch -x — rc {dash[0]}; без --branch при разошедшейся kit-v3 — rc {same_branch[0]}; --branch kit-v3.4 — rc {rc_up} «{tail(text_up)[:90]}»; модули {', '.join(lock_ok['module'])} — замок проекта цел; "
+        probe("v3.4-F3.5", ok, f"telefon={'OK' if ok else 'нет'} · копия клона, {spec_now.group(1) if spec_now else '?'}; --branch -x — rc {dash[0]}; без --branch при разошедшейся kit-v3 — rc {same_branch[0]}; --branch kit-v3.4 — rc {rc_up} «{tail(text_up)[:90]}»; модули {', '.join(lock_ok['module'])} — замок проекта цел; "
               f"коммит в код модуля без offen — rc {c1[0]} «{c1[1][:110]}»; «Тимлид:» туда же — rc {c2[0]}; пункт фичи из offen — rc {c3[0]}; в docs/ — rc {c4[0]}; без «Тимлид:» в замок — rc {c5[0]}, в планки — rc {c6[0]}; bin/check-budget проекта — rc {rc_b} «{frozen_line[:100]}» {tail(text_b)}; коммит мимо хука: rc {rc_ph} «{past_line[:110]}»; "
               f"копия без frozen.json: апгрейд — rc {rc_abs}, замок {'поставлен' if installed else 'не поставлен'}, коммит «{subject[:70]}»")
     green = all(sec) and len(sec) == 5
@@ -715,7 +715,7 @@ def section_fenster():
     ro = fresh()
     ro_red = sh(["bash", "scripts/deploy.sh"], ro, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false", DEPLOY_LINIE="1"))
     ro_win = window(ro)
-    sides_line("F4.1", [("zeile", "строка отката", zeile, f"первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт её «{tail(fail_line[1], 2)}»"),
+    sides_line("v3.4-F4.1", [("zeile", "строка отката", zeile, f"первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт её «{tail(fail_line[1], 2)}»"),
                         ("zeile", "S7 красная выкатка", rollout[0] == 1 and says(rollout, w0) and "DEPLOY_FAIL step=rollout" in rollout[1], raw(rollout, 2)),
                         ("zeile", "E6 единственный sha второй раз", prints(h_only) == "none" and "rollback=none" in h_only[1], raw(h_only, 2)),
                         ("zeile", "следующий деплой", says(h_next, s0) and f"rollback={s0}" in h_next[1], raw(h_next, 2)),
@@ -830,7 +830,7 @@ def section_fenster():
               ("журнала окна нет — строка его не создаёт", no_window[0] == 0 and no_window[1].splitlines()[-1] == "LIVE_OK" and not os.path.exists(f"{no_deploy}/docs/evidence/deploy-window.log"), raw(no_window)),
               ("E3 E15 шапка судьи", "LIVE_SEIT" in live_text and "не пересекаются" in live_text, "названо" if "LIVE_SEIT" in live_text else "нет")]
     missed = [f"{n}: rc {r[0]} «{tail(r[1], 2, 120)}» ≠ {w}" for n, r, w in results if (n, r, w) not in hits] + [n for n, ok, _ in extras if not ok]
-    probe("F4.2", not missed,
+    probe("v3.4-F4.2", not missed,
           f"fixturen={len(hits) + sum(bool(x[1]) for x in extras)}/{len(results) + len(extras)} · " + "; ".join(f"{n} — {tail(r[1], 1, 70)}" for n, r, _ in results[:4]) + " · …; " + "; ".join(f"{n} — {tail(r[1], 2, 120)}" for n, r, _ in results[11:15])
           + " · …; " + "; ".join(f"{n} — rc {r[0]} {tail(r[1], 1, 60)}" for n, r, _ in results[21:]) + " · " + "; ".join(f"{n} — {x}" for n, _, x in extras) + (f" · НЕ СОШЛОСЬ: {'; '.join(missed)}" if missed else ""))
     # F4.3 — канарейка: письмо OK|GELB|ROT, эталон красный → ROT, весь процесс ≤ 60 с
@@ -882,7 +882,7 @@ def section_fenster():
     is_rot = lambda x, grund: x[0] == 1 and x[2] == ["Fixtur Kontrolle: ROT"] and f"CANARY_ROT grund={grund}" in x[1] and "Traceback" not in x[1]
     is_green = lambda x, state: x[0] == 0 and x[2] == [f"Fixtur Kontrolle: {state}"] and "CANARY_OK" in x[1] and ("GELB p95>3200" in x[1]) == (state == "GELB")
     brief = lambda x: f"rc {x[0]} «{tail(x[1], 1, 70)}» {x[2]}"
-    sides_line("F4.3", [*[("rot", n, is_rot(x, g), brief(x)) for n, x, g in red_runs],
+    sides_line("v3.4-F4.3", [*[("rot", n, is_rot(x, g), brief(x)) for n, x, g in red_runs],
                         ("rot", "повис", is_rot(hang, "timeout") and hang[3] < 10, f"{brief(hang)} за {hang[3]:.0f} с"),
                         *[("gruen", n, is_green(x, s), brief(x)) for n, x, s in green_runs],
                         ("gruen", "письмо не ушло", dead[0] == 0 and "CANARY_BRIEF_FEHLER" in dead[1], raw(dead, 1, 40)),
@@ -943,7 +943,7 @@ def section_fenster():
     edited("S28 строка 0 ждёт FENSTER_ROT", gate_t, lambda t: t.replace("`FENSTER_GRUEN …`", "`FENSTER_ROT …`"))
     ok_t = green_t[0] == 0 and green_t[1].splitlines()[-1] == "BUDGET_OK" and control[0] == 0
     ok_r = all(r[0] == 1 and "BUDGET_FAIL" in r[1] and ("FAIL contract" in r[1] or "FAIL templates" in r[1]) for r in reds.values()) and named_ok
-    probe("F4.4", ok_t and ok_r, f"templates={'OK' if ok_t else 'нет'} rot={'OK' if ok_r else 'нет'} · кит — {tail(green_t[1])}, копия без правки — {tail(control[1])} · красных {sum(r[0] == 1 for r in reds.values())}/{len(reds)}, без красной стороны: {', '.join(k for k, r in reds.items() if r[0] != 1) or 'нет'}, снятая фраза названа в FAIL — {named_ok} · без строки: " + ", ".join(f"{k} — rc {r[0]}" for k, r in reds.items())
+    probe("v3.4-F4.4", ok_t and ok_r, f"templates={'OK' if ok_t else 'нет'} rot={'OK' if ok_r else 'нет'} · кит — {tail(green_t[1])}, копия без правки — {tail(control[1])} · красных {sum(r[0] == 1 for r in reds.values())}/{len(reds)}, без красной стороны: {', '.join(k for k, r in reds.items() if r[0] != 1) or 'нет'}, снятая фраза названа в FAIL — {named_ok} · без строки: " + ", ".join(f"{k} — rc {r[0]}" for k, r in reds.items())
           + f"; «{next((l for l in reds['окно'][1].splitlines() if l.startswith('FAIL')), '')[:110]}»")
     print("FENSTER_OK" if all(sec) and len(sec) == 4 else "FENSTER_FAIL", flush=True)
     return all(sec) and len(sec) == 4
@@ -1216,7 +1216,7 @@ def section_paar():
     brief = lambda r: f"rc {r[0]} «{last(r[1])[:90]}»"
     is_pair = lambda r, rc, head: r[0] == rc and last(r[1]).startswith(head) and r[2] == alternating
     no_run = lambda r: r[0] == 1 and last(r[1]).startswith("PAIR_FAIL") and not r[2] and "PAIR_RULE" not in r[1]
-    row("F5.1", (("gleich", "OK"), ("rot", "FAIL")), [
+    row("v3.4-F5.1", (("gleich", "OK"), ("rot", "FAIL")), [
         ("gleich", "один код", is_pair(same, 0, "PAIR_OK diff_p50=0 diff_p95=0 ") and order == alternating, f"{brief(same)}, прогоны {' '.join(same[2])}, bash {vfy.split('(')[0]}"),
         ("gleich", "правило до первого прогона", same[4] == "1" and "PAIR_RULE diff_p50 ≤ 300 мс, diff_p95 ≤ 500 мс" in same[1], f"PAIR_RULE в выводе при первом прогоне: {same[4] or 'нет'}"),
         ("gleich", "ровно порог", is_pair(edge, 0, "PAIR_OK diff_p50=300 diff_p95=300 "), brief(edge)),
@@ -1286,7 +1286,7 @@ def section_paar():
     moved_s5 = tpl("s5", lambda x: "\n".join(l for l in x.split("\n") if needle not in l).replace("## 5", f"## 5\n{next((l for l in x.split(chr(10)) if needle in l), '')}\n", 1))
     contract_line = lambda r: next((l for l in r[1].splitlines() if "docs/SPEC.template.md" in l and "contract" in l), "нет строки contract")[:110]
     t_red = lambda r: r[0] == 1 and needle in contract_line(r) and "FAIL" in contract_line(r)
-    row("F5.2", (("vorlage", "OK"),), [
+    row("v3.4-F5.2", (("vorlage", "OK"),), [
         *[("vorlage", f"звено вендора, {n}", l.startswith("OK"), l[:60]) for n, l in good],
         *[("vorlage", f"звено вендора, {n}", l.startswith("FAIL") and w in l, l[l.find("—") + 2:][:90]) for n, w, l in bad],
         ("vorlage", "--templates на ките", green_t[0] == 0 and "BUDGET_OK" in green_t[1], f"rc {green_t[0]} «{last(green_t[1])[:40]}»"),
@@ -1379,7 +1379,7 @@ def section_paar():
                 ("битые строки журнала — не прогоны", broken[:3] == ("done", 2, 7), f"{broken[0]} n={broken[1]}"),
                 ("журнала нет", absent[:3] == ("offen", 0, 0) and runs_word(*absent[:3]) == "offen n=0 fon=0", runs_word(*absent[:3]))]
     missed = [s[0] for s in ok_sides if not s[1]]
-    probe("F5.3", live_state != "rot" and not missed, f"{runs_word(live_state, live_k, live_m)} · {live_raw} · " + "; ".join(f"{s[0]} — {s[2]}" for s in ok_sides) + (f" · НЕ СОШЛОСЬ: {', '.join(missed)}" if missed else ""))
+    probe("v3.4-F5.3", live_state != "rot" and not missed, f"{runs_word(live_state, live_k, live_m)} · {live_raw} · " + "; ".join(f"{s[0]} — {s[2]}" for s in ok_sides) + (f" · НЕ СОШЛОСЬ: {', '.join(missed)}" if missed else ""))
     # F5.4 — три числа ретро в отчёте; данных нет — нули; разница чисел ловит мутацию счёта
     spec_tpl = lambda *lines: "# SPEC\n\n## 0. Контекст\n" + "".join(l + "\n" for l in lines) + "\n## 2. Фичи\n- **F1 x** · готово: F1.1\n  - `F1.1` проба\n\n## 3. Инварианты\nПоправка 9: слово оператора 01.01.2026 — вне §0.\n"
     verdict = lambda v_, feats, block=(), spec="docs/SPEC-2.md": f"VERDICT: {v_}\nFEATURES: {feats}\n/verify-phase · {spec} · HEAD x\n\n## Блокирующие\n" + "".join(f"- **{b}: дефект**\n" for b in block) + "\n## Named, not built\n- **F9: не блокирует**\n"
@@ -1425,7 +1425,7 @@ def section_paar():
     with open(f"{back_p}/docs/evidence/deploy-window.log", "a", encoding="utf-8") as fh:
         fh.write("DEPLOY_OK sha=d linie=1 rollback=a\nDEPLOY_FAIL step=args sha=e\nROLLBACK_OK sha=a sekunden=0\n")
     no_linie = rep(back_p)
-    row("F5.4", (("metriken", "3"),), [
+    row("v3.4-F5.4", (("metriken", "3"),), [
         ("metriken", "фикстура", base_r[0] == 0 and base_r[1].startswith("Кругов до PASS: 2 (F1 2, F2 1; без PASS: F3 — 1)") and base_r[2] == "Откатов деплоя: 1 из 3" and base_r[3] == "Поправок объёма: 2"
          and "кругов до PASS 2, откатов 1 из 3, поправок 2" in base_r[4], show(base_r)),
         ("metriken", "ещё один NEEDS_WORK", more_round[1].startswith("Кругов до PASS: 3 (F1 3,"), more_round[1]),
@@ -1467,7 +1467,7 @@ def section_paar():
     no_num, no_ev, no_field, no_empty, no_login = wnd({"seven_day": {}}), wnd(False), wnd(None), wnd({}), wnd(error="Not logged in")
     w_brief = lambda r: f"rc {r[0]} «{tail(r[1], 2, 110)}»"
     refused = lambda r, why: r[0] == 1 and "WINDOW: refuse" in r[1] and why in r[1] and warn not in r[1]
-    row("F5.5", (("fehlt", "WARN"),), [
+    row("v3.4-F5.5", (("fehlt", "WARN"),), [
         ("fehlt", "ключа нет", fehlt_a[0] == 0 and warn in fehlt_a[1] and last(fehlt_a[1]) == "WINDOW: start", w_brief(fehlt_a)),
         ("fehlt", "только окно 5 ч, 99 %", fehlt_b[0] == 0 and warn in fehlt_b[1] and last(fehlt_b[1]) == "WINDOW: start", w_brief(fehlt_b)),
         ("fehlt", "ключа нет, --override", fehlt_o[0] == 0 and warn in fehlt_o[1] and "был бы старт" in fehlt_o[1], w_brief(fehlt_o)),
@@ -1527,7 +1527,7 @@ def section_mods():
     sec.clear()
     if not os.path.isdir(SPEC_BOARD) or not os.path.isfile("mods/.claude-plugin/marketplace.json"):
         for i in ("F9.1", "F9.2"):
-            print(f"{i} offen · не репо кита: нет {SPEC_BOARD}", flush=True)
+            print(f"v3.4-{i} offen · не репо кита: нет {SPEC_BOARD}", flush=True)
         print("--   mods: не репо кита — маркера MODS нет", flush=True)
         return True
     if not shutil.which("claude"):
@@ -1541,7 +1541,7 @@ def section_mods():
     tested = rc == 0 and npass != "?" and nfail == "0"
     seen = lambda tag: (re.search(rf"^{tag} board (\d+/\d+/\d+)\b", text, re.M) or [None, "нет"])[1]
     board, nach = seen("F9.1-board"), seen("F9.1-nach")
-    probe("F9.1", tested and not miss["F9.1"] and board == "2/1/1" and nach == "1/1/2",
+    probe("v3.4-F9.1", tested and not miss["F9.1"] and board == "2/1/1" and nach == "1/1/2",
           f"board={board} nach={nach} · claude plugin test {SPEC_BOARD}: rc {rc}, {npass} pass, {nfail} fail; названных тестов F9.1 "
           f"{len(BOARD_TESTS['F9.1']) - len(miss['F9.1'])} из {len(BOARD_TESTS['F9.1'])}" + (f"; не прошли — {'; '.join(miss['F9.1'])}" if miss["F9.1"] else ""))
     code = "\n".join(read(f"{SPEC_BOARD}/hooks/{f}") for f in sorted(os.listdir(f"{SPEC_BOARD}/hooks")) if not f.endswith((".test.tsx", ".test.ts", ".json")))
@@ -1564,7 +1564,7 @@ def section_mods():
     red_net = board_net("await fetch(u)") == ["fetch("] and board_net("$.process.run(['curl', u])") and board_net("$.model.complete({})")
     red_agree = not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | да | x |", False) and not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | нет | x |", True) and not board_agrees("", False)
     ok = v[0] == 0 and "Validation passed" in v[1] and tested and not miss["F9.2"] and not net and "spec-board" in market and agree and red_test and bool(red_net) and git_clean and red_agree
-    probe("F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "
+    probe("v3.4-F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "
           f"названных тестов F9.2 {len(BOARD_TESTS['F9.2']) - len(miss['F9.2'])} из {len(BOARD_TESTS['F9.2'])}" + (f" (не прошли — {'; '.join(miss['F9.2'])})" if miss["F9.2"] else "")
           + f"; модель, сеть и процесс не на git в коде мода — {', '.join(net) or 'нет'}; marketplace — {'есть' if 'spec-board' in market else 'нет'}; "
           f"строка шаблона Environment — {'«да»' if '| да |' in row else '«нет»' if row else 'нет строки'}, профиль кита — {on}{'' if agree else ' (не согласны)'} · "

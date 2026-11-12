@@ -905,7 +905,7 @@ def lints():
     plain_rot = plain_fail != "нет строки" and "BUDGET_FAIL planka-source" in p_red[1] and p_red[0] == 1
     plain_gruen = any(l.startswith("OK   planka-source") for l in p_good[1]) and "BUDGET_FAIL planka-source" not in p_good[1]
     rot, gruen = rot and fail_line == "BUDGET_FAIL planka-source" and plain_rot, gruen and plain_gruen
-    emit("F2.1", rot and gruen and state,
+    emit("v3.4-F2.1", rot and gruen and state,
          f"rot={'OK' if rot else 'нет'} gruen={'OK' if gruen else 'нет'} · без файла — {r1[0]}: «{r1[1]}» → «{fail_line}» · bin/check-budget на фикстуре — rc {p_red[0]} «{plain_fail}…» и "
          f"BUDGET_FAIL planka-source — {'есть' if 'BUDGET_FAIL planka-source' in p_red[1] else 'нет'}; с файлом — {'OK planka-source' if plain_gruen else 'нет'} · красные: {rot_text} · зелёные: {gruen_text} · выдача: {state_text}")
     # F2.2
@@ -955,7 +955,7 @@ def lints():
     ])
     p_scope = plain(base, grown())
     named = "BUDGET_FAIL scope-growth F2" in p_scope[1]
-    emit("F2.2", ohne and mit and named and without[1].startswith("F2:") and two[1].startswith("F3:"),
+    emit("v3.4-F2.2", ohne and mit and named and without[1].startswith("F2:") and two[1].startswith("F3:"),
          f"ohne={without[0]} mit={withl[1].rsplit('поправок: ', 1)[-1] if 'поправок: ' in withl[1] else '?'} · без строки — «{without[1]}»; со строкой — «{withl[1]}» · "
          f"bin/check-budget на фикстуре — {'BUDGET_FAIL scope-growth F2' if named else 'нет строки BUDGET_FAIL scope-growth F2'}; две новые, одна строка — «{two[1][:20]}» · FAIL: {ohne_text} · OK: {mit_text}")
     # F2.3
@@ -999,7 +999,7 @@ def lints():
     ])
     p_inl = plain({**pr, **pfile(K), "docs/SPEC-1.md": top + item(f"{key}, p95 3300 мс")})
     warned = "BUDGET_WARN planken-inline" in p_inl[1]
-    emit("F2.3", inline and fine and keyred and warned,
+    emit("v3.4-F2.3", inline and fine and keyred and warned,
          f"inline={inl[0]} ohne={nof[0]} · число рядом — «{inl[1]}»; нет файла — «{nof[1]}» · bin/check-budget на фикстуре — {'BUDGET_WARN planken-inline' if warned else 'нет строки BUDGET_WARN planken-inline'} · "
          f"WARN: {inline_text} · OK: {fine_text} · FAIL: {keyred_text}")
     # F2.4
@@ -1045,7 +1045,7 @@ def lints():
         ("нет права на запуск, с меткой", 1, "TEST_FAIL tests/t.sh rc=127", test_run({"flaky": {"tests/t.sh": "решение"}}, argv=("tests/t.sh",))),
         ("rc 126, с меткой", 1, "TEST_FAIL bash tests/t.sh rc=126", test_run(label, "exit 126\n")),
     ])
-    emit("F2.4", flaky and block,
+    emit("v3.4-F2.4", flaky and block,
          f"flaky={'OK' if flaky else 'нет'} ohne={'block' if block else 'нет'} · с меткой, красный — rc {fl[0]} «{fl[1]}»; без метки — rc {no[0]} «{no[1]}» · FLAKY и зелёные: {flaky_text} · блок, rc 1: {block_text}")
     cur = rule_planka(dict(b)) + rule_scope(dict(b)) + rule_planken(dict(b))
     for s_, r_, m_ in cur:

@@ -161,7 +161,7 @@ def f61(e):
 sweep, bad, f33, miss = f61(v33)
 r_sweep = f61(v33.replace(sweep[0], re.sub(r"\(https://[^)]*\)", "", sweep[0]), 1) if sweep else v33)
 r_field = f61("\n".join(l for l in v33.splitlines() if not (l.startswith("| ") and "unifiedWindows" in l.split("|")[1])))
-item("F6.1", v33 and sweep and not bad and not miss,
+item("v3.3-F6.1", v33 and sweep and not bad and not miss,
      f"запись v3.3: строк свипа 09.10 — {len(sweep)}, без «цитаты» или https-адреса — {len(bad)}{': ' + '; '.join(bad) if bad else ''}; "
      f"полей v3.3 — {len(f33)}, без строки таблицы с источником и до/после — {', '.join(miss) or 'нет'}",
      r_sweep[1] and "unifiedWindows" in r_field[3],
@@ -179,7 +179,7 @@ for doc, words in NEED62.items():
     g_dead += [f"{doc}: {d}" for d in dead]
     g_need += [f"{doc}: {w}" for w in words if w not in text]
 _, _, r_dead = links_paths("README.md", rd + "\n[пропавший файл](docs/no-such-file.md)\n")
-item("F6.2", not g_dead and not g_need,
+item("v3.3-F6.2", not g_dead and not g_need,
      f"README.md, docs/dev-system.ru.md, docs/LAUNCH.md: ссылок и путей {n_links}, мёртвых — {', '.join(g_dead) or 'нет'}; судья на заявлении, "
      f"bin/check-window с --override, один круг: нет — {', '.join(g_need) or 'ничего'}",
      "docs/no-such-file.md" in r_dead, f"README.md с [пропавший файл](docs/no-such-file.md) — мёртвых {len(r_dead)}: {', '.join(r_dead)}")
@@ -222,7 +222,7 @@ kit = dict(proc=proc, spec=read("kit/docs/SPEC.template.md"), prompt=read("kit/d
 g_ret = retired_on(**kit)
 n_items = len(re.findall(r"^  - `F\d+\.\d+` ", kit["spec"], re.M))
 r_ret = retired_on(**dict(kit, proc=re.sub(r"^(\| Toolgate \|[^|\n]*\|[^|\n]*\| )нет( \|)", r"\1да\2", proc, flags=re.M)))
-item("F6.3", b_ok and not g_ret,
+item("v3.3-F6.3", b_ok and not g_ret,
      f"bin/check-budget --templates: rc {r.returncode}, {'BUDGET_OK' if b_ok else 'нет BUDGET_OK'}, FAIL {len(b_fail)}{': ' + '; '.join(b_fail) if b_fail else ''}; "
      f"шаблоны и настройки кита: пунктов в шаблоне SPEC {n_items}, таблица судей, строка запуска с bin/check-window; расхождений — {', '.join(g_ret) or 'нет'}",
      "PROCESS: Toolgate «да»" in r_ret, f"PROCESS с Toolgate «да» — {', '.join(r_ret) or 'расхождений нет'}")
@@ -259,7 +259,7 @@ if shutil.which("claude"):
 else:
     green += "; claude нет в PATH (CI) — проверены только строки CHANGELOG"
 r64 = f64(re.sub(r"(`window-guard`[^\n]*\n)(?:\s+- `\./\S+ (?:hooks|calls): [^\n]*\n)+", r"\1", v34 + "\n"))
-item("F6.4", ok, green, not r64, f"записи без строк мода — строк hooks: и calls: window-guard {len(r64)}")
+item("v3.3-F6.4", ok, green, not r64, f"записи без строк мода — строк hooks: и calls: window-guard {len(r64)}")
 
 # ── v3.4 (SPEC-v3.4 F8) ──────────────────────────────────────────────────────────────────────────────────────────────────────
 FIELDS34 = ["background_tasks", "platform_cap", "permissions.blockWritesOutsideWorkingDirectories", "effortLevel", "ultracode",
@@ -326,7 +326,7 @@ r_out = f81_log(re.sub(r"^(\| lint `risk-tier`[^|]*\|)[^|]*\|$", r"\1 — |", CL
 r_mod = f81_log(CL.replace("- `phase-start` 0.1.0 (`mods/phase-start`), «Validation passed»:", "- phase-start, «Validation passed»:"))
 r_word = f81_doc("docs/LAUNCH.md", read("docs/LAUNCH.md").replace("blockWritesOutsideWorkingDirectories", "поле записи"))
 r_dead = f81_doc("README.md", rd + "\n[пропавший](docs/no-such-file.md)\n")
-item("F8.1", n_docs == 4 and not g34 and not g_index,
+item("v3.4-F8.1", n_docs == 4 and not g34 and not g_index,
      f"docs={n_docs} · CHANGELOG: полей с источником и до/после {len(FIELDS34)}, снятых строкой {len(RETIRED34)}, вошло → вышло {len(IN34)}, строки Unreleased и моды в записи; "
      f"README.md, docs/LAUNCH.md, docs/dev-system.ru.md: слов фазы {sum(map(len, NEED81.values()))}; docs/README.md называет текущей SPEC запроса; расхождения — {'; '.join(g34 + g_index + [x for v in g_docs.values() for x in v]) or 'нет'}",
      len(r_index) == 1 and "поле PermissionDenied" in r_field and "источник без якоря {features, prior, risk}" in r_anchor and "снятое P1-4" in r_ret and "вошло без вышло risk-tier" in r_out and "не в записи `phase-start` 0.1.0" in r_mod
@@ -425,7 +425,7 @@ for rel, ph in PHRASES82:
         f.write(text)
 shutil.rmtree(c82, ignore_errors=True)
 t_ok = b_ok and control[0] == 0 and tel_ok and not mods_on(lk) and not limits_row
-item("F8.2", t_ok,
+item("v3.4-F8.2", t_ok,
      f"templates={'OK' if t_ok else 'нет'} · bin/check-budget --templates: rc {r.returncode}, копия кита без правки rc {control[0]}; {tel}; "
      f"строки Environment: limits {'осталась' if limits_row else 'снята'}, window-guard и phase-start «да», в launch settings кита не включены — {', '.join(mods_on(lk)) or 'нет'}",
      all(red82) and red_tel_ok and mods_on({}) == ["window-guard@two-tier-mods", "phase-start@two-tier-mods"],
