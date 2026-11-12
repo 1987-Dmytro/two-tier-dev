@@ -191,3 +191,5 @@
 {"ts": "2026-11-08T18:09:13Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["docs/reviews/V3.4-review.md"], "score": 0.03, "diff": "2d079f525932710e", "ms": 1497}
 {"ts": "2026-11-08T18:10:18Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/spec-gate.jsonl"], "score": 0.1, "diff": "122a3ab96235b987", "ms": 1916}
 {"ts": "2026-11-12T18:44:39Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/spec-gate.jsonl"], "score": 0.07, "diff": "70acbe6f91f951c1", "ms": 1720}
+{"ts": "2026-11-12T18:48:53Z", "decision": "note", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.59, "diff": "7e3f763958f87877", "ms": 2183}
+{"ts": "2026-11-12T18:50:52Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/verify-phase"], "score": 0.12, "diff": "c0917b8773c561a5", "ms": 1158}
