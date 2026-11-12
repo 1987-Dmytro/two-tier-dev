@@ -1,6 +1,7 @@
 {
   "ultracode": true,
   "effortLevel": "xhigh",
+  "autoCompactWindow": 600000,
   "subagentPromptCacheTtl": "1h",
   "worktree": {
     "baseRef": "head"
@@ -43,7 +44,7 @@
     },
     "handoff@two-tier-mods": {
       "options": {
-        "threshold": 70,
+        "threshold": 40,
         "handoffDir": "handoffs",
         "autoClear": true,
         "minTurns": 2,
@@ -117,7 +118,7 @@
     "environment": [
       "$defaults",
       "Project: two-tier-dev — the operator's public kit for AI-agent development: scripts, hooks, saved workflows, mods, templates and docs. Primary use: software development.",
-      "Source control: github.com/1987-Dmytro/two-tier-dev — pushing the phase branch (v3.4) there is routine; main changes only through a pull request after the operator's acceptance.",
+      "Source control: github.com/1987-Dmytro/two-tier-dev — pushing the phase branch (v3.5) there is routine; main changes only through a pull request after the operator's acceptance.",
       "Trusted domains: github.com, code.claude.com, registry.npmjs.org, context7.com, api.typesafe.ai, docs.typesafe.ai.",
       "Key services: GitHub Actions CI of this repo; fixture repos under /tmp/two-tier-v3 and a read-only clone of projekt_1_telefon there; nested claude -p control runs on the subscription.",
       "Decision-model vendor: TypeSafe (Jev) at api.typesafe.ai — calls from the commit judge, bin/ scripts and the Stop hook with the key from the environment are routine; the key is never printed or written into the repo."
