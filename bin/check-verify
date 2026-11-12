@@ -511,6 +511,24 @@ def launcher():
             f"новый HEAD — {'лог того же HEAD' if 'того же HEAD' in moved else 'гейт снова'}, лог старше 12 ч — {'лог того же HEAD' if 'того же HEAD' in stale else 'гейт снова'}"), ok
 
 
+def journal_to_repo(live):
+    """SPEC-v3.5 F8.3: строки журнала лаунчера живых фикстур (их docs/evidence/verify-runs.jsonl) — в журнал репо с полем fixture:
+    пару «до и после правки воркфлоу» судят по журналу репо. Только счётчики, как пишет лаунчер."""
+    rows = []
+    for kind, d, *_ in live.values():
+        p = f"{d}/docs/evidence/verify-runs.jsonl"
+        for l in open(p, encoding="utf-8") if os.path.isfile(p) else ():
+            try:
+                rows.append(json.dumps({**json.loads(l), "fixture": kind}, ensure_ascii=False))
+            except ValueError:
+                pass
+    if rows:
+        os.makedirs(f"{REPO}/docs/evidence", exist_ok=True)
+        with open(f"{REPO}/docs/evidence/verify-runs.jsonl", "a", encoding="utf-8") as f:
+            f.write("\n".join(rows) + "\n")
+    print(f"--- журнал: строк живых фикстур в docs/evidence/verify-runs.jsonl — {len(rows)}", flush=True)
+
+
 def judge(kind, d, rc, text, report, name):
     used = dict(re.findall(r"(claude-[a-z0-9-]+) ×(\d+)", text))
     print(f"--- {kind}: {d} · rc {rc} · {name}")
@@ -548,6 +566,7 @@ def main():
         s = stub()
         prior_side, ltext, lok = launcher()
         live = {res[0]: res for res in live}
+    journal_to_repo(live)
     for res in live.values():
         judge(*res)
     rep = lambda k: s.get(k, {}).get("report", "")

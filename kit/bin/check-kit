@@ -1330,7 +1330,7 @@ def section_paar():
     put(fk, "bad.json", '{"result": {"report": "VERDICT')
     cut_out = launch(head_ev + [event(subtype="task_notification", task_id="w1", status="completed", output_file=f"{fk}/bad.json", usage={"duration_ms": 1000})])  # файл итога обрезан
     want = {"cli": "2.1.316", "features": ["F1"], "limit": limit, "wf_sec": 12, "bash": 3, "fon": 2, "moved": 1, "status": "completed"}
-    got = {k: x for k, x in (full[3][0] if full[3] else {}).items() if k != "sec"}
+    got = {k: x for k, x in (full[3][0] if full[3] else {}).items() if k not in ("sec", "ts", "tokens", "wf", "models")}  # поля F8.3 SPEC-v3.5 судит bin/check-verify
     secret_free = all(not re.search(r"/tmp|/Users|/home", json.dumps(r)) for r in hang[3])
     jr = f"{fk}/j.jsonl"
 
