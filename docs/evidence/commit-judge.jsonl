@@ -212,3 +212,5 @@
 {"ts": "2026-11-12T20:50:28Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-kit"], "score": 0.1, "diff": "0f73c46585d7bd7c", "ms": 1075}
 {"ts": "2026-11-12T20:53:07Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F4-budget-result.txt"], "score": 0.06, "diff": "062a68db1c83caec", "ms": 1458}
 {"ts": "2026-11-12T21:12:18Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.24, "diff": "972ec3ea3b304dee", "ms": 869}
+{"ts": "2026-11-12T21:12:36Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/F3-check-harness-result.txt"], "score": 0.06, "diff": "7ea1fd549543c366", "ms": 790}
+{"ts": "2026-11-12T21:28:49Z", "decision": "pass", "judge": "abide", "rule": "no-writes-outside-repo", "files": ["kit/bin/check-harness"], "score": 0.14, "diff": "f8d3a371ec54230e", "ms": 827}
