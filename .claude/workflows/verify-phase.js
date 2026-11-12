@@ -3,9 +3,9 @@ export const meta = {
   description: 'Phase acceptance: per SPEC feature (all, or the F<n> ids in args) a fresh check run, each item by the checker own command, edge cases and mutations by the risk tier of the feature; refuters, a judge and code return VERDICT PASS or NEEDS_WORK',
   whenToUse: 'Acceptance of a two-tier phase; started by bin/verify-phase [F<n> …] from a fresh clone (30 min limit, verdict to docs/evidence/verify-<sha>.txt, a point round to verify-<sha>-F<n>.txt)',
   phases: [
-    { title: 'Scope', model: 'claude-sonnet-5-5' },
-    { title: 'Verify', model: 'claude-sonnet-5-5' },
-    { title: 'Refute', model: 'claude-sonnet-5-5' },
+    { title: 'Scope', model: 'claude-opus-5-5' },
+    { title: 'Verify', model: 'claude-opus-5-5' },
+    { title: 'Refute', model: 'claude-opus-5-5' },
     { title: 'Judge', model: 'claude-opus-5-5' },
   ],
 }
@@ -16,7 +16,8 @@ export const meta = {
 // the ids alone also do (an array, or a string that carries them); absent — every feature (F4.1).
 // The label `· risk: high|low` on the feature line sets the depth (SPEC-v3.4 F7.1): high — the full depth and at least 2 mutations; low — the fresh check and the items only; none — the full depth, one mutation.
 // Code blocks after the judge: a dead verifier, a red check, a surviving mutation (F4.2), too few mutations at risk high, an item without the checker own run (F4.3).
-const CHECKER = 'claude-sonnet-5-5'
+// Every stage runs on Opus (SPEC-v3.5 F8): the judgement by REVIEW.md is Opus's, the checkers included.
+const CHECKER = 'claude-opus-5-5'
 const JUDGE = 'claude-opus-5-5'
 const BLOCKING = 'blocking ONLY if: (a) the feature is not proven by its check — no evidence file docs/evidence/<F>-*-result.txt, no marker in it, or the fresh run is red; (b) an invariant of SPEC §3 is broken; (c) a bug on a path the customer runs — observed behaviour contradicts the done clause («готово») or an item of the feature; (d) a security hole — a secret in code or evidence, an irreversible step without a gate, widened permissions; (e) a mutation of the product survived its check; (f) an item is not confirmed by the checker own command and its raw output. Everything else is non_blocking: taste, style, improvements outside the SPEC.'
 const str = { type: 'string' }

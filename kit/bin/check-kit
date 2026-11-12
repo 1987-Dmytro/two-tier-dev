@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """check-kit [<корень>] [frozen|fenster|graph|paar|mods|handoff|operator] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
-(вердикт — /verify-phase из свежего клона, лимит 30 мин) и plan-phase, evaluator без правок, воркфлоу verify-phase и его лаунчер.
+(вердикт — /verify-phase из свежего клона, лимит 30 мин) и plan-phase, воркфлоу verify-phase и его лаунчер; агента evaluator в ките нет (SPEC-v3.5 F8.4).
 
 Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
 копии workflow CI и verify-phase совпадают, defaults бюджета в kit/budgets.json и budgets.json совпадают. KIT_OK или exit 1.
@@ -1949,9 +1949,7 @@ for n in names:
     say(not miss, n, f"контракт ({len(CONTRACT.get(n, []))} слов): нет — {', '.join(miss) or 'ничего'}")
 if "accept" in names:
     say("docs/STATUS.md" not in read(f"{sk}/accept/SKILL.md"), "accept", "STATUS не пишет: пути docs/STATUS.md в скилле нет")
-ev = read(f"{root}/.claude/agents/evaluator.md")
-tools = re.search(r"^tools:(.*)$", ev, re.M).group(1).strip()
-say("Write" not in tools and "Edit" not in tools and "REVIEW.md" in ev, "evaluator", f"tools {tools}; формат REVIEW.md {'есть' if 'REVIEW.md' in ev else 'нет'}")
+say(not os.path.exists(f"{root}/.claude/agents/evaluator.md"), "evaluator", f"{root}/.claude/agents/evaluator.md — {'есть' if os.path.exists(f'{root}/.claude/agents/evaluator.md') else 'нет: приёмка — /verify-phase на Opus (SPEC-v3.5 F8.4)'}")
 wf = sorted(os.listdir(f"{root}/.claude/workflows")) if os.path.isdir(f"{root}/.claude/workflows") else []
 say(wf == ["verify-phase.js"], "workflows", f"{root}/.claude/workflows: {', '.join(wf) or 'нет'} (ждём verify-phase.js)")
 vp = f"{root}/bin/verify-phase"

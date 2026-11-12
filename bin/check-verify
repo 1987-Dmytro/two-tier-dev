@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """check-verify — /verify-phase выносит вердикт фазы (SPEC-v3.1 F4; SPEC-v3.3 F4.1–F4.3 — метки v3.3-F4.*; SPEC-v3.4 F7). VERIFY_OK или exit 1.
 
-  · статика: kit/.claude/workflows/verify-phase.js — meta литералом, модели полными id (проверяющие claude-sonnet-5-5,
-    судья claude-opus-5-5), без часов и случайности; копия в .claude/workflows/ корня репо — та же; лимит лаунчера 1800 с;
+  · статика: kit/.claude/workflows/verify-phase.js — meta литералом, модели полными id (все стадии — claude-opus-5-5, SPEC-v3.5 F8),
+    без часов и случайности; копия в .claude/workflows/ корня репо — та же; лимит лаунчера 1800 с;
   · заглушки: скрипт воркфлоу под node с подставными agent/pipeline/parallel и args — какие проверяющие идут и что
     решает код (F4.1–F4.3); лаунчер с подставным claude на PATH — список фич, args, имя файла вердикта, сверка FEATURES:;
   · живые фикстуры во /tmp/two-tier-v3 (кит из bin/two-tier-init, фаза `bin/slug` и `bin/words`, параллельно):
@@ -11,13 +11,17 @@
       clean — две фичи без дефекта, чеки покрывают пункты → VERDICT: PASS, блокирующих 0, FEATURES: F1, F2;
       point — та же фаза, `bin/verify-phase F1` → verify-<sha>-F1.txt с FEATURES: F1, проверяющий F2 не идёт (F4.1);
       limit — чистая фикстура с --limit 20 → VERIFY_TIMEOUT, вердикта нет;
-    у агентов прогонов — только claude-sonnet-5-5 и claude-opus-5-5. Окно подписки лаунчера — подставное событие
+    у агентов прогонов — только claude-opus-5-5. Окно подписки лаунчера — подставное событие
     (CHECK_WINDOW_EVENTS, 5 %), хода на снятие оно не тратит.
   · F7.1 — метка `risk:` в заглушках и в живых clean/point (F1 high, F2 low), правило risk-tier — настоящий bin/check-budget на своих проектах;
     F7.2 — прошлый вердикт в args лаунчера (заглушка и живой point) и в запросах, «повтор», строка КЛАССЫ, отчёт нового вида читает spec-gate;
     F7.3 — кейс docs/evals/rollback-pause живым кругом: с мутантом и без него; F7.4 — bin/gate-v3.4 один в своём репо (рекурсии нет: bin/check-verify
     там нет), bin/evidence на своём проекте, лаунчер с заглушкой claude и гейтом, меняющим evidence клона.
+  · SPEC-v3.5 F8 (VERIFY_OPUS_OK): F8.1 — 4 стадии на Opus, мутант с Sonnet красный, у агентов живых кругов только Opus; F8.2 — вердикты
+    clean, red, eval; F8.3 — пара «до и после правки воркфлоу» в docs/evidence/verify-runs.jsonl репо; F8.4 — evaluator в docs/archive/,
+    апгрейд уводит его в архив запуска; F8.5 — решение гейта (--gate): воркфлоу и лаунчер не менялись с коммита evidence F8 — маркер из него, иначе живые круги.
 Фикстуры синтетические и не пушатся: у них нет origin.
+bin/check-verify --gate — для гейта: решение F8.5; «evidence» — строка VERIFY_OPUS_OK из docs/evidence/F8-check-verify-result.txt коммита evidence, rc 0; «live» — полный прогон.
 """
 import json, os, re, shutil, signal, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor
@@ -25,7 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 TMP = "/tmp/two-tier-v3"
 WF = "kit/.claude/workflows/verify-phase.js"
-MODELS = {"claude-sonnet-5-5", "claude-opus-5-5"}
+MODELS = {"claude-opus-5-5"}  # SPEC-v3.5 F8: все стадии на Opus
 EVAL = f"{REPO}/docs/evals/rollback-pause"
 # SPEC-v3.5 F6.4: фикстуры, играющие тимлида, зовут git в окружении своей роли — без CLAUDECODE сессии Claude Code
 GIT_ENV = dict({k: v for k, v in os.environ.items() if k != "CLAUDECODE"}, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
@@ -257,7 +261,7 @@ def static():
     lit = bool(meta) and not re.search(r"\(|\.\.\.|`|[A-Za-z_]\w*\s*[,}\n]", re.sub(r"\w+:", "", bare))
     say(lit and "name: 'verify-phase'" in meta.group(1), "workflow", f"{WF}: meta первым оператором, литералом — {'да' if lit else 'нет'}")
     ids = set(re.findall(r"'(claude-[a-z0-9-]+)'", js))
-    say(ids == MODELS and "const CHECKER = 'claude-sonnet-5-5'" in js and "const JUDGE = 'claude-opus-5-5'" in js, "workflow",
+    say(ids == MODELS and "const CHECKER = 'claude-opus-5-5'" in js and "const JUDGE = 'claude-opus-5-5'" in js, "workflow",
         f"модели: {', '.join(sorted(ids))}; проверяющие CHECKER, судья JUDGE — полными id")
     bad = [w for w in ("Date.now", "Math.random", "new Date(") if w in js]
     say(not bad, "workflow", f"часы и случайность в скрипте — {', '.join(bad) or 'нет'}")
@@ -615,6 +619,7 @@ def main():
     f72(s, h, prior_side, prep)
     f73(live, s)
     f74()
+    f8(live)
     return finish()
 
 
@@ -1015,10 +1020,151 @@ def f74():
           + "; ".join(f"{n} — rc {c[1]}, {'; '.join(c[2]) or 'молчит'}" for n, c in clone_sides))
 
 
+# --- SPEC-v3.5 F8: приёмка на Opus -------------------------------------------------------------------------------------
+F8_OK = []
+GATE_PATHS = ("kit/.claude/workflows/verify-phase.js", ".claude/workflows/verify-phase.js", "kit/bin/verify-phase")
+EVIDENCE_F8 = "docs/evidence/F8-check-verify-result.txt"
+
+
+def stages(js):
+    """(стадий на Opus, стадий всего, все модели скрипта — Opus): стадии — phases meta, модели агентов — id в скрипте."""
+    meta = re.match(r"export const meta = (\{.*?\n\})\n", js, re.S)
+    ph = re.findall(r"\{ title: '(\w+)', model: '(claude-[a-z0-9-]+)' \}", meta.group(1) if meta else "")
+    return sum(m == "claude-opus-5-5" for _, m in ph), len(ph), set(re.findall(r"'(claude-[a-z0-9-]+)'", js)) == {"claude-opus-5-5"}
+
+
+def gate_decision(cwd):
+    """F8.5: («evidence», где) — воркфлоу и лаунчер не менялись (ни в истории, ни в дереве) с коммита evidence F8 и в нём VERIFY_OPUS_OK; иначе («live», почему)."""
+    g = lambda *a: subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True)
+    ev = g("log", "-1", "--format=%H", "--", EVIDENCE_F8).stdout.strip()
+    if not ev:
+        return "live", f"{EVIDENCE_F8} нет в истории"
+    if "VERIFY_OPUS_OK" not in g("show", f"{ev}:{EVIDENCE_F8}").stdout.splitlines():
+        return "live", f"в {EVIDENCE_F8} @ {ev[:7]} нет VERIFY_OPUS_OK"
+    changed = [x for x in g("diff", "--name-only", ev, "--", *GATE_PATHS).stdout.split() if x]
+    return ("live", f"с {ev[:7]} изменены: {', '.join(changed)}") if changed else ("evidence", f"{EVIDENCE_F8} @ {ev[:7]}, {len(GATE_PATHS)} путей без правок")
+
+
+def pair(rows, before, after, edit_ts):
+    """F8.3: (сошлось, что): «до» — строки фикстур с wf до правки, все завершённые с токенами и раньше коммита правки; «после» — wf HEAD, с токенами."""
+    done = lambda r: r.get("fixture") and r.get("status") == "completed"
+    b = [r for r in rows if done(r) and r.get("wf") == before]
+    a = [r for r in rows if done(r) and r.get("wf") == after]
+    tok = lambda rs: all(isinstance(r.get("tokens"), int) and r["tokens"] > 0 for r in rs)
+    why = [w for w, bad in (("«до» нет", not b), ("«после» нет", not a), ("«до» без токенов", b and not tok(b)), ("«после» без токенов", a and not tok(a)),
+                            ("«до» новее правки", any(str(r.get("ts", "")) >= edit_ts for r in b))) if bad]
+    side = lambda rs: f"{len(rs)} строк, {sum(r.get('sec') or 0 for r in rs)} с, {sum(r.get('tokens') or 0 for r in rs if isinstance(r.get('tokens'), int))} токенов"
+    return not why, f"до ({before}) — {side(b)}; после ({after}) — {side(a)}" + (f"; {', '.join(why)}" if why else "")
+
+
+def retired(base):
+    """F8.4: где агент evaluator: (в архиве репо, файлы evaluator.md в kit/ и bin/, упоминания вне списка апгрейда и проб)."""
+    files = [os.path.relpath(os.path.join(d, f), base) for top in ("kit", "bin") for d, _, fs in os.walk(f"{base}/{top}") for f in fs if f == "evaluator.md"]
+    allow = {"kit/bin/two-tier-upgrade", "kit/bin/check-kit", "bin/check-verify"}  # снимает, проверяет отсутствие, проба
+    said = []
+    for top in ("kit", "bin"):
+        for d, _, fs in os.walk(f"{base}/{top}"):
+            for f in fs:
+                rel = os.path.relpath(os.path.join(d, f), base)
+                if "__pycache__" in rel or rel in allow or os.path.islink(os.path.join(d, f)):
+                    continue
+                try:
+                    said += [rel] if "evaluator" in open(os.path.join(d, f), encoding="utf-8").read() else []
+                except (UnicodeDecodeError, OSError):
+                    pass
+    return os.path.isfile(f"{base}/docs/archive/evaluator.md"), files, said
+
+
+def f8(live):
+    def p(item, ok, text):
+        F8_OK.append(bool(ok))
+        probe(item, ok, text)
+    js = open(f"{REPO}/{WF}", encoding="utf-8").read()
+    n_opus, n_all, only = stages(js)
+    mut = js.replace("{ title: 'Verify', model: 'claude-opus-5-5' }", "{ title: 'Verify', model: 'claude-sonnet-5-5' }", 1)
+    m_opus, m_all, m_only = stages(mut)
+    used = {k: dict(re.findall(r"(claude-[a-z0-9-]+) ×(\d+)", res[3])) for k, res in live.items() if k != "limit"}
+    agents_ok = all(u and set(u) == {"claude-opus-5-5"} for u in used.values())
+    mutant_red = mut != js and not (m_opus == m_all == 4 and m_only)
+    p("F8.1", n_opus == n_all == 4 and only and mutant_red and agents_ok,
+      f"opus={n_opus}/{n_all} mutant={'rot' if mutant_red else 'grün'} · {WF}: стадии на claude-opus-5-5 {n_opus} из {n_all}, иных id в скрипте — {'нет' if only else 'есть'}; "
+      f"мутант (Verify → claude-sonnet-5-5) — стадий на Opus {m_opus}/{m_all}, только Opus — {'да' if m_only else 'нет'} · строка лаунчера живых кругов: "
+      + "; ".join(f"{k} {', '.join(f'{m} ×{n}' for m, n in u.items()) or 'нет'}" for k, u in used.items()))
+    first = lambda k: (live[k][4].splitlines() or ["нет файла"])[0] if k in live else "нет прогона"
+    ev = live.get("eval")
+    caught = bool(ev) and ev[4].startswith("VERDICT: NEEDS_WORK") and eval_caught(ev[4], eval_case())
+    ok82 = first("clean").startswith("VERDICT: PASS") and first("red").startswith("VERDICT: NEEDS_WORK") and caught
+    p("F8.2", ok82, f"clean={'PASS' if first('clean').startswith('VERDICT: PASS') else first('clean')} red={'NW' if first('red').startswith('VERDICT: NEEDS_WORK') else first('red')} "
+                    f"eval={1 if caught else 0}/1 · живые круги на Opus: clean «{first('clean')}», red «{first('red')}», eval «{first('eval')}» — мутант кейса пойман — {'да' if caught else 'нет'}")
+    g = lambda *a: subprocess.run(["git", *a], cwd=REPO, capture_output=True, text=True, env=dict(os.environ, TZ="UTC")).stdout.strip()
+    edit = g("log", "-1", "--format=%H", "--", WF)
+    edit_ts = g("log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%dT%H:%M:%SZ", edit)
+    before, after = g("rev-parse", f"{edit}^:{WF}")[:12], g("hash-object", WF)[:12]
+    rows = []
+    for l in open(f"{REPO}/docs/evidence/verify-runs.jsonl", encoding="utf-8") if os.path.isfile(f"{REPO}/docs/evidence/verify-runs.jsonl") else ():
+        try:
+            rows.append(json.loads(l))
+        except ValueError:
+            pass
+    ok, what = pair(rows, before, after, edit_ts)
+    no_tok = [dict(r, tokens=None) if r.get("wf") == before else r for r in rows]
+    late = [dict(r, ts="2999-01-01T00:00:00Z") if r.get("wf") == before else r for r in rows]
+    reds = [("«до» без токенов", *pair(no_tok, before, after, edit_ts)), ("«до» новее правки", *pair(late, before, after, edit_ts))]
+    n_red = sum(not r[1] for r in reds)
+    p("F8.3", ok and n_red == 2, f"paar={'OK' if ok else 'FAIL'} rot={n_red}/2 · правка воркфлоу {edit[:7]} ({edit_ts}) · docs/evidence/verify-runs.jsonl: {what} · "
+                                 + "; ".join(f"{n} — {'FAIL' if not r else 'OK'} «{w.split('; ')[-1]}»" for n, r, w in reds))
+    arch, files, said = retired(REPO)
+    red_dir = tempfile.mkdtemp(prefix="check-verify-f84-", dir=TMP)
+    os.makedirs(f"{red_dir}/kit/.claude/agents")
+    shutil.copy2(f"{REPO}/docs/archive/evaluator.md", f"{red_dir}/kit/.claude/agents/evaluator.md") if arch else None
+    _, r_files, _ = retired(red_dir)
+    u = tempfile.mkdtemp(prefix="check-verify-up-", dir=TMP)
+    gu = lambda *a: subprocess.run(["git", *a], cwd=u, env=GIT_ENV, capture_output=True, text=True)
+    gu("init", "-q", "-b", "main")
+    for rel, text in (("src/a.py", "a = 1\n"), (".claude/agents/evaluator.md", "---\nname: evaluator\n---\n")):
+        os.makedirs(os.path.dirname(f"{u}/{rel}"), exist_ok=True)
+        open(f"{u}/{rel}", "w", encoding="utf-8").write(text)
+    gu("add", "--", "src/a.py", ".claude/agents/evaluator.md")
+    gu("-c", "core.hooksPath=/dev/null", "commit", "-qm", "base")
+    up = subprocess.run([f"{REPO}/kit/bin/two-tier-upgrade", u], env=GIT_ENV, capture_output=True, text=True, timeout=600)
+    tree = gu("ls-tree", "-r", "--name-only", "HEAD").stdout.split()
+    up_arch = [x for x in tree if x.startswith("docs/archive/") and x.endswith("claude-config/agents/evaluator.md")]
+    up_ok = up.returncode == 0 and up_arch and ".claude/agents/evaluator.md" not in tree
+    ok84 = arch and not files and not said and r_files == ["kit/.claude/agents/evaluator.md"] and up_ok
+    p("F8.4", ok84, f"agent={'archiv' if arch and not files else 'kit'} upgrade={'archiv' if up_ok else 'nein'} · docs/archive/evaluator.md — {'есть' if arch else 'нет'}; evaluator.md в kit/ и bin/ — "
+                    f"{', '.join(files) or 'нет'}; упоминаний вне списка апгрейда и проб — {', '.join(said) or 'нет'} · красная: файл в kit/ — {', '.join(r_files) or 'не найден'} · "
+                    f"two-tier-upgrade проекта с .claude/agents/evaluator.md — rc {up.returncode}, в HEAD {', '.join(up_arch) or 'архива нет'}, на месте — {'нет' if up_ok else 'есть'}")
+    gd = tempfile.mkdtemp(prefix="check-verify-gate-", dir=TMP)
+    gg = lambda *a: subprocess.run(["git", *a], cwd=gd, env=GIT_ENV, capture_output=True, text=True)
+    gg("init", "-q", "-b", "main")
+    for rel in GATE_PATHS:
+        os.makedirs(os.path.dirname(f"{gd}/{rel}"), exist_ok=True)
+        shutil.copy2(f"{REPO}/{rel}", f"{gd}/{rel}")
+    gg("add", "--", *GATE_PATHS)
+    gg("commit", "-qm", "F8.1: воркфлоу")
+    os.makedirs(f"{gd}/docs/evidence")
+    open(f"{gd}/{EVIDENCE_F8}", "w", encoding="utf-8").write("spec: SPEC-v3.5\nF8.1 opus=4/4\nVERIFY_OPUS_OK\n")
+    gg("add", "--", EVIDENCE_F8)
+    gg("commit", "-qm", "F8.1: evidence")
+    same = gate_decision(gd)
+    with open(f"{gd}/.claude/workflows/verify-phase.js", "a", encoding="utf-8") as f:
+        f.write("// правка копии\n")
+    diff = gate_decision(gd)
+    p("F8.5", same[0] == "evidence" and diff[0] == "live", f"gleich={same[0]} diff={diff[0]} · фикстура: воркфлоу, копия и лаунчер, затем коммит evidence F8 с VERIFY_OPUS_OK — «{same[1]}»; "
+                                                           f"правка .claude/workflows/verify-phase.js в дереве — «{diff[1]}»")
+
 def finish():
     print("VERIFY_OK" if out and all(out) else "VERIFY_FAIL")
+    if F8_OK and all(F8_OK) and out and all(out):
+        print("VERIFY_OPUS_OK")
     return 0 if out and all(out) else 1
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--gate"]:
+        how, why = gate_decision(REPO)
+        print(f"VERIFY_GATE {how} · {why}", flush=True)
+        if how == "evidence":
+            print(f"VERIFY_OPUS_OK — из {EVIDENCE_F8} коммита evidence", flush=True)
+            sys.exit(0)
     sys.exit(main())

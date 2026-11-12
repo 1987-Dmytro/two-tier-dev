@@ -68,7 +68,7 @@
 - **F8.1** статика: 4 стадии `claude-opus-5-5` → мутант с Sonnet в стадии — FAIL → `F8.1 opus=4/4 mutant=rot`.
 - **F8.2** живые: `clean` PASS, `red` NEEDS_WORK, `eval` ловит мутант → `F8.2 clean=PASS red=NW eval=1/1`.
 - **F8.3** журнал репо: «до» (`wf` = хеш до правки, `tokens`, `ts` раньше коммита правки) и «после» (`wf` = HEAD) → `paar=OK`; «до» без токенов / новее правки → FAIL 2/2 → `F8.3 paar=OK rot=2/2`.
-- **F8.4** `evaluator.md` в `docs/archive/`, в `kit/` и `bin/` упоминаний нет; апгрейд фикстуры с ним → в архиве запуска → `F8.4 agent=archiv upgrade=archiv`; красная — файл в `kit/`.
+- **F8.4** `evaluator.md` в `docs/archive/`, в `kit/` и `bin/` файла нет, упоминаний вне списка апгрейда и проб нет; апгрейд фикстуры с ним → в архиве запуска → `F8.4 agent=archiv upgrade=archiv`; красная — файл в `kit/`.
 - **F8.5** решение гейта: пути воркфлоу и лаунчера не менялись с коммита evidence → `evidence`; правка в копии → `live` → `F8.5 gleich=evidence diff=live`.
 ### F9 — `bin/evidence F9 gate -- bin/gate-v3.5` → `GATE35_OK`
 - **F9.1** фикстура: `docs/drafts/team-lead-spec.md` 8001 знак → FAIL, 8000 → OK → `F9.1 spec=FAIL,OK`.

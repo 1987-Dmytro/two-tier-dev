@@ -38,7 +38,8 @@ ACT = [".claude/hooks/abide.mjs", ".claude/hooks/toolgate-deny.mjs"]  # v3.3, F3
 TL_RETIRED = [".claude/toolgate.yaml"]  # ушедший файл тимлида: в архив коммитом «Тимлид: …»
 RETIRED = [".claude/hooks/verify-gate.sh", ".claude/hooks/track-read.sh", ".claude/hooks/commit-on-stop.sh",
            ".claude/hooks/test-output-filter.sh", ".claude/rules/graphify.md", ".claude/skills/team-lead/SKILL.md",
-           ".claude/skills/grilling/SKILL.md", "intent/intent.template.md", "docs/GOAL.template.txt"] + ACT + TL_RETIRED
+           ".claude/skills/grilling/SKILL.md", "intent/intent.template.md", "docs/GOAL.template.txt"] + ACT + TL_RETIRED \
+    + [".claude/agents/evaluator.md"]  # v3.5, F8.4: приёмка — /verify-phase на Opus, агент evaluator снят
 PLUGINS_OFF = ["jev-steer-or-queue@jev-steer-or-queue", "compact-adviser@compact-adviser"]  # v3.3, F3.1: плагины на действие
 TODAY = time.strftime("%Y-%m-%d")
 BRANCH = "kit-v3"  # ветка апгрейда; --branch
