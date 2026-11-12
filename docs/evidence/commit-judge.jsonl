@@ -189,3 +189,4 @@
 {"ts": "2026-11-08T17:36:18Z", "decision": "skip", "judge": "abide", "rule": null, "files": ["docs/PROGRESS.md"], "score": null, "note": "abide check error CHECK_TIMEOUT", "diff": "fd1401f864f897a1", "ms": 18773}
 {"ts": "2026-11-08T17:53:11Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["docs/STATUS.md"], "score": 0.02, "diff": "21beaf84122e7bd0", "ms": 1610}
 {"ts": "2026-11-08T18:09:13Z", "decision": "pass", "judge": "abide", "rule": "no-secret-values", "files": ["docs/reviews/V3.4-review.md"], "score": 0.03, "diff": "2d079f525932710e", "ms": 1497}
+{"ts": "2026-11-08T18:10:18Z", "decision": "pass", "judge": "abide", "rule": "evidence-anonymized", "files": ["docs/evidence/spec-gate.jsonl"], "score": 0.1, "diff": "122a3ab96235b987", "ms": 1916}
