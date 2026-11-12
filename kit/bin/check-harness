@@ -77,12 +77,16 @@ GATE_PROGRESS = ("# PROGRESS — фикстура spec-gate\n\n## Голова �
 GATE_STOP = ("STOP: STOP-INPUT — фикстуре нужен ключ оператора.\nВопрос оператору: выдать ли ключ фикстуры? "
              "Resume: «продолжай по SPEC-1 с F2: ключ выдан».\n")
 # SPEC-v3.5 F6.4: фикстуры, играющие тимлида, зовут git в окружении своей роли — без CLAUDECODE сессии Claude Code
-GIT_ENV = dict({k: v for k, v in os.environ.items() if k != "CLAUDECODE"}, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
-               GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid",
-               # без фонового обслуживания git: после push receive-pack запускает его в bare origin фикстуры, оно пакует loose-объекты и снимает
-               # пустые objects/xx — следующий push под нагрузкой гейта переносит объекты в снятый каталог (ENOENT, «unable to migrate objects»)
-               GIT_CONFIG_COUNT="3", GIT_CONFIG_KEY_0="gc.auto", GIT_CONFIG_VALUE_0="0", GIT_CONFIG_KEY_1="maintenance.auto",
-               GIT_CONFIG_VALUE_1="false", GIT_CONFIG_KEY_2="receive.autogc", GIT_CONFIG_VALUE_2="false")
+# Без фонового обслуживания git: после push receive-pack запускает его в bare origin фикстуры, оно пакует loose-объекты и снимает пустые
+# objects/xx — следующий push под нагрузкой переносит объекты в снятый каталог (ENOENT, «unable to migrate objects»). Настройки — глобальным
+# конфигом фикстур: GIT_CONFIG_COUNT/PARAMETERS локальный транспорт до receive-pack не доносит (local_repo_env), GIT_CONFIG_GLOBAL — доносит.
+FIXTURE_GITCONFIG = "/tmp/two-tier-v3/fixture.gitconfig"
+os.makedirs(os.path.dirname(FIXTURE_GITCONFIG), exist_ok=True)
+with open(f"{FIXTURE_GITCONFIG}.{os.getpid()}", "w", encoding="utf-8") as _f:  # атомарно: гейт гонит несколько check-harness разом
+    _f.write("[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n[receive]\n\tautogc = false\n")
+os.replace(f"{FIXTURE_GITCONFIG}.{os.getpid()}", FIXTURE_GITCONFIG)
+GIT_ENV = dict({k: v for k, v in os.environ.items() if k != "CLAUDECODE"}, GIT_CONFIG_GLOBAL=FIXTURE_GITCONFIG, GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
+               GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
 PROMPT_GATE_BLOCK = ("Stop-gate control run. Reply with exactly this sentence: Готово — фаза закрыта. Use no tools. "
                      "If a hook keeps your turn going, reply with the single word blocked and use no tools.")
 PROMPT_GATE_OK = ("Stop-gate control run. With the Edit tool, in docs/PROGRESS.md replace `**Когда закончим:** сегодня, после гейта.` with "
@@ -2072,12 +2076,15 @@ def stop_probes(src, launch):
     open(f"{a}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg.replace("гейт идёт.", "гейт идёт, стоп открыт."))
     ship(a, "голова после стопа", "docs/PROGRESS.md")
     rep_head = dec(gate_run(a, ta, "probe-open-head"))
+    two, ttwo = gate_fixture(src, launch)  # в разделе две строки STOP: прошлая снята, открытая — последняя
+    stop_now(two, GATE_STOP.replace(STOP_L, STOP_L + " — снят") + "\n" + GATE_STOP)
+    last_open = dec(gate_run(two, ttwo, "probe-open-two"))
     o, to = gate_fixture(src, launch)
     stop_now(o)
     old = hook_at(src, o, OLD_HOOK_34, "spec-gate-v34.mjs")
     alt = [dec(gate_run(o, to, "probe-open", hook=old)), dec(gate_run(o, to, "probe-open", hook=old))] if old else ["?", "?"]
-    item(S, "F3.1", new == ["stop"] * 3 and alt == ["stop", "block"] and rep_plan == rep_head == "stop", f"neu={','.join(new[:2])} alt={','.join(alt)} · стоп запушен, после него коммит только в docs/evidence/: "
-         f"та же сессия — {new[0]}, {new[1]}; новая сессия — {new[2]}; затем коммит только docs/PLAN-1.md — {rep_plan}, только головы PROGRESS — {rep_head}; хук v3.4 ({OLD_HOOK_34}) — {', '.join(alt)}")
+    item(S, "F3.1", new == ["stop"] * 3 and alt == ["stop", "block"] and rep_plan == rep_head == last_open == "stop", f"neu={','.join(new[:2])} alt={','.join(alt)} · стоп запушен, после него коммит только в docs/evidence/: "
+         f"та же сессия — {new[0]}, {new[1]}; новая сессия — {new[2]}; затем коммит только docs/PLAN-1.md — {rep_plan}, только головы PROGRESS — {rep_head}; две строки STOP в разделе (первая снята) — {last_open}; хук v3.4 ({OLD_HOOK_34}) — {', '.join(alt)}")
     # F3.2 — стоп закрыт: коммит кода, «— снят», слово Resume (и в новой сессии)
     c, tc = gate_fixture(src, launch)
     stop_now(c)
@@ -2100,18 +2107,20 @@ def stop_probes(src, launch):
     res2 = gate_run(r, fresh, "probe-resume-next")
     kept = last_line(res1).get("resumed") or []
 
-    def word_at(text, dt):  # слово оператора в транскрипте через dt с от сейчас (стоп закоммичен сейчас)
+    def word_at(text, dt, meta=False):  # слово оператора в транскрипте через dt с от сейчас (стоп закоммичен сейчас)
         w, tw = gate_fixture(src, launch)
         stop_now(w, f"{STOP_L}\nВопрос оператору: выдать ли ключ фикстуры?\nResume: {resume}\n")
+        rec = {"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + dt)), "message": {"role": "user", "content": text}}
         with open(tw, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + dt)), "message": {"role": "user", "content": text}}, ensure_ascii=False) + "\n")
+            f.write(json.dumps(rec | ({"isMeta": True} if meta else {}), ensure_ascii=False) + "\n")
         return dec(gate_run(w, tw, "probe-word"))
     prefix = word_at("Resume: ключ у оператора, иду дальше", 2)  # не строка Resume стопа, но начинается с «Resume:» — слово
     before = word_at(resume, -300)  # строка Resume стопа до его коммита — не слово
+    meta = word_at("Resume: ключ у оператора, иду дальше", 2, meta=True)  # служебная запись харнеса (isMeta), не слова человека — не слово
     sides = [dec(code), dec(snyat), dec(res1), dec(res2)]
-    item(S, "F3.2", sides == ["block"] * 4 and bool(kept) and prefix == "block" and before == "stop", f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
+    item(S, "F3.2", sides == ["block"] * 4 and bool(kept) and prefix == "block" and before == meta == "stop", f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
          f"слово Resume (строка Resume стопа после его коммита), потом коммит только в docs/evidence/ — {sides[2]}, в журнале resumed {kept}; новая сессия без слова — {sides[3]}; "
-         f"сообщение «Resume: …» не строкой стопа — {prefix}; строка Resume за 5 мин до коммита стопа — {before}")
+         f"сообщение «Resume: …» не строкой стопа — {prefix}; строка Resume за 5 мин до коммита стопа — {before}; служебная запись (isMeta) «Resume: …» — {meta}")
     # F3.3 — стоп с текстом стопа прошлой фазы: новый стоп; хук v3.4 — «старый»
     p, tp = gate_fixture(src, launch, stop_old=True)
     pg = open(f"{p}/docs/PROGRESS.md", encoding="utf-8").read()
@@ -2146,11 +2155,24 @@ def stop_probes(src, launch):
     f5, t5 = gate_fixture(src, launch)
     stop_now(f5, "STOP: STOP-INPUT — фикстуре нужен ключ оператора.\nВопрос оператору: продолжать ли без ключа (resume)?\n")
     word = gate_run(f5, t5, "probe-form")
+    f6, t6 = gate_fixture(src, launch)
+    stop_now(f6, "STOP: STOP-INPUT — фикстуре нужен ключ оператора.\nResume: продолжай по SPEC-1 с F2: ключ выдан\n")
+    noq = gate_run(f6, t6, "probe-form")
+    f7, t7 = gate_fixture(src, launch)
+    stop_now(f7, "STOP: STOP-INPUT — фикстуре нужен ключ оператора.\nВопрос оператору: выдать ли ключ?\nResume: выдать ли ключ?\n")
+    qres = gate_run(f7, t7, "probe-form")
+    f8, t8 = gate_fixture(src, launch)
+    open(f"{f8}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + GATE_STOP)
+    for a_ in (("add", "--", "docs/PROGRESS.md"), ("commit", "-qm", "стоп без push")):
+        subprocess.run(["git", *a_], cwd=f8, env=GIT_ENV, capture_output=True, text=True, check=True)
+    unpushed = gate_run(f8, t8, "probe-form")
     rs = lambda x: " ".join(str(m) for m in (last_line(x).get("missing") or []))
-    named = ["STOP-INPUT» has no question" in rs(no_form), "STOP-PAY» is not a stop of SPEC §4" in rs(bad_id), "on disk only" in rs(disk), "STOP-INPUT» has no question" in rs(word)]
-    item(S, "F3.4", all(named) and dec(no_form) == dec(bad_id) == dec(disk) == dec(word) == "block" and dec(formed) == "stop",
-         f"form={sum(named)}/4 · без вопроса и Resume — {dec(no_form)}, названо — {'да' if named[0] else 'нет'}; слова «продолжать» и resume в вопросе, строки Resume нет — {dec(word)}, названо — {'да' if named[3] else 'нет'}; STOP-PAY вне §4 — {dec(bad_id)}, названо — {'да' if named[1] else 'нет'}; "
-         f"только на диске — {dec(disk)}, названо — {'да' if named[2] else 'нет'} · красная: оформленный и запушенный — {dec(formed)}")
+    named = ["STOP-INPUT» has no question" in rs(no_form), "STOP-PAY» is not a stop of SPEC §4" in rs(bad_id), "on disk only" in rs(disk)]
+    extra = ["STOP-INPUT» has no question" in rs(word), "STOP-INPUT» has no question" in rs(noq), "STOP-INPUT» has no question" in rs(qres), "is not pushed" in rs(unpushed)]  # стороны сверх трёх пункта
+    item(S, "F3.4", all(named) and all(extra) and dec(no_form) == dec(bad_id) == dec(disk) == dec(word) == dec(noq) == dec(qres) == dec(unpushed) == "block" and dec(formed) == "stop",
+         f"form={sum(named)}/3 · без вопроса и Resume — {dec(no_form)}, названо — {'да' if named[0] else 'нет'}; STOP-PAY вне §4 — {dec(bad_id)}, названо — {'да' if named[1] else 'нет'}; "
+         f"только на диске — {dec(disk)}, названо — {'да' if named[2] else 'нет'}; ещё: слова «продолжать» и resume в вопросе без строки Resume — {dec(word)}, строка Resume без вопроса — {dec(noq)}, строка Resume вопросом — {dec(qres)}, закоммичен без push — {dec(unpushed)}, названо — {sum(extra)}/4 · "
+         f"красная: оформленный и запушенный — {dec(formed)}")
 
 
 def gate_probes(src, launch, lenv, args):

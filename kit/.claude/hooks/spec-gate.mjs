@@ -184,7 +184,7 @@ const STOP_ONE = /^[ \t]*(?:[-*][ \t]*)?STOP:[ \t]*STOP-[A-Z]+\b/m
 const LIFTED = /[—–-]+\s*снят\S*\s*$/i
 const RESUME_LINE = /^[ \t]*(?:[-*][ \t]*)?\**Resume:\**[ \t]*(\S.*)$/i
 const CONTINUE_LINE = /^[ \t]*(?:[-*][ \t]*)?(Продолж[^?]*)$/i
-const RESUME_MARK = /(?:^|\s)\**Resume:\**[ \t]*\S/im  // the form check: a Resume line, or «Resume: …» after the question on its line — not the word alone
+const RESUME_MARK = /(?:^|\s)\**Resume:\**[ \t]*\S[^\n]*(?<!\?)[ \t]*$/im  // the form check: a Resume line, or «Resume: …» after the question on its line — not the word alone, never a question (as resumeOf)
 function openStop(progress) {
   const sections = progress.split(/^(?=## )/m)
   const section = sections.find(s => s.startsWith('## Open stop')) ?? sections.find(s => !s.startsWith('## Closed') && STOP_ONE.test(s)) ?? ''
