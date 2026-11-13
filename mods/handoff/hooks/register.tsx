@@ -23,10 +23,12 @@ type Settings = { threshold: number; handoffDir: string; autoCompact: boolean; m
 type State = {
   s: Settings
   isAttended: boolean // the REPL, or a surface attached once (session.attach): a person's session
+  isSdkHost: boolean // started as the SDK starts (isInteractive false) — the Code tab: $.session.compact is refused there
   isArmed: boolean // re-armed whenever the fill is below the threshold (after a compaction: its size afterwards)
   threshold: number // the threshold of the last decision: what the band reads
   isRunning: boolean
   lastPath: string | undefined
+  pending: Trigger | undefined // the mod's trigger of a `/compact` prompt it submitted: names the file the hook writes
 }
 
 type Outcome = { isWritten: true; relPath: string; text: string } | { isWritten: false; text: string }
@@ -42,6 +44,7 @@ const kTokens = (n: number | undefined) => (n === undefined ? '?' : `${Math.roun
 const sizeOf = (f: Fill) => (f.tokens === undefined ? '' : ` · ${kTokens(f.tokens)}/${kTokens(f.window)}`)
 const percentOf = (tokens: number, window: number) => Math.round((tokens / window) * 100)
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err))
+const HEADLESS = /not available in a headless/i // $.session.compact in an SDK-hosted session (the Code tab), engine 2.1.321
 
 // The fill as the person sees it — the app's context figure and /context measure against the compaction window
 // (`autoCompactWindow`, `rawMaxTokens`), which may be smaller than the model's: 386k is 64 % of a 600k compaction window and
@@ -73,14 +76,17 @@ export const register: Register = (on, options) => {
   const st: State = {
     s: settingsOf(options),
     isAttended: false,
+    isSdkHost: false,
     isArmed: true,
     threshold: 70,
     isRunning: false,
     lastPath: undefined,
+    pending: undefined,
   }
 
   on('session.start', async ($, e, next) => {
     st.isAttended ||= e.isInteractive // a host may attach before this runs
+    st.isSdkHost = !e.isInteractive
     await $.command.register({
       name: 'handoff',
       description: 'Hand off in place: `now` compacts this session with the handoff sections (never /clear); `write` writes the file only.',
@@ -112,8 +118,14 @@ export const register: Register = (on, options) => {
   on('session.compact', async ($, e, next) => {
     if (e.agentId !== undefined || !(await isPersons($, st))) return next(e)
     const result = await next({ ...e, instructions: withInstructions(e.instructions, compactInstructions(st.s.language)) })
-    if (e.trigger === 'precompute' || result.skip !== undefined) return result
-    await afterCompact($, st, e.trigger, e.messages, result)
+    if (e.trigger === 'precompute') return result
+    const trigger = st.pending ?? e.trigger // the mod's own `/compact` prompt (Code tab) carries the mod's trigger
+    st.pending = undefined
+    if (result.skip !== undefined) {
+      if (trigger === 'threshold') st.isArmed = true
+      return result
+    }
+    await afterCompact($, st, trigger, e.messages, result)
     return result
   })
 
@@ -246,6 +258,20 @@ async function compactInPlace($: EngineInterface, st: State, trigger: Trigger): 
     const relPath = await afterCompact($, st, trigger, before, result)
     await update($, note, () => (relPath ? `compacted · ${relPath}` : 'compacted'))
   } catch (err) {
+    if (st.isSdkHost || HEADLESS.test(messageOf(err))) {
+      // The Code tab hosts the engine as the SDK does: there `$.session.compact` is refused and compaction runs inside a turn,
+      // as the `/compact` command (the engine's own words; a prompt beginning with / is refused — `$.command.run` runs it).
+      // The session.compact hook adds the sections, saves the file and re-arms.
+      st.pending = trigger
+      try {
+        await $.command.run({ command: 'compact' })
+        await update($, note, () => 'compacting via /compact')
+        return
+      } catch (err2) {
+        st.pending = undefined
+        err = err2
+      }
+    }
     rearm()
     const why = `handoff: compact failed — ${messageOf(err)}; nothing was cleared`
     $.ui.toast(why, { timeoutMs: 8000 })

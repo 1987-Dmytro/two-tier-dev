@@ -213,7 +213,7 @@ test("after a person's /clear the band comes back at once, and the main button c
 })
 
 // SPEC-v3.5 F1: a person's session (the REPL or an attached surface), the threshold of budgets.json, the surface in the status.
-type Host = { fills: Array<number | null>; budgets?: string; surfaces: string[]; written: string[]; commands: string[]; submitted: string[]; compactions: Compaction[]; after: number | null; refuse: number; skip: number; toasts: string[]; statuses: string[]; docs: Record<string, string>; breakdown?: unknown; tokens?: number; key?: string }
+type Host = { fills: Array<number | null>; budgets?: string; surfaces: string[]; written: string[]; commands: string[]; submitted: string[]; compactions: Compaction[]; after: number | null; refuse: number; skip: number; headless: number; toasts: string[]; statuses: string[]; docs: Record<string, string>; breakdown?: unknown; tokens?: number; key?: string }
 
 /** A hosted session (isInteractive false): each turn reads the next fill of `fills`; budgets.json is `budgets` (undefined: no file). */
 function hosted(on: any, h: Host) {
@@ -261,6 +261,10 @@ function hosted(on: any, h: Host) {
       h.skip--
       return { skip: 'blocked by a PreCompact hook' }
     }
+    if (h.headless > 0) {
+      h.headless--
+      throw new Error('$.session.compact: not available in a headless (-p / SDK) session yet: compaction here runs inside a turn (a /compact prompt)')
+    }
     return compacted(h.after)
   })
   on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
@@ -278,7 +282,7 @@ function hosted(on: any, h: Host) {
   })
   on('session.attach', ($: any, e: any) => ({ clientId: e.clientId }))
 }
-const hostOf = (fills: Array<number | null>, extra: Partial<Host> = {}): Host => ({ fills, surfaces: [], written: [], commands: [], submitted: [], compactions: [], after: 50000, refuse: 0, skip: 0, toasts: [], statuses: [], docs: {}, ...extra })
+const hostOf = (fills: Array<number | null>, extra: Partial<Host> = {}): Host => ({ fills, surfaces: [], written: [], commands: [], submitted: [], compactions: [], after: 50000, refuse: 0, skip: 0, headless: 0, toasts: [], statuses: [], docs: {}, ...extra })
 const BUDGETS = (d: number, p?: number) => JSON.stringify({ defaults: { handoff_threshold_pct: d }, project: p === undefined ? {} : { handoff_threshold_pct: p } })
 const handoffs = (h: Host) => h.written.filter(p => /\/handoff-[^/]+\.md$/.test(p)).length
 
@@ -371,11 +375,11 @@ test('no tokensAfter from core: not re-armed until a turn reads the fill below t
   expect(h.compactions).toHaveLength(1)
 })
 
-test('a compaction refused (a turn runs): nothing cleared, a toast, re-armed — the next turn end compacts', { options: { minTurns: 0 } }, async ($, on) => {
+test('REPL: a compaction refused (a turn runs): nothing cleared, a toast, re-armed — the next turn end compacts', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], refuse: 1 })
   hosted(on, h)
   const clock = mock.clock(on)
-  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true }) // the REPL
   await turns($, clock, h, 2)
   expect(h.compactions).toHaveLength(2)
   expect(h.toasts.some(t => t.includes('nothing was cleared'))).toBe(true)
@@ -416,7 +420,7 @@ test('a refused /handoff now never held the arm: no second handoff while the fil
   const h = hostOf([50, 50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], refuse: 1 })
   hosted(on, h)
   const clock = mock.clock(on)
-  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true }) // the REPL
   await turns($, clock, h, 1) // the handoff file; disarmed
   await $.command.run({ command: 'handoff', args: 'now', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)
   await clock.advance(1000) // refused: a turn runs
@@ -435,6 +439,24 @@ test('no figure yet (no response in this window): no decision, the status says u
   h.fills = [null]
   const { text } = await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)
   expect(text ?? '').toContain('context unknown of 1000000 tokens (model window)')
+})
+
+test('Code tab (SDK host): $.session.compact refused as headless — the mod runs /compact; that compaction carries the sections, the threshold file and the re-arm', { options: { minTurns: 0 } }, async ($, on) => {
+  const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], headless: 1 })
+  hosted(on, h)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  await turns($, clock, h, 1)
+  expect(h.commands).toEqual(['compact'])
+  expect(h.submitted).toHaveLength(0)
+  expect(h.toasts.some(t => t.includes('compact failed'))).toBe(false)
+  // the engine runs the prompt as a compaction inside a turn: trigger manual, through the mod's hook
+  await $.session.compact({ trigger: 'manual', messages: MSGS } as any)
+  expect(h.compactions[1]!.instructions).toContain('Сжимай как хендофф')
+  expect(h.written.some(p => /-compact-threshold\.md$/.test(p))).toBe(true)
+  expect(h.statuses).toContain('ctx 5% · 50k/1000k · handoff @40% · compacted')
+  await turns($, clock, h, 1) // re-armed by the size after: the next crossing goes the same way
+  expect(h.compactions).toHaveLength(3)
 })
 
 test('/handoff now compacts in place once the session is idle; no /clear, no prompt', { options: {} }, async ($, on) => {
