@@ -23,8 +23,8 @@ LIVE = {  # фича: маркер, evidence, пути фичи (мод, хук,
            ["mods/handoff", "kit/bin/check-kit", "kit/bin/check-harness", "kit/budgets.json", "kit/.claude/launch.settings.json", "kit/docs/PROCESS.template.md",
             "bin/two-tier-init"]),
     "F2": ("GATE_SESSION_OK", "docs/evidence/F2-check-harness-result.txt",
-           ["kit/.claude/hooks/spec-gate.mjs", "kit/.claude/hooks/steer.sh", "kit/.claude/settings.json", "mods/phase-start", "kit/bin/check-harness", "kit/.gitignore",
-            "bin/two-tier-init", "checks/fixtures/telefon-spec11-transcript-heads.jsonl"]),
+           ["kit/.claude/hooks/spec-gate.mjs", "kit/.claude/hooks/steer.sh", "kit/.claude/settings.json", "kit/.claude/launch.settings.json", "mods/phase-start",
+            "kit/bin/check-harness", "kit/.gitignore", "bin/two-tier-init", "checks/fixtures/telefon-spec11-transcript-heads.jsonl"]),
 }
 OFFEN_OK = [r"^[^:]+:v3\.4-F5\.3 offen", r"^kit-t5:v3\.4-F3\.5 telefon=offen · не репо кита", r"^kit-t5:v3\.4-F9\.[12] offen · не репо кита",
             r"^kit-t5:F1\.[1-5] offen · не репо кита", r"^kit-t5:F6\.[1-5] offen · не репо кита", r"^kit-t5:F9\.4 offen · не репо кита"]
@@ -78,16 +78,16 @@ def mark(f, marker, *names, rcs, quiet=False):
         fails.append(f"{marker} ({'; '.join(why)})")
 
 
-def fresh(ev, paths):
+def fresh(ev, paths, root=REPO):
     """(маркер из evidence годен, почему): коммит evidence есть, маркер в нём, пути есть и без правок с него — в истории и в дереве (и новых файлов вне git)."""
-    c = git("log", "-1", "--format=%H", "--", ev).stdout.strip()
+    c = git("log", "-1", "--format=%H", "--", ev, cwd=root).stdout.strip()
     if not c:
         return False, f"{ev} нет в истории"
-    gone = [p for p in paths if not os.path.exists(f"{REPO}/{p}")]
+    gone = [p for p in paths if not os.path.exists(f"{root}/{p}")]
     if gone:
         return False, f"путей фичи нет: {', '.join(gone)}"
-    changed = [x for x in git("diff", "--name-only", c, "--", *paths).stdout.split() if x]
-    changed += [x for x in git("ls-files", "--others", "--exclude-standard", "--", *paths).stdout.split() if x]
+    changed = [x for x in git("diff", "--name-only", c, "--", *paths, cwd=root).stdout.split() if x]
+    changed += [x for x in git("ls-files", "--others", "--exclude-standard", "--", *paths, cwd=root).stdout.split() if x]
     return (False, f"с {c[:7]} изменены: {', '.join(changed[:5])}") if changed else (True, f"{ev} @ {c[:7]}, {', '.join(paths)} без правок")
 
 
@@ -244,12 +244,29 @@ if f3:
 _, red_bad = item_lines(red_dir, open(f"{REPO}/{SPEC}", encoding="utf-8").read())
 red_items = bool(f3) and any("чужой id F3.5" in b for b in red_bad)
 rot = int(red_tel) + int(red_items)
-leer = "OK" if f_marks == 0 and n_init == m_kit and hp == ".githooks" and red_marks == 2 and all(ok for _, ok, _ in mod_rows) else "FAIL"
+# свежесть evidence F1/F2 (fresh): свой репо во /tmp — коммит evidence, затем путь фичи без файла и новый файл вне git под путём фичи — оба «не свежо»
+fr = tempfile.mkdtemp(prefix="gate35-fresh-", dir=TT)
+os.makedirs(f"{fr}/docs/evidence")
+os.makedirs(f"{fr}/mod")
+open(f"{fr}/docs/evidence/F1-x-result.txt", "w").write("spec: SPEC-v3.5\n")
+open(f"{fr}/mod/a.ts", "w").write("a\n")
+git("init", "-q", "-b", "main", cwd=fr)
+git("add", "--", "docs/evidence/F1-x-result.txt", "mod/a.ts", cwd=fr)
+git("-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "F1.1: evidence", cwd=fr)
+fr_base = fresh("docs/evidence/F1-x-result.txt", ["mod"], fr)
+fr_gone = fresh("docs/evidence/F1-x-result.txt", ["mod", "mod-typo"], fr)
+open(f"{fr}/mod/new.ts", "w").write("b\n")
+fr_new = fresh("docs/evidence/F1-x-result.txt", ["mod"], fr)
+fresh_ok = fr_base[0] and not fr_gone[0] and "путей фичи нет" in fr_gone[1] and not fr_new[0] and "mod/new.ts" in fr_new[1]
+shutil.rmtree(fr, ignore_errors=True)
+leer = "OK" if (f_marks == 0 and n_init == m_kit and hp == ".githooks" and red_marks == 2 and all(ok for _, ok, _ in mod_rows)
+                and fresh_ok) else "FAIL"
 line95 = (f"leer={leer} rot={rot}/2 · t5 от bin/two-tier-init: файлов кита {n_init} из {m_kit}, core.hooksPath {hp}; маркеров красных {f_marks}; моды {len(mod_rows)}: "
           f"{sum(ok for _, ok, _ in mod_rows)} зелёных; живые F1 и F2 — {', '.join(f'{f} ' + ('evidence' if ev_ok[f][0] else 'live') for f in LIVE)} ‖ копия клона telefon — {tel} ‖ "
           f"evidence F1–F8: пунктов {n_items}, строк не по одной и чужих id — {'; '.join(bad_items) or 'нет'} ‖ другого offen — {'; '.join(other) or 'нет'} ‖ "
           f"красные образцы: строка F9.4 без клона — {'красный' if red_tel else 'зелёный'}; строка «F3.5» прошлой фазы в evidence F3 — {'; '.join(b for b in red_bad if 'F3.5' in b) or 'не поймана'}; "
-          f"разметка: лог без маркера и маркер при rc 1 — FAIL {red_marks}/2")
+          f"разметка: лог без маркера и маркер при rc 1 — FAIL {red_marks}/2; свежесть evidence: без правок — {'свежо' if fr_base[0] else 'не свежо'}, "
+          f"путь без файла — {'свежо' if fr_gone[0] else 'не свежо'} «{fr_gone[1]}», новый файл вне git — {'свежо' if fr_new[0] else 'не свежо'} «{fr_new[1]}»")
 ok95 = leer == "OK" and tel == "OK" and not bad_items and not other and rot == 2
 print(f"F9.5 {line95}" if ok95 else f"F9.5 FAIL: {line95}", flush=True)
 fails += [] if ok95 else [f"F9.5 leer={leer} telefon={tel}{' items' if bad_items else ''}{' offen' if other else ''}"]
