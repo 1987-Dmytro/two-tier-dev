@@ -1319,6 +1319,9 @@ def lints():
         ("только id в заголовке (через пустую строку)", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1.", row="ранняя"))),
         ("только id в заголовке вплотную", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1.", row="ранняя", gap="\n"))),
         ("заголовок жирным, как «Таблица A» SPEC-11", "FAIL", "F58.1:", pe(early(judged, head="**Таблица A — пара F58.1, раз в час**", row="ранняя"))),
+        ("через две пустые строки", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1.", row="ранняя", gap="\n\n\n"))),
+        ("заголовок в две строки", "FAIL", "F58.1:", pe(early(judged, head="Таблица посадки: судит пара F58.1,\nраз в час.", row="ранняя"))),
+        ("« - » внутри заголовка", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1 - раз в час.", row="ранняя"))),
         ("выдана и идёт", "WARN", "SPEC уже выдана", pe(early(judged), commits=[("F58.1: работа", {"src/x.py": "x\n"}, [])])),
     ]
     rot41, rot41_text = judge(f41_rows)
@@ -1331,6 +1334,12 @@ def lints():
         ("планка с файлом распределения", "OK", "ранних планок 0", pe(early(judged, head="Судит пара F58.1.", cell=file_cell))),
         ("ранняя без связи с пунктом", "OK", "ранних планок 1", pe(early(judged, head="Окно звонков.", row="ранняя"))),
         ("пункт списка над таблицей — не заголовок", "OK", "ранних планок 1", pe(early(judged, head="- пара F58.1 — пункт списка", row="ранняя"))),
+        ("заголовок вплотную, абзац над ним через пустую — не заголовок", "OK", "ранних планок 1", pe(early(judged, head="Абзац: судит пара F58.1.\n\nОкно звонков.", row="ранняя", gap="\n"))),
+        ("пункт «1.»", "OK", "ранних планок 1", pe(early(judged, head="1. пара F58.1 — пункт списка", row="ранняя"))),
+        ("таблица над таблицей", "OK", "ранних планок 1", pe(early(judged, head="| звено | судья |\n|---|---|\n| y | F58.1 |", row="ранняя"))),
+        ("пункт с продолжением", "OK", "ранних планок 1", pe(early(judged, head="- пара F58.1 — пункт списка\n  продолжение пункта", row="ранняя"))),
+        ("пункт «*»", "OK", "ранних планок 1", pe(early(judged, head="* пара F58.1 — пункт списка", row="ранняя"))),
+        ("строка # над абзацем", "OK", "ранних планок 1", pe(early(judged, head="### Таблица посадки F58.1\nОкно звонков.", row="ранняя"))),
     ]
     ok42, ok42_text = judge(f42_rows)
     emit("F4.2", ok42, f"otchet={'OK' if f42_rows[0][3][0] == 'OK' else f42_rows[0][3][0]} datei={'OK' if f42_rows[2][3][0] == 'OK' else f42_rows[2][3][0]} · {ok42_text}")
@@ -1439,8 +1448,12 @@ def lints():
 
     # F9.1 — копия team-lead-spec у тимлида не длиннее team_lead_spec_copy_chars: знаки, не байты; ключ из кита, а не из budgets.json корня, — WARN
     key91 = "team_lead_spec_copy_chars"
-    kd91 = json.loads(read(f"{kroot}/budgets.json"))["defaults"].get(key91)  # значение как есть: в ките число пункта — 8000, без подстановки
-    val91 = kd91 == 8000 if kroot == "kit" else (kd91 is None or isinstance(kd91, int))
+    bj91 = json.loads(read(f"{kroot}/budgets.json"))
+
+    def value91(bj, kit):  # значение как есть: в ките число пункта — 8000, без подстановки; в проекте — число или нет ключа
+        kd = bj["defaults"].get(key91)
+        return kd, (isinstance(kd, int) and kd == 8000 if kit else (kd is None or isinstance(kd, int)))
+    kd91, val91 = value91(bj91, kroot == "kit")
     lim91 = 8000 if kroot == "kit" else (kd91 if isinstance(kd91, int) else 8000)  # фикстура: 8001 → FAIL, 8000 → OK (PLAN F9.1)
 
     def copy_side(n, kit_key=False):
@@ -1452,8 +1465,13 @@ def lints():
         rc_, lines = plain(fs)
         return rc_, next((" ".join(l.split()) for l in lines if re.match(rf"(OK|WARN|FAIL) +{key91}:", l)), "нет строки")
     over, at, kitw = copy_side(lim91 + 1), copy_side(lim91), copy_side(lim91 + 1, kit_key=True)
-    ok91 = val91 and over[0] == 1 and over[1].startswith(f"FAIL {key91}") and at[0] == 0 and at[1].startswith(f"OK {key91}") and kitw[1].startswith(f"WARN {key91}") and kitw[0] == 0
-    emit("F9.1", ok91, f"spec={over[1].split()[0]},{at[1].split()[0]} · {kroot}/budgets.json: {key91} = {kd91 if kd91 is not None else 'нет'}{'' if val91 else ' (в ките ждали 8000)'}; "
+    gate91 = lambda val: val and over[0] == 1 and over[1].startswith(f"FAIL {key91}") and at[0] == 0 and at[1].startswith(f"OK {key91}") and kitw[1].startswith(f"WARN {key91}") and kitw[0] == 0
+    fx91 = lambda v: {"defaults": {**{k: x for k, x in bj91["defaults"].items() if k != key91}, **({} if v is None else {key91: v})}}  # budgets.json кита: ключ v, None — без ключа
+    # пункт на budgets.json кита и красная сторона значения: та же проверка на фикстуре с 9000 и без ключа — пункт красный
+    res91 = [gate91(value91(bj, kit)[1]) for bj, kit in ((bj91, kroot == "kit"), (fx91(9000), True), (fx91(None), True))]
+    ok91 = res91 == [True, False, False]
+    emit("F9.1", ok91, f"spec={over[1].split()[0]},{at[1].split()[0]} · {kroot}/budgets.json: {key91} = {kd91 if kd91 is not None else 'нет'}{'' if val91 else ' (в ките ждали 8000)'}, "
+                       f"та же проверка на фикстуре budgets.json кита: 9000 — {'OK' if res91[1] else 'FAIL'}, ключа нет — {'OK' if res91[2] else 'FAIL'}; "
                        f"фикстура: копия {lim91 + 1} знаков (кириллица — знаки, не байты) — rc {over[0]} «{over[1]}»; "
                        f"{lim91} — rc {at[0]} «{at[1]}» · ключ только в kit/budgets.json — rc {kitw[0]} «{kitw[1]}»")
 
