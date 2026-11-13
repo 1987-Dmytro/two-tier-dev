@@ -1743,7 +1743,8 @@ def section_handoff():
         host.say("/handoff now")
         host.results(1, 240)
         host.until(lambda e: e.get("type") == "conversation_reset", 240)
-        host.results(1, 240)  # запрос продолжения после /clear
+        cont2 = host.until(lambda e: e.get("type") == "assistant", 300)  # запрос продолжения после /clear — ход модели
+        host.results(1, 300)
         after, resets = handoff_files(proj), host.count("conversation_reset")
     t40, t10 = re.search(r"threshold (\d+)%", s40), re.search(r"threshold (\d+)%", s10)
     alt = "?"
@@ -1753,11 +1754,12 @@ def section_handoff():
             ostat = status_of(host)
             alt = "fehlt" if "handoff" not in command_names(host) and not STATUS_FORM.match(ostat) else "da"  # без команды текст уходит модели: судит форма статуса мода, не слово
     neu = f"{t40.group(1) if t40 else '?'},{t10.group(1) if t10 else '?'}"
-    p("F1.1", "handoff" in names and neu == "40,10" and "(budgets.json)" in s40 and alt == "fehlt",
+    thr = lambda st: (re.search(r"threshold \d+% \([^)]*\)", st) or [""])[0]
+    p("F1.1", "handoff" in names and neu == "40,10" and "(budgets.json)" in s40 and "(budgets.json)" in s10 and alt == "fehlt",
       f"neu={neu} alt={alt} · хост вкладки (stream-json в обе стороны, без -p), копия mods/handoff 0.4.0 — --plugin-dir, установленный выключен: handoff в commands_changed — "
-      f"{'да' if 'handoff' in names else 'нет'}; budgets.json кита — «{s40[:120]}»; project.handoff_threshold_pct 10 — «{s10[:60]}»; копия 0.3.0 ({OLD_KIT}) — команды нет: {alt}")
-    p("F1.2", before == 0 and after == 1 and resets >= 1, f"datei={before},{after} reset={resets} · тот же хост: файлов handoff-*.md в handoffs/ до команды — {before}, после /handoff now — {after}; "
-      f"событие conversation_reset — {resets}; запрос продолжения после /clear ушёл и получил ответ")
+      f"{'да' if 'handoff' in names else 'нет'}; budgets.json кита — «{s40[:120]}»; project.handoff_threshold_pct 10 — «{thr(s10)}»; копия 0.3.0 ({OLD_KIT}) — команды нет: {alt}")
+    p("F1.2", before == 0 and after == 1 and resets >= 1 and cont2 is not None, f"datei={before},{after} reset={resets} · тот же хост: файлов handoff-*.md в handoffs/ до команды — {before}, после /handoff now — {after}; "
+      f"событие conversation_reset — {resets}; ход модели на запрос продолжения после /clear — {'есть' if cont2 is not None else 'нет'}")
     # F1.3 — поверхность: без неё мод не пишет сам, с ui_attach — пишет и продолжает (порог 10, заполнение > 10 %)
     proj = handoff_project()
     set_threshold(proj, 10)
@@ -1771,6 +1773,11 @@ def section_handoff():
         host.results(1, 240)
         host.say("Read each of the files fill/part-0.txt to fill/part-5.txt in full with the Read tool, one call per file. Then reply with the single word read.")
         host.results(1, 600)
+        # без поверхности окно держится дольше одного форка ($.model.fork — 16–20 с после конца хода): хендофф, начатый сам, успел бы лечь
+        t_hold = time.monotonic()
+        while time.monotonic() - t_hold < NO_SURFACE_HOLD and not handoff_files(proj):
+            host.until(lambda e: False, 1)
+        held = round(time.monotonic() - t_hold)
         s_fill = status_of(host)
         no_surface = handoff_files(proj)
         host.control("ui_attach", surface="desktop", client_id="probe")
@@ -1778,18 +1785,24 @@ def section_handoff():
         s_desk = status_of(host)
         host.say("Reply with the single word ok and use no tools.")
         host.results(1, 240)
-        host.until(lambda e: e.get("type") == "conversation_reset", 300)
-        host.results(1, 300)  # запрос продолжения после /clear
+        reset3 = host.until(lambda e: e.get("type") == "conversation_reset", 300)
+        cont3 = host.until(lambda e: e.get("type") == "assistant", 300) if reset3 else None  # мод продолжает: ход модели на запрос продолжения
+        host.results(1, 300)
         with_surface = handoff_files(proj)
     fill = re.search(r"context (\d+)% of (\d+)", s_fill)
     fl = f"{'desktop' if 'surface desktop' in s_desk else '?'},{'none' if 'surface none' in s_none else '?'}"
-    p("F1.3", fl == "desktop,none" and no_surface == 0 and with_surface == 1 and fill and int(fill.group(1)) >= 10,
-      f"fl={fl} auto={with_surface},{no_surface} · хост, порог 10 (project.handoff_threshold_pct): без поверхности — «{s_none[:90]}»; после чтения fill/ — заполнение {fill.group(1) if fill else '?'}% "
-      f"окна {fill.group(2) if fill else '?'}, хендоффов {no_surface}; ui_attach desktop — «{s_desk[:70]}», следующий ход — хендоффов {with_surface}, /clear и запрос продолжения ушли")
+    surf = lambda st: (re.search(r"threshold \d+% \([^)]*\) · surface \S+", st) or [""])[0]
+    p("F1.3", fl == "desktop,none" and no_surface == 0 and held >= NO_SURFACE_HOLD and with_surface == 1 and reset3 is not None and cont3 is not None
+      and fill and int(fill.group(1)) >= 10,
+      f"fl={fl} auto={with_surface},{no_surface} · хост, порог 10 (project.handoff_threshold_pct): без поверхности — «{surf(s_none)}»; после чтения fill/ — заполнение {fill.group(1) if fill else '?'}% "
+      f"окна {fill.group(2) if fill else '?'}, за {held} с без поверхности хендоффов {no_surface}; ui_attach desktop — «{surf(s_desk)}», следующий ход — хендоффов {with_surface}, "
+      f"conversation_reset — {'есть' if reset3 is not None else 'нет'}, ход модели на запрос продолжения — {'есть' if cont3 is not None else 'нет'}")
     ok = all(sec) and not opened
     print("HANDOFF_TAB_OK" if ok else ("HANDOFF_TAB_FAIL" if not all(sec) else "--   handoff-tab: offen — маркера HANDOFF_TAB нет"), flush=True)
     return all(sec)
 
+
+NO_SURFACE_HOLD = 45  # с: окно без поверхности дольше форка хендоффа (16–20 с) с запасом — мод, пишущий сам, покраснел бы
 
 # ---------- раздел operator (SPEC-v3.5 F6): слово оператора командой ----------
 OPW_SPEC = ("# SPEC-2\n\n## 2. Фичи\n- **F1 x** · готово: F1.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n  - `F1.1` x\n\n"
@@ -1892,14 +1905,18 @@ def section_operator():
     op_in = plain_commit(d, "Оператор: z", "docs/STATUS.md", "s2\ns3\n")
     op_out = plain_commit(d, "Оператор: w", "docs/PROCESS.md", "p2\n")
     op_big = plain_commit(d, "Оператор: big", "docs/STATUS.md", "".join(f"l{i}\n" for i in range(10)))
+    _, oa = sh([f"{d}/bin/check-budget"], d)  # lint владения до обхода хука: «Оператор:» в окне (x из F6.2 и z) — проход
+    own_ok = next((l for l in oa.splitlines() if l.startswith("OK   owner")), "нет строки")
+    lint_ja = not any(l.startswith("FAIL owner") for l in oa.splitlines()) and "«Оператор:» в окне — 2" in own_ok
     plain_commit(d, "Оператор: w", "docs/PROCESS.md", "p2\n", hooks=False)  # мимо хука — его видит lint владения
     rb, ob = sh([f"{d}/bin/check-budget"], d)
-    own_fail = next((l for l in ob.splitlines() if l.startswith("FAIL owner")), "нет строки")
+    own_fails = [l for l in ob.splitlines() if l.startswith("FAIL owner")]
+    own_fail = own_fails[0] if own_fails else "нет строки"
     tl_in = plain_commit(d, "Тимлид: статус", "docs/STATUS.md", "s4\n")
     tl_out = plain_commit(d, "Тимлид: статус", "docs/STATUS.md", "s4\n", env=GIT_ENV)
-    op_ja = op_in[0] == 0
+    op_ja = op_in[0] == 0 and lint_ja
     op_nein = op_out[0] == 1 and "operator-window: docs/PROCESS.md" in op_out[1] and op_big[0] == 1 and "operator-window" in op_big[1] \
-        and "BUDGET_FAIL owner" in ob.splitlines() and "вне окна доводки" in own_fail and rb == 1
+        and "BUDGET_FAIL owner" in ob.splitlines() and len(own_fails) == 1 and "«Оператор: w»" in own_fail and "вне окна доводки" in own_fail and "docs/PROCESS.md" in own_fail
     tl_nein = tl_in[0] == 1 and "team-lead-session" in tl_in[1] and tl_out[0] == 0
     sess = dict(os.environ, CLAUDECODE="1", TELEFON_CLONE=f"{TMP}/no-telefon-clone")
     fx = {}
@@ -1913,7 +1930,8 @@ def section_operator():
     fix_ok = all(rc_ == 0 and not bad and mk is not False for rc_, bad, mk, _ in fx.values())
     p("F6.4", op_ja and op_nein and tl_nein and fix_ok,
       f"op={'ja' if op_ja else 'nein'},{'nein' if op_nein else 'ja'} tl={'nein' if tl_nein else 'ja'} fixturen={'OK' if fix_ok else 'FAIL'} · хук: «Оператор:» в окне — rc {op_in[0]}; "
-      f"вне окна — rc {op_out[0]} «{op_out[1][:90]}»; дифф сверх запаса — rc {op_big[0]}; мимо хука → bin/check-budget rc {rb} «{own_fail[:110]}», BUDGET_FAIL owner — "
+      f"lint владения на них — «{own_ok[own_ok.find('«Оператор:»'):][:60] if '«Оператор:»' in own_ok else own_ok[:60]}», строк FAIL owner — 0 · "
+      f"вне окна — rc {op_out[0]} «{op_out[1][:90]}»; дифф сверх запаса — rc {op_big[0]}; мимо хука → bin/check-budget: строк FAIL owner {len(own_fails)} «{own_fail[:110]}», BUDGET_FAIL owner — "
       f"{'есть' if 'BUDGET_FAIL owner' in ob.splitlines() else 'нет'} · «Тимлид:» при CLAUDECODE=1 — rc {tl_in[0]} «{tl_in[1][:80]}», без — rc {tl_out[0]} · из сессии (CLAUDECODE=1): "
       + "; ".join(f"{n} — rc {rc_}, красных строк {len(bad)}{', COMMIT_OK' if mk else ''}{f' (без ключа или abide вне счёта: {chr(32).join(nk)})' if nk else ''}"
                   for n, (rc_, bad, mk, nk) in fx.items()))
