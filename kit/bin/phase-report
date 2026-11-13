@@ -8,11 +8,13 @@
   · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
     отказы и отклонённые — поимённо, их читает тимлид;
   · пропуски spec-gate — строки docs/evidence/spec-gate.jsonl с решением pass и причиной (кап, no-progress, ошибка, AGENT_STOP, фон);
+    ложные блоки — строки «ложный блок» в разделе ## Notes docs/PROGRESS.md (SPEC-v3.5 §4); «ложных блоков 0» — счёт, не блок;
   · пропуски сессии исполнителя (SPEC-v3.5 §5): решения pass «not the phase session» журнала spec-gate — всего и сессий из метки .claude/phase-session.json
     (их хеш, как в журнале; ожидается 0); цена круга F8.3 — по последнему завершённому прогону каждой фикстуры в docs/evidence/verify-runs.jsonl до и после
     правки воркфлоу kit/.claude/workflows/verify-phase.js (wf — хеш файла на родителе коммита правки и в HEAD): секунды и токены;
   · слово оператора и тимлида (SPEC-v3.5 F6.5): коммиты «Оператор:» и «Тимлид:» плеча — sha, пути, слово; плечо — от первого коммита не «Тимлид:»
-    после последнего коммита стартового запроса (docs/PROMPT.txt): «Тимлид:» сразу за ним — выдача, не плечо;
+    после выдачи — самого раннего коммита серии docs/PROMPT.txt, чей `Read first:` называет ту же SPEC (issue_commit; правка запроса
+    с той же SPEC начало не сдвигает, коммиты прошлой SPEC — не плечо): «Тимлид:» сразу за выдачей — тоже выдача, не плечо;
   · метрики ретро (SPEC-v3.4 F5.4): кругов до PASS — по вердиктам этой SPEC docs/evidence/verify-<sha>[-F<n>…].txt в порядке истории; откатов деплоя — строки ROLLBACK_OK после выкатки на линию, по одной на выкатку,
     против деплоев на линию в docs/evidence/deploy-window.log; поправок объёма — строки «Поправка» §0 SPEC. Данных нет — нули;
   · ячейка Jev в тени: один вопрос `choice` на пункт — пункт против сырого вывода его пробы (`questions.item_status` в
@@ -307,11 +309,12 @@ def main(argv):
     gate = [g for g in gate_all if since and utc(g.get("ts", "")) >= utc(since)]  # решения плеча (SPEC-v3.5 §5): с первого коммита плеча
     passes = [g for g in gate if g.get("decision") == "pass" or (g.get("decision") == "block" and g.get("mode") != "active")]  # блок в тени ход не держал
     blocks = [g for g in gate if g.get("decision") == "block" and g.get("mode") == "active"]
-    false_lines = [l for l in read("docs/PROGRESS.md").splitlines() if re.search(r"ложн\w* блок", l, re.I)]
+    notes = re.search(r"^## Notes[^\n]*\n(.*?)(?=^## |\Z)", read("docs/PROGRESS.md"), re.S | re.M)  # SPEC-v3.5 §4: ложный блок — строка в ## Notes с причиной
+    false_lines = [l for l in (notes[1] if notes else "").splitlines() if re.search(r"ложный блок", l, re.I)]
     L += ["", "## Пропуски spec-gate", "", f"Решения хука плеча — с {since or '—'} (первый коммит не «Тимлид:» после выдачи). Решений хука за плечо: {len(gate)} из {len(gate_all)} в журнале — "
           f"блоков {sum(g.get('decision') == 'block' for g in gate)} (активных {len(blocks)}), OK {sum(g.get('decision') == 'ok' for g in gate)}, "
           f"стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.",
-          f"Ложных блоков (строки «ложный блок» в PROGRESS, SPEC §4): {len(false_lines)}." + (" " + "; ".join(cell(l, 140) for l in false_lines) if false_lines else ""), ""]
+          f"Ложных блоков (строки «ложный блок» в ## Notes PROGRESS, SPEC §4): {len(false_lines)}." + (" " + "; ".join(cell(l, 140) for l in false_lines) if false_lines else ""), ""]
     L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · block · {cell(g.get('reason', ''), 60)} · {cell('; '.join(g.get('missing') or []), 140)}" for g in blocks]
     L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- пропусков нет"]
     n_np, n_np_own = not_phase(gate)

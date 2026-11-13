@@ -1853,6 +1853,50 @@ def plain_commit(d, msg, rel, text, env=SESSION_ENV, hooks=True):
     return rc, next((l for l in out_.splitlines() if l.startswith("commit refused")), out_[:120])
 
 
+# F6.5 на истории: запрос сначала называл SPEC-1 (как в репо кита), даты коммиттера +01:00; плечо SPEC-2 — с «F1.1: работа» (09:00:00Z)
+OPW_HISTORY = [
+    ("2026-11-10T09:00:00+01:00", "Тимлид: выдача SPEC-1", {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n", "docs/SPEC-1.md": "# SPEC-1\n"}),
+    ("2026-11-10T10:00:00+01:00", "F1.1: работа SPEC-1", {"src/x.py": "x = 1\n"}),
+    ("2026-11-10T11:00:00+01:00", "Оператор: слово SPEC-1", {"docs/STATUS.md": "s0\n"}),
+    ("2026-11-12T08:00:00+01:00", "Тимлид: выдача SPEC-2", {"docs/PROMPT.txt": "Read first: docs/SPEC-2.md\n", "docs/SPEC-2.md": OPW_SPEC.format(window=OPW_WINDOW)}),
+    ("2026-11-12T08:30:00+01:00", "Тимлид: вердикт проверяющего", {"docs/reviews/2-spec.md": "PASS\n"}),
+    ("2026-11-12T10:00:00+01:00", "F1.1: работа", {"src/x.py": "x = 2\n"}),
+    ("2026-11-12T10:30:00+01:00", "Оператор: строка статуса", {"docs/STATUS.md": "s1\n"}),
+    ("2026-11-12T11:00:00+01:00", "Тимлид: уточнение запроса", {"docs/PROMPT.txt": "Read first: docs/SPEC-2.md\n\nУточнение.\n"}),
+    ("2026-11-12T12:00:00+01:00", "Оператор: после уточнения", {"docs/STATUS.md": "s2\n"})]
+# журнал spec-gate: до плеча — 4 решения (прошлая фаза, после выдачи, за миг до плеча), с его секунды — 4; без пояса в сравнении — 2
+OPW_GATE = [("2026-11-11T12:00:00.000Z", "pass", "not the phase session: прошлая фаза"), ("2026-11-11T12:00:01.000Z", "block", "прошлая фаза"),
+            ("2026-11-12T07:45:00.000Z", "block", "после выдачи, до плеча"), ("2026-11-12T08:59:59.900Z", "block", "за миг до плеча"),
+            ("2026-11-12T09:00:00.400Z", "ok", "секунда начала плеча"), ("2026-11-12T09:30:00.000Z", "block", "плечо"),
+            ("2026-11-12T10:30:00.000Z", "pass", "not the phase session: боковой чат"), ("2026-11-12T11:30:00.000Z", "ok", "конец плеча")]
+# ложный блок — строка в ## Notes с причиной (SPEC-v3.5 §4): «ложных блоков 0» — счёт, строка вне Notes — не в счёте
+OPW_PROGRESS = ("# PROGRESS\n\n## Голова\nложных блоков 0 — голова\n\n## Notes\n- ложный блок spec-gate: хук держал F1.1, проба была в evidence (фикстура)\n"
+                "- ложных блоков 0 до F2 — счёт\n\n## Named, not built\n- ложный блок вне Notes — не в счёте\n")
+
+
+def op_history():
+    """bin/phase-report --no-jev на фикстуре истории: ((слово оператора, тимлида), (решений хука за плечо, в журнале), ложных блоков); нет строки — None."""
+    d = tempfile.mkdtemp(prefix="check-kit-operator-hist-", dir=TMP)
+    os.makedirs(f"{d}/bin")
+    for t_ in ("check-budget", "phase-report"):
+        shutil.copy2(f"{root}/bin/{t_}", f"{d}/bin/{t_}")
+    sh(["git", "init", "-q", "-b", "main"], d)
+    for when, msg_, files in OPW_HISTORY:
+        for rel, text in files.items():
+            put(d, rel, text)
+        sh(["git", "add", "--", *files], d)
+        sh(["git", "commit", "-qm", msg_], d, env=dict(GIT_ENV, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+    put(d, "docs/evidence/spec-gate.jsonl", "".join(json.dumps({"ts": ts, "session": "fx", "mode": "active", "decision": dec, "reason": why, "missing": []},
+                                                               ensure_ascii=False) + "\n" for ts, dec, why in OPW_GATE))
+    put(d, "docs/PROGRESS.md", OPW_PROGRESS)
+    _, o_ = sh([f"{d}/bin/phase-report", "--no-jev"], d)
+    rep = read(f"{d}/docs/evidence/phase-report.md") if os.path.isfile(f"{d}/docs/evidence/phase-report.md") else ""
+    w = re.search(r"слово оператора (\d+), тимлида (\d+)", o_)
+    g = re.search(r"Решений хука за плечо: (\d+) из (\d+)", rep)
+    f = re.search(r"^Ложных блоков \([^\n]*?\): (\d+)\.", rep, re.M)
+    return (int(w[1]), int(w[2])) if w else None, (int(g[1]), int(g[2])) if g else None, int(f[1]) if f else None
+
+
 def section_operator():
     """F6 (SPEC-v3.5): строки F6.1–F6.5 и OPERATOR_WORD_OK. Не репо кита — строки offen, маркера нет, код 0."""
     sec = []
@@ -1888,7 +1932,11 @@ def section_operator():
     da = op_project()  # свой проект: d дальше служит F6.4
     rc_at, msg_at = opw(da, "docs/STATUS.md", "y", "a\nb\nc\nd\n")  # дифф ровно в запас (−s1 +4 = 5): не сверх запаса — коммит
     ok62 = ok62 and rc_at == 0 and sh(["git", "log", "-1", "--format=%s"], da)[1] == "Оператор: y"
-    p("F6.2", ok62, f"offen={'commit' if ok62 else 'нет'} · bin/operator-word docs/STATUS.md -m \"x\" (stdin «s2», окно `docs/STATUS.md` · запас 5) — rc {rc} «{msg[:120]}»; "
+    link = f"{da}-link"  # абсолютный путь через симлинк каталога (свой: на Linux /tmp не симлинк) — тот же файл репо, коммит
+    os.symlink(da, link)
+    rc_ln, msg_ln = opw(da, f"{link}/docs/STATUS.md", "v", "a\nb\nc\ne\n")
+    ok62 = ok62 and rc_ln == 0 and sh(["git", "log", "-1", "--format=%s"], da)[1] == "Оператор: v" and read(f"{da}/docs/STATUS.md") == "a\nb\nc\ne\n"
+    p("F6.2", ok62, f"offen={'commit' if ok62 else 'нет'} · абсолютный путь через симлинк каталога (…-link/docs/STATUS.md) — rc {rc_ln} «{msg_ln[:130]}» · bin/operator-word docs/STATUS.md -m \"x\" (stdin «s2», окно `docs/STATUS.md` · запас 5) — rc {rc} «{msg[:120]}»; "
                     f"HEAD «{subj}», пути {', '.join(files_) or '—'}; дифф ровно в запас 5 — rc {rc_at} «{msg_at[:90]}»")
     # F6.3 — отказ, файл цел, коммита нет: путь вне окна, SPEC без окна, дифф сверх запаса
     def refused(dd, rel, word, text):
@@ -1907,7 +1955,8 @@ def section_operator():
     op_big = plain_commit(d, "Оператор: big", "docs/STATUS.md", "".join(f"l{i}\n" for i in range(10)))
     _, oa = sh([f"{d}/bin/check-budget"], d)  # lint владения до обхода хука: «Оператор:» в окне (x из F6.2 и z) — проход
     own_ok = next((l for l in oa.splitlines() if l.startswith("OK   owner")), "нет строки")
-    lint_ja = not any(l.startswith("FAIL owner") for l in oa.splitlines()) and "«Оператор:» в окне — 2" in own_ok
+    pre_fails = [l for l in oa.splitlines() if l.startswith("FAIL owner")]
+    lint_ja = not pre_fails and "«Оператор:» в окне — 2" in own_ok
     plain_commit(d, "Оператор: w", "docs/PROCESS.md", "p2\n", hooks=False)  # мимо хука — его видит lint владения
     rb, ob = sh([f"{d}/bin/check-budget"], d)
     own_fails = [l for l in ob.splitlines() if l.startswith("FAIL owner")]
@@ -1930,12 +1979,12 @@ def section_operator():
     fix_ok = all(rc_ == 0 and not bad and mk is not False for rc_, bad, mk, _ in fx.values())
     p("F6.4", op_ja and op_nein and tl_nein and fix_ok,
       f"op={'ja' if op_ja else 'nein'},{'nein' if op_nein else 'ja'} tl={'nein' if tl_nein else 'ja'} fixturen={'OK' if fix_ok else 'FAIL'} · хук: «Оператор:» в окне — rc {op_in[0]}; "
-      f"lint владения на них — «{own_ok[own_ok.find('«Оператор:»'):][:60] if '«Оператор:»' in own_ok else own_ok[:60]}», строк FAIL owner — 0 · "
+      f"lint владения на них — «{own_ok[own_ok.find('«Оператор:»'):][:60] if '«Оператор:»' in own_ok else own_ok[:60]}», строк FAIL owner — {len(pre_fails)} · "
       f"вне окна — rc {op_out[0]} «{op_out[1][:90]}»; дифф сверх запаса — rc {op_big[0]}; мимо хука → bin/check-budget: строк FAIL owner {len(own_fails)} «{own_fail[:110]}», BUDGET_FAIL owner — "
       f"{'есть' if 'BUDGET_FAIL owner' in ob.splitlines() else 'нет'} · «Тимлид:» при CLAUDECODE=1 — rc {tl_in[0]} «{tl_in[1][:80]}», без — rc {tl_out[0]} · из сессии (CLAUDECODE=1): "
       + "; ".join(f"{n} — rc {rc_}, красных строк {len(bad)}{', COMMIT_OK' if mk else ''}{f' (без ключа или abide вне счёта: {chr(32).join(nk)})' if nk else ''}"
                   for n, (rc_, bad, mk, nk) in fx.items()))
-    # F6.5 — bin/phase-report: «Оператор:» и «Тимлид:» плеча (после коммита запроса; «Тимлид:» сразу за ним — выдача)
+    # F6.5 — bin/phase-report: «Оператор:» и «Тимлид:» плеча (после выдачи — серии коммитов запроса с той же SPEC; «Тимлид:» сразу за ней — выдача)
     def leg(dd, commits):
         for msg_, rel, text in commits:
             plain_commit(dd, msg_, rel, text, env=GIT_ENV, hooks=False)
@@ -1951,8 +2000,12 @@ def section_operator():
                                  ("Тимлид: уточнение запроса", "docs/PROMPT.txt", "Read first: docs/SPEC-2.md\n\nУточнение.\n"), ("Оператор: после", "docs/STATUS.md", "s3\n")])
     rows = [l for l in rep.splitlines() if re.match(r"^- `[0-9a-f]+` · (Оператор|Тимлид) · ", l)]
     named = all(any(w in l and path in l for l in rows) for w, path in (("строка статуса", "docs/STATUS.md"), ("ещё строка", "docs/STATUS.md"), ("поправка", "docs/PROCESS.md")))
-    ok65 = got == (2, 1) and empty == (0, 0) and len(rows) == 3 and named and mid == (2, 1)
-    p("F6.5", ok65, f"liste={got[0] if got else '?'},{got[1] if got else '?'} leer={empty[0] if empty else '?'},{empty[1] if empty else '?'} · bin/phase-report --no-jev: плечо "
+    # история запроса с прошлой SPEC и даты +01:00: плечо — с серии той же SPEC; решения хука до плеча вне счёта; ложный блок — строка в ## Notes
+    h_words, h_gate, h_false = op_history()
+    ok65 = got == (2, 1) and empty == (0, 0) and len(rows) == 3 and named and mid == (2, 1) and h_words == (2, 1) and h_gate == (4, 8) and h_false == 1
+    p("F6.5", ok65, f"liste={got[0] if got else '?'},{got[1] if got else '?'} leer={empty[0] if empty else '?'},{empty[1] if empty else '?'} · история SPEC-1 → SPEC-2, даты +01:00: "
+                    f"слово {','.join(map(str, h_words)) if h_words else 'нет строки'} (ждём 2,1: слово SPEC-1 не в счёте), решений хука за плечо "
+                    f"{' из '.join(map(str, h_gate)) if h_gate else 'нет строки'} (ждём 4 из 8), ложных блоков в ## Notes {h_false if h_false is not None else 'нет строки'} (ждём 1) · bin/phase-report --no-jev: плечо "
                     f"«Тимлид:» выдачи, F1.1, «Оператор:» ×2, «Тимлид:» ×1 — строк списка {len(rows)}, sha · путь · слово названы — {'да' if named else 'нет'}: "
                     + " | ".join(' '.join(l.split())[:70] for l in rows) + " · без них — " + (f"{empty[0]},{empty[1]}" if empty else "нет строки")
                     + " · правка запроса «Тимлид:» посреди плеча — " + (f"{mid[0]},{mid[1]}" if mid else "нет строки"))
