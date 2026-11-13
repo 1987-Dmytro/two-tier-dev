@@ -1,7 +1,7 @@
 {
   "name": "handoff",
-  "version": "0.5.0",
-  "description": "Hands off in place, never with /clear: every compaction of a person's session keeps the handoff's sections and leaves its summary as a handoff file; past the threshold, at Jev's boundary (absorbed from compact-adviser) or on /handoff now, the mod compacts the session itself.",
+  "version": "0.6.0",
+  "description": "Hands off in place, never with /clear: at every crossing of the threshold (the fill read as the app reads it, against the compaction window) the mod compacts the session with the handoff's sections; every compaction of a person's session keeps them and leaves its summary as a handoff file. No Jev, no paid calls.",
   "author": {
     "name": "two-tier-dev"
   },
@@ -9,7 +9,7 @@
     "threshold": {
       "type": "number",
       "default": 70,
-      "description": "Fallback threshold: context fill (percent of the window) at which the session is compacted in place after the turn ends; handoff_threshold_pct of the project's budgets.json wins.",
+      "description": "Fallback threshold: context fill (percent of the compaction window, as the app shows it) at which the session is compacted in place after the turn ends, at every crossing; handoff_threshold_pct of the project's budgets.json wins.",
       "title": "Auto-handoff threshold (%)"
     },
     "handoffDir": {
@@ -21,7 +21,7 @@
     "autoCompact": {
       "type": "boolean",
       "default": true,
-      "description": "Past the threshold or at Jev's boundary, compact the session in place with the handoff's sections (the task list, background work and the session stay); off writes the handoff file only. The context is never cleared.",
+      "description": "Past the threshold, compact the session in place with the handoff's sections (the task list, background work and the session stay); off writes the handoff file only. The context is never cleared.",
       "title": "Compact in place at the handoff"
     },
     "minTurns": {
@@ -39,17 +39,6 @@
       ],
       "description": "Language of the handoff document and of the compaction's instructions.",
       "title": "Language"
-    },
-    "jev": {
-      "type": "string",
-      "default": "hint",
-      "options": [
-        "off",
-        "hint",
-        "auto"
-      ],
-      "description": "Jev's boundary judgment after each settled answer below the threshold (needs TYPESAFE_API_KEY): hint lights the band, auto compacts in place right there, off never asks.",
-      "title": "Jev boundary (off / hint / auto)"
     }
   },
   "types": "./types/index.d.ts"

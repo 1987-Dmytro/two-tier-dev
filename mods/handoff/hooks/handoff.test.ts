@@ -1,6 +1,5 @@
 import type { RenderElement } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
-import { floorFor, parseJudgment, score, scrub, stateOf } from './jev'
 import { compactDoc, compactInstructions, handoffPrompt, parseHandoff, resumePrompt, slugify, stampOf, summaryOf, withInstructions } from './text'
 
 test('parseHandoff takes the slug line off the top and keeps the document', () => {
@@ -40,7 +39,7 @@ test('compaction helpers: the summary is what is new, the person speaks first, t
   expect(doc.startsWith('# Хендофф 2026-11-13-1810 — сжатие (auto)')).toBe(true)
   expect(doc).toContain('428k → 41k')
   expect(doc).toContain('СВОДКА')
-  expect(compactDoc('en', 's', 'jev', '')).toContain('no summary text')
+  expect(compactDoc('en', 's', 'button', '')).toContain('no summary text')
   expect(compactInstructions('en')).toContain('background')
 })
 
@@ -79,7 +78,7 @@ test('/handoff write forks the transcript and writes the file under handoffDir',
 
 const BAND = { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 1 }, view: {} }
 
-test('the band stays empty before the first figure and shows its buttons after a turn', { options: { threshold: 70, jev: 'off' } }, async ($, on) => {
+test('the band stays empty before the first figure and shows its buttons after a turn', { options: { threshold: 70 } }, async ($, on) => {
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: 84000, window: 200000, percent: 42 }, rateLimits: [] } }))
@@ -103,48 +102,33 @@ test('the band stays empty before the first figure and shows its buttons after a
   }
 })
 
-// ---------- Jev boundary (absorbed from compact-adviser) ----------
+// ---------- shared fixtures ----------
 
 const KEY = 'tsk_' + 'k'.repeat(40)
-const reply = (finished: number, handsOn: number, model = 'jev-1.13.0') =>
-  JSON.stringify({
-    model,
-    answers: {
-      done: { type: 'choice', choice: 'finished', probabilities: { finished, not_finished: 1 - finished, unclear: 0 }, confidence: 0.9 },
-      shape: { type: 'choice', choice: 'hands_on', probabilities: { hands_on: handsOn, coordinating: 1 - handsOn, unclear: 0 }, confidence: 0.9 },
-    },
-    usage: { input_tokens: 900, output_tokens: 0 },
-  })
-
 type Compaction = { trigger: string; instructions?: string; agentId?: string }
-type Calls = { bodies: string[]; journal: string[]; files: string[]; docs: Record<string, string>; toasts: string[]; submitted: string[]; commands: string[]; compactions: Compaction[] }
+type Calls = { journal: string[]; files: string[]; docs: Record<string, string>; toasts: string[]; submitted: string[]; commands: string[]; compactions: Compaction[]; envReads: string[]; fetches: number }
 
 const KEPT = { role: 'user' as const, text: 'последний промпт', toolUses: [] }
 const SUMMARY = { role: 'user' as const, text: 'СВОДКА: F1 сделан, дальше F2', toolUses: [] }
 /** What core answers a compaction with: the summary and one kept message, `after` tokens afterwards (null: core recorded none). */
 const compacted = (after: number | null = 40000): any => ({ messages: [SUMMARY, KEPT], tokensBefore: 400000, ...(after === null ? {} : { tokensAfter: after }) })
 
-/** Stubs for one session at `percent` fill whose Jev answers `jevText` (undefined: no key in the environment); core answers a compaction with `core()`. */
-function session(on: any, percent: number, jevText: string | undefined, core: () => any = () => compacted(), fetchError?: string): Calls {
-  const c: Calls = { bodies: [], journal: [], files: [], docs: {}, toasts: [], submitted: [], commands: [], compactions: [] }
+/** Stubs for one REPL session at `percent` fill of a 200k window; core answers a compaction with `core()`; a key sits in the environment. */
+function session(on: any, percent: number, core: () => any = () => compacted()): Calls {
+  const c: Calls = { journal: [], files: [], docs: {}, toasts: [], submitted: [], commands: [], compactions: [], envReads: [], fetches: 0 }
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
   on('command.register', ($: any, e: any) => ({ value: { command: e.name } }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: percent * 2000, window: 200000, percent }, rateLimits: [] } }))
   on('session.turns', () => ({ value: 5 }))
   on('session.root', () => ({ value: '/repo' }))
-  on('session.messages', () => ({
-    value: [
-      KEPT,
-      { role: 'user', text: 'сделай F1: секретный промпт', toolUses: [] },
-      { role: 'assistant', text: '', toolUses: [{ tool_use_id: 'a', tool: 'Edit', input: {} }, { tool_use_id: 'b', tool: 'Bash', input: {} }] },
-      { role: 'user', text: '', toolUses: [], toolResults: [{ tool_use_id: 'a', text: 'ok' }] },
-    ],
-  }))
-  on('env.get', ($: any, e: any) => ({ value: e.name === 'TYPESAFE_API_KEY' && jevText !== undefined ? KEY : undefined }))
-  on('http.fetch', ($: any, e: any) => {
-    c.bodies.push(e.init?.body ?? '')
-    if (fetchError !== undefined) return { deny: fetchError }
-    return { value: { status: 200, ok: true, headers: {}, text: jevText ?? '' } }
+  on('session.messages', () => ({ value: [KEPT, { role: 'user', text: 'сделай F1', toolUses: [] }] }))
+  on('env.get', ($: any, e: any) => {
+    c.envReads.push(e.name)
+    return { value: e.name === 'TYPESAFE_API_KEY' ? KEY : undefined }
+  })
+  on('http.fetch', () => {
+    c.fetches++
+    return { value: { status: 200, ok: true, headers: {}, text: '{}' } }
   })
   on('fs.read', () => ({ deny: 'no such file' }))
   on('fs.write', ($: any, e: any) => {
@@ -155,7 +139,6 @@ function session(on: any, percent: number, jevText: string | undefined, core: ()
     }
     return { value: undefined }
   })
-  on('model.fork', () => ({ value: { isAnswered: true as const, text: 'slug: jev\n# Хендофф\n## 3. Следующее\n- шаг', usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } } }))
   on('session.compact', ($: any, e: any) => {
     c.compactions.push({ trigger: e.trigger, instructions: e.instructions, agentId: e.agentId })
     return core()
@@ -181,142 +164,42 @@ function session(on: any, percent: number, jevText: string | undefined, core: ()
   return c
 }
 
-async function settledTurn($: any, clock: any, turnId = 't1') {
+test('no Jev, no paid call: the mod never reads TYPESAFE_API_KEY and never calls the network, below or past the threshold', { options: { threshold: 40, minTurns: 0 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  const c = session(on, 30)
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.turn.start({ text: 'сделай F1: секретный промпт', turnId })
-  await $.turn.complete({ answer: `F1 готово, ${KEY} в выводе`, durationMs: 10, isAborted: false, turnId, reason: 'answer' })
-  await clock.settle()
-}
-
-test('floor, score, scrub and state: the pure half', () => {
-  expect(floorFor(5, 70)).toBe(0.9)
-  expect(floorFor(10, 70)).toBe(0.9)
-  expect(floorFor(40, 70)).toBe(0.7)
-  expect(floorFor(70, 70)).toBe(0.5)
-  expect(score({ finished: 1, handsOn: 1, model: 'm', inputTokens: 0, outputTokens: 0 })).toBe(1)
-  expect(score({ finished: 1, handsOn: 0, model: 'm', inputTokens: 0, outputTokens: 0 })).toBe(0.5)
-  expect(scrub(`x ${KEY} y sk-ant-${'a'.repeat(24)} z`, KEY)).toBe('x [key] y [key] z')
-  expect(typeof parseJudgment(reply(0.9, 0.9, 'jev-latest'))).toBe('string')
-  expect(stateOf('p', 'a', ['Edit', 'Edit', 'Bash'], KEY).tool_calls).toEqual({ Edit: 2, Bash: 1 })
-  expect(stateOf('p'.repeat(5000), 'a', [], KEY).prompt.length).toBeLessThan(2100)
+  for (const id of ['t1', 't2']) {
+    await $.turn.start({ text: 'сделай F1', turnId: id })
+    await $.turn.complete({ answer: 'F1 готово', durationMs: 10, isAborted: false, turnId: id, reason: 'answer' })
+    await clock.advance(1000)
+  }
+  await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)
+  expect(c.envReads).not.toContain('TYPESAFE_API_KEY')
+  expect(c.fetches).toBe(0)
+  expect(c.journal.some(l => l.includes('"decision"'))).toBe(false)
 })
 
-test('jev: hint — a finished hands-on answer lights the band; the key and the prompt stay home', { options: { threshold: 70, jev: 'hint' } }, async ($, on) => {
+test('past the threshold in a REPL session: compacted in place — no /clear, no resume prompt, the summary saved', { options: { threshold: 40, minTurns: 0 } }, async ($, on) => {
   const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.96, 0.9))
-  await settledTurn($, clock)
-  expect(c.bodies).toHaveLength(1)
-  const body = JSON.parse(c.bodies[0]!)
-  expect(body.model).toBe('jev-1.13.0')
-  expect(body.state.tool_calls).toEqual({ Edit: 1, Bash: 1 })
-  expect(c.bodies[0]).not.toContain(KEY)
-  const ui = await $.ui.mount({ plugin: 'handoff', surface: 'terminal', component: 'AbovePrompt', props: BAND })
-  expect(await ui.find({ type: 'Text', text: /Jev: задача на границе 0\.9\d ≥ 0\.70/ })).toBeDefined()
-  expect(c.journal).toHaveLength(1)
-  expect(c.journal[0]).toContain('"decision":"hint"')
-  expect(c.journal[0]).not.toContain('секретный')
-  expect(c.journal[0]).not.toContain(KEY)
-  expect(c.journal[0]).not.toContain('F1 готово')
-  expect(c.files).toHaveLength(0) // hint only: no handoff written
-  // the next turn starts: the hint is gone
-  await $.turn.start({ text: 'дальше', turnId: 't2' })
-  const after = await $.ui.mount({ plugin: 'handoff', surface: 'terminal', component: 'AbovePrompt', props: BAND })
-  expect(await after.find({ type: 'Text', text: /Jev:/ })).toBeUndefined()
-})
-
-test('jev: auto — at the boundary the session is compacted in place: no /clear, no resume prompt, the summary saved', { options: { threshold: 70, jev: 'auto' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.96, 0.9))
-  await settledTurn($, clock)
+  const c = session(on, 45)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'сделай F1', turnId: 't1' })
+  await $.turn.complete({ answer: 'F1 готово', durationMs: 10, isAborted: false, turnId: 't1', reason: 'answer' })
+  await clock.advance(1000)
   expect(c.compactions).toHaveLength(1)
   expect(c.compactions[0]!.instructions).toContain('Сжимай как хендофф')
   expect(c.commands).not.toContain('clear')
   expect(c.submitted).toHaveLength(0)
-  const file = c.files.find(p => /^\/repo\/handoffs\/handoff-\d{4}-\d{2}-\d{2}-\d{6}-compact-jev\.md$/.test(p))
+  const file = c.files.find(p => /^\/repo\/handoffs\/handoff-\d{4}-\d{2}-\d{2}-\d{6}-compact-threshold\.md$/.test(p))
   expect(file).toBeDefined()
   expect(c.docs[file!]).toContain('СВОДКА: F1 сделан')
   expect(c.docs[file!]).not.toContain('последний промпт')
-  expect(c.journal[0]).toContain('"decision":"auto"')
-  expect(c.journal.some(l => l.includes('"trigger":"jev"') && l.includes('"after":40000'))).toBe(true)
+  expect(c.journal.some(l => l.includes('"trigger":"threshold"') && l.includes('"after":40000'))).toBe(true)
 })
 
-test('jev: below the floor — no advice, nothing written', { options: { threshold: 70, jev: 'auto' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.5, 0.2)) // 0.30 < 0.70
-  await settledTurn($, clock)
-  expect(c.files).toHaveLength(0)
-  expect(c.journal[0]).toContain('"decision":"below"')
-})
-
-test('jev: a reply from another model is an error, not advice', { options: { threshold: 70, jev: 'auto' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.99, 0.99, 'jev-latest'))
-  await settledTurn($, clock)
-  expect(c.files).toHaveLength(0)
-  expect(c.journal[0]).toContain('"decision":"error"')
-})
-
-test('jev: no key in the environment — Jev is never called', { options: { threshold: 70, jev: 'hint' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, undefined)
-  await settledTurn($, clock)
-  expect(c.bodies).toHaveLength(0)
-  expect(c.journal).toHaveLength(0)
-})
-
-test('jev: a judgment that returns after the next turn began is dropped', { options: { threshold: 70, jev: 'auto' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.96, 0.9))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.turn.start({ text: 'p', turnId: 't1' })
-  await $.turn.complete({ answer: 'готово', durationMs: 10, isAborted: false, turnId: 't1', reason: 'answer' })
-  await $.turn.start({ text: 'новый промпт', turnId: 't2' }) // the person typed on before Jev answered
-  await clock.settle()
-  expect(c.files).toHaveLength(0)
-  expect(c.compactions).toHaveLength(0)
-  expect(c.journal[0]).toContain('"decision":"stale"')
-})
-
-test('jev: off — Jev is never asked', { options: { threshold: 70, jev: 'off' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.96, 0.9))
-  await settledTurn($, clock)
-  expect(c.bodies).toHaveLength(0)
-})
-
-test("jev: a subagent's or teammate's run neither replaces the person's prompt nor makes the judgment stale", { options: { threshold: 70, jev: 'auto' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.96, 0.9))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.turn.start({ text: 'USER PROMPT', turnId: 't1' })
-  await $.turn.start({ text: 'AGENT PROMPT', turnId: 's1', agentId: 'a1' } as any) // the Agent tool inside the main turn
-  await $.turn.complete({ answer: 'готово', durationMs: 10, isAborted: false, turnId: 't1', reason: 'answer' })
-  await $.turn.start({ text: 'BACKGROUND', turnId: 's2', agentId: 'a2' } as any) // a background agent starts while Jev answers
-  await clock.settle()
-  expect(JSON.parse(c.bodies[0]!).state.prompt).toBe('USER PROMPT')
-  expect(c.journal[0]).toContain('"decision":"auto"')
-  expect(c.compactions).toHaveLength(1)
-})
-
-test('jev: a network error is journalled with the key blanked', { options: { threshold: 70, jev: 'hint' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 40, reply(0.96, 0.9), () => compacted(), `refused for ${KEY}`)
-  await settledTurn($, clock)
-  expect(c.journal[0]).toContain('"decision":"error"')
-  expect(c.journal[0]).toContain('[key]')
-  expect(c.journal[0]).not.toContain(KEY)
-})
-
-test('jev: under 10 % fill — not asked: a fresh context has nothing to hand off', { options: { threshold: 70, jev: 'hint' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  const c = session(on, 9, reply(0.96, 0.9))
-  await settledTurn($, clock)
-  expect(c.bodies).toHaveLength(0)
-})
-
-test("after a person's /clear the band comes back at once, and the main button compacts in place", { options: { threshold: 70, jev: 'off' } }, async ($, on) => {
+test("after a person's /clear the band comes back at once, and the main button compacts in place", { options: { threshold: 70 } }, async ($, on) => {
   mock.clock(on)
-  const c = session(on, 3, undefined, () => ({ skip: 'nothing to compact' }))
+  const c = session(on, 3, () => ({ skip: 'nothing to compact' }))
   on('classic.SessionStart', () => ({}))
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
   await $.classic.SessionStart({ source: 'clear' })
@@ -408,7 +291,7 @@ async function turns($: any, clock: any, h: Host, n: number, agentId?: string) {
   }
 }
 
-test('threshold: handoff_threshold_pct of budgets.json, project only tightens; no file — the option', { options: { threshold: 70, jev: 'off' } }, async ($, on) => {
+test('threshold: handoff_threshold_pct of budgets.json, project only tightens; no file — the option', { options: { threshold: 70 } }, async ($, on) => {
   const h = hostOf([5], { budgets: BUDGETS(40) })
   hosted(on, h)
   await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
@@ -422,7 +305,7 @@ test('threshold: handoff_threshold_pct of budgets.json, project only tightens; n
   expect(await status()).toContain('threshold 70% (option)')
 })
 
-test('status names the surface: none in a hosted session without one, desktop once attached', { options: { jev: 'off' } }, async ($, on) => {
+test('status names the surface: none in a hosted session without one, desktop once attached', { options: {} }, async ($, on) => {
   const h = hostOf([5], { budgets: BUDGETS(40) })
   hosted(on, h)
   await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
@@ -433,7 +316,7 @@ test('status names the surface: none in a hosted session without one, desktop on
   expect(await status()).toContain('surface desktop')
 })
 
-test('no REPL and no surface: past the threshold the mod writes no handoff by itself', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('no REPL and no surface: past the threshold the mod writes no handoff by itself', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([50, 50], { budgets: BUDGETS(40) })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -442,7 +325,7 @@ test('no REPL and no surface: past the threshold the mod writes no handoff by it
   expect(handoffs(h)).toBe(0)
 })
 
-test('a surface attached: past the budgets.json threshold the session is compacted in place — never /clear, no resume prompt', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('a surface attached: past the budgets.json threshold the session is compacted in place — never /clear, no resume prompt', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -457,7 +340,7 @@ test('a surface attached: past the budgets.json threshold the session is compact
   expect(h.submitted).toHaveLength(0)
 })
 
-test('autoCompact off: past the threshold the handoff file only — no compaction, no /clear', { options: { jev: 'off', minTurns: 0, autoCompact: false } }, async ($, on) => {
+test('autoCompact off: past the threshold the handoff file only — no compaction, no /clear', { options: { minTurns: 0, autoCompact: false } }, async ($, on) => {
   const h = hostOf([50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -468,7 +351,7 @@ test('autoCompact off: past the threshold the handoff file only — no compactio
   expect(h.commands).not.toContain('clear')
 })
 
-test('re-armed from the size after the compaction: the next crossing compacts again before any fresh figure', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('re-armed from the size after the compaction: the next crossing compacts again before any fresh figure', { options: { minTurns: 0 } }, async ($, on) => {
   // the usage stub still reads 50 % after the first compaction: only tokensAfter (50k of 1M = 5 %) can re-arm
   const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
@@ -479,7 +362,7 @@ test('re-armed from the size after the compaction: the next crossing compacts ag
   expect(h.statuses).toContain('ctx 5% · 50k/1000k · handoff @40% · compacted')
 })
 
-test('no tokensAfter from core: not re-armed until a turn reads the fill below threshold − 20', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('no tokensAfter from core: not re-armed until a turn reads the fill below the threshold', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], after: null })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -488,7 +371,7 @@ test('no tokensAfter from core: not re-armed until a turn reads the fill below t
   expect(h.compactions).toHaveLength(1)
 })
 
-test('a compaction refused (a turn runs): nothing cleared, a toast, re-armed — the next turn end compacts', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('a compaction refused (a turn runs): nothing cleared, a toast, re-armed — the next turn end compacts', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], refuse: 1 })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -500,7 +383,7 @@ test('a compaction refused (a turn runs): nothing cleared, a toast, re-armed —
   expect(h.commands).not.toContain('clear')
 })
 
-test('the fill is read against the compaction window, as the app shows it: 386k of 600k is 64 %, not the model window\'s 39 %', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('the fill is read against the compaction window, as the app shows it: 386k of 600k is 64 %, not the model window\'s 39 %', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([39], {
     budgets: BUDGETS(40),
     surfaces: ['desktop'],
@@ -519,7 +402,7 @@ test('the fill is read against the compaction window, as the app shows it: 386k 
   expect(h.statuses).toContain('ctx 8% · 50k/600k · handoff @40% · compacted')
 })
 
-test('a vetoed compaction ({ skip }) from the threshold re-arms: the next turn end tries again', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('a vetoed compaction ({ skip }) from the threshold re-arms: the next turn end tries again', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], skip: 1 })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -529,7 +412,7 @@ test('a vetoed compaction ({ skip }) from the threshold re-arms: the next turn e
   expect(h.written.filter(p => /-compact-threshold\.md$/.test(p))).toHaveLength(1)
 })
 
-test('a refused /handoff now never held the arm: no second handoff above threshold − 20 (F1.4)', { options: { jev: 'off', minTurns: 0, autoCompact: false } }, async ($, on) => {
+test('a refused /handoff now never held the arm: no second handoff while the fill stays at or past the threshold', { options: { minTurns: 0, autoCompact: false } }, async ($, on) => {
   const h = hostOf([50, 50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], refuse: 1 })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -541,7 +424,7 @@ test('a refused /handoff now never held the arm: no second handoff above thresho
   expect(handoffs(h)).toBe(1)
 })
 
-test('no figure yet (no response in this window): no decision, the status says unknown', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+test('no figure yet (no response in this window): no decision, the status says unknown', { options: { minTurns: 0 } }, async ($, on) => {
   const h = hostOf([null], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -554,7 +437,7 @@ test('no figure yet (no response in this window): no decision, the status says u
   expect(text ?? '').toContain('context unknown of 1000000 tokens (model window)')
 })
 
-test('/handoff now compacts in place once the session is idle; no /clear, no prompt', { options: { jev: 'off' } }, async ($, on) => {
+test('/handoff now compacts in place once the session is idle; no /clear, no prompt', { options: {} }, async ($, on) => {
   const h = hostOf([5], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
@@ -571,7 +454,7 @@ test('/handoff now compacts in place once the session is idle; no /clear, no pro
 // The engine's own compactions: its threshold mid-turn (auto), a person's /compact (manual), a precompute.
 const MSGS = [{ role: 'user' as const, text: 'шаг 1', toolUses: [], handle: 'h1' }, KEPT]
 
-test("the engine's own compaction in a person's session: the handoff sections ride its instructions, its summary becomes the file", { options: { jev: 'off' } }, async ($, on) => {
+test("the engine's own compaction in a person's session: the handoff sections ride its instructions, its summary becomes the file", { options: {} }, async ($, on) => {
   const h = hostOf([30], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   mock.clock(on)
@@ -588,7 +471,7 @@ test("the engine's own compaction in a person's session: the handoff sections ri
   expect(line).not.toContain('СВОДКА')
 })
 
-test("a person's /compact <text>: their text first, the handoff sections after it", { options: { jev: 'off' } }, async ($, on) => {
+test("a person's /compact <text>: their text first, the handoff sections after it", { options: {} }, async ($, on) => {
   const h = hostOf([30], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   mock.clock(on)
@@ -599,7 +482,7 @@ test("a person's /compact <text>: their text first, the handoff sections after i
   expect(h.written.some(p => /-compact-manual\.md$/.test(p))).toBe(true)
 })
 
-test('precompute: the instructions ride, no file (nothing is installed yet)', { options: { jev: 'off' } }, async ($, on) => {
+test('precompute: the instructions ride, no file (nothing is installed yet)', { options: {} }, async ($, on) => {
   const h = hostOf([30], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   mock.clock(on)
@@ -609,7 +492,7 @@ test('precompute: the instructions ride, no file (nothing is installed yet)', { 
   expect(h.written.filter(p => p.endsWith('.md'))).toHaveLength(0)
 })
 
-test("a subagent's compaction and a session with no person are left as they are", { options: { jev: 'off' } }, async ($, on) => {
+test("a subagent's compaction and a session with no person are left as they are", { options: {} }, async ($, on) => {
   const h = hostOf([30], { budgets: BUDGETS(40), surfaces: [] })
   hosted(on, h)
   mock.clock(on)
@@ -621,7 +504,7 @@ test("a subagent's compaction and a session with no person are left as they are"
   expect(h.written).toHaveLength(0)
 })
 
-test("status names the engine's compaction point, armed and the Jev key's presence", { options: { jev: 'hint' } }, async ($, on) => {
+test("status names the engine's compaction point and armed — and no Jev", { options: {} }, async ($, on) => {
   const h = hostOf([43], {
     budgets: BUDGETS(40),
     surfaces: ['desktop'],
@@ -634,33 +517,30 @@ test("status names the engine's compaction point, armed and the Jev key's presen
   expect(text ?? '').toContain('43% of 1000000 tokens (model window), 427k')
   expect(text ?? '').toContain('engine compacts at 580k (settings)')
   expect(text ?? '').toContain('armed yes')
-  expect(text ?? '').toContain('jev hint (key absent; last —)')
-  h.key = KEY
-  const again = (await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)).text ?? ''
-  expect(again).toContain('jev hint (key present; last —)')
-  expect(again).not.toContain(KEY)
+  expect(text ?? '').not.toContain('jev')
+  expect(text ?? '').not.toContain('key')
 })
 
-test('F1.4 above the threshold − 20: no second handoff', { options: { jev: 'off', minTurns: 0, autoCompact: false } }, async ($, on) => {
-  // 25 and 20 — not below 40 − 20: no re-arm (a margin of 10 or `<=` would re-arm and hand off twice)
-  const h = hostOf([50, 45, 25, 20, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
+test('every crossing of the threshold hands off: 50 → 45 (no repeat) → 25 → 50 (again)', { options: { minTurns: 0, autoCompact: false } }, async ($, on) => {
+  // 25 is below 40: re-armed — the operator's rule «at every 40 %» (until 0.5.0 the fill had to drop below threshold − 20)
+  const h = hostOf([50, 45, 25, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
   await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
-  await turns($, clock, h, 5)
-  expect(handoffs(h)).toBe(1)
+  await turns($, clock, h, 4)
+  expect(handoffs(h)).toBe(2)
 })
 
-test('F1.4 after the fill drops below the threshold − 20: the next crossing hands off again', { options: { jev: 'off', minTurns: 0, autoCompact: false } }, async ($, on) => {
-  const h = hostOf([50, 10, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
+test('no repeat while the fill stays at or past the threshold: 50 → 45 → 48 hands off once', { options: { minTurns: 0, autoCompact: false } }, async ($, on) => {
+  const h = hostOf([50, 45, 48], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
   await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
   await turns($, clock, h, 3)
-  expect(handoffs(h)).toBe(2)
+  expect(handoffs(h)).toBe(1)
 })
 
-test('F1.4 a subagent turn never hands off', { options: { jev: 'off', minTurns: 0, autoCompact: false } }, async ($, on) => {
+test('a subagent turn never hands off', { options: { minTurns: 0, autoCompact: false } }, async ($, on) => {
   const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'] })
   hosted(on, h)
   const clock = mock.clock(on)
