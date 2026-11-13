@@ -25,6 +25,8 @@ if os.path.isfile(mark):
         ids = j if isinstance(j, list) else j.get("sessions", []) if isinstance(j, dict) else []
     except (OSError, ValueError):
         ids = []
+    if not isinstance(ids, list):  # sessions: null, a number, a string — the mark names no session (as spec-gate reads it)
+        ids = []
     if data.get("session_id") not in ids:
         sys.exit(0)
 p = sys.argv[1]

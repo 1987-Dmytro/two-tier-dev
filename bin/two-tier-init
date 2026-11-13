@@ -5,7 +5,7 @@
 #
 # Содержимое kit/ ложится в КОРЕНЬ цели: kit/CLAUDE.md → <target>/CLAUDE.md,
 # kit/.claude/ → <target>/.claude/, kit/bin/ → <target>/bin/; вложенного kit/ в цели нет.
-# Существующий файл не перезаписывается — печатается «skip (exists)».
+# Существующий файл не перезаписывается — печатается «skip (exists)»; у .gitignore цели дописываются недостающие строки кита.
 # Режимы сохраняются (cp -p): хуки должны остаться исполняемыми. Кэш Python (__pycache__) не копируется.
 # Цель должна существовать; git init скрипт не делает и не требует.
 set -euo pipefail
@@ -26,6 +26,17 @@ cd "$KIT"
 find . -name __pycache__ -prune -o -type f -print | LC_ALL=C sort | while IFS= read -r src; do
   rel="${src#./}"
   dst="$TARGET/$rel"
+  if [ -e "$dst" ] && [ "$rel" = ".gitignore" ]; then  # v3.5, F2.5: строки кита дописываются к .gitignore проекта, его строки остаются
+    need="$( (grep -v '^#' "$src" | grep -v '^[[:space:]]*$' | grep -vxF -f "$dst") || true)"
+    if [ -n "$need" ]; then
+      if [ -s "$dst" ] && [ -n "$(tail -c1 "$dst")" ]; then echo >> "$dst"; fi
+      { echo "# two-tier-dev kit (two-tier-init)"; echo "$need"; } >> "$dst"
+      echo "  merged: $rel (+$(printf '%s\n' "$need" | wc -l | tr -d ' ') строк кита)"
+    else
+      echo "  skip (exists): $rel"
+    fi
+    continue
+  fi
   if [ -e "$dst" ]; then
     echo "  skip (exists): $rel"
     continue

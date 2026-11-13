@@ -1936,14 +1936,16 @@ def session_probes(src, launch):
         put_mark(repo, None)
         ohne = [not_phase(run(r["session"], tp[r["session"]])) for r in forks]
         old = hook_at(src, repo, OLD_HOOK_34, "spec-gate-v34.mjs")
-        alt = [not_phase(run(r["session"], tp[r["session"]], old)) for r in forks] if old else None
+        alt_lines = [last_line(run(r["session"], tp[r["session"]], old)) for r in forks] if old else None
+        alt = [l.get("decision") == "pass" and str(l.get("reason", "")).startswith("not the phase session") for l in alt_lines] if old else None
+        alt_block = sum(l.get("decision") == "block" for l in alt_lines) if old else 0  # хук v3.4 ответвления судит: block на каждом
         mut = mutant_hook(repo, "if (first && id && first.sessionId !== id) return", "if (false) return", "spec-gate-mut-fork.mjs")
         mut_d = last_line(run(forks[0]["session"], tp[forks[0]["session"]], mut)).get("decision")
         ok = (sum(neu) == 10 and len(neu) == 10 and sum(ohne) == 9 and len(ohne) == 9 and len(reset) == 6 and sum(reset) == 0 and main_d == "block"
-              and alt is not None and sum(alt) == 0 and mut_d == "block")
+              and alt is not None and sum(alt) == 0 and alt_block == len(forks) and mut_d == "block")
         item(S, "F2.2", ok, f"neu={sum(neu)}/{len(neu)} ohne={sum(ohne)}/{len(ohne)} reset={sum(reset)}/{len(reset)} alt={sum(alt) if alt is not None else '?'}/{len(alt) if alt is not None else 9} mut={mut_d} · "
              f"головы {HEADS}: ответвлений {len(forks)}, после сброса {len(resets)}, главная — {main_d}; метка — главная и сбросы, как пишет мод; служебная при метке — "
-             f"{'pass' if neu[-1] else 'нет'}; хук v3.4 ({OLD_HOOK_34}) — {'ответвления судит' if alt is not None and not any(alt) else alt}; мутант без правила ответвления — {mut_d}")
+             f"{'pass' if neu[-1] else 'нет'}; хук v3.4 ({OLD_HOOK_34}) — block {alt_block}/{len(forks)} ответвлений; мутант без правила ответвления — {mut_d}")
     # F2.3 — вне метки: запрос, Resume, продолжение хендоффа — суд; служебная без файла — как v3.4
     r3, t3 = gate_fixture(src, launch)
     open(f"{r3}/docs/PROGRESS.md", "a", encoding="utf-8").write("\nSTOP: STOP-INPUT — фикстуре нужен ключ оператора.\nResume: «продолжай по SPEC-1 с F2: ключ выдан».\n")
@@ -1977,25 +1979,30 @@ def session_probes(src, launch):
                            env={k: v for k, v in os.environ.items() if k != "AGENT_STEER_FILE"} | {"CLAUDE_PROJECT_DIR": sr}, timeout=30)
         return int("Operator note" in r.stdout), open(f"{sr}/STEER.md", encoding="utf-8").read().strip()
     sides = [steer("s-phase", ["s-phase"]), steer("s-other", ["s-phase"]), steer("s-other", None)]
+    def steer_raw(mark_text):  # метка как есть: (rc хука, заметка 1/0)
+        open(f"{sr}/{MARK}", "w", encoding="utf-8").write(mark_text)
+        open(f"{sr}/STEER.md", "w", encoding="utf-8").write("заметка F2.5\n")
+        r = subprocess.run([f"{sr}/.claude/hooks/steer.sh"], input=json.dumps({"session_id": "s-other", "tool_name": "Bash"}), capture_output=True, text=True,
+                           env={k: v for k, v in os.environ.items() if k != "AGENT_STEER_FILE"} | {"CLAUDE_PROJECT_DIR": sr}, timeout=30)
+        return r.returncode, int("Operator note" in r.stdout)
     empty = [steer("s-other", [])[0]]  # метка без сессий и битая метка: заметку не берёт никто
-    open(f"{sr}/{MARK}", "w", encoding="utf-8").write("не JSON\n")
-    open(f"{sr}/STEER.md", "w", encoding="utf-8").write("заметка F2.5\n")
-    junk = subprocess.run([f"{sr}/.claude/hooks/steer.sh"], input=json.dumps({"session_id": "s-other", "tool_name": "Bash"}), capture_output=True, text=True,
-                          env={k: v for k, v in os.environ.items() if k != "AGENT_STEER_FILE"} | {"CLAUDE_PROJECT_DIR": sr}, timeout=30)
-    empty.append(int("Operator note" in junk.stdout))
+    empty.append(steer_raw("не JSON\n")[1])
+    odd = [steer_raw(t) for t in ('{"sessions": null}\n', '{"sessions": 5}\n', '{"sessions": "s-other-long"}\n')]  # sessions не список: никого, rc 0
     ig = tempfile.mkdtemp(prefix="steer-ignore-", dir=TMP)
-    gi = kit and f"{kit}/kit/.gitignore"
-    if gi and os.path.isfile(gi):
-        shutil.copy(gi, f"{ig}/.gitignore")
     subprocess.run(["git", "init", "-q", ig], env=GIT_ENV)
+    open(f"{ig}/.gitignore", "w", encoding="utf-8").write("node_modules/\n")  # .gitignore проекта до кита: init дописывает строки кита, его строки остаются
+    init = kit and f"{kit}/bin/two-tier-init"
+    init_rc = subprocess.run([init, ig], env=GIT_ENV, capture_output=True, text=True, timeout=300).returncode if init and os.path.isfile(init) else None
     ign = subprocess.run(["git", "-C", ig, "check-ignore", "-q", MARK], env=GIT_ENV).returncode
-    os.path.isfile(f"{ig}/.gitignore") and os.remove(f"{ig}/.gitignore")
+    kept = "node_modules/" in open(f"{ig}/.gitignore", encoding="utf-8").read().splitlines()
+    open(f"{ig}/.gitignore", "w", encoding="utf-8").write("node_modules/\n")  # без строк кита
     bare = subprocess.run(["git", "-C", ig, "check-ignore", "-q", MARK], env=GIT_ENV).returncode
-    ok5 = [s[0] for s in sides] == [1, 0, 1] and sides[1][1] == "заметка F2.5" and empty == [0, 0] and ign == 0 and bare == 1
-    item(S, "F2.5", ok5, f"steer={','.join(str(s[0]) for s in sides)} ignore={'OK' if ign == 0 and bare == 1 else 'FAIL'} · сессия из метки — заметка {'есть' if sides[0][0] else 'нет'}; "
+    ok5 = ([s[0] for s in sides] == [1, 0, 1] and sides[1][1] == "заметка F2.5" and empty == [0, 0] and odd == [(0, 0)] * 3
+           and init_rc == 0 and ign == 0 and kept and bare == 1)
+    item(S, "F2.5", ok5, f"steer={','.join(str(s[0]) for s in sides)} ignore={'OK' if init_rc == 0 and ign == 0 and kept and bare == 1 else 'FAIL'} · сессия из метки — заметка {'есть' if sides[0][0] else 'нет'}; "
          f"чужая при метке — {'есть' if sides[1][0] else 'нет'}, STEER.md остался — «{sides[1][1]}»; без метки — {'есть' if sides[2][0] else 'нет'}; "
-         f"метка без сессий — {'есть' if empty[0] else 'нет'}, битая метка — {'есть' if empty[1] else 'нет'} · "
-         f"git check-ignore {MARK}: .gitignore кита (kit/.gitignore, его кладёт bin/two-tier-init) — rc {ign}, без него — rc {bare}")
+         f"метка без сессий — {'есть' if empty[0] else 'нет'}, битая метка — {'есть' if empty[1] else 'нет'}; sessions null, 5, строка — (rc, заметка) {odd} · "
+         f"git check-ignore {MARK}: .gitignore проекта («node_modules/»), затем bin/two-tier-init — rc {init_rc}, check-ignore rc {ign}, строка проекта осталась — {'да' if kept else 'нет'}; без строк кита — rc {bare}")
     # F2.1, F2.4 — хост вкладки с копией мода phase-start
     if not shutil.which("claude") or not kit:
         why = "claude нет в PATH" if not shutil.which("claude") else "не репо кита: нет mods/phase-start"
@@ -2069,6 +2076,13 @@ def stop_probes(src, launch):
     dec = lambda r: last_line(r).get("decision")
     STOP_L = GATE_STOP.split("\n")[0]
     stop_now = lambda repo, text=GATE_STOP: (open(f"{repo}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + text), ship(repo, "стоп", "docs/PROGRESS.md"))
+    RESUME = "продолжай по SPEC-1 с F2: ключ выдан"  # строка Resume стопа, как её шлёт /phase resume (resumeOf мода phase-start)
+    FORM11 = f"{STOP_L}\nВопрос оператору: выдать ли ключ фикстуры?\nResume: {RESUME}\n"  # форма стопов SPEC-11: вопрос и отдельная строка Resume
+
+    def say(t, text, dt=1, meta=False):  # слово человека в транскрипте через dt с от сейчас (стоп закоммичен раньше)
+        rec = {"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + dt)), "message": {"role": "user", "content": text}}
+        with open(t, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec | ({"isMeta": True} if meta else {}), ensure_ascii=False) + "\n")
 
     def one(text, word=None):  # свой проект: стоп text запушен, слово word (если есть) — в транскрипте после коммита; решение хука
         w, tw = gate_fixture(src, launch)
@@ -2079,10 +2093,12 @@ def stop_probes(src, launch):
         return dec(gate_run(w, tw, "probe-one"))
     # F3.1 — открытый стоп, после него только отчётные коммиты: каждый конец хода — stop; хук v3.4 — второй block
     a, ta = gate_fixture(src, launch)
-    stop_now(a)
+    stop_now(a, FORM11)
     open(f"{a}/docs/evidence/x-result.txt", "w", encoding="utf-8").write("x\n")
     ship(a, "отчёт после стопа", "docs/evidence/x-result.txt")
-    new = [dec(gate_run(a, ta, "probe-open")), dec(gate_run(a, ta, "probe-open")), dec(gate_run(a, ta, "probe-open-next"))]
+    n1 = dec(gate_run(a, ta, "probe-open"))
+    say(ta, "что с ключом фикстуры?")  # слово оператора не строкой Resume между концами хода — стоп не закрывает
+    new = [n1, dec(gate_run(a, ta, "probe-open")), dec(gate_run(a, ta, "probe-open-next"))]
     open(f"{a}/docs/PLAN-1.md", "w", encoding="utf-8").write("# PLAN-1\n")  # отчётные файлы SPEC §1: PLAN и PROGRESS — не код
     ship(a, "PLAN после стопа", "docs/PLAN-1.md")
     rep_plan = dec(gate_run(a, ta, "probe-open-plan"))
@@ -2095,12 +2111,18 @@ def stop_probes(src, launch):
     last_open = dec(gate_run(two, ttwo, "probe-open-two"))
     sect_open = one("STOP: STOP-INPUT — прошлый ключ — снят\n\n## Open stop\n" + GATE_STOP)  # «## Open stop» раньше первого раздела со STOP
     sect_closed = one("\n## Closed stops\nSTOP: STOP-PAY — старый.\nВопрос: был ли? Resume: да\n\n## Notes\n" + GATE_STOP)  # «## Closed…» не судится
+    inline_open = one(GATE_STOP)  # «Resume: …» за вопросом в той же строке — форма тоже стоп
     o, to = gate_fixture(src, launch)
-    stop_now(o)
+    stop_now(o, FORM11)
     old = hook_at(src, o, OLD_HOOK_34, "spec-gate-v34.mjs")
-    alt = [dec(gate_run(o, to, "probe-open", hook=old)), dec(gate_run(o, to, "probe-open", hook=old))] if old else ["?", "?"]
-    item(S, "F3.1", new == ["stop"] * 3 and alt == ["stop", "block"] and rep_plan == rep_head == last_open == sect_open == sect_closed == "stop", f"neu={','.join(new[:2])} alt={','.join(alt)} · стоп запушен, после него коммит только в docs/evidence/: "
-         f"та же сессия — {new[0]}, {new[1]}; новая сессия — {new[2]}; затем коммит только docs/PLAN-1.md — {rep_plan}, только головы PROGRESS — {rep_head}; две строки STOP в разделе (первая снята) — {last_open}; «## Open stop» после раздела со снятым STOP — {sect_open}; STOP в «## Closed stops» раньше открытого — {sect_closed}; хук v3.4 ({OLD_HOOK_34}) — {', '.join(alt)}")
+    if old:
+        a1 = dec(gate_run(o, to, "probe-open", hook=old))
+        say(to, "что с ключом фикстуры?")
+        alt = [a1, dec(gate_run(o, to, "probe-open", hook=old))]
+    else:
+        alt = ["?", "?"]
+    item(S, "F3.1", new == ["stop"] * 3 and alt == ["stop", "block"] and rep_plan == rep_head == last_open == sect_open == sect_closed == inline_open == "stop", f"neu={','.join(new[:2])} alt={','.join(alt)} · стоп формы SPEC-11 (вопрос, строка Resume) запушен, после него коммит только в docs/evidence/: "
+         f"та же сессия — {new[0]}, слово оператора не строкой Resume, снова — {new[1]}; новая сессия — {new[2]}; затем коммит только docs/PLAN-1.md — {rep_plan}, только головы PROGRESS — {rep_head}; две строки STOP в разделе (первая снята) — {last_open}; «## Open stop» после раздела со снятым STOP — {sect_open}; STOP в «## Closed stops» раньше открытого — {sect_closed}; «Resume: …» в строке вопроса — {inline_open}; хук v3.4 ({OLD_HOOK_34}) — {', '.join(alt)}")
     # F3.2 — стоп закрыт: коммит кода, «— снят», слово Resume (и в новой сессии)
     c, tc = gate_fixture(src, launch)
     stop_now(c)
@@ -2133,11 +2155,25 @@ def stop_probes(src, launch):
     prefix = word_at("Resume: ключ у оператора, иду дальше", 2)  # не строка Resume стопа, но начинается с «Resume:» — слово
     before = word_at(resume, -300)  # строка Resume стопа до его коммита — не слово
     meta = word_at("Resume: ключ у оператора, иду дальше", 2, meta=True)
-    inline = one(GATE_STOP, "«продолжай по SPEC-1 с F2: ключ выдан».")  # «Resume: …» за вопросом в строке — не строка Resume: её текст без префикса — не слово  # служебная запись харнеса (isMeta), не слова человека — не слово
+    inline = one(GATE_STOP, "«продолжай по SPEC-1 с F2: ключ выдан».")
+    dd, tdd = gate_fixture(src, launch)  # коммит файла docs/ вне отчётных (docs/STATUS.md) после стопа — тоже код
+    stop_now(dd, FORM11)
+    open(f"{dd}/docs/STATUS.md", "w", encoding="utf-8").write("s\n")
+    ship(dd, "F2.1: статус после стопа", "docs/STATUS.md")
+    docs_after = dec(gate_run(dd, tdd, "probe-docs"))
+    bw, tbw = gate_fixture(src, launch)  # слово Resume в конце хода, который отпущен фоном: слово в журнале, новая сессия — стоп закрыт
+    stop_now(bw, FORM11)
+    say(tbw, RESUME, 2)
+    bg1 = last_line(gate_run(bw, tbw, "probe-bg", extra={"background_tasks": [{"type": "shell"}]}))
+    fresh_bw = f"{os.path.dirname(tbw)}/fresh-bg.jsonl"
+    open(fresh_bw, "w").write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}) + "\n")
+    bg_next = dec(gate_run(bw, fresh_bw, "probe-bg-next"))  # «Resume: …» за вопросом в строке — не строка Resume: её текст без префикса — не слово  # служебная запись харнеса (isMeta), не слова человека — не слово
     sides = [dec(code), dec(snyat), dec(res1), dec(res2)]
-    item(S, "F3.2", sides == ["block"] * 4 and bool(kept) and prefix == "block" and before == meta == inline == "stop", f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
+    item(S, "F3.2", sides == ["block"] * 4 and bool(kept) and prefix == "block" and before == meta == inline == "stop" and docs_after == "block"
+         and bg1.get("decision") == "pass" and str(bg1.get("reason", "")).startswith("background") and bool(bg1.get("resumed")) and bg_next == "block", f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
          f"слово Resume (строка Resume стопа после его коммита), потом коммит только в docs/evidence/ — {sides[2]}, в журнале resumed {kept}; новая сессия без слова — {sides[3]}; "
-         f"сообщение «Resume: …» не строкой стопа — {prefix}; строка Resume за 5 мин до коммита стопа — {before}; служебная запись (isMeta) «Resume: …» — {meta}; текст «Resume:» из строки вопроса без префикса — {inline}")
+         f"сообщение «Resume: …» не строкой стопа — {prefix}; строка Resume за 5 мин до коммита стопа — {before}; служебная запись (isMeta) «Resume: …» — {meta}; текст «Resume:» из строки вопроса без префикса — {inline}; коммит docs/STATUS.md после стопа — {docs_after}; "
+         f"слово Resume в конце хода с фоновой задачей — {bg1.get('decision')} «{str(bg1.get('reason', ''))[:30]}», resumed {bg1.get('resumed') or []}, новая сессия — {bg_next}")
     # F3.3 — стоп с текстом стопа прошлой фазы: новый стоп; хук v3.4 — «старый»
     p, tp = gate_fixture(src, launch, stop_old=True)
     pg = open(f"{p}/docs/PROGRESS.md", encoding="utf-8").read()
@@ -2214,7 +2250,8 @@ def stop_probes(src, launch):
         "«снят» не в конце строки STOP": (one("STOP: STOP-INPUT — прежний ключ снят с выдачи, нужен новый.\nВопрос оператору: выдать ли ключ фикстуры? Resume: «продолжай по SPEC-1 с F2: ключ выдан».\n"), "stop"),
         "? только в URL": (one("STOP: STOP-INPUT — нужен ключ.\nКлюч: https://example.invalid/key?id=1\nResume: продолжай по SPEC-1 с F2\n"), "block")}
     rs = lambda x: " ".join(str(m) for m in (last_line(x).get("missing") or []))
-    named = ["STOP-INPUT» has no question" in rs(no_form), "STOP-PAY» is not a stop of SPEC §4" in rs(bad_id), "on disk only" in rs(disk)]
+    named = ["STOP-INPUT» has no question" in rs(no_form), "STOP-PAY» is not a stop of SPEC §4" in rs(bad_id),
+             any("on disk only" in str(m) and "STOP-INPUT" in str(m) for m in (last_line(disk).get("missing") or []))]
     extra = ["STOP-INPUT» has no question" in rs(word), "STOP-INPUT» has no question" in rs(noq), "STOP-INPUT» has no question" in rs(qres), "is not pushed" in rs(unpushed)]  # стороны сверх трёх пункта
     item(S, "F3.4", all(named) and all(extra) and dec(no_form) == dec(bad_id) == dec(disk) == dec(word) == dec(noq) == dec(qres) == dec(unpushed) == "block" and dec(formed) == "stop" and all(g == w for g, w in form_more.values()),
          f"form={sum(named)}/3 · без вопроса и Resume — {dec(no_form)}, названо — {'да' if named[0] else 'нет'}; STOP-PAY вне §4 — {dec(bad_id)}, названо — {'да' if named[1] else 'нет'}; "

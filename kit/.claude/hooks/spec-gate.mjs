@@ -25,7 +25,8 @@
 // PROGRESS versions back from HEAD with the same open STOP line — a stop with the text of a past phase's stop is a new stop) there is
 // no commit beyond the report files (docs/evidence/, docs/PROGRESS.md, docs/PLAN-*.md) and no Resume word — a user message after
 // that commit that is the stop's Resume line as /phase resume sends it, or starts with «Resume:». A Resume word seen once is kept in
-// the log (`resumed`: <sha of the stop commit>:<hash of the line>), so the stop stays closed in the next session (handoff, /clear).
+// the log (`resumed`: <sha of the stop commit>:<hash of the line>), so the stop stays closed in the next session (handoff, /clear) —
+// also when that turn end passes before the stop is judged (background tasks, AGENT_STOP): the word is logged there too.
 // «— снят» at the end of the line closes it too. A STOP line on disk only, or an open STOP without its form, is a missing line.
 // The full set → SPEC_GATE_OK and the turn ends; otherwise the end of the turn is blocked and the reason is the list of what is
 // missing, built by code. Jev is not asked here: its one cell — an item against the raw output of its probe — is in the phase
@@ -241,6 +242,27 @@ function resumeWord(p, resume, since) {
   return false
 }
 
+// The open stop of PROGRESS at HEAD and its Resume word (SPEC-v3.5 F3.2): {open, at, mark, word}; a lifted or absent stop — no mark.
+function stopWord(root, input, log, progress) {
+  const open = openStop(progress)
+  if (!open || open.lifted) return { open, at: null, mark: null, word: false }
+  const at = stopCommit(root, open.line)
+  const mark = at && `${at.slice(0, 12)}:${sha12(canon(open.line))}`
+  const when = at ? Number(git(root, 'log', '-1', '--format=%ct', at)) * 1000 : Infinity
+  const word = !!mark && (log.some(l => (l.resumed || []).includes(mark)) || resumeWord(input.transcript_path, open.resume, when))
+  return { open, at, mark, word }
+}
+
+// A turn end that passes before the stop is judged keeps the Resume word it carries: [mark] or [].
+function wordOnPass(root, input, log) {
+  try {
+    const w = stopWord(root, input, log, atHead(root, 'docs/PROGRESS.md') || '')
+    return w.word ? [w.mark] : []
+  } catch {
+    return []
+  }
+}
+
 // SPEC-v3.5 F2: null — the session is judged; {reason} — it passes as not the phase session.
 function notPhase(input, root, promptText, progress) {
   const id = String(input.session_id || '')
@@ -355,7 +377,7 @@ const bgTypes = input => (Array.isArray(input.background_tasks) ? input.backgrou
 function decide(input, root, cfg, log) {
   const prior = log.filter(l => l.session === input.session)
   const stopFile = process.env.AGENT_STOP_FILE || path.join(root, 'AGENT_STOP')
-  if (fs.existsSync(stopFile)) return { decision: 'pass', reason: 'agent-stop' }
+  if (fs.existsSync(stopFile)) return { decision: 'pass', reason: 'agent-stop', resumed: wordOnPass(root, input, log) }
   const promptFile = ['docs/PROMPT.txt', 'docs/GOAL.txt'].find(p => atHead(root, p) !== null || fs.existsSync(path.join(root, p)))
   if (!promptFile) return null // no phase is open
   const rf = ((atHead(root, promptFile) ?? read(path.join(root, promptFile)) ?? '').match(/^Read first:(.*)$/m) || [])[1] || ''
@@ -366,7 +388,7 @@ function decide(input, root, cfg, log) {
   if (other) return { decision: 'pass', reason: other.reason }
   const wakes = [...new Set(bgTypes(input).filter(t => WAKES.includes(t)))]
   if ((input.session_crons || []).length) wakes.push('cron')
-  if (wakes.length) return { decision: 'pass', reason: `background:${wakes.join(',')}` }
+  if (wakes.length) return { decision: 'pass', reason: `background:${wakes.join(',')}`, resumed: wordOnPass(root, input, log) }
   const start = sessionStart(input.transcript_path) ?? t0 - NO_TRANSCRIPT_MS
 
   const feats = features(spec)
@@ -434,12 +456,9 @@ function decide(input, root, cfg, log) {
     if (!reasons.includes(id)) missing.push(`«STOP: ${id}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
     else if (!(/\?(?![\w=&%])/.test(open.near) && (open.resume || RESUME_MARK.test(open.near)))) missing.push(`«STOP: ${id}» has no question (?) and resume line within the next three lines`)
     else {
-      const at = stopCommit(root, open.line)
-      const mark = at && `${at.slice(0, 12)}:${sha12(canon(open.line))}`
+      const { at, mark, word } = stopWord(root, input, log, progress)
       const own = p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md' || /^docs\/PLAN-[^/]+\.md$/.test(p)
       const code = at ? commits(root, `${at}..HEAD`).find(c => c.files.some(p => !own(p))) : null
-      const when = at ? Number(git(root, 'log', '-1', '--format=%ct', at)) * 1000 : Infinity
-      const word = !!mark && (log.some(l => (l.resumed || []).includes(mark)) || resumeWord(input.transcript_path, open.resume, when))
       if (word) resumed.push(mark)
       if (mark && !code && !word && pushed) return { decision: 'stop', reason: id, stops: [mark] }
     }
