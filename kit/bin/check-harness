@@ -1956,11 +1956,17 @@ def session_probes(src, launch):
     put_mark(r3, ["someone-else"])
     got = {k: last_line(gate_run(r3, own(sid, text), sid)).get("decision") for k, (sid, text) in cases.items()}
     service_mark = gate_run(r3, own("a0000004", "что в STATUS?"), "a0000004")
+    late = synth_transcript(f"{d3}/a0000006.jsonl", [{"type": "queue-operation", "sessionId": "a0000006"}, user_rec("что в STATUS?", "a0000006"),
+                            {"type": "assistant", "sessionId": "a0000006", "message": {"role": "assistant", "content": []}},
+                            user_rec(open(f"{r3}/docs/PROMPT.txt", encoding="utf-8").read(), "a0000006")])
+    late_prompt = gate_run(r3, late, "a0000006")  # текст запроса после первого ответа модели — не голова: правило (3) его не видит
+    any_resume = last_line(gate_run(r3, own("a0000007", "Resume: ключ выдан, продолжай"), "a0000007")).get("decision")  # «Resume: …» не строкой стопа — тоже суд
     put_mark(r3, None)
     got["служебная без файла"] = last_line(gate_run(r3, own("a0000005", "что в STATUS?"), "a0000005")).get("decision")
     n3 = sum(v == "block" for v in got.values())
-    item(S, "F2.3", n3 == 4 and not_phase(service_mark), f"block={n3}/4 · файл метки называет другую сессию: " + "; ".join(f"{k} — {v}" for k, v in got.items())
-         + f" · красная: служебная при файле — {last_line(service_mark).get('decision')} «{str(last_line(service_mark).get('reason', ''))[:60]}»")
+    item(S, "F2.3", n3 == 4 and not_phase(service_mark) and not_phase(late_prompt) and any_resume == "block", f"block={n3}/4 · файл метки называет другую сессию: " + "; ".join(f"{k} — {v}" for k, v in got.items())
+         + f" · красная: служебная при файле — {last_line(service_mark).get('decision')} «{str(last_line(service_mark).get('reason', ''))[:60]}»; "
+         f"запрос после первого ответа модели — {last_line(late_prompt).get('decision')}; «Resume: …» не строкой стопа — {any_resume}")
     # F2.5 — steer.sh: заметку берёт сессия фазы; без метки — любая; метка под .gitignore
     sr, _ = gate_fixture(src, launch)
 
