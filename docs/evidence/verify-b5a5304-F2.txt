@@ -1,0 +1,15 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 1
+FEATURES: F2
+/verify-phase · docs/SPEC-v3.5.md · HEAD b5a5304 · проверяющие claude-opus-5-5 (фич 1 из 9, опровергателей 0) · судья claude-opus-5-5
+
+F2 доказана: `GATE_SESSION_OK` есть в docs/evidence/F2-check-harness-result.txt @ b5a5304 и в gate.log, свежий прогон `bin/check-harness session` зелёный (rc 0). Все пять пунктов F2.1–F2.5 подтверждены собственными командами чекера и их сырым выводом, включая живой хост для F2.1 и F2.4. Все семь мутаций красные, среди них выжившая в прошлом вердикте M6 (transcriptHead `return` → `continue`), так что блокирующая строка прошлого вердикта закрыта. Кандидатов в блокирующие нет, единственная находка (строковый `sessions` в steer.sh) не блокирует.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F2 (не блокирует): steer.sh и spec-gate по-разному читают испорченную метку. Если `sessions` записан строкой, spec-gate считает, что метка не называет ни одной сессии, а steer.sh проверяет вхождение через Python `in` по этой строке. Так заметку оператора получает сессия, чей id входит в строку как подстрока. Проверено: python3 acc_e4.py -> «note given» при sessions='s-phase' и session 'phase'. Мод всегда пишет список, поэтому на обычном пути этого не бывает. Это устойчивость вне формата мода, а не пункт F2.5.
+
+## По фичам
+- F2: risk high; прошлый вердикт verify-8060bcf-F2.txt; чек `grep -n 'F2' /tmp/two-tier-v3/verify-b5a5304-spxkgm1u/gate.log; grep -n 'GATE_SESSION_OK' docs/evidence/F2-check-harness-result.txt; plus own fresh run of the code part: PATH=<PATH without ~/.local/bin> python3 bin/check-harness session (F2.2, F2.3, F2.5 ran, all OK; F2.1 and F2.4 'offen' with no claude, so that run prints no marker; rc 0, about 9 s)` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутация kit/.claude/hooks/spec-gate.mjs: transcriptHead: `if (r?.type === 'assistant') return out` -> `continue` (the prior verdict's surviving mutation M6: records after the first model answer join the head) → red; мутация kit/.claude/hooks/steer.sh: `if data.get("session_id") not in ids:` -> `if False:` (the mark no longer limits who gets the note) → red; мутация kit/.claude/hooks/spec-gate.mjs: rule (3): dropped `|| HANDOFF_STARTS.some(h => t.startsWith(h))` → red; мутация kit/.claude/hooks/spec-gate.mjs: rule (3): `t === norm(resume)` -> `t === norm(resume) + "x"` (a session that opens with the /phase resume line is no longer recognised) → red; мутация kit/.claude/hooks/spec-gate.mjs: rule (1): `if (id && mark.sessions.includes(id)) return null` -> `if (false) return null` → red; мутация mods/phase-start/hooks/register.ts: markSession returns true without writing (`if (id) return true`), applied to a copy at /tmp/two-tier-v3/acc-f2-mods/nowrite → red; мутация mods/phase-start/hooks/register.ts: classic.SessionStart: `if (e.source !== 'clear' || mark.id === undefined) return result` -> `return result`, applied to a copy at /tmp/two-tier-v3/acc-f2-mods/noclear → red; находок 1, блокирующих-кандидатов 0, опровергнуто 0

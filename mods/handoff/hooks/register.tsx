@@ -6,6 +6,10 @@
 // Below the threshold, Jev (absorbed from compact-adviser) judges each settled answer: is the unit of work finished,
 // and was it hands-on? Past a floor that slides with the fill, `jev: hint` lights the band, `jev: auto` hands off there.
 // A band above the prompt shows the fill, the hint and the buttons. Headless runs (`claude -p`) are left alone.
+// SPEC-v3.5 F1 (0.4.0): /handoff is registered everywhere the mod loads — a host like the Code tab starts as the SDK does (isInteractive
+// false) and attaches a surface later; the mod acts by itself only in a person's session: the REPL or an attached surface, the rule of
+// spec-board and window-guard (an attach is latched). The threshold is `handoff_threshold_pct` of the project's budgets.json (defaults,
+// project only tightens — the rule of window-guard), else the `threshold` option, else 70; it is read at each decision and each status.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
@@ -16,8 +20,9 @@ type Settings = { threshold: number; handoffDir: string; autoClear: boolean; min
 
 type State = {
   s: Settings
-  isInteractive: boolean
+  isAttended: boolean // the REPL, or a surface attached once (session.attach): a person's session
   isArmed: boolean // re-armed once the fill drops well below the threshold (a fresh context after /clear)
+  threshold: number // the threshold of the last decision: what the band and Jev's floor read
   isRunning: boolean
   lastPath: string | undefined
   prompt: string // the user's last typed prompt: what Jev reads beside the answer
@@ -51,8 +56,9 @@ const words = (lang: Lang) =>
 export const register: Register = (on, options) => {
   const st: State = {
     s: settingsOf(options),
-    isInteractive: false,
+    isAttended: false,
     isArmed: true,
+    threshold: 70,
     isRunning: false,
     lastPath: undefined,
     prompt: '',
@@ -61,14 +67,17 @@ export const register: Register = (on, options) => {
   }
 
   on('session.start', async ($, e, next) => {
-    st.isInteractive = e.isInteractive
-    if (st.isInteractive) {
-      await $.command.register({
-        name: 'handoff',
-        description: 'Write a handoff from this session; `now` also clears the context and resumes from it.',
-        argumentHint: 'now | write | status | last',
-      })
-    }
+    st.isAttended ||= e.isInteractive // a host may attach before this runs
+    await $.command.register({
+      name: 'handoff',
+      description: 'Write a handoff from this session; `now` also clears the context and resumes from it.',
+      argumentHint: 'now | write | status | last',
+    })
+    return next(e)
+  })
+
+  on('session.attach', ($, e, next) => {
+    st.isAttended = true
     return next(e)
   })
 
@@ -83,7 +92,7 @@ export const register: Register = (on, options) => {
   // /clear resets $.state, and session.start does not fire again: put the fill back so the band shows at once.
   on('classic.SessionStart', async ($, e, next) => {
     const result = await next(e)
-    if (!st.isInteractive || e.source !== 'clear') return result
+    if (e.source !== 'clear' || !(await isPersons($, st))) return result
     try {
       const percent = (await $.session.usage()).context.percent ?? 0
       await update($, fill, () => percent)
@@ -97,7 +106,8 @@ export const register: Register = (on, options) => {
   // below it, ask Jev whether this answer closes a unit of work.
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
-    if (e.agentId !== undefined || !st.isInteractive || st.isRunning || e.isAborted) return result
+    if (e.agentId !== undefined || st.isRunning || e.isAborted || !(await isPersons($, st))) return result
+    const threshold = (st.threshold = await thresholdOf($, st))
     let percent = 0
     try {
       percent = (await $.session.usage()).context.percent ?? 0
@@ -105,9 +115,9 @@ export const register: Register = (on, options) => {
       return result // no figure, no decision
     }
     await update($, fill, () => percent)
-    $.ui.status(`ctx ${percent}% · handoff @${st.s.threshold}%`)
-    if (percent < st.s.threshold - 20) st.isArmed = true
-    if (percent < st.s.threshold) {
+    $.ui.status(`ctx ${percent}% · handoff @${threshold}%`)
+    if (percent < threshold - 20) st.isArmed = true
+    if (percent < threshold) {
       if (st.s.jev !== 'off' && st.isArmed && e.reason === 'answer' && e.answer.trim() && percent >= JEV_FROM && st.judged !== e.turnId) {
         st.judged = e.turnId
         const answer = e.answer
@@ -157,12 +167,12 @@ export const register: Register = (on, options) => {
     const w = words(st.s.language)
     const last = await read($, note)
     const tip = await read($, advice)
-    const isHot = percent >= st.s.threshold || tip !== ''
+    const isHot = percent >= st.threshold || tip !== ''
     return (
       <Box>
         <Text color={isHot ? 'yellow' : undefined} dimColor={!isHot}>
           {w.ctx} {percent}% · {w.at}
-          {st.s.threshold}%{tip ? ` · ${w.jev} ${tip}` : ''}{last ? ` · ${last}` : ''}{' '}
+          {st.threshold}%{tip ? ` · ${w.jev} ${tip}` : ''}{last ? ` · ${last}` : ''}{' '}
         </Text>
         <Button key="now" label={w.now} hotkey="h" variant="primary" onPress={() => void handoffAndResume($, st, 'button')} />
         <Text> </Text>
@@ -206,7 +216,7 @@ async function judgeBoundary($: EngineInterface, st: State, answer: string, perc
   } catch (err) {
     verdict = `network: ${err instanceof Error ? err.message : String(err)}`.split(key).join('[key]')
   }
-  const floor = floorFor(percent, st.s.threshold)
+  const floor = floorFor(percent, st.threshold)
   const s = typeof verdict === 'string' ? undefined : Math.round(score(verdict) * 100) / 100
   const isStale = st.seq !== seq || st.isRunning
   const decision = s === undefined ? 'error' : isStale ? 'stale' : s < floor ? 'below' : st.s.jev
@@ -220,7 +230,7 @@ async function judgeBoundary($: EngineInterface, st: State, answer: string, perc
     ...(typeof verdict === 'string' ? { error: verdict } : { model: verdict.model, in: verdict.inputTokens, out: verdict.outputTokens }),
   })
   if (s === undefined || isStale) return
-  $.ui.status(`ctx ${percent}% · handoff @${st.s.threshold}% · jev ${s.toFixed(2)}/${floor.toFixed(2)}`)
+  $.ui.status(`ctx ${percent}% · handoff @${st.threshold}% · jev ${s.toFixed(2)}/${floor.toFixed(2)}`)
   if (s < floor) return
   const tip = `${s.toFixed(2)} ≥ ${floor.toFixed(2)}`
   if (st.s.jev === 'auto') {
@@ -280,6 +290,33 @@ async function handoffFileOnly($: EngineInterface, st: State): Promise<void> {
   if (outcome.isWritten) $.ui.log(`fresh-session line: ${resumePrompt(st.s.language, outcome.relPath)}`)
 }
 
+// A person's session: the REPL, or a surface attached now or once (spec-board and window-guard read it the same way).
+async function isPersons($: EngineInterface, st: State): Promise<boolean> {
+  return st.isAttended || (await $.session.surfaces()).length > 0
+}
+
+const isPct = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+// handoff_threshold_pct of the project's budgets.json (the repo root, else the session root): defaults, and project only tightens; no file,
+// bad JSON or no key — undefined.
+async function budgetThreshold($: EngineInterface): Promise<number | undefined> {
+  try {
+    const root = (await $.session.repo())?.root ?? (await $.session.root())
+    const { defaults, project } = JSON.parse(await $.fs.read(`${root}/budgets.json`))
+    const d = isPct(defaults?.handoff_threshold_pct) ? defaults.handoff_threshold_pct : undefined
+    const p = isPct(project?.handoff_threshold_pct) ? project.handoff_threshold_pct : undefined
+    return p !== undefined && (d === undefined || p <= d) ? p : d
+  } catch {
+    return undefined
+  }
+}
+
+// The threshold now: budgets.json, else the option (the user's settings — the fallback), clamped as the option is.
+async function thresholdOf($: EngineInterface, st: State): Promise<number> {
+  const b = await budgetThreshold($)
+  return b === undefined ? st.s.threshold : clamp(b, 10, 95)
+}
+
 async function statusLine($: EngineInterface, st: State): Promise<string> {
   let fillText = 'unknown'
   try {
@@ -289,7 +326,10 @@ async function statusLine($: EngineInterface, st: State): Promise<string> {
     /* no figure */
   }
   const last = st.lastPath ?? (await readLast($))
-  return `handoff · context ${fillText} · threshold ${st.s.threshold}% · auto-clear ${st.s.autoClear ? 'on' : 'off'} · dir ${st.s.handoffDir}/ · last: ${last ?? '—'}`
+  const b = await budgetThreshold($)
+  const surfaces = await $.session.surfaces()
+  const surface = surfaces.length ? surfaces.join(',') : st.isAttended ? 'attached' : 'none'
+  return `handoff · context ${fillText} · threshold ${await thresholdOf($, st)}% (${b === undefined ? 'option' : 'budgets.json'}) · surface ${surface} · auto-clear ${st.s.autoClear ? 'on' : 'off'} · dir ${st.s.handoffDir}/ · last: ${last ?? '—'}`
 }
 
 async function readLast($: EngineInterface): Promise<string | undefined> {

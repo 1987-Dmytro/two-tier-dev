@@ -1,6 +1,7 @@
 {
   "effortLevel": "xhigh",
   "ultracode": true,
+  "autoCompactWindow": 600000,
   "enabledPlugins": {
     "ponytail@ponytail": true,
     "pr-review-toolkit@claude-plugins-official": true,
@@ -32,7 +33,6 @@
     },
     "handoff@two-tier-mods": {
       "options": {
-        "threshold": 70,
         "handoffDir": "handoffs",
         "autoClear": true,
         "minTurns": 2,
@@ -58,6 +58,7 @@
     "anthropic-skills:morning": "off",
     "anthropic-skills:pdf": "off",
     "anthropic-skills:pptx": "off",
+    "anthropic-skills:process-hygiene": "off",
     "anthropic-skills:role-checker": "off",
     "anthropic-skills:role-hypothesis-generator": "off",
     "anthropic-skills:role-hypothesis-judge": "off",

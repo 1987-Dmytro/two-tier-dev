@@ -1,0 +1,17 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 3
+FEATURES: F1
+/verify-phase · docs/SPEC-v3.5.md · HEAD c1387be · проверяющие claude-opus-5-5 (фич 1 из 9, опровергателей 0) · судья claude-opus-5-5
+
+Свежий прогон `bin/check-kit handoff` на c1387be дал rc 0 и маркер HANDOFF_TAB_OK. В docs/evidence/F1-check-kit-result.txt есть строки F1.1–F1.5 и маркер. Каждый пункт проверяющий подтвердил своей командой и сырым выводом: хост вкладки (40 и 10, у 0.3.0 команды нет), файл 0→1 и conversation_reset, автохендофф desktop против none, тесты мода V14 a–f, окно 580000 и 980000 со снятым правилом modes. Все пять мутаций продукта при risk high чек убил, кандидатов в блокирующие нет: найденные края (порог ≤ 20, сбой fork, поле «last» в статусе) лежат вне пути по умолчанию и вне «готово».
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- F1 (не блокирует): при пороге 20 и ниже мод больше не взводится, потому что `percent < threshold - 20` никогда не истинно. За сессию выходит один автохендофф, даже когда после /clear заполнение около 2 % (mods/handoff/hooks/register.tsx:119; EDGE g и h красные, i при пороге 21 зелёный). Это край пункта F1.4 при пороге 10 и 20. При пороге кита 40 эффекта нет.
+- F1 (не блокирует): если автохендофф упал (fork не вернул текста), isArmed уже false. Пока заполнение выше порога − 20, повторной попытки нет, и остаётся только страховка autoCompactWindow (EDGE w3). Это путь ошибки вне «готово»; хорошо бы исправить.
+- F1 (не блокирует): в новом проекте без handoffs/ `/handoff status` показывает «last: handoffs/handoff-…». Путь берётся из $.store прошлого прогона в другом проекте. Косметика: порог и поверхность статус называет верно.
+
+## По фичам
+- F1: risk high; прошлый вердикт verify-f1b6f85-F1-F6.txt; чек `unset ANTHROPIC_API_KEY && bin/check-kit handoff (fresh run in verifier worktree at c1387be; gate.log has only 'F1 HANDOFF_TAB_OK — из docs/evidence/F1-check-kit-result.txt @ d5c2bc7', i.e. from evidence, not a fresh run)` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутация mods/handoff/hooks/register.tsx: line 119: `if (percent < threshold - 20) st.isArmed = true` -> `percent <= threshold - 20` (re-arms at exactly threshold-20, so a second handoff fires above the item's limit) → red; мутация mods/handoff/hooks/register.tsx: isPersons: `return st.isAttended || ...` -> `return true || st.isAttended || ...` (the mod hands off by itself with no surface, against F1.3 none -> 0) → red; мутация mods/handoff/hooks/register.tsx: turn.complete: dropped `e.agentId !== undefined ||` (a subagent turn can hand off, against F1.4 agent=0) → red; мутация mods/handoff/hooks/register.tsx: budgetThreshold: `return p !== undefined && (d === undefined || p <= d) ? p : d` -> `return d ?? p` (the project's tighter threshold is ignored, against F1.1 neu=40,10) → red; мутация mods/handoff/hooks/register.tsx: command.run: `if (arg === 'now' && st.s.autoClear)` -> `arg === 'now!'` (/handoff now writes the file but no /clear, so no conversation_reset, against F1.2). The mod's own tests stay green on this one (25 pass 0 fail), so the full feature check was run → red; находок 3, блокирующих-кандидатов 0, опровергнуто 0

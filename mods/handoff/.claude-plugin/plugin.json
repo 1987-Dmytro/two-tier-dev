@@ -1,6 +1,6 @@
 {
   "name": "handoff",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Writes a handoff document from the live transcript when the context fills past a threshold, when Jev judges the unit of work finished (absorbed from compact-adviser), or on /handoff, then clears the context and resumes from it.",
   "author": {
     "name": "two-tier-dev"
@@ -9,7 +9,7 @@
     "threshold": {
       "type": "number",
       "default": 70,
-      "description": "Context fill (percent of the window) at which the handoff is written automatically after the turn ends.",
+      "description": "Fallback threshold: context fill (percent of the window) at which the handoff is written automatically after the turn ends; handoff_threshold_pct of the project's budgets.json wins.",
       "title": "Auto-handoff threshold (%)"
     },
     "handoffDir": {

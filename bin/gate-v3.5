@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""gate-v3.5 — гейт кита v3.5 (SPEC-v3.5 F9.5). Без ветки — GATE_SKIP, rc 0 (K80); git не читает HEAD — GATE_FAIL reason=no-repo, rc 1;
+не репо кита — GATE_FAIL reason=no-kit.
+
+Свой t5 во /tmp/two-tier-v3 от bin/two-tier-init и корень этого репо: маркеры F1–F8 фазы с номером фичи и уцелевшие маркеры v3.4, v3.3, v3.2;
+строки F9.1–F9.4 — из логов чеков как есть; F9.5 — сам гейт: проект из кита жив, все маркеры, копия клона telefon (F9.4; TELEFON_CLONE или
+/tmp/two-tier-v3/telefon-src), в evidence фичи F1–F8 — ровно одна строка на каждый её пункт и ни одной с чужим id (SPEC §3); красные образцы —
+лог F9.4 без клона и строка пункта с чужим id. GATE35_OK — только после всех проверок; лог без маркера — FAIL с именем.
+Живые пробы F1 (хост вкладки) и F2 (хост и хук) гейт повторяет только при правке путей фичи (мод, хук, чек, шаблоны) после коммита их evidence — иначе маркер из
+evidence; F8 — `bin/check-verify --gate` (воркфлоу и лаунчер без правок с коммита evidence F8 — маркер из него). В репо ничего не пишет,
+кроме журналов чеков; полные логи — свой каталог /tmp/two-tier-v3/gate35-*, в вывод — команда, код выхода и строки FAIL/WARN/BAD/FLAKY.
+"""
+import glob, json, os, re, shutil, signal, subprocess, sys, tempfile, time
+from concurrent.futures import ThreadPoolExecutor
+
+REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+TT = os.environ.get("GATE_TMP") or "/tmp/two-tier-v3"
+SPEC = "docs/SPEC-v3.5.md"
+SPEC_ID = "SPEC-v3.5"
+CLONE = os.environ.get("TELEFON_CLONE") or "/tmp/two-tier-v3/telefon-src"
+LIVE = {  # фича: маркер, evidence, пути фичи (мод, хук, чек, шаблоны — SPEC «Цена судей») — правка их после коммита evidence требует живого прогона
+    "F1": ("HANDOFF_TAB_OK", "docs/evidence/F1-check-kit-result.txt",
+           ["mods/handoff", "kit/bin/check-kit", "kit/bin/check-harness", "kit/budgets.json", "kit/.claude/launch.settings.json", "kit/docs/PROCESS.template.md",
+            "bin/two-tier-init"]),
+    "F2": ("GATE_SESSION_OK", "docs/evidence/F2-check-harness-result.txt",
+           ["kit/.claude/hooks/spec-gate.mjs", "kit/.claude/hooks/steer.sh", "kit/.claude/settings.json", "kit/.claude/launch.settings.json", "mods/phase-start",
+            "kit/bin/check-harness", "kit/.gitignore", "bin/two-tier-init", "checks/fixtures/telefon-spec11-transcript-heads.jsonl"]),
+}
+OFFEN_OK = [r"^[^:]+:v3\.4-F5\.3 offen", r"^kit-t5:v3\.4-F3\.5 telefon=offen · не репо кита", r"^kit-t5:v3\.4-F9\.[12] offen · не репо кита",
+            r"^kit-t5:F1\.[1-5] offen · не репо кита", r"^kit-t5:F6\.[1-5] offen · не репо кита", r"^kit-t5:F9\.4 offen · не репо кита"]
+fails = []
+
+
+def git(*a, cwd=REPO):
+    return subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True)
+
+
+def run(job):
+    """(имя, каталог, команда, env) → (имя, rc): лог и код в LOGS; группа процессов снимается по таймауту."""
+    name, cwd, cmd, extra = job
+    env = dict(os.environ, **extra)
+    with open(f"{LOGS}/{name}.log", "w", encoding="utf-8") as log:
+        p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+        try:
+            rc = p.wait(timeout=3600)
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, signal.SIGKILL)
+            rc = p.wait()
+    where = "t5" if cwd == T5 else "корень ветки"
+    print(f"{name}: ({where}) {' '.join(cmd)}{' · ' + ' '.join(f'{k}={v}' for k, v in extra.items()) if extra else ''} — rc {rc}", flush=True)
+    return name, rc
+
+
+def log(name):
+    p = f"{LOGS}/{name}.log"
+    return open(p, encoding="utf-8", errors="replace").read().splitlines() if os.path.isfile(p) else []
+
+
+relayed = set()
+
+
+def mark(f, marker, *names, rcs, quiet=False):
+    """В каждом логе rc 0 и строка, равная маркеру; строки FAIL/WARN/BAD/FLAKY лога — один раз. quiet — красный образец: строки не печатает."""
+    why = []
+    for n in names:
+        if n not in relayed:
+            relayed.add(n)
+            for l in log(n):
+                if re.match(r"^((v[0-9.]+-)?F[0-9]+\.[0-9]+ FAIL|FAIL|WARN|BAD|FLAKY|[A-Z_]+_WARN)", l):
+                    print(f"    {n}: {l[:400]}")
+        if marker not in log(n):
+            why.append(f"{n}: нет {marker}")
+        if rcs.get(n) != 0:
+            why.append(f"{n}: rc {rcs.get(n, 'нет')}")
+    if not quiet:
+        print(f"{f} {marker}" if not why else f"{f} FAIL: {marker} — {'; '.join(why)}", flush=True)
+    if why:
+        fails.append(f"{marker} ({'; '.join(why)})")
+
+
+def fresh(ev, paths, root=REPO):
+    """(маркер из evidence годен, почему): коммит evidence есть, маркер в нём, пути есть и без правок с него — в истории и в дереве (и новых файлов вне git)."""
+    c = git("log", "-1", "--format=%H", "--", ev, cwd=root).stdout.strip()
+    if not c:
+        return False, f"{ev} нет в истории"
+    gone = [p for p in paths if not os.path.exists(f"{root}/{p}")]
+    if gone:
+        return False, f"путей фичи нет: {', '.join(gone)}"
+    changed = [x for x in git("diff", "--name-only", c, "--", *paths, cwd=root).stdout.split() if x]
+    changed += [x for x in git("ls-files", "--others", "--exclude-standard", "--", *paths, cwd=root).stdout.split() if x]
+    return (False, f"с {c[:7]} изменены: {', '.join(changed[:5])}") if changed else (True, f"{ev} @ {c[:7]}, {', '.join(paths)} без правок")
+
+
+def item_lines(ev_dir, spec_text):
+    """(пунктов F1–F8, расхождения): в docs/evidence/F<n>-*-result.txt со `spec: SPEC-v3.5` — ровно одна строка `F<n>.<k> ` на пункт и ни одной с чужим id."""
+    items = re.findall(r"^\s+- `(F\d+\.\d+)`", spec_text, re.M)
+    feats = sorted({i.split(".")[0] for i in items if not i.startswith("F9.")}, key=lambda x: int(x[1:]))
+    bad = []
+    for f in feats:
+        files = [p for p in sorted(glob.glob(f"{ev_dir}/{f}-*-result.txt")) if open(p, encoding="utf-8").read().lstrip("﻿").split("\n", 1)[0].strip() == f"spec: {SPEC_ID}"]
+        lines = [l for p in files for l in open(p, encoding="utf-8").read().splitlines() if re.match(rf"{f}\.\d+ ", l)]
+        own = [i for i in items if i.split(".")[0] == f]
+        bad += [f"{i}: строк {n}" for i in own for n in [sum(1 for l in lines if l.startswith(i + " "))] if n != 1]
+        bad += [f"чужой id {l.split()[0]} в {f}-*" for l in lines if l.split()[0] not in own]
+    return len([i for i in items if not i.startswith("F9.")]), bad
+
+
+def tel_state(line):
+    """Состояние копии клона по строке F9.4: OK, offen (клона нет) или FAIL."""
+    return "offen" if re.match(r"^F9\.4 offen", line) else "OK" if re.match(r"^F9\.4 lints=4,0 hook=pass,block", line) else "FAIL"
+
+
+if git("rev-parse", "--verify", "-q", "HEAD").returncode:
+    print("GATE_FAIL reason=no-repo")
+    sys.exit(1)
+if git("symbolic-ref", "-q", "HEAD").returncode:
+    print(f"GATE_SKIP reason=detached sha={git('rev-parse', '--short=7', 'HEAD').stdout.strip()}")
+    sys.exit(0)
+print(f"gate-v3.5: ветка {git('branch', '--show-current').stdout.strip()}, HEAD {git('rev-parse', '--short=7', 'HEAD').stdout.strip()}", flush=True)
+for need in ("bin/two-tier-init", "bin/two-tier-upgrade", "bin/check-verify", "bin/check-docs", "kit/.claude", SPEC):
+    if not os.path.exists(f"{REPO}/{need}"):
+        print(f"GATE_FAIL reason=no-kit — нет {need}: это не репо кита v3.5")
+        sys.exit(1)
+t0 = time.monotonic()
+os.makedirs(f"{TT}/skills/.claude/skills", exist_ok=True)  # скилл graphify для --add-dir строки запуска шаблона — так его готовит оператор
+if os.path.isdir(os.path.expanduser("~/.claude/skills/graphify")) and not os.path.lexists(f"{TT}/skills/.claude/skills/graphify"):
+    os.symlink(os.path.expanduser("~/.claude/skills/graphify"), f"{TT}/skills/.claude/skills/graphify")
+T5 = tempfile.mkdtemp(prefix="t35-", dir=TT)
+LOGS = tempfile.mkdtemp(prefix="gate35-", dir=TT)
+git("init", "-q", T5)
+init = subprocess.run([f"{REPO}/bin/two-tier-init", T5], capture_output=True, text=True)
+n_init = sum(1 for l in init.stdout.splitlines() if "wrote:" in l)
+m_kit = len(git("ls-files", "kit").stdout.splitlines())
+hp = git("config", "--get", "core.hooksPath", cwd=T5).stdout.strip() or "нет"
+print(f"t5: bin/two-tier-init — файлов кита {n_init} (в git {m_kit}), core.hooksPath {hp}; логи — {LOGS}", flush=True)
+
+ev_ok = {f: fresh(ev, paths) for f, (_, ev, paths) in LIVE.items()}
+for f, (ok, why) in ev_ok.items():
+    print(f"{f}: {'из evidence' if ok else 'живой прогон'} — {why}", flush=True)
+jobs = [("items-t5", T5, ["bin/check-harness", "items"], {}), ("commit-t5", T5, ["bin/check-harness", "commit"], {}),
+        ("env-t5", T5, ["bin/check-harness", "env"], {}), ("desktop-t5", T5, ["bin/check-harness", "--desktop"], {}),
+        ("kit-t5", T5, ["bin/check-kit"], {}), ("init-t5", T5, ["bin/check-budget"], {}), ("lints-t5", T5, ["bin/check-budget", "--lints"], {}),
+        ("templates-t5", T5, ["bin/check-budget", "--templates"], {}), ("gate-test", T5, ["bin/gate-test", "bin/check-spend", "--self-test"], {}),
+        ("jev", T5, ["bin/jev", "--self-test"], {}), ("owner", T5, ["bin/check-budget", "--self-test", "intent", "owner"], {}),
+        ("stop", REPO, ["bin/check-harness", "stop"], {}),
+        ("kit-repo", REPO, ["bin/check-kit"], {"CHECK_KIT_SKIP": "handoff"} if ev_ok["F1"][0] else {}),
+        ("lints-repo", REPO, ["bin/check-budget", "--lints"], {}), ("templates-repo", REPO, ["bin/check-budget", "--templates"], {}),
+        ("budget-repo", REPO, ["bin/check-budget"], {}), ("verify", REPO, ["bin/check-verify", "--gate"], {}),
+        ("upgrade", REPO, ["bin/two-tier-upgrade", "--self-test"], {}), ("spend", REPO, ["bin/check-spend"], {})]
+jobs += [] if ev_ok["F2"][0] else [("session", REPO, ["bin/check-harness", "session"], {})]
+with ThreadPoolExecutor(8) as ex:
+    rcs = dict(ex.map(run, jobs))
+# после: bin/check-docs судит, что plugin test не оставил файлов в моде, — моды не гоняются рядом с ним
+rcs.update(dict(map(run, [("docs", REPO, ["bin/check-docs"], {})])))
+mods = sorted(d for d in os.listdir(f"{REPO}/mods") if os.path.isfile(f"{REPO}/mods/{d}/.claude-plugin/plugin.json"))
+noapi = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+mod_rows = []
+for m in mods:
+    v = subprocess.run(["claude", "plugin", "validate", f"mods/{m}"], cwd=REPO, env=noapi, capture_output=True, text=True)
+    t = subprocess.run(["claude", "plugin", "test", f"mods/{m}"], cwd=REPO, env=noapi, capture_output=True, text=True)
+    npass = (re.search(r"(\d+) pass", t.stdout + t.stderr) or [None, "?"])[1]
+    nfail = (re.search(r"(\d+) fail", t.stdout + t.stderr) or [None, "?"])[1]
+    mod_rows.append((m, v.returncode == 0 and "Validation passed" in v.stdout + v.stderr and t.returncode == 0 and nfail == "0", f"{m} validate rc {v.returncode}, test rc {t.returncode} ({npass} pass, {nfail} fail)"))
+print("моды: " + "; ".join(r for _, _, r in mod_rows), flush=True)
+
+# красные образцы самой разметки: лог без маркера и маркер при rc 1 — FAIL с именем
+with open(f"{LOGS}/red-a.log", "w") as f:
+    f.write("OK   x\n")
+with open(f"{LOGS}/red-c.log", "w") as f:
+    f.write("RED_OK\n")
+n0 = len(fails)
+for n, rc in (("red-a", 0), ("red-c", 1)):
+    relayed.add(n)
+    mark("F0", "RED_OK", n, rcs={n: rc}, quiet=True)
+red_marks = len(fails) - n0
+del fails[n0:]
+
+for f, (marker, ev, _) in LIVE.items():
+    if ev_ok[f][0]:
+        c = git("log", "-1", "--format=%H", "--", ev).stdout.strip()
+        got = marker in git("show", f"{c}:{ev}").stdout.splitlines()
+        print(f"{f} {marker} — из {ev} @ {c[:7]}" if got else f"{f} FAIL: {marker} — нет в {ev} @ {c[:7]}", flush=True)
+        fails += [] if got else [f"{marker} (evidence)"]
+    else:
+        mark(f, marker, "kit-repo" if f == "F1" else "session", rcs=rcs)
+mark("F3", "GATE_STOP_OK", "stop", rcs=rcs)
+mark("F4", "PLANKA_EARLY_OK", "lints-repo", rcs=rcs)
+mark("F5", "SPEC_PATHS_OK", "lints-repo", rcs=rcs)
+mark("F6", "OPERATOR_WORD_OK", "kit-repo", rcs=rcs)
+mark("F7", "SPEC_REVIEW_OK", "lints-repo", rcs=rcs)
+mark("F8", "VERIFY_OPUS_OK", "verify", rcs=rcs)
+mark("v3.4", "GATE_HOOK_OK", "items-t5", rcs=rcs)
+mark("v3.4", "BUDGET_LINT_OK", "lints-t5", "lints-repo", rcs=rcs)
+mark("v3.4", "TEST_OK bin/check-spend --self-test", "gate-test", rcs=rcs)
+mark("v3.4", "FROZEN_OK", "kit-repo", rcs=rcs)
+mark("v3.4", "FENSTER_OK", "kit-t5", "kit-repo", rcs=rcs)
+mark("v3.4", "PAAR_OK", "kit-t5", "kit-repo", rcs=rcs)
+mark("v3.4", "HARNESS_OK", "desktop-t5", rcs=rcs)
+mark("v3.4", "VERIFY_OK", "verify", rcs=rcs)
+mark("v3.4", "MODS_OK", "kit-repo", rcs=rcs)
+mark("v3.4", "GRAPH_OK", "kit-t5", "kit-repo", rcs=rcs)
+mark("v3.3", "ITEMS_OK", "items-t5", rcs=rcs)
+mark("v3.3", "COMMIT_OK", "commit-t5", rcs=rcs)
+mark("v3.3", "ENV_OK", "env-t5", rcs=rcs)
+mark("v3.3", "WINDOW_OK", "kit-t5", "kit-repo", rcs=rcs)
+mark("v3.3", "DOCS_OK", "docs", rcs=rcs)
+mark("v3.2", "JEV_OK", "jev", rcs=rcs)
+mark("v3.2", "HARNESS_OK", "env-t5", rcs=rcs)
+mark("v3.2", "HOOKS_OK", "env-t5", rcs=rcs)
+mark("v3.2", "KIT_OK", "kit-t5", "kit-repo", rcs=rcs)
+mark("v3.2", "HANDOFF_OK", "kit-repo", rcs=rcs)
+mark("v3.2", "OWNER_OK", "owner", rcs=rcs)
+mark("v3.2", "BUDGET_OK", "init-t5", "templates-t5", "templates-repo", "budget-repo", rcs=rcs)
+mark("v3.2", "SPEND_OK", "spend", rcs=rcs)
+mark("v3.2", "UPGRADE_OK", "upgrade", rcs=rcs)
+f_marks = len(fails)
+for m, ok, _ in mod_rows:
+    fails += [] if ok else [f"мод {m}: validate или test"]
+
+lines9 = {}
+for iid, src in (("F9.1", "lints-repo"), ("F9.2", "docs"), ("F9.3", "docs"), ("F9.4", "kit-repo")):  # строки пунктов F9.1–F9.4 — из логов как есть
+    line = next((l for l in log(src) if l.startswith(iid + " ")), f"{iid} FAIL: нет строки в логе {src}")
+    lines9[iid] = line
+    print(line, flush=True)
+    if re.match(rf"^{re.escape(iid)} (FAIL|offen)", line):
+        fails.append(iid)
+
+offen = []
+for n in sorted(rcs):
+    offen += [f"{n}:{l}" for l in log(n) if re.match(r"^(v[0-9.]+-)?F[0-9]+\.[0-9]+ ([a-z_]+=)?offen( |$)", l)]
+other = [x for x in offen if not any(re.match(p, x) for p in OFFEN_OK)]
+tel = tel_state(lines9["F9.4"])
+n_items, bad_items = item_lines(f"{REPO}/docs/evidence", open(f"{REPO}/{SPEC}", encoding="utf-8").read())
+# красные образцы F9.5: строка F9.4 без клона; строка пункта с чужим id (прошлой фазы, без префикса) в evidence фичи
+red_tel = tel_state("F9.4 offen · клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src (ветка main)") != "OK"
+red_dir = tempfile.mkdtemp(prefix="gate35-ev-", dir=TT)
+for p in glob.glob(f"{REPO}/docs/evidence/F*-result.txt"):
+    with open(p, encoding="utf-8") as src, open(f"{red_dir}/{os.path.basename(p)}", "w", encoding="utf-8") as dst:
+        dst.write(src.read())
+f3 = next(iter(sorted(glob.glob(f"{red_dir}/F3-*-result.txt"))), None)
+if f3:
+    with open(f3, "a", encoding="utf-8") as f:
+        f.write("F3.5 telefon=OK · строка пробы v3.4 без префикса версии\n")
+_, red_bad = item_lines(red_dir, open(f"{REPO}/{SPEC}", encoding="utf-8").read())
+red_items = bool(f3) and any("чужой id F3.5" in b for b in red_bad)
+rot = int(red_tel) + int(red_items)
+# свежесть evidence F1/F2 (fresh): свой репо во /tmp — коммит evidence, затем путь фичи без файла и новый файл вне git под путём фичи — оба «не свежо»
+fr = tempfile.mkdtemp(prefix="gate35-fresh-", dir=TT)
+os.makedirs(f"{fr}/docs/evidence")
+os.makedirs(f"{fr}/mod")
+open(f"{fr}/docs/evidence/F1-x-result.txt", "w").write("spec: SPEC-v3.5\n")
+open(f"{fr}/mod/a.ts", "w").write("a\n")
+fr_env = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")  # без конфига пользователя: подпись, шаблоны и хуки не мешают коммиту
+for a in (["init", "-q", "-b", "main"], ["add", "--", "docs/evidence/F1-x-result.txt", "mod/a.ts"],
+          ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "F1.1: evidence"]):
+    subprocess.run(["git", *a], cwd=fr, env=fr_env, capture_output=True, text=True)
+fr_base = fresh("docs/evidence/F1-x-result.txt", ["mod"], fr)
+fr_gone = fresh("docs/evidence/F1-x-result.txt", ["mod", "mod-typo"], fr)
+open(f"{fr}/mod/new.ts", "w").write("b\n")
+fr_new = fresh("docs/evidence/F1-x-result.txt", ["mod"], fr)
+fresh_ok = fr_base[0] and not fr_gone[0] and "путей фичи нет" in fr_gone[1] and not fr_new[0] and "mod/new.ts" in fr_new[1]
+shutil.rmtree(fr, ignore_errors=True)
+leer = "OK" if (f_marks == 0 and n_init == m_kit and hp == ".githooks" and red_marks == 2 and all(ok for _, ok, _ in mod_rows)
+                and fresh_ok) else "FAIL"
+line95 = (f"leer={leer} rot={rot}/2 · t5 от bin/two-tier-init: файлов кита {n_init} из {m_kit}, core.hooksPath {hp}; маркеров красных {f_marks}; моды {len(mod_rows)}: "
+          f"{sum(ok for _, ok, _ in mod_rows)} зелёных; живые F1 и F2 — {', '.join(f'{f} ' + ('evidence' if ev_ok[f][0] else 'live') for f in LIVE)} ‖ копия клона telefon — {tel} ‖ "
+          f"evidence F1–F8: пунктов {n_items}, строк не по одной и чужих id — {'; '.join(bad_items) or 'нет'} ‖ другого offen — {'; '.join(other) or 'нет'} ‖ "
+          f"красные образцы: строка F9.4 без клона — {'красный' if red_tel else 'зелёный'}; строка «F3.5» прошлой фазы в evidence F3 — {'; '.join(b for b in red_bad if 'F3.5' in b) or 'не поймана'}; "
+          f"разметка: лог без маркера и маркер при rc 1 — FAIL {red_marks}/2; свежесть evidence: без правок — {'свежо' if fr_base[0] else 'не свежо'}, "
+          f"путь без файла — {'свежо' if fr_gone[0] else 'не свежо'} «{fr_gone[1]}», новый файл вне git — {'свежо' if fr_new[0] else 'не свежо'} «{fr_new[1]}»")
+ok95 = leer == "OK" and tel == "OK" and not bad_items and not other and rot == 2
+print(f"F9.5 {line95}" if ok95 else f"F9.5 FAIL: {line95}", flush=True)
+fails += [] if ok95 else [f"F9.5 leer={leer} telefon={tel}{' items' if bad_items else ''}{' offen' if other else ''}"]
+shutil.rmtree(T5, ignore_errors=True)  # проекты снимаются, логи остаются
+shutil.rmtree(red_dir, ignore_errors=True)
+print(f"gate-v3.5: {int(time.monotonic() - t0)} с; логи — {LOGS}")
+if not fails:
+    print("GATE35_OK")
+    sys.exit(0)
+print(f"GATE35_FAIL: {len(fails)} — {'; '.join(fails)}")
+sys.exit(1)

@@ -1,8 +1,9 @@
 # docs
 
-- `SPEC-v3.4.md` · `PLAN-v3.4.md` · `PROGRESS.md` — the current phase, v3.4 «the kit under the Code tab»: the team lead's spec
+- `SPEC-v3.5.md` · `PLAN-v3.5.md` · `PROGRESS.md` — the current phase, v3.5 «a phase without the operator's hands»: the team lead's spec
   (features and their items `F<n>.<k>`), the executor's plan (a probe per item with both sides, order, risks, deviations), the
   executor's report.
+- `SPEC-v3.4.md` · `PLAN-v3.4.md` — the phase that built kit v3.4 «the kit under the Code tab»; its report goes to `archive/` in step 0 of v3.5.
 - `SPEC-v3.3.md` · `PLAN-v3.3.md` · `archive/PROGRESS-v3.3-2026-11-06.md` — the phase that built kit v3.3 «the judge on the claim»; its evidence is in `archive/evidence-v3.3/`.
 - `SPEC-v3.2.md` · `PLAN-v3.2.md` · `archive/PROGRESS-v3.2.md` — the phase that built kit v3.2; its evidence is in `archive/evidence-v3.2/`.
 - `SPEC-v3.1.md` · `PLAN-v3.1.md` · `archive/PROGRESS-v3.1.md` — the phase that built kit v3.1; its evidence is in `archive/evidence-v3.1/`.

@@ -13,11 +13,15 @@ type Seen = {
   registered: Array<{ name: string; argumentHint?: string; immediate?: true }>
   clock: { settle: () => Promise<void> }
   root: string // what $.session.root answers now: a worktree move changes it
+  id: string // what $.session.id answers now: /clear changes it
+  mark: string | null // .claude/phase-session.json before the test: null — no file
 }
+const MARK_PATH = '/repo/.claude/phase-session.json'
+const marks = (seen: Seen) => seen.written.filter(w => w.path === MARK_PATH).map(w => JSON.parse(w.text).sessions)
 
 // The engine beneath the mod. `null`: the file does not exist.
 const seat = (on: any, { branch = 'v3.4', prompt = PROMPT, progress = PROGRESS, gitCode = 0, noGit = false, drop, submitRefused = false, writeRefused = false }: Seat): Seen => {
-  const seen: Seen = { sent: [], written: [], toasts: [], registered: [], clock: mock.clock(on), root: '/repo' }
+  const seen: Seen = { sent: [], written: [], toasts: [], registered: [], clock: mock.clock(on), root: '/repo', id: 'sid-1', mark: null }
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
   on('command.register', ($: any, e: any) => {
     seen.registered.push(e)
@@ -29,9 +33,12 @@ const seat = (on: any, { branch = 'v3.4', prompt = PROMPT, progress = PROGRESS, 
   })
   on('session.root', () => ({ value: seen.root }))
   on('fs.read', ($: any, e: any) => {
-    const text = e.path === '/repo/docs/PROMPT.txt' ? prompt : e.path === '/repo/docs/PROGRESS.md' ? progress : null
+    const mark = seen.written.filter(w => w.path === e.path).at(-1)?.text ?? (e.path === MARK_PATH ? seen.mark : null)
+    const text = e.path === '/repo/docs/PROMPT.txt' ? prompt : e.path === '/repo/docs/PROGRESS.md' ? progress : mark ?? null
     return text === null ? { deny: 'no such file' } : { value: text }
   })
+  on('session.id', () => ({ value: seen.id }))
+  on('classic.SessionStart', () => ({})) // no settings hook beneath
   on('process.run', ($: any, e: any) => {
     expect(e.argv).toEqual(['git', 'branch', '--show-current'])
     expect(e.init.cwd).toBe('/repo')
@@ -158,7 +165,7 @@ test('right branch: exactly one submit, the whole PROMPT, as the user', async ($
   expect(seen.sent[0]!.text).toBe(PROMPT)
   expect(seen.sent[0]!.origin?.asUser).toBe(true)
   expect(text).toContain('on branch v3.4')
-  expect(seen.written).toEqual([])
+  expect(seen.written.map(w => w.path)).toEqual([MARK_PATH]) // the mark of the phase session, nothing else
 })
 
 test('foreign branch: refused with both names, nothing sent', async ($, on) => {
@@ -309,4 +316,63 @@ test('another argument does nothing', async ($, on) => {
   expect((await phase($, seen, 'stop')).text).toContain('unknown argument')
   expect(seen.sent).toEqual([])
   expect(seen.written).toEqual([])
+})
+
+// SPEC-v3.5 F2: the mark of the phase session (.claude/phase-session.json), kept only by this mod; spec-gate and steer.sh read it.
+test('mark: /phase names the session that sent the prompt', async ($, on) => {
+  const seen = seat(on, {})
+  expect(marks(seen)).toEqual([])
+  await phase($, seen)
+  expect(marks(seen)).toEqual([['sid-1']])
+})
+
+test('mark: /phase resume names the session too', async ($, on) => {
+  const seen = seat(on, {})
+  await phase($, seen, 'resume')
+  expect(seen.sent.length).toBe(1)
+  expect(marks(seen)).toEqual([['sid-1']])
+})
+
+test('mark: nothing sent — nothing marked (foreign branch, dropped, refused)', async ($, on) => {
+  const a = seat(on, { branch: 'main' })
+  await phase($, a)
+  expect(marks(a)).toEqual([])
+})
+
+test('mark: a dropped prompt marks nothing', async ($, on) => {
+  const seen = seat(on, { drop: 'queue full' })
+  await phase($, seen)
+  expect(marks(seen)).toEqual([])
+})
+
+test('mark: /clear after the mark adds the new id', async ($, on) => {
+  const seen = seat(on, {})
+  await phase($, seen)
+  seen.id = 'sid-2'
+  await $.classic.SessionStart({ source: 'clear', session_id: 'sid-2' } as any)
+  expect(marks(seen).at(-1)).toEqual(['sid-1', 'sid-2'])
+})
+
+test('mark: a fork, a resume, or /clear in a session never marked adds nothing', async ($, on) => {
+  const seen = seat(on, {})
+  await $.classic.SessionStart({ source: 'clear', session_id: 'sid-9' } as any)
+  expect(marks(seen)).toEqual([])
+  await phase($, seen)
+  await $.classic.SessionStart({ source: 'fork', session_id: 'sid-3' } as any)
+  await $.classic.SessionStart({ source: 'resume', session_id: 'sid-4' } as any)
+  expect(marks(seen)).toEqual([['sid-1']])
+})
+
+test('mark: the ids already there stay; a file that is not ours is written anew', async ($, on) => {
+  const kept = seat(on, {})
+  kept.mark = JSON.stringify({ sessions: ['old-1'] })
+  await phase($, kept)
+  expect(marks(kept)).toEqual([['old-1', 'sid-1']])
+})
+
+test('mark: a mark that cannot be written says so in a toast, the prompt went', async ($, on) => {
+  const seen = seat(on, { writeRefused: true })
+  await phase($, seen)
+  expect(seen.sent.length).toBe(1)
+  expect(seen.toasts.some(t => t.startsWith('phase mark not written'))).toBe(true)
 })

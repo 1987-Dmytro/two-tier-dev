@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""operator-word <путь> -m "<слово>" — слово оператора командой (SPEC-v3.5 F6): файл тимлида из окна доводки SPEC §3 получает
+содержимое из stdin, коммит — «Оператор: <слово>», только этот путь.
+
+Окно — строка §3 SPEC фазы (первый SPEC строки `Read first:` в docs/PROMPT.txt, как в HEAD):
+  «Окно доводки: открыто `<путь>`[, `<путь>`…] · запас диффа <N> …» — путь каталога кончается на «/».
+Отказ — rc 1, файл цел, коммита нет: SPEC без окна, путь вне окна, дифф (добавлено + удалено строк) сверх запаса, отказ хука коммита.
+Тот же суд — хук .githooks/commit-msg (правило operator-window) и lint владения bin/check-budget; след — список в bin/phase-report.
+"""
+import difflib, os, re, subprocess, sys
+
+WINDOW = re.compile(r"Окно доводки:\s*открыто\s+(.*?)\s*·\s*запас диффа\s+(\d+)")
+
+
+def git(*a, inp=None):
+    return subprocess.run(["git", *a], capture_output=True, text=True, input=inp)
+
+
+def window(spec_text):
+    """([пути], запас) окна доводки §3 или None: строки нет, «открыто нет», плейсхолдер."""
+    sec3 = re.search(r"^## 3\.[^\n]*\n(.*?)(?=^## |\Z)", spec_text, re.S | re.M)
+    m = WINDOW.search(sec3.group(1)) if sec3 else None
+    paths = re.findall(r"`([^`\s]+)`", m.group(1)) if m else []
+    return (paths, int(m.group(2))) if paths else None
+
+
+def in_window(path, paths):
+    return any(path == w or (w.endswith("/") and path.startswith(w)) for w in paths)
+
+
+def head_window(rev="HEAD"):
+    """Окно SPEC фазы в rev: (SPEC, окно или None) — SPEC None, если запроса или SPEC в rev нет."""
+    prompt = git("show", f"{rev}:docs/PROMPT.txt").stdout
+    m = re.search(r"^Read first:\s*([^,\s]+)", prompt, re.M)
+    spec = m.group(1) if m and re.fullmatch(r"(.*/)?SPEC-[^/]+\.md", m.group(1)) else None
+    text = git("show", f"{rev}:{spec}").stdout if spec else ""
+    return (spec if text else None), (window(text) if text else None)
+
+
+def refuse(why):
+    print(f"operator-word: отказ — {why}; файл цел, коммита нет", file=sys.stderr)
+    return 1
+
+
+def main(argv):
+    if len(argv) != 3 or argv[1] != "-m" or not argv[2].strip() or "\n" in argv[2]:
+        print(__doc__)
+        return 2
+    top = git("rev-parse", "--show-toplevel").stdout.strip()
+    if not top:
+        return refuse("не репозиторий git")
+    path = os.path.relpath(os.path.realpath(argv[0]), os.path.realpath(top))
+    os.chdir(top)
+    if path.startswith("..") or path.startswith(".git/"):
+        return refuse(f"{argv[0]} вне репозитория")
+    spec, win = head_window()
+    if not spec:
+        return refuse("нет SPEC фазы в HEAD (docs/PROMPT.txt, строка Read first:)")
+    if not win:
+        return refuse(f"{spec}: в §3 нет окна доводки («Окно доводки: открыто `<путь>` · запас диффа <N>»)")
+    paths, cap = win
+    if not in_window(path, paths):
+        return refuse(f"{path} вне окна доводки {spec}: {', '.join(paths)}")
+    new = sys.stdin.read()
+    old = open(path, encoding="utf-8").read() if os.path.isfile(path) else None
+    lines = sum(1 for l in difflib.unified_diff((old or "").splitlines(), new.splitlines(), lineterm="", n=0)
+                if l[:1] in "+-" and not l.startswith(("+++", "---")))
+    if lines > cap:
+        return refuse(f"дифф {path} — {lines} строк, запас окна {cap}")
+    if old == new:
+        return refuse(f"{path} не меняется")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new)
+    word = argv[2].strip()
+    add = git("add", "--", path)
+    r = git("commit", "-q", "-m", f"Оператор: {word}", "--", path) if add.returncode == 0 else add
+    if r.returncode != 0:
+        if old is None:
+            os.remove(path)
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(old)
+        git("reset", "-q", "--", path)
+        return refuse(f"коммит не прошёл (rc {r.returncode}): {' '.join((r.stderr or r.stdout).split())[:300]}")
+    sha = git("rev-parse", "--short", "HEAD").stdout.strip()
+    print(f"operator-word: {sha} «Оператор: {word}» — {path}, строк диффа {lines} из {cap}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

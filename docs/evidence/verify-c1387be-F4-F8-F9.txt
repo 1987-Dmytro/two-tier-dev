@@ -1,0 +1,17 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 0
+FEATURES: F4, F8, F9
+/verify-phase · docs/SPEC-v3.5.md · HEAD c1387be · проверяющие claude-opus-5-5 (фич 3 из 9, опровергателей 0) · судья claude-opus-5-5
+
+Свежие прогоны всех трёх фич зелёные: F4 — свой прогон в рабочей копии, F8 и F9 — gate.log свежего клона. Маркеры PLANKA_EARLY_OK, VERIFY_OPUS_OK и GATE35_OK есть и в прогоне, и в файлах docs/evidence/F4-budget-result.txt, F8-check-verify-result.txt, F9-gate-result.txt. Все пункты F4.1–F4.3, F8.1–F8.5 и F9.1–F9.5 подтверждены собственной командой проверяющего и её сырым выводом. Красные стороны тоже сработали: FAIL planka-early на F58.1, мутант модели sonnet даёт static RED, на 8001 символе — FAIL, а чужой id F3.5 и отсутствие клона дают GATE35_FAIL. Кандидатов в блокирующие, опровергнутых находок и мутаций для риска low нет, прежние вердикты — PASS без блоков.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- нет
+
+## По фичам
+- F4: risk low; прошлый вердикт verify-28eeeae-F4-F5-F7.txt; чек `bin/check-budget --lints (gate.log line 31 'F4 PLANKA_EARLY_OK', a fresh run with no 'из docs/evidence' suffix; own run in the worktree took 30 s, rc 0, line 8 'PLANKA_EARLY_OK'; docs/evidence/F4-budget-result.txt line 10 'PLANKA_EARLY_OK', line 1 'spec: SPEC-v3.5')` rc 0, маркер есть (own_run); пунктов своим прогоном 3/3; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+- F8: risk low; прошлый вердикт verify-28eeeae-F8-F9.txt; чек `bin/check-verify --gate (gate log line of bin/gate-v3.5, fresh clone) plus grep of docs/evidence/F8-check-verify-result.txt` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0
+- F9: risk low; прошлый вердикт verify-28eeeae-F8-F9.txt; чек `bin/gate-v3.5 (launcher fresh clone, log /tmp/two-tier-v3/verify-c1387be-yq3zik3d/gate.log; HEAD c1387be, 355 s, so not re-run; docs/evidence/F9-gate-result.txt has GATE35_OK as last line, run on d5c2bc7, 342 s)` rc 0, маркер есть (gate_log); пунктов своим прогоном 5/5; мутаций нет; находок 0, блокирующих-кандидатов 0, опровергнуто 0

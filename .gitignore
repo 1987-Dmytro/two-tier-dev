@@ -9,3 +9,6 @@ __pycache__/
 mods/*/.claude-plugin/types/
 # handoff mod: the executor's handoffs, written from the live transcript (SPEC-v3.2 F6)
 handoffs/
+# per-machine files of a session: the Code-tab profile (a copy of launch.settings.json) and the mark of the phase session (SPEC-v3.5 F2)
+.claude/settings.local.json
+.claude/phase-session.json

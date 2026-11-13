@@ -8,6 +8,13 @@
   · судьи коммита — счёт строк docs/evidence/commit-judge.jsonl (хуки git кита): прошло, отказы, отклонённые, заметки, пропуски;
     отказы и отклонённые — поимённо, их читает тимлид;
   · пропуски spec-gate — строки docs/evidence/spec-gate.jsonl с решением pass и причиной (кап, no-progress, ошибка, AGENT_STOP, фон);
+    ложные блоки — пункты «- ложный блок <причина>» в разделе ## Notes docs/PROGRESS.md (SPEC-v3.5 §4); «ложных блоков 0» и «не ложный блок» — не блок;
+  · пропуски сессии исполнителя (SPEC-v3.5 §5): решения pass «not the phase session» журнала spec-gate — всего и сессий из метки .claude/phase-session.json
+    (их хеш, как в журнале; ожидается 0); цена круга F8.3 — по последнему завершённому прогону каждой фикстуры в docs/evidence/verify-runs.jsonl до и после
+    правки воркфлоу kit/.claude/workflows/verify-phase.js (wf — хеш файла на родителе коммита правки и в HEAD): секунды и токены;
+  · слово оператора и тимлида (SPEC-v3.5 F6.5): коммиты «Оператор:» и «Тимлид:» плеча — sha, пути, слово; плечо — от первого коммита не «Тимлид:»
+    после выдачи — самого раннего коммита серии docs/PROMPT.txt, чей `Read first:` называет ту же SPEC (issue_commit; правка запроса
+    с той же SPEC начало не сдвигает, коммиты прошлой SPEC — не плечо): «Тимлид:» сразу за выдачей — тоже выдача, не плечо;
   · метрики ретро (SPEC-v3.4 F5.4): кругов до PASS — по вердиктам этой SPEC docs/evidence/verify-<sha>[-F<n>…].txt в порядке истории; откатов деплоя — строки ROLLBACK_OK после выкатки на линию, по одной на выкатку,
     против деплоев на линию в docs/evidence/deploy-window.log; поправок объёма — строки «Поправка» §0 SPEC. Данных нет — нули;
   · ячейка Jev в тени: один вопрос `choice` на пункт — пункт против сырого вывода его пробы (`questions.item_status` в
@@ -15,7 +22,7 @@
     строками docs/evidence/jev-labels.jsonl. В Jev уходят только текст пунктов и строки проб.
 Печатает путь и счёт; rc 0, кроме неверных аргументов (2).
 """
-import glob, json, os, re, subprocess, sys, tempfile, time
+import datetime, glob, hashlib, json, os, re, subprocess, sys, tempfile, time
 
 TMP = "/tmp/two-tier-v3"
 FEATURE = re.compile(r"^- \*\*(F\d+)\b")
@@ -84,6 +91,84 @@ def phase_commits():
         m = IDS.match(subj)
         out.append({"sha": sha, "subj": subj, "ids": re.findall(r"F\d+\.\d+", m.group(1)) if m else [], "tl": subj.startswith("Тимлид:")})
     return base[:7], out
+
+
+def issue_commit():
+    """Коммит выдачи фазы: самый ранний коммит docs/PROMPT.txt, с которого его `Read first:` называет SPEC фазы (как в рабочем дереве).
+    Правка запроса посреди плеча («Тимлид: уточнение») SPEC не меняет — начало плеча не сдвигает. Нет истории — None."""
+    rf = lambda text: (re.search(r"^Read first:(.*)$", text, re.M) or [None, ""])[1]
+    spec_of = lambda text: next((x.strip() for x in rf(text).split(",") if re.search(r"(^|/)SPEC-[^/]+\.md$", x.strip())), None)
+    want = spec_of(read("docs/PROMPT.txt"))
+    start = None
+    for sha in git("log", "--format=%H", "--", "docs/PROMPT.txt").split():  # от новых к старым: серия версий с той же SPEC
+        if spec_of(git("show", f"{sha}:docs/PROMPT.txt")) != want:
+            break
+        start = sha
+    return start
+
+
+def leg_since():
+    """Время начала плеча (ISO UTC): первый коммит не «Тимлид:» после выдачи; нет его — None."""
+    start = issue_commit()
+    for line in git("log", "--reverse", "--no-merges", "--format=%cI %s", f"{start}..HEAD" if start else "HEAD").splitlines():
+        when, _, subj = line.partition(" ")
+        if not subj.startswith("Тимлид:"):
+            return when
+    return None
+
+
+def utc(ts):
+    """ISO с поясом → «YYYY-MM-DDTHH:MM:SS» UTC для сравнения со ts журналов; не ISO — исходная строка."""
+    try:
+        return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    except (ValueError, AttributeError):
+        return str(ts)
+
+
+def words():
+    """[(вид, sha, [пути], слово)] — коммиты «Оператор:» и «Тимлид:» плеча (F6.5): после выдачи (issue_commit), с первого коммита не «Тимлид:»."""
+    start = issue_commit()
+    raw = git("log", "--reverse", "--no-merges", "-z", "--name-only", "--format=%x01%h %s", f"{start}..HEAD" if start else "HEAD")
+    out, leg = [], False
+    for chunk in raw.split("\x01")[1:]:
+        head, _, names = chunk.partition("\0")
+        sha, _, subj = head.partition(" ")
+        kind = next((k for k in ("Оператор:", "Тимлид:") if subj.startswith(k)), None)
+        leg = leg or kind != "Тимлид:"
+        if leg and kind:
+            out.append((kind.rstrip(":"), sha, [n.strip("\n") for n in names.split("\0") if n.strip("\n")], subj[len(kind):].strip()))
+    return out
+
+
+def not_phase(gate):
+    """(pass «not the phase session» всего, из них сессий метки): хеш сессии — первые 8 знаков sha256 её id, как пишет хук."""
+    try:
+        j = json.loads(read(".claude/phase-session.json") or "null")
+    except ValueError:
+        j = None
+    ids = j if isinstance(j, list) else (j or {}).get("sessions", []) if isinstance(j, dict) else []
+    marked = {hashlib.sha256(str(s).encode()).hexdigest()[:8] for s in ids}
+    np = [g for g in gate if g.get("decision") == "pass" and str(g.get("reason", "")).startswith("not the phase session")]
+    return len(np), sum(1 for g in np if g.get("session") in marked)
+
+
+def price_f83():
+    """Цена круга F8.3: {сторона: (фикстур, секунд, токенов)} по последнему завершённому прогону каждой фикстуры до и после правки воркфлоу; нет данных — {}."""
+    wf = "kit/.claude/workflows/verify-phase.js"
+    edit = git("log", "-1", "--format=%H", "--", wf).strip()
+    if not edit or not os.path.isfile(wf):
+        return {}
+    sides = {"до": git("rev-parse", f"{edit}^:{wf}").strip()[:12], "после": git("hash-object", wf).strip()[:12]}
+    last = {}
+    for r in jsonl("docs/evidence/verify-runs.jsonl"):
+        for side, h in sides.items():
+            if r.get("fixture") and r.get("status") == "completed" and r.get("wf") == h and isinstance(r.get("tokens"), int):
+                last[(side, r["fixture"])] = r
+    out = {}
+    for side in sides:
+        rs = [r for (s, _), r in last.items() if s == side]
+        out[side] = (len(rs), sum(r.get("sec") or 0 for r in rs), sum(r["tokens"] for r in rs))
+    return out
 
 
 def probes(spec):
@@ -219,11 +304,25 @@ def main(argv):
             sc = f" ({r['score']:.2f})" if isinstance(r.get("score"), (int, float)) else ""
             fs = ", ".join(cell(f, 60) for f in (r.get("files") or [])[:3]) or "—"
             L.append(f"- {r.get('ts', '?')} · {r['decision']} · {r.get('judge')} · {r.get('rule') or r.get('note') or '—'}{sc} · {fs}")
-    gate = jsonl("docs/evidence/spec-gate.jsonl")
+    gate_all = jsonl("docs/evidence/spec-gate.jsonl")
+    since = leg_since()
+    gate = [g for g in gate_all if since and utc(g.get("ts", "")) >= utc(since)]  # решения плеча (SPEC-v3.5 §5): с первого коммита плеча
     passes = [g for g in gate if g.get("decision") == "pass" or (g.get("decision") == "block" and g.get("mode") != "active")]  # блок в тени ход не держал
-    L += ["", "## Пропуски spec-gate", "", f"Решений хука: {len(gate)} — блоков {sum(g.get('decision') == 'block' for g in gate)}, "
-          f"OK {sum(g.get('decision') == 'ok' for g in gate)}, стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.", ""]
-    L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- нет"]
+    blocks = [g for g in gate if g.get("decision") == "block" and g.get("mode") == "active"]
+    notes = re.search(r"^## Notes[^\n]*\n(.*?)(?=^## |\Z)", read("docs/PROGRESS.md"), re.S | re.M)  # SPEC-v3.5 §4: ложный блок — строка в ## Notes с причиной
+    false_lines = [l for l in (notes[1] if notes else "").splitlines() if re.match(r"\s*[-*]\s*ложный блок", l, re.I)]  # пункт «- ложный блок …», не упоминание
+    L += ["", "## Пропуски spec-gate", "", f"Решения хука плеча — с {since or '—'} (первый коммит не «Тимлид:» после выдачи). Решений хука за плечо: {len(gate)} из {len(gate_all)} в журнале — "
+          f"блоков {sum(g.get('decision') == 'block' for g in gate)} (активных {len(blocks)}), OK {sum(g.get('decision') == 'ok' for g in gate)}, "
+          f"стопов {sum(g.get('decision') == 'stop' for g in gate)}, пропусков {len(passes)}.",
+          f"Ложных блоков (пункты «- ложный блок» в ## Notes PROGRESS, SPEC §4): {len(false_lines)}." + (" " + "; ".join(cell(l, 140) for l in false_lines) if false_lines else ""), ""]
+    L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · block · {cell(g.get('reason', ''), 60)} · {cell('; '.join(g.get('missing') or []), 140)}" for g in blocks]
+    L += [f"- {g.get('ts', '?')} · сессия {g.get('session', '?')} · {g.get('mode', '?')} · {cell(g.get('reason', ''), 140)}" for g in passes] or ["- пропусков нет"]
+    n_np, n_np_own = not_phase(gate)
+    L += ["", f"Пропусков «not the phase session»: {n_np}; из них сессий метки `.claude/phase-session.json` — {n_np_own} (ожидается 0)."]
+    said = words()
+    n_op, n_tl = sum(k == "Оператор" for k, *_ in said), sum(k == "Тимлид" for k, *_ in said)
+    L += ["", "## Слово оператора и тимлида", "", f"Коммитов плеча «Оператор:» — {n_op}, «Тимлид:» — {n_tl} (ожидается 0, кроме слова оператора в окне доводки SPEC §3).", ""]
+    L += [f"- `{sha}` · {k} · {', '.join(cell(x, 60) for x in paths[:3]) or '—'} · {cell(w, 120)}" for k, sha, paths, w in said] or ["- нет"]
     took, going = rounds(spec)
     n_rounds = max(took.values(), default=0)
     deploy_log = read("docs/evidence/deploy-window.log").splitlines()
@@ -238,6 +337,8 @@ def main(argv):
     detail = "; ".join(x for x in (", ".join(f"{f} {k}" for f, k in sorted(took.items(), key=lambda x: int(x[0][1:]))),
                                    "без PASS: " + ", ".join(f"{f} — {k}" for f, k in sorted(going.items(), key=lambda x: int(x[0][1:]))) if going else "") if x)
     L += ["", "## Метрики ретро", "", f"- Кругов до PASS: {n_rounds}" + (f" ({detail})" if detail else ""), f"- Откатов деплоя: {n_back} из {n_line}", f"- Поправок объёма: {n_amend}"]
+    price = price_f83()
+    L += [f"- Цена круга F8.3 (последний завершённый прогон каждой фикстуры): " + "; ".join(f"{s} — фикстур {n}, {sec} с, {tok} токенов" for s, (n, sec, tok) in price.items())] if price else []
     counts = {}
     for v in status.values():
         k = v.split()[0].rstrip(":")
@@ -246,7 +347,8 @@ def main(argv):
     with open("docs/evidence/phase-report.md", "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
     print(f"phase-report: docs/evidence/phase-report.md — пунктов {len(items)}, с пробой {len(items) - len(no_probe)}, без коммитов {len(no_commit)}, "
-          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}; кругов до PASS {n_rounds}, откатов {n_back} из {n_line}, поправок {n_amend}; Jev — {jev_note}")
+          f"коммитов без пункта {len(stray)}; судей коммита {len(judged)}; пропусков хука {len(passes)}, not the phase session {n_np} (метки {n_np_own}); слово оператора {n_op}, тимлида {n_tl}; "
+          f"кругов до PASS {n_rounds}, откатов {n_back} из {n_line}, поправок {n_amend}; Jev — {jev_note}")
     return 0
 
 

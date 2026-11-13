@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
-"""check-kit [<корень>] [frozen|fenster|graph|paar|mods] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
-(вердикт — /verify-phase из свежего клона, лимит 30 мин) и plan-phase, evaluator без правок, воркфлоу verify-phase и его лаунчер.
+"""check-kit [<корень>] [frozen|fenster|graph|paar|mods|handoff|operator|telefon] — скиллы и воркфлоу кита (SPEC-v3 F6, SPEC-v3.1 F5): набор, frontmatter, контракт accept
+(вердикт — /verify-phase из свежего клона, лимит 30 мин) и plan-phase, воркфлоу verify-phase и его лаунчер; агента evaluator в ките нет (SPEC-v3.5 F8.4).
 
 Корень: аргумент, иначе kit/ репо кита, иначе корень проекта. В репо кита ещё: скиллы v2 в архиве,
 копии workflow CI и verify-phase совпадают, defaults бюджета в kit/budgets.json и budgets.json совпадают. KIT_OK или exit 1.
-Мод handoff (SPEC-v3.2 F6, только репо кита): строка шаблона Environment (70 %, /clear), включение и режим в launch settings кита
-(pluginConfigs, иначе userConfig мода по умолчанию), handoffs/ в .gitignore, команда установки в выводе bin/two-tier-init,
+Мод handoff (SPEC-v3.2 F6, только репо кита): строка шаблона Environment (порог `handoff_threshold_pct` budgets.json, /clear), включение и режим в launch settings кита
+(pluginConfigs без порога — SPEC-v3.5 F1), handoffs/ в .gitignore, команда установки в выводе bin/two-tier-init,
 `claude plugin validate` и `claude plugin test` мода — HANDOFF_OK; без claude в PATH (CI) validate и test не гоняются, маркера нет.
 Окна (SPEC-v3.3 F5, кит и проект): bin/check-window на подставленных событиях и строка запуска шаблона с заглушкой claude —
 строки v3.3-F5.1…F5.4 и WINDOW_OK; при claude в PATH ещё живой ход справкой.
 Разделы v3.4: frozen (F3: замок, паспорт, регрессия в деплое, апгрейд клона telefon — FROZEN_OK), fenster (F4: окно деплоя, живой канал, канарейка,
 шаблоны — FENSTER_OK), graph (Graphify: `.githooks/post-commit`, первая сборка bin/two-tier-init, отчёт апгрейда, живой прогон при CLI в PATH — GRAPH_OK), paar (F5: пара одного часа, планка звена вендора, журнал bin/verify-phase, метрики bin/phase-report, окно без ключа недели — PAAR_OK); с именем раздела идёт только он, без имени — всё.
+telefon (SPEC-v3.5 F9.4: копия клона telefon после апгрейда — линты v3.5, BUDGET_OK, пропуск ответвления хуком; кит v3.4 — без них; нет клона — `F9.4 offen`).
+CHECK_KIT_SKIP=<раздел>[,…] — пропустить живой раздел в полном прогоне (гейт берёт его маркер из evidence).
+operator (SPEC-v3.5 F6: строка окна доводки в шаблоне SPEC, bin/operator-word на фикстуре, хук commit-msg и lint владения, «Тимлид:» при CLAUDECODE=1,
+фикстуры-тимлид из сессии, список в bin/phase-report — OPERATOR_WORD_OK; не репо кита — строки offen).
 mods (F9: мод mods/spec-board — `claude plugin validate|test`, названные тесты фикстуры 2/1/1 и 1/1/2, -p и подагенты без рисования, без модели и
-сети, строка в marketplace, строка шаблона Environment и профиль кита — MODS_OK); не репо кита или нет claude в PATH — строки `F9.<k> offen`, маркера нет, код 0.
-Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — F3.5 не гонялся: строка `F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
-F5.3 закрывается замером: n ≥ 2 на обеих сторонах пары ≤2.1.316 и ≥2.1.318 в docs/evidence/verify-runs.jsonl; меньше или журнала нет — строка `F5.3 offen n=<k> fon=<m>`, PAAR_OK печатается (SPEC-v3.4 §4). Судит и считается только дошедший прогон (status completed): дольше своего лимита (limit строки; в старой строке его нет — лимит bin/verify-phase) — FAIL; упавший запуск — не замер, VERIFY_TIMEOUT — счётчик timeout=<k>.
+сети, строка в marketplace, строка шаблона Environment и профиль кита — MODS_OK); не репо кита или нет claude в PATH — строки `v3.4-F9.<k> offen`, маркера нет, код 0.
+Нет клона telefon (CI на GitHub: клона там нет) или не репо кита — v3.4-F3.5 не гонялся: строка `v3.4-F3.5 telefon=offen`, маркера FROZEN_OK нет, код 0, как у HANDOFF без claude.
+F5.3 закрывается замером: n ≥ 2 на обеих сторонах пары ≤2.1.316 и ≥2.1.318 в docs/evidence/verify-runs.jsonl; меньше или журнала нет — строка `v3.4-F5.3 offen n=<k> fon=<m>`, PAAR_OK печатается (SPEC-v3.4 §4). Судит и считается только дошедший прогон (status completed): дольше своего лимита (limit строки; в старой строке его нет — лимит bin/verify-phase) — FAIL; упавший запуск — не замер, VERIFY_TIMEOUT — счётчик timeout=<k>.
 """
 import json, os, re, shutil, subprocess, sys, tempfile, time
 
 out = []
 TMP = "/tmp/two-tier-v3"
-SECTIONS = ("frozen", "fenster", "graph", "paar", "mods")
-GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.invalid",
+SECTIONS = ("frozen", "fenster", "graph", "paar", "mods", "handoff", "operator", "telefon")
+UPGRADE_BRANCH = "kit-v3.5"  # ветка апгрейда копии клона telefon (SPEC-v3.5 §4: telefon-часть v3.4-F3.5 — на идущей SPEC клона)
+# SPEC-v3.5 F6.4: фикстуры, играющие тимлида, зовут git в окружении своей роли — без CLAUDECODE сессии Claude Code
+GIT_ENV = dict({k: v for k, v in os.environ.items() if k != "CLAUDECODE"}, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.invalid",
                GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
 for k in ("TYPESAFE_API_KEY", "TYPESAFE_AI_API_KEY"):  # суд abide фикстурам не нужен: без ключа он — пропуск
     GIT_ENV.pop(k, None)
@@ -31,6 +37,7 @@ V32_RETIRED = {"goal_chars", "docs/GOAL.txt"}
 V33_KEYS, V33_CHANGED = {"spec_block_chars", "window_seven_day_pct"}, {"abide_rules"}
 V34_RETIRED = {"window_five_hour_pct", "window_repair_pct"}  # окно 5 ч снято словом оператора 06.11: в корневом budgets.json ключи снимает тимлид, чек их терпит
 V34_OWNER = {"checks/planken.json", "frozen.json"}  # v3.4: файлы тимлида новых механизмов (F2.3, F3.1) — тимлид вносит в budgets.json на приёмке
+V35_KEYS = {"handoff_threshold_pct", "team_lead_spec_copy_chars"}  # SPEC-v3.5 F1, F9.1: ключи кита — тимлид вносит в корень на приёмке
 
 
 def say(ok, item, msg):
@@ -322,7 +329,7 @@ def section_frozen():
     cp += [fz_rc(0, "«Тимлид:» чинит замок", set_lock(d, {"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]})}})),
            fz_rc(0, "после починки", commit(d, "F1.1: x", "src/demo/x.py", "x\n"))]
     (vb_ok, vb_raw), (of_ok, of_raw), (cp_ok, cp_raw), (ci_ok, ci_raw) = fz_join(vb), fz_join(of), fz_join(cp), fz_join(ci)
-    probe("F3.1", vb_ok and of_ok and cp_ok and ci_ok, f"verboten={'OK' if vb_ok else 'нет'} offen={'OK' if of_ok else 'нет'} cap={'OK' if cp_ok else 'нет'} · запрет: {vb_raw} · открыто: {of_raw} · предел: {cp_raw} · CI: {ci_raw}")
+    probe("v3.4-F3.1", vb_ok and of_ok and cp_ok and ci_ok, f"verboten={'OK' if vb_ok else 'нет'} offen={'OK' if of_ok else 'нет'} cap={'OK' if cp_ok else 'нет'} · запрет: {vb_raw} · открыто: {of_raw} · предел: {cp_raw} · CI: {ci_raw}")
     # F3.2 — «Тимлид:» замок кода не обходит (K79)
     lock = {"basis": None, "module": {"demo": demo(pfade=["src/demo/", "docs/DEMO.md"])}}
     opened = {"basis": None, "module": {"demo": demo({"SPEC-2": ["*"]}, pfade=["src/demo/", "docs/DEMO.md"])}}
@@ -376,7 +383,7 @@ def section_frozen():
     d = project({"basis": "0000000", "module": {"demo": demo()}}, extra={"budgets.json": no_own})
     tl.append(fz_rc(0, "«Тимлид:» чинит basis замка, строки в owner нет", commit(d, "Тимлид: замок", "frozen.json", json.dumps(lock, ensure_ascii=False))))
     tl_ok, tl_raw = fz_join(tl)
-    probe("F3.2", tl_ok, f"tl={'OK' if tl_ok else 'нет'} · {tl_raw}")
+    probe("v3.4-F3.2", tl_ok, f"tl={'OK' if tl_ok else 'нет'} · {tl_raw}")
     # F3.3 — паспорт: расхождение без <МОДУЛЬ>_OFFEN → DEPLOY_FAIL step=passport
     passport = {"file": "docs/DEMO.md", "fingerprints": {"src": ["src/demo/"]}}
     lock = {"basis": None, "module": {"demo": demo(passport={"file": "docs/DEMO.md", "fingerprints": {"src": ["src/demo/"], "texte": ["docs/texte.md"]}})}}
@@ -448,7 +455,7 @@ def section_frozen():
     put(d, "src/demo/a.py", "a = 2\n")
     op += [fz_rc(0, "SPEC — первая запись SPEC-*.md, DEMO_OFFEN=SPEC-2", check(d, DEMO_OFFEN="SPEC-2"), "PASSPORT_OFFEN"), fz_rc(1, "DEMO_OFFEN=SPEC-1 из чужого имени", check(d, DEMO_OFFEN="SPEC-1"), "PASSPORT_FAIL")]
     (ps_ok, ps_raw), (op_ok, op_raw) = fz_join(ps), fz_join(op)
-    probe("F3.3", ps_ok and op_ok, f"pass={'OK' if ps_ok else 'нет'} offen={'OK' if op_ok else 'нет'} · паспорт: {ps_raw} · открыто: {op_raw}")
+    probe("v3.4-F3.3", ps_ok and op_ok, f"pass={'OK' if ps_ok else 'нет'} offen={'OK' if op_ok else 'нет'} · паспорт: {ps_raw} · открыто: {op_raw}")
     # F3.4 — шаг regress: DEPLOY_OK только после REGRESS_OK; судится stdout, stderr идёт мимо
     d = project({"basis": None, "module": {}})
     red = lambda label, got, step="regress": (got[0] == 1 and f"DEPLOY_FAIL step={step}" in got[1] and "DEPLOY_OK" not in got[1], f"{label} — rc {got[0]} «{tail(got[1])}»")
@@ -466,47 +473,50 @@ def section_frozen():
                              red("нет REGRESS_CMD и Makefile", sh(["bash", "scripts/deploy.sh"], d, env=no_regress)),
                              red("DEPLOY_CMD=false", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false")), "rollout"),
                              red("DEPLOY_CMD=exit 3", sh(["bash", "scripts/deploy.sh"], d, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="exit 3")), "rollout")])
-    probe("F3.4", two == 2 and rg_ok, f"regress={two}/2 · REGRESS_OK — rc {a[0]} «{tail(a[1], 2)}» · REGRESS_FAIL — rc {b[0]} «{tail(b[1], 2)}» · {rg_raw}")
+    probe("v3.4-F3.4", two == 2 and rg_ok, f"regress={two}/2 · REGRESS_OK — rc {a[0]} «{tail(a[1], 2)}» · REGRESS_FAIL — rc {b[0]} «{tail(b[1], 2)}» · {rg_raw}")
     # F3.5 — апгрейд копии клона telefon: замок и хук работают, bin/check-budget проекта зелёный; нет клона или не репо кита — offen и без маркера
     clone = os.environ.get("TELEFON_CLONE", f"{TMP}/telefon-src")
     up = os.path.abspath(f"{root}/bin/two-tier-upgrade")
     upgrade = lambda *a: sh([up, *a], os.getcwd(), env=dict(os.environ))
     skipped = root != "kit" or not os.path.isdir(f"{clone}/.git")
     if skipped:
-        probe("F3.5", True, f"telefon=offen · {'не репо кита' if root != 'kit' else 'клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src (ветка linie-1)'}")
+        probe("v3.4-F3.5", True, f"telefon=offen · {'не репо кита' if root != 'kit' else 'клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src (ветка main)'}")
     else:
         d = fz_copy(clone)
         head0 = head(d)
         dash = upgrade("--branch", "-x", d)
         same_branch = upgrade(d)
-        rc_up, text_up = upgrade("--branch", "kit-v3.4", d)
+        rc_up, text_up = upgrade("--branch", UPGRADE_BRANCH, d)
         lock_ok = json.load(open(f"{d}/frozen.json", encoding="utf-8"))
+        # SPEC-v3.5 §4: пункт фичи, открытой замком для идущей SPEC клона (сценарий v3.4 был под ветку linie-1 и F53 SPEC-10)
+        spec_now = re.search(r"Read first:.*?(SPEC-[^\s,/]+)\.md", open(f"{d}/docs/PROMPT.txt", encoding="utf-8").read())
+        opened_f = next((x for m in lock_ok["module"].values() for x in ((m.get("offen") or {}).get(spec_now.group(1) if spec_now else "", [])) if re.fullmatch(r"F\d+", x)), "F0")
+        item_open = f"{opened_f}.9"
         src_file = next(p for p in sh(["git", "ls-files", "src/"], d)[1].splitlines() if p.endswith(".py") and "/bo/" not in p and "/cc/" not in p)
         original = open(f"{d}/{src_file}", encoding="utf-8").read()
         c1 = commit(d, "F9.9: проба замка", src_file, original + "# проба\n")
         c2 = commit(d, "Тимлид: проба замка", src_file, original + "# проба\n")
-        c3 = commit(d, "F53.9: пункт фичи из offen", src_file, original + "# проба\n")
+        c3 = commit(d, f"{item_open}: пункт фичи из offen", src_file, original + "# проба\n")
         c4 = commit(d, "F9.9: проба docs", "docs/zz-probe.md", "x\n")
-        c5 = commit(d, "F53.9: открыть замок", "frozen.json", open(f"{d}/frozen.json", encoding="utf-8").read() + "\n")
-        c6 = commit(d, "F53.9: планки", "checks/planken.json", open(f"{d}/checks/planken.json", encoding="utf-8").read() + "\n")
+        c5 = commit(d, f"{item_open}: открыть замок", "frozen.json", open(f"{d}/frozen.json", encoding="utf-8").read() + "\n")
+        c6 = commit(d, f"{item_open}: планки", "checks/planken.json", open(f"{d}/checks/planken.json", encoding="utf-8").read() + "\n")
         rc_b, text_b = sh(["bin/check-budget"], d, env=dict(os.environ))
         frozen_line = fz_budget_line(text_b)
         fz_past_hook(d, "F9.9: мимо хука", src_file, original + "# мимо хука\n")
         rc_ph, text_ph = sh(["bin/check-budget"], d, env=dict(os.environ))
         past_line = fz_budget_line(text_ph)
-        spec_now = re.search(r"Read first:.*?(SPEC-[^\s,/]+)\.md", open(f"{d}/docs/PROMPT.txt", encoding="utf-8").read())
         shutil.rmtree(d, ignore_errors=True)
         d = fz_copy(clone)  # замка нет — апгрейд ставит пустой коммитом тимлида
         sh(["git", "rm", "-q", "frozen.json"], d)
         fz_past_hook(d, "проба: замка нет")
-        rc_abs, text_abs = upgrade("--branch", "kit-v3.4", d)
+        rc_abs, text_abs = upgrade("--branch", UPGRADE_BRANCH, d)
         installed = os.path.isfile(f"{d}/frozen.json") and sh(["git", "ls-files", "frozen.json"], d)[1] == "frozen.json"
         subject = sh(["git", "log", "-1", "--format=%s", "--", "frozen.json"], d)[1]
         shutil.rmtree(d, ignore_errors=True)
         ok = (dash[0] == 2 and "--branch" in dash[1] and same_branch[0] == 1 and "--branch" in same_branch[1] and rc_up == 0 and c1[0] == 1 and src_file in c1[1] and c2[0] == 1 and c3[0] == 0 and c4[0] == 0 and c5[0] == 1 and "frozen.json" in c5[1] and c6[0] == 1 and "checks/planken.json" in c6[1]
               and rc_b == 0 and text_b.splitlines()[-1] == "BUDGET_OK" and frozen_line.startswith("OK") and "FROZEN_DIFF_OK" in frozen_line and list(lock_ok["module"]) == ["telefon", "backoffice", "command-center"]
               and rc_ph == 1 and past_line.startswith("FAIL") and "FROZEN_DIFF_FAIL" in past_line and src_file in past_line and rc_abs == 0 and installed and subject.startswith("Тимлид: frozen.json"))
-        probe("F3.5", ok, f"telefon={'OK' if ok else 'нет'} · копия клона, {spec_now.group(1) if spec_now else '?'}; --branch -x — rc {dash[0]}; без --branch при разошедшейся kit-v3 — rc {same_branch[0]}; --branch kit-v3.4 — rc {rc_up} «{tail(text_up)[:90]}»; модули {', '.join(lock_ok['module'])} — замок проекта цел; "
+        probe("v3.4-F3.5", ok, f"telefon={'OK' if ok else 'нет'} · копия клона, {spec_now.group(1) if spec_now else '?'}, открыта {opened_f}; --branch -x — rc {dash[0]}; без --branch при разошедшейся kit-v3 — rc {same_branch[0]}; --branch {UPGRADE_BRANCH} — rc {rc_up} «{tail(text_up)[:90]}»; модули {', '.join(lock_ok['module'])} — замок проекта цел; "
               f"коммит в код модуля без offen — rc {c1[0]} «{c1[1][:110]}»; «Тимлид:» туда же — rc {c2[0]}; пункт фичи из offen — rc {c3[0]}; в docs/ — rc {c4[0]}; без «Тимлид:» в замок — rc {c5[0]}, в планки — rc {c6[0]}; bin/check-budget проекта — rc {rc_b} «{frozen_line[:100]}» {tail(text_b)}; коммит мимо хука: rc {rc_ph} «{past_line[:110]}»; "
               f"копия без frozen.json: апгрейд — rc {rc_abs}, замок {'поставлен' if installed else 'не поставлен'}, коммит «{subject[:70]}»")
     green = all(sec) and len(sec) == 5
@@ -715,7 +725,7 @@ def section_fenster():
     ro = fresh()
     ro_red = sh(["bash", "scripts/deploy.sh"], ro, env=dict(GIT_ENV, REGRESS_CMD="echo REGRESS_OK", DEPLOY_CMD="false", DEPLOY_LINIE="1"))
     ro_win = window(ro)
-    sides_line("F4.1", [("zeile", "строка отката", zeile, f"первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт её «{tail(fail_line[1], 2)}»"),
+    sides_line("v3.4-F4.1", [("zeile", "строка отката", zeile, f"первый деплой «{tail(a1[1], 2)}», второй «{tail(a2[1], 2)}», красный исход тоже несёт её «{tail(fail_line[1], 2)}»"),
                         ("zeile", "S7 красная выкатка", rollout[0] == 1 and says(rollout, w0) and "DEPLOY_FAIL step=rollout" in rollout[1], raw(rollout, 2)),
                         ("zeile", "E6 единственный sha второй раз", prints(h_only) == "none" and "rollback=none" in h_only[1], raw(h_only, 2)),
                         ("zeile", "следующий деплой", says(h_next, s0) and f"rollback={s0}" in h_next[1], raw(h_next, 2)),
@@ -830,7 +840,7 @@ def section_fenster():
               ("журнала окна нет — строка его не создаёт", no_window[0] == 0 and no_window[1].splitlines()[-1] == "LIVE_OK" and not os.path.exists(f"{no_deploy}/docs/evidence/deploy-window.log"), raw(no_window)),
               ("E3 E15 шапка судьи", "LIVE_SEIT" in live_text and "не пересекаются" in live_text, "названо" if "LIVE_SEIT" in live_text else "нет")]
     missed = [f"{n}: rc {r[0]} «{tail(r[1], 2, 120)}» ≠ {w}" for n, r, w in results if (n, r, w) not in hits] + [n for n, ok, _ in extras if not ok]
-    probe("F4.2", not missed,
+    probe("v3.4-F4.2", not missed,
           f"fixturen={len(hits) + sum(bool(x[1]) for x in extras)}/{len(results) + len(extras)} · " + "; ".join(f"{n} — {tail(r[1], 1, 70)}" for n, r, _ in results[:4]) + " · …; " + "; ".join(f"{n} — {tail(r[1], 2, 120)}" for n, r, _ in results[11:15])
           + " · …; " + "; ".join(f"{n} — rc {r[0]} {tail(r[1], 1, 60)}" for n, r, _ in results[21:]) + " · " + "; ".join(f"{n} — {x}" for n, _, x in extras) + (f" · НЕ СОШЛОСЬ: {'; '.join(missed)}" if missed else ""))
     # F4.3 — канарейка: письмо OK|GELB|ROT, эталон красный → ROT, весь процесс ≤ 60 с
@@ -882,7 +892,7 @@ def section_fenster():
     is_rot = lambda x, grund: x[0] == 1 and x[2] == ["Fixtur Kontrolle: ROT"] and f"CANARY_ROT grund={grund}" in x[1] and "Traceback" not in x[1]
     is_green = lambda x, state: x[0] == 0 and x[2] == [f"Fixtur Kontrolle: {state}"] and "CANARY_OK" in x[1] and ("GELB p95>3200" in x[1]) == (state == "GELB")
     brief = lambda x: f"rc {x[0]} «{tail(x[1], 1, 70)}» {x[2]}"
-    sides_line("F4.3", [*[("rot", n, is_rot(x, g), brief(x)) for n, x, g in red_runs],
+    sides_line("v3.4-F4.3", [*[("rot", n, is_rot(x, g), brief(x)) for n, x, g in red_runs],
                         ("rot", "повис", is_rot(hang, "timeout") and hang[3] < 10, f"{brief(hang)} за {hang[3]:.0f} с"),
                         *[("gruen", n, is_green(x, s), brief(x)) for n, x, s in green_runs],
                         ("gruen", "письмо не ушло", dead[0] == 0 and "CANARY_BRIEF_FEHLER" in dead[1], raw(dead, 1, 40)),
@@ -943,7 +953,7 @@ def section_fenster():
     edited("S28 строка 0 ждёт FENSTER_ROT", gate_t, lambda t: t.replace("`FENSTER_GRUEN …`", "`FENSTER_ROT …`"))
     ok_t = green_t[0] == 0 and green_t[1].splitlines()[-1] == "BUDGET_OK" and control[0] == 0
     ok_r = all(r[0] == 1 and "BUDGET_FAIL" in r[1] and ("FAIL contract" in r[1] or "FAIL templates" in r[1]) for r in reds.values()) and named_ok
-    probe("F4.4", ok_t and ok_r, f"templates={'OK' if ok_t else 'нет'} rot={'OK' if ok_r else 'нет'} · кит — {tail(green_t[1])}, копия без правки — {tail(control[1])} · красных {sum(r[0] == 1 for r in reds.values())}/{len(reds)}, без красной стороны: {', '.join(k for k, r in reds.items() if r[0] != 1) or 'нет'}, снятая фраза названа в FAIL — {named_ok} · без строки: " + ", ".join(f"{k} — rc {r[0]}" for k, r in reds.items())
+    probe("v3.4-F4.4", ok_t and ok_r, f"templates={'OK' if ok_t else 'нет'} rot={'OK' if ok_r else 'нет'} · кит — {tail(green_t[1])}, копия без правки — {tail(control[1])} · красных {sum(r[0] == 1 for r in reds.values())}/{len(reds)}, без красной стороны: {', '.join(k for k, r in reds.items() if r[0] != 1) or 'нет'}, снятая фраза названа в FAIL — {named_ok} · без строки: " + ", ".join(f"{k} — rc {r[0]}" for k, r in reds.items())
           + f"; «{next((l for l in reds['окно'][1].splitlines() if l.startswith('FAIL')), '')[:110]}»")
     print("FENSTER_OK" if all(sec) and len(sec) == 4 else "FENSTER_FAIL", flush=True)
     return all(sec) and len(sec) == 4
@@ -1216,7 +1226,7 @@ def section_paar():
     brief = lambda r: f"rc {r[0]} «{last(r[1])[:90]}»"
     is_pair = lambda r, rc, head: r[0] == rc and last(r[1]).startswith(head) and r[2] == alternating
     no_run = lambda r: r[0] == 1 and last(r[1]).startswith("PAIR_FAIL") and not r[2] and "PAIR_RULE" not in r[1]
-    row("F5.1", (("gleich", "OK"), ("rot", "FAIL")), [
+    row("v3.4-F5.1", (("gleich", "OK"), ("rot", "FAIL")), [
         ("gleich", "один код", is_pair(same, 0, "PAIR_OK diff_p50=0 diff_p95=0 ") and order == alternating, f"{brief(same)}, прогоны {' '.join(same[2])}, bash {vfy.split('(')[0]}"),
         ("gleich", "правило до первого прогона", same[4] == "1" and "PAIR_RULE diff_p50 ≤ 300 мс, diff_p95 ≤ 500 мс" in same[1], f"PAIR_RULE в выводе при первом прогоне: {same[4] or 'нет'}"),
         ("gleich", "ровно порог", is_pair(edge, 0, "PAIR_OK diff_p50=300 diff_p95=300 "), brief(edge)),
@@ -1286,7 +1296,7 @@ def section_paar():
     moved_s5 = tpl("s5", lambda x: "\n".join(l for l in x.split("\n") if needle not in l).replace("## 5", f"## 5\n{next((l for l in x.split(chr(10)) if needle in l), '')}\n", 1))
     contract_line = lambda r: next((l for l in r[1].splitlines() if "docs/SPEC.template.md" in l and "contract" in l), "нет строки contract")[:110]
     t_red = lambda r: r[0] == 1 and needle in contract_line(r) and "FAIL" in contract_line(r)
-    row("F5.2", (("vorlage", "OK"),), [
+    row("v3.4-F5.2", (("vorlage", "OK"),), [
         *[("vorlage", f"звено вендора, {n}", l.startswith("OK"), l[:60]) for n, l in good],
         *[("vorlage", f"звено вендора, {n}", l.startswith("FAIL") and w in l, l[l.find("—") + 2:][:90]) for n, w, l in bad],
         ("vorlage", "--templates на ките", green_t[0] == 0 and "BUDGET_OK" in green_t[1], f"rc {green_t[0]} «{last(green_t[1])[:40]}»"),
@@ -1330,7 +1340,7 @@ def section_paar():
     put(fk, "bad.json", '{"result": {"report": "VERDICT')
     cut_out = launch(head_ev + [event(subtype="task_notification", task_id="w1", status="completed", output_file=f"{fk}/bad.json", usage={"duration_ms": 1000})])  # файл итога обрезан
     want = {"cli": "2.1.316", "features": ["F1"], "limit": limit, "wf_sec": 12, "bash": 3, "fon": 2, "moved": 1, "status": "completed"}
-    got = {k: x for k, x in (full[3][0] if full[3] else {}).items() if k != "sec"}
+    got = {k: x for k, x in (full[3][0] if full[3] else {}).items() if k not in ("sec", "ts", "tokens", "wf", "models")}  # поля F8.3 SPEC-v3.5 судит bin/check-verify
     secret_free = all(not re.search(r"/tmp|/Users|/home", json.dumps(r)) for r in hang[3])
     jr = f"{fk}/j.jsonl"
 
@@ -1379,7 +1389,7 @@ def section_paar():
                 ("битые строки журнала — не прогоны", broken[:3] == ("done", 2, 7), f"{broken[0]} n={broken[1]}"),
                 ("журнала нет", absent[:3] == ("offen", 0, 0) and runs_word(*absent[:3]) == "offen n=0 fon=0", runs_word(*absent[:3]))]
     missed = [s[0] for s in ok_sides if not s[1]]
-    probe("F5.3", live_state != "rot" and not missed, f"{runs_word(live_state, live_k, live_m)} · {live_raw} · " + "; ".join(f"{s[0]} — {s[2]}" for s in ok_sides) + (f" · НЕ СОШЛОСЬ: {', '.join(missed)}" if missed else ""))
+    probe("v3.4-F5.3", live_state != "rot" and not missed, f"{runs_word(live_state, live_k, live_m)} · {live_raw} · " + "; ".join(f"{s[0]} — {s[2]}" for s in ok_sides) + (f" · НЕ СОШЛОСЬ: {', '.join(missed)}" if missed else ""))
     # F5.4 — три числа ретро в отчёте; данных нет — нули; разница чисел ловит мутацию счёта
     spec_tpl = lambda *lines: "# SPEC\n\n## 0. Контекст\n" + "".join(l + "\n" for l in lines) + "\n## 2. Фичи\n- **F1 x** · готово: F1.1\n  - `F1.1` проба\n\n## 3. Инварианты\nПоправка 9: слово оператора 01.01.2026 — вне §0.\n"
     verdict = lambda v_, feats, block=(), spec="docs/SPEC-2.md": f"VERDICT: {v_}\nFEATURES: {feats}\n/verify-phase · {spec} · HEAD x\n\n## Блокирующие\n" + "".join(f"- **{b}: дефект**\n" for b in block) + "\n## Named, not built\n- **F9: не блокирует**\n"
@@ -1425,7 +1435,7 @@ def section_paar():
     with open(f"{back_p}/docs/evidence/deploy-window.log", "a", encoding="utf-8") as fh:
         fh.write("DEPLOY_OK sha=d linie=1 rollback=a\nDEPLOY_FAIL step=args sha=e\nROLLBACK_OK sha=a sekunden=0\n")
     no_linie = rep(back_p)
-    row("F5.4", (("metriken", "3"),), [
+    row("v3.4-F5.4", (("metriken", "3"),), [
         ("metriken", "фикстура", base_r[0] == 0 and base_r[1].startswith("Кругов до PASS: 2 (F1 2, F2 1; без PASS: F3 — 1)") and base_r[2] == "Откатов деплоя: 1 из 3" and base_r[3] == "Поправок объёма: 2"
          and "кругов до PASS 2, откатов 1 из 3, поправок 2" in base_r[4], show(base_r)),
         ("metriken", "ещё один NEEDS_WORK", more_round[1].startswith("Кругов до PASS: 3 (F1 3,"), more_round[1]),
@@ -1467,7 +1477,7 @@ def section_paar():
     no_num, no_ev, no_field, no_empty, no_login = wnd({"seven_day": {}}), wnd(False), wnd(None), wnd({}), wnd(error="Not logged in")
     w_brief = lambda r: f"rc {r[0]} «{tail(r[1], 2, 110)}»"
     refused = lambda r, why: r[0] == 1 and "WINDOW: refuse" in r[1] and why in r[1] and warn not in r[1]
-    row("F5.5", (("fehlt", "WARN"),), [
+    row("v3.4-F5.5", (("fehlt", "WARN"),), [
         ("fehlt", "ключа нет", fehlt_a[0] == 0 and warn in fehlt_a[1] and last(fehlt_a[1]) == "WINDOW: start", w_brief(fehlt_a)),
         ("fehlt", "только окно 5 ч, 99 %", fehlt_b[0] == 0 and warn in fehlt_b[1] and last(fehlt_b[1]) == "WINDOW: start", w_brief(fehlt_b)),
         ("fehlt", "ключа нет, --override", fehlt_o[0] == 0 and warn in fehlt_o[1] and "был бы старт" in fehlt_o[1], w_brief(fehlt_o)),
@@ -1527,7 +1537,7 @@ def section_mods():
     sec.clear()
     if not os.path.isdir(SPEC_BOARD) or not os.path.isfile("mods/.claude-plugin/marketplace.json"):
         for i in ("F9.1", "F9.2"):
-            print(f"{i} offen · не репо кита: нет {SPEC_BOARD}", flush=True)
+            print(f"v3.4-{i} offen · не репо кита: нет {SPEC_BOARD}", flush=True)
         print("--   mods: не репо кита — маркера MODS нет", flush=True)
         return True
     if not shutil.which("claude"):
@@ -1541,7 +1551,7 @@ def section_mods():
     tested = rc == 0 and npass != "?" and nfail == "0"
     seen = lambda tag: (re.search(rf"^{tag} board (\d+/\d+/\d+)\b", text, re.M) or [None, "нет"])[1]
     board, nach = seen("F9.1-board"), seen("F9.1-nach")
-    probe("F9.1", tested and not miss["F9.1"] and board == "2/1/1" and nach == "1/1/2",
+    probe("v3.4-F9.1", tested and not miss["F9.1"] and board == "2/1/1" and nach == "1/1/2",
           f"board={board} nach={nach} · claude plugin test {SPEC_BOARD}: rc {rc}, {npass} pass, {nfail} fail; названных тестов F9.1 "
           f"{len(BOARD_TESTS['F9.1']) - len(miss['F9.1'])} из {len(BOARD_TESTS['F9.1'])}" + (f"; не прошли — {'; '.join(miss['F9.1'])}" if miss["F9.1"] else ""))
     code = "\n".join(read(f"{SPEC_BOARD}/hooks/{f}") for f in sorted(os.listdir(f"{SPEC_BOARD}/hooks")) if not f.endswith((".test.tsx", ".test.ts", ".json")))
@@ -1564,7 +1574,7 @@ def section_mods():
     red_net = board_net("await fetch(u)") == ["fetch("] and board_net("$.process.run(['curl', u])") and board_net("$.model.complete({})")
     red_agree = not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | да | x |", False) and not board_agrees("| spec-board | плагин | `spec-board@two-tier-mods` | нет | x |", True) and not board_agrees("", False)
     ok = v[0] == 0 and "Validation passed" in v[1] and tested and not miss["F9.2"] and not net and "spec-board" in market and agree and red_test and bool(red_net) and git_clean and red_agree
-    probe("F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "
+    probe("v3.4-F9.2", ok, f"validate={'OK' if v[0] == 0 and 'Validation passed' in v[1] else 'нет'} test={npass} · claude plugin validate {SPEC_BOARD}: rc {v[0]}; "
           f"названных тестов F9.2 {len(BOARD_TESTS['F9.2']) - len(miss['F9.2'])} из {len(BOARD_TESTS['F9.2'])}" + (f" (не прошли — {'; '.join(miss['F9.2'])})" if miss["F9.2"] else "")
           + f"; модель, сеть и процесс не на git в коде мода — {', '.join(net) or 'нет'}; marketplace — {'есть' if 'spec-board' in market else 'нет'}; "
           f"строка шаблона Environment — {'«да»' if '| да |' in row else '«нет»' if row else 'нет строки'}, профиль кита — {on}{'' if agree else ' (не согласны)'} · "
@@ -1576,8 +1586,475 @@ def section_mods():
     return green
 
 
+# ---------- SPEC-v3.5 F1: мод handoff во вкладке Code — хост вкладки, тесты мода, шаблоны, пара effectiveWindow ----------
+OLD_KIT = "6cd2177"  # кит v3.4 (main, PR #7): мод handoff 0.3.0, правило modes и шаблоны до SPEC-v3.5
+F14_TESTS = ["F1.4 above the threshold − 20: no second handoff", "F1.4 after the fill drops below the threshold − 20: the next crossing hands off again",
+             "F1.4 a subagent turn never hands off"]
+HOST_JEV_OFF = {"pluginConfigs": {"handoff@inline": {"options": {"jev": "off"}}}}  # копия мода из --plugin-dir — handoff@inline: Jev в пробе не зовётся
+
+
+def harness_module():
+    """kit/bin/check-harness модулем: хост вкладки TabHost, таблица Environment и правило modes — те же, что судят харнес."""
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("harness_v35", os.path.realpath(f"{root}/bin/check-harness"))
+    m = importlib.util.module_from_spec(importlib.util.spec_from_loader("harness_v35", loader))
+    loader.exec_module(m)
+    return m
+
+
+def old_tree(rev, *paths):
+    """Файлы кита на ревизии rev (git archive) в свой каталог; нет истории — None."""
+    d = tempfile.mkdtemp(prefix=f"old-{rev}-", dir=TMP)
+    a = subprocess.run(["git", "archive", rev, *paths], capture_output=True)
+    if a.returncode:
+        return None
+    subprocess.run(["tar", "-x", "-C", d], input=a.stdout, check=True)
+    return d
+
+
+def handoff_project():
+    """Проект из кита (bin/two-tier-init) в своём каталоге: budgets.json кита (handoff_threshold_pct 40)."""
+    d = tempfile.mkdtemp(prefix="handoff-tab-", dir=TMP)
+    proj = f"{d}/proj"
+    os.makedirs(proj)
+    subprocess.run(["git", "init", "-q", "-b", "phase", proj], env=GIT_ENV, check=True)
+    subprocess.run(["bin/two-tier-init", proj], capture_output=True, check=True)
+    return proj
+
+
+def set_threshold(proj, pct):
+    b = json.loads(read(f"{proj}/budgets.json"))
+    b.setdefault("project", {})["handoff_threshold_pct"] = pct
+    open(f"{proj}/budgets.json", "w", encoding="utf-8").write(json.dumps(b, ensure_ascii=False, indent=2) + "\n")
+
+
+def handoff_files(proj):
+    return len([n for n in os.listdir(f"{proj}/handoffs") if n.startswith("handoff-") and n.endswith(".md")]) if os.path.isdir(f"{proj}/handoffs") else 0
+
+
+STATUS_FORM = re.compile(r"(handoff: )?handoff · context ")  # строка /handoff status мода
+
+
+def status_of(host):
+    host.say("/handoff status")
+    r = host.results(1, 120)[0] or {}
+    return str(r.get("result", ""))
+
+
+def command_names(host):
+    cc = [e for e in host.events if e.get("type") == "system" and e.get("subtype") == "commands_changed"]
+    return {(c.get("name") if isinstance(c, dict) else str(c)) for c in (cc[-1].get("commands") or [])} if cc else set()
+
+
+def section_handoff():
+    """F1 (SPEC-v3.5): строки F1.1–F1.5 и HANDOFF_TAB_OK. Не репо кита — строки offen; нет claude в PATH — живые стороны offen, маркера нет, код 0."""
+    sec, opened = [], []
+
+    def p(item, ok, text):
+        sec.append(bool(ok))
+        probe(item, ok, text)
+
+    def offen_line(item, why):
+        opened.append(item)
+        print(f"{item} offen · {why}", flush=True)
+    if root != "kit" or not os.path.isdir("mods/handoff"):
+        for i in range(1, 6):
+            offen_line(f"F1.{i}", "не репо кита: нет mods/handoff")
+        return True
+    h = harness_module()
+    live = bool(shutil.which("claude"))
+    # F1.5 — шаблоны: ключ budgets.json, профиль без порога и с autoCompactWindow, правило modes без порога handoff; пара effectiveWindow
+    kb = json.loads(read("kit/budgets.json"))["defaults"]
+    ls = json.loads(read("kit/.claude/launch.settings.json"))
+    hopts = (ls.get("pluginConfigs", {}).get("handoff@two-tier-mods") or {}).get("options") or {}
+    rows = h.table(read("kit/docs/PROCESS.template.md"))
+    new_bad = [b for b in h.modes(rows, ls.get("pluginConfigs", {})) if "handoff@two-tier-mods" in b]
+    old = old_tree(OLD_KIT, "kit/bin/check-harness")
+    old_bad = None
+    if old:
+        import importlib.machinery, importlib.util
+        lo = importlib.machinery.SourceFileLoader("harness_v34", f"{old}/kit/bin/check-harness")
+        om = importlib.util.module_from_spec(importlib.util.spec_from_loader("harness_v34", lo))
+        lo.exec_module(om)
+        old_bad = [b for b in om.modes(rows, ls.get("pluginConfigs", {})) if "handoff@two-tier-mods" in b]
+    win = {}
+    if live:
+        base = tempfile.mkdtemp(prefix="f15-window-", dir=TMP)
+        for side, field in (("mit", True), ("ohne", False)):
+            d = f"{base}/{side}"
+            os.makedirs(f"{d}/.claude")
+            prof = dict(ls)
+            prof.pop("autoCompactWindow", None) if not field else None
+            open(f"{d}/.claude/settings.local.json", "w", encoding="utf-8").write(json.dumps(prof, ensure_ascii=False))
+            subprocess.run(["git", "init", "-q", d], env=GIT_ENV)
+            env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "CLAUDECODE")} | {"SPEC_GATE": "off"}
+            try:
+                subprocess.run(["claude", "-p", "Reply with the single word ok.", "--model", "claude-opus-5-5", "--setting-sources", "project,local", "--max-turns", "1",
+                                "--debug-file", f"{d}.log"], cwd=d, env=env, capture_output=True, text=True, timeout=240, start_new_session=True)
+            except subprocess.TimeoutExpired:
+                pass
+            m = re.findall(r"effectiveWindow=(\d+)", read(f"{d}.log")) if os.path.isfile(f"{d}.log") else []
+            win[side] = int(m[-1]) if m else None
+    static_ok = kb.get("handoff_threshold_pct") == 40 and "threshold" not in hopts and ls.get("autoCompactWindow") == 600000 and not new_bad and bool(old_bad)
+    f15 = (f"fenster={win.get('mit')},{win.get('ohne')} modes={'raus' if not new_bad and old_bad else 'drin'} · kit/budgets.json handoff_threshold_pct {kb.get('handoff_threshold_pct')}; "
+           f"профиль шаблона: autoCompactWindow {ls.get('autoCompactWindow')}, порог в pluginConfigs handoff — {hopts.get('threshold', 'нет')}; правило modes на шаблоне: новое — "
+           f"{'; '.join(new_bad) or 'OK'}, кит v3.4 ({OLD_KIT}) — {'; '.join(old_bad or []) or 'OK'} · claude -p с профилем шаблона как .claude/settings.local.json — effectiveWindow {win.get('mit')}, без поля — {win.get('ohne')} (--debug-file)")
+    if live:
+        p("F1.5", static_ok and win.get("mit") == 580000 and win.get("ohne") == 980000, f15)
+    elif not static_ok:
+        p("F1.5", False, f15)
+    else:
+        offen_line("F1.5", "claude нет в PATH — пары effectiveWindow нет; " + f15.split(" · ", 1)[1])
+    # F1.4 — названные тесты мода: второго нет выше порога − 20, после спада есть, подагент — 0; мутант без isArmed — красный
+    def plugin_test(folder):
+        r = subprocess.run(["claude", "plugin", "test", folder], capture_output=True, text=True, timeout=300)
+        txt = r.stdout + r.stderr
+        return r.returncode, {t: f"(pass) {t}" in txt for t in F14_TESTS}, txt
+    if live:
+        base = tempfile.mkdtemp(prefix="f14-", dir=TMP)
+        rc, named, txt = plugin_test(h.mod_copy("mods/handoff", f"{base}/new/handoff"))
+        mut = h.mod_copy("mods/handoff", f"{base}/mut/handoff", [("hooks/register.tsx", "    if (!st.isArmed) return result\n", "")])
+        mrc, mnamed, _ = plugin_test(mut)
+        npass = (re.search(r"(\d+) pass", txt) or [None, "?"])[1]
+        ok = rc == 0 and all(named.values()) and mrc != 0 and not mnamed[F14_TESTS[0]] and mnamed[F14_TESTS[1]]
+        p("F1.4", ok, f"zweiter={'0,1' if named[F14_TESTS[0]] and named[F14_TESTS[1]] else 'FAIL'} agent={'0' if named[F14_TESTS[2]] else 'FAIL'} · claude plugin test копии mods/handoff: rc {rc}, pass {npass}; "
+                      + "; ".join(f"«{t}» — {'pass' if v else 'нет'}" for t, v in named.items()) + f" · мутант без проверки isArmed: rc {mrc}, «{F14_TESTS[0]}» — {'pass' if mnamed[F14_TESTS[0]] else 'fail'}")
+    else:
+        offen_line("F1.4", "claude нет в PATH — claude plugin test не шёл")
+    if not live:
+        for i in ("F1.1", "F1.2", "F1.3"):
+            offen_line(i, "claude нет в PATH — хоста вкладки нет")
+        print("--   handoff-tab: offen — маркера HANDOFF_TAB нет", flush=True)
+        return all(sec)
+    base = tempfile.mkdtemp(prefix="f1-host-", dir=TMP)
+    new_mod = h.mod_copy("mods/handoff", f"{base}/new/handoff")
+    old_src = old_tree(OLD_KIT, "mods/handoff")
+    # F1.1 и F1.2 — хост вкладки с копией 0.4.0: команда, порог budgets.json 40 и 10, /handoff now
+    proj = handoff_project()
+    with h.TabHost(proj, [new_mod], settings=HOST_JEV_OFF) as host:
+        s40 = status_of(host)
+        names = command_names(host)
+        set_threshold(proj, 10)
+        s10 = status_of(host)
+        before = handoff_files(proj)
+        host.say("Reply with the single word ok and use no tools.")  # ход модели: без разговора $.model.fork нечего форкать (nothing-to-fork)
+        host.results(1, 240)
+        host.say("/handoff now")
+        host.results(1, 240)
+        host.until(lambda e: e.get("type") == "conversation_reset", 240)
+        cont2 = host.until(lambda e: e.get("type") == "assistant", 300)  # запрос продолжения после /clear — ход модели
+        host.results(1, 300)
+        after, resets = handoff_files(proj), host.count("conversation_reset")
+    t40, t10 = re.search(r"threshold (\d+)%", s40), re.search(r"threshold (\d+)%", s10)
+    alt = "?"
+    if old_src:
+        oproj = handoff_project()
+        with h.TabHost(oproj, [f"{old_src}/mods/handoff"], settings=HOST_JEV_OFF) as host:
+            ostat = status_of(host)
+            alt = "fehlt" if "handoff" not in command_names(host) and not STATUS_FORM.match(ostat) else "da"  # без команды текст уходит модели: судит форма статуса мода, не слово
+    neu = f"{t40.group(1) if t40 else '?'},{t10.group(1) if t10 else '?'}"
+    thr = lambda st: (re.search(r"threshold \d+% \([^)]*\)", st) or [""])[0]
+    p("F1.1", "handoff" in names and neu == "40,10" and "(budgets.json)" in s40 and "(budgets.json)" in s10 and alt == "fehlt",
+      f"neu={neu} alt={alt} · хост вкладки (stream-json в обе стороны, без -p), копия mods/handoff 0.4.0 — --plugin-dir, установленный выключен: handoff в commands_changed — "
+      f"{'да' if 'handoff' in names else 'нет'}; budgets.json кита — «{s40[:120]}»; project.handoff_threshold_pct 10 — «{thr(s10)}»; копия 0.3.0 ({OLD_KIT}) — команды нет: {alt}")
+    p("F1.2", before == 0 and after == 1 and resets >= 1 and cont2 is not None, f"datei={before},{after} reset={resets} · тот же хост: файлов handoff-*.md в handoffs/ до команды — {before}, после /handoff now — {after}; "
+      f"событие conversation_reset — {resets}; ход модели на запрос продолжения после /clear — {'есть' if cont2 is not None else 'нет'}")
+    # F1.3 — поверхность: без неё мод не пишет сам, с ui_attach — пишет и продолжает (порог 10, заполнение > 10 %)
+    proj = handoff_project()
+    set_threshold(proj, 10)
+    os.makedirs(f"{proj}/fill")
+    words = ["harbor", "cedar", "ember", "fjord", "grove", "island", "juniper", "amber", "birch", "delta", "kestrel", "lantern", "meadow", "nimbus", "orchid", "pebble"]
+    for i in range(6):
+        open(f"{proj}/fill/part-{i}.txt", "w", encoding="utf-8").write("\n".join(" ".join(words[(i * 7 + j * 3 + k) % len(words)] for k in range(11)) + f" {i}-{j}" for j in range(1000)) + "\n")
+    with h.TabHost(proj, [new_mod], settings=HOST_JEV_OFF) as host:
+        s_none = status_of(host)
+        host.say("Reply with the single word ok and use no tools.")
+        host.results(1, 240)
+        host.say("Read each of the files fill/part-0.txt to fill/part-5.txt in full with the Read tool, one call per file. Then reply with the single word read.")
+        host.results(1, 600)
+        # без поверхности окно держится дольше одного форка ($.model.fork — 16–20 с после конца хода): хендофф, начатый сам, успел бы лечь
+        t_hold = time.monotonic()
+        while time.monotonic() - t_hold < NO_SURFACE_HOLD and not handoff_files(proj):
+            host.until(lambda e: False, 1)
+        held = round(time.monotonic() - t_hold)
+        s_fill = status_of(host)
+        no_surface = handoff_files(proj)
+        host.control("ui_attach", surface="desktop", client_id="probe")
+        host.until(lambda e: e.get("type") == "control_response", 60)
+        s_desk = status_of(host)
+        host.say("Reply with the single word ok and use no tools.")
+        host.results(1, 240)
+        reset3 = host.until(lambda e: e.get("type") == "conversation_reset", 300)
+        cont3 = host.until(lambda e: e.get("type") == "assistant", 300) if reset3 else None  # мод продолжает: ход модели на запрос продолжения
+        host.results(1, 300)
+        with_surface = handoff_files(proj)
+    fill = re.search(r"context (\d+)% of (\d+)", s_fill)
+    fl = f"{'desktop' if 'surface desktop' in s_desk else '?'},{'none' if 'surface none' in s_none else '?'}"
+    surf = lambda st: (re.search(r"threshold \d+% \([^)]*\) · surface \S+", st) or [""])[0]
+    p("F1.3", fl == "desktop,none" and no_surface == 0 and held >= NO_SURFACE_HOLD and with_surface == 1 and reset3 is not None and cont3 is not None
+      and fill and int(fill.group(1)) >= 10,
+      f"fl={fl} auto={with_surface},{no_surface} · хост, порог 10 (project.handoff_threshold_pct): без поверхности — «{surf(s_none)}»; после чтения fill/ — заполнение {fill.group(1) if fill else '?'}% "
+      f"окна {fill.group(2) if fill else '?'}, за {held} с без поверхности хендоффов {no_surface}; ui_attach desktop — «{surf(s_desk)}», следующий ход — хендоффов {with_surface}, "
+      f"conversation_reset — {'есть' if reset3 is not None else 'нет'}, ход модели на запрос продолжения — {'есть' if cont3 is not None else 'нет'}")
+    ok = all(sec) and not opened
+    print("HANDOFF_TAB_OK" if ok else ("HANDOFF_TAB_FAIL" if not all(sec) else "--   handoff-tab: offen — маркера HANDOFF_TAB нет"), flush=True)
+    return all(sec)
+
+
+NO_SURFACE_HOLD = 45  # с: окно без поверхности дольше форка хендоффа (16–20 с) с запасом — мод, пишущий сам, покраснел бы
+
+# ---------- раздел operator (SPEC-v3.5 F6): слово оператора командой ----------
+OPW_SPEC = ("# SPEC-2\n\n## 2. Фичи\n- **F1 x** · готово: F1.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n  - `F1.1` x\n\n"
+            "## 3. Инварианты и границы\n{window}\n## 4. Стопы\n")
+OPW_WINDOW = "- Окно доводки: открыто `docs/STATUS.md` · запас диффа 5 — в окне файл тимлида меняет только `bin/operator-word` · судья: хук `.githooks/commit-msg`\n"
+SESSION_ENV = dict(GIT_ENV, CLAUDECODE="1")  # исполнитель: git из сессии Claude Code
+
+
+def op_project(window=True):
+    """Проект-фикстура: хуки кита, operator-word, check-budget, phase-report, budgets.json кита; SPEC-2 с окном доводки (или без); выдача — «Тимлид:» на main, плечо — ветка phase."""
+    os.makedirs(TMP, exist_ok=True)
+    d = tempfile.mkdtemp(prefix="check-kit-operator-", dir=TMP)
+    shutil.copytree(f"{root}/.githooks", f"{d}/.githooks", ignore=shutil.ignore_patterns("__pycache__"))
+    for t_ in ("operator-word", "check-budget", "phase-report"):
+        os.makedirs(f"{d}/bin", exist_ok=True)
+        shutil.copy2(f"{root}/bin/{t_}", f"{d}/bin/{t_}")
+    shutil.copy2(f"{root}/budgets.json", f"{d}/budgets.json")
+    files = {"docs/PROMPT.txt": "Read first: docs/SPEC-2.md\n", "docs/SPEC-2.md": OPW_SPEC.format(window=OPW_WINDOW if window else ""),
+             "docs/STATUS.md": "s1\n", "docs/PROCESS.md": "p1\n", "src/x.py": "x = 1\n"}
+    for rel, text in files.items():
+        put(d, rel, text)
+    sh(["git", "init", "-q", "-b", "main"], d)
+    sh(["git", "config", "core.hooksPath", ".githooks"], d)
+    sh(["git", "add", "--", *files, ".githooks", "bin", "budgets.json"], d)
+    sh(["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "Тимлид: выдача SPEC-2"], d)
+    sh(["git", "switch", "-qc", "phase"], d)
+    return d
+
+
+def opw(d, rel, word, text):
+    r = subprocess.run([f"{d}/bin/operator-word", rel, "-m", word], cwd=d, input=text, env=SESSION_ENV, capture_output=True, text=True, timeout=120)
+    return r.returncode, " ".join((r.stdout + r.stderr).split())[:200]
+
+
+def head_of(d):
+    return sh(["git", "rev-parse", "--short", "HEAD"], d)[1]
+
+
+def plain_commit(d, msg, rel, text, env=SESSION_ENV, hooks=True):
+    """Коммит одного файла мимо operator-word: (rc, строка отказа хука); отказан — файл и индекс как до него."""
+    before = read(f"{d}/{rel}") if os.path.isfile(f"{d}/{rel}") else None
+    put(d, rel, text)
+    sh(["git", "add", "--", rel], d)
+    rc, out_ = sh(["git", *([] if hooks else ["-c", "core.hooksPath=/dev/null"]), "commit", "-qm", msg], d, env=env)
+    if rc:
+        sh(["git", "reset", "-q", "--", rel], d)
+        put(d, rel, before) if before is not None else os.remove(f"{d}/{rel}")
+    return rc, next((l for l in out_.splitlines() if l.startswith("commit refused")), out_[:120])
+
+
+# F6.5 на истории: запрос сначала называл SPEC-1 (как в репо кита), даты коммиттера +01:00; плечо SPEC-2 — с «F1.1: работа» (09:00:00Z)
+OPW_HISTORY = [
+    ("2026-11-10T09:00:00+01:00", "Тимлид: выдача SPEC-1", {"docs/PROMPT.txt": "Read first: docs/SPEC-1.md\n", "docs/SPEC-1.md": "# SPEC-1\n"}),
+    ("2026-11-10T10:00:00+01:00", "F1.1: работа SPEC-1", {"src/x.py": "x = 1\n"}),
+    ("2026-11-10T11:00:00+01:00", "Оператор: слово SPEC-1", {"docs/STATUS.md": "s0\n"}),
+    ("2026-11-12T08:00:00+01:00", "Тимлид: выдача SPEC-2", {"docs/PROMPT.txt": "Read first: docs/SPEC-2.md\n", "docs/SPEC-2.md": OPW_SPEC.format(window=OPW_WINDOW)}),
+    ("2026-11-12T08:30:00+01:00", "Тимлид: вердикт проверяющего", {"docs/reviews/2-spec.md": "PASS\n"}),
+    ("2026-11-12T10:00:00+01:00", "F1.1: работа", {"src/x.py": "x = 2\n"}),
+    ("2026-11-12T10:30:00+01:00", "Оператор: строка статуса", {"docs/STATUS.md": "s1\n"}),
+    ("2026-11-12T11:00:00+01:00", "Тимлид: уточнение запроса", {"docs/PROMPT.txt": "Read first: docs/SPEC-2.md\n\nУточнение.\n"}),
+    ("2026-11-12T12:00:00+01:00", "Оператор: после уточнения", {"docs/STATUS.md": "s2\n"})]
+# журнал spec-gate: до плеча — 4 решения (прошлая фаза, после выдачи, за миг до плеча), с его секунды — 4; без пояса в сравнении — 2
+OPW_GATE = [("2026-11-11T12:00:00.000Z", "pass", "not the phase session: прошлая фаза"), ("2026-11-11T12:00:01.000Z", "block", "прошлая фаза"),
+            ("2026-11-12T07:45:00.000Z", "block", "после выдачи, до плеча"), ("2026-11-12T08:59:59.900Z", "block", "за миг до плеча"),
+            ("2026-11-12T09:00:00.400Z", "ok", "секунда начала плеча"), ("2026-11-12T09:30:00.000Z", "block", "плечо"),
+            ("2026-11-12T10:30:00.000Z", "pass", "not the phase session: боковой чат"), ("2026-11-12T11:30:00.000Z", "ok", "конец плеча")]
+# ложный блок — строка в ## Notes с причиной (SPEC-v3.5 §4): «ложных блоков 0» — счёт, строка вне Notes — не в счёте
+OPW_PROGRESS = ("# PROGRESS\n\n## Голова\nложных блоков 0 — голова\n\n## Notes\n- ложный блок spec-gate: хук держал F1.1, проба была в evidence (фикстура)\n"
+                "- ложных блоков 0 до F2 — счёт\n- блок служебной сессии без метки — ожидаем, не ложный блок (SPEC §4)\n\n## Named, not built\n- ложный блок вне Notes — не в счёте\n")
+
+
+def op_history():
+    """bin/phase-report --no-jev на фикстуре истории: ((слово оператора, тимлида), (решений хука за плечо, в журнале), ложных блоков); нет строки — None."""
+    d = tempfile.mkdtemp(prefix="check-kit-operator-hist-", dir=TMP)
+    os.makedirs(f"{d}/bin")
+    for t_ in ("check-budget", "phase-report"):
+        shutil.copy2(f"{root}/bin/{t_}", f"{d}/bin/{t_}")
+    sh(["git", "init", "-q", "-b", "main"], d)
+    for when, msg_, files in OPW_HISTORY:
+        for rel, text in files.items():
+            put(d, rel, text)
+        sh(["git", "add", "--", *files], d)
+        sh(["git", "commit", "-qm", msg_], d, env=dict(GIT_ENV, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+    put(d, "docs/evidence/spec-gate.jsonl", "".join(json.dumps({"ts": ts, "session": "fx", "mode": "active", "decision": dec, "reason": why, "missing": []},
+                                                               ensure_ascii=False) + "\n" for ts, dec, why in OPW_GATE))
+    put(d, "docs/PROGRESS.md", OPW_PROGRESS)
+    _, o_ = sh([f"{d}/bin/phase-report", "--no-jev"], d)
+    rep = read(f"{d}/docs/evidence/phase-report.md") if os.path.isfile(f"{d}/docs/evidence/phase-report.md") else ""
+    w = re.search(r"слово оператора (\d+), тимлида (\d+)", o_)
+    g = re.search(r"Решений хука за плечо: (\d+) из (\d+)", rep)
+    f = re.search(r"^Ложных блоков \([^\n]*?\): (\d+)\.", rep, re.M)
+    return (int(w[1]), int(w[2])) if w else None, (int(g[1]), int(g[2])) if g else None, int(f[1]) if f else None
+
+
+def section_operator():
+    """F6 (SPEC-v3.5): строки F6.1–F6.5 и OPERATOR_WORD_OK. Не репо кита — строки offen, маркера нет, код 0."""
+    sec = []
+
+    def p(item, ok, text):
+        sec.append(bool(ok))
+        probe(item, ok, text)
+    if root != "kit":
+        for i in range(1, 6):
+            print(f"F6.{i} offen · не репо кита", flush=True)
+        print("--   operator: offen — маркера OPERATOR_WORD нет", flush=True)
+        return True
+    # F6.1 — шаблон SPEC §3: строка окна доводки; без неё --templates красный
+    tg = subprocess.run([f"{root}/bin/check-budget", "--templates"], capture_output=True, text=True, timeout=300)
+    g_line = next((l for l in tg.stdout.splitlines() if l.startswith(("OK   contract: kit/docs/SPEC", "FAIL contract: kit/docs/SPEC"))), "нет строки")
+    tmp = tempfile.mkdtemp(prefix="check-kit-tmpl-", dir=TMP)
+    shutil.copytree(root, f"{tmp}/kit", ignore=shutil.ignore_patterns("__pycache__", "graphify-out", "node_modules"))
+    spec_t = f"{tmp}/kit/docs/SPEC.template.md"
+    had = "Окно доводки: открыто" in read(spec_t)
+    put(f"{tmp}/kit", "docs/SPEC.template.md", read(spec_t).replace("Окно доводки: открыто", "Окно: открыто"))
+    tr = subprocess.run([f"{tmp}/kit/bin/check-budget", "--templates"], cwd=tmp, capture_output=True, text=True, timeout=300)
+    r_line = next((l for l in tr.stdout.splitlines() if l.startswith("FAIL contract: kit/docs/SPEC")), "нет строки")
+    vor = tg.returncode == 0 and g_line.startswith("OK")
+    rot = had and tr.returncode == 1 and "Окно доводки: открыто" in r_line and "BUDGET_FAIL: 1" in tr.stdout
+    p("F6.1", vor and rot, f"vorlage={'OK' if vor else 'нет'} rot={'OK' if rot else 'нет'} · bin/check-budget --templates — rc {tg.returncode} «{g_line[:90]}» · "
+                           f"шаблон без строки «Окно доводки: открыто» — rc {tr.returncode} «{' '.join(r_line.split())[:150]}»")
+    # F6.2 — путь из окна: содержимое из stdin, коммит «Оператор: <слово>» только этого пути
+    d = op_project()
+    sh(["git", "commit", "--allow-empty", "-qm", "F1.1: работа"], d, env=SESSION_ENV)
+    rc, msg = opw(d, "docs/STATUS.md", "x", "s2\n")
+    subj, files_ = sh(["git", "log", "-1", "--format=%s"], d)[1], sh(["git", "show", "--name-only", "--format=", "HEAD"], d)[1].split()
+    ok62 = rc == 0 and subj == "Оператор: x" and read(f"{d}/docs/STATUS.md") == "s2\n" and files_ == ["docs/STATUS.md"]
+    da = op_project()  # свой проект: d дальше служит F6.4
+    rc_at, msg_at = opw(da, "docs/STATUS.md", "y", "a\nb\nc\nd\n")  # дифф ровно в запас (−s1 +4 = 5): не сверх запаса — коммит
+    ok62 = ok62 and rc_at == 0 and sh(["git", "log", "-1", "--format=%s"], da)[1] == "Оператор: y"
+    link = f"{da}-link"  # абсолютный путь через симлинк каталога (свой: на Linux /tmp не симлинк) — тот же файл репо, коммит
+    os.symlink(da, link)
+    rc_ln, msg_ln = opw(da, f"{link}/docs/STATUS.md", "v", "a\nb\nc\ne\n")
+    ok62 = ok62 and rc_ln == 0 and sh(["git", "log", "-1", "--format=%s"], da)[1] == "Оператор: v" and read(f"{da}/docs/STATUS.md") == "a\nb\nc\ne\n"
+    p("F6.2", ok62, f"offen={'commit' if ok62 else 'нет'} · абсолютный путь через симлинк каталога (…-link/docs/STATUS.md) — rc {rc_ln} «{msg_ln[:130]}» · bin/operator-word docs/STATUS.md -m \"x\" (stdin «s2», окно `docs/STATUS.md` · запас 5) — rc {rc} «{msg[:120]}»; "
+                    f"HEAD «{subj}», пути {', '.join(files_) or '—'}; дифф ровно в запас 5 — rc {rc_at} «{msg_at[:90]}»")
+    # F6.3 — отказ, файл цел, коммита нет: путь вне окна, SPEC без окна, дифф сверх запаса
+    def refused(dd, rel, word, text):
+        before, h0 = read(f"{dd}/{rel}"), head_of(dd)
+        rc_, m_ = opw(dd, rel, word, text)
+        return rc_ == 1 and read(f"{dd}/{rel}") == before and head_of(dd) == h0, rc_, m_
+    d_nowin = op_project(window=False)
+    nein = [("путь вне окна", *refused(d, "docs/PROCESS.md", "y", "p2\n")),
+            ("SPEC без окна", *refused(d_nowin, "docs/STATUS.md", "x", "s2\n")),
+            ("дифф сверх запаса", *refused(d, "docs/STATUS.md", "z", "".join(f"l{i}\n" for i in range(10))))]
+    n63 = sum(r[1] for r in nein)
+    p("F6.3", n63 == 3, f"nein={n63}/3 · " + "; ".join(f"{n} — rc {rc_} «{m_[:110]}», файл цел и HEAD тот же — {'да' if ok else 'нет'}" for n, ok, rc_, m_ in nein))
+    # F6.4 — хук и lint владения; «Тимлид:» из сессии; фикстуры-тимлид из сессии зелёные
+    op_in = plain_commit(d, "Оператор: z", "docs/STATUS.md", "s2\ns3\n")
+    op_out = plain_commit(d, "Оператор: w", "docs/PROCESS.md", "p2\n")
+    op_big = plain_commit(d, "Оператор: big", "docs/STATUS.md", "".join(f"l{i}\n" for i in range(10)))
+    _, oa = sh([f"{d}/bin/check-budget"], d)  # lint владения до обхода хука: «Оператор:» в окне (x из F6.2 и z) — проход
+    own_ok = next((l for l in oa.splitlines() if l.startswith("OK   owner")), "нет строки")
+    pre_fails = [l for l in oa.splitlines() if l.startswith("FAIL owner")]
+    lint_ja = not pre_fails and "«Оператор:» в окне — 2" in own_ok
+    plain_commit(d, "Оператор: w", "docs/PROCESS.md", "p2\n", hooks=False)  # мимо хука — его видит lint владения
+    rb, ob = sh([f"{d}/bin/check-budget"], d)
+    own_fails = [l for l in ob.splitlines() if l.startswith("FAIL owner")]
+    own_fail = own_fails[0] if own_fails else "нет строки"
+    tl_in = plain_commit(d, "Тимлид: статус", "docs/STATUS.md", "s4\n")
+    tl_out = plain_commit(d, "Тимлид: статус", "docs/STATUS.md", "s4\n", env=GIT_ENV)
+    op_ja = op_in[0] == 0 and lint_ja
+    op_nein = op_out[0] == 1 and "operator-window: docs/PROCESS.md" in op_out[1] and op_big[0] == 1 and "operator-window" in op_big[1] \
+        and "BUDGET_FAIL owner" in ob.splitlines() and len(own_fails) == 1 and "«Оператор: w»" in own_fail and "вне окна доводки" in own_fail and "docs/PROCESS.md" in own_fail
+    tl_nein = tl_in[0] == 1 and "team-lead-session" in tl_in[1] and tl_out[0] == 0
+    sess = dict(os.environ, CLAUDECODE="1", TELEFON_CLONE=f"{TMP}/no-telefon-clone")
+    fx = {}
+    for name, cmd in (("bin/check-harness commit", ["bin/check-harness", "commit"]), ("bin/check-kit frozen", ["bin/check-kit", "frozen"])):
+        r = subprocess.run(cmd, env=sess, capture_output=True, text=True, timeout=900)
+        out = r.stdout.splitlines()
+        # суд модели без ключа или abide (CI) краснеет не от CLAUDECODE: его строки вне счёта, тогда и маркер с rc не судятся
+        nokey = [l.split()[0] for l in out if re.match(r"^\S+ FAIL: нет (ключа|abide)", l)]
+        bad = [l.split()[0] for l in out if (re.match(r"^\S+ FAIL: ", l) and l.split()[0] not in nokey) or (re.match(r"^[A-Z_]+_FAIL$", l) and not nokey)]
+        fx[name] = (0 if nokey and not bad else r.returncode, bad, (None if nokey else "COMMIT_OK" in out) if "harness" in name else None, nokey)
+    fix_ok = all(rc_ == 0 and not bad and mk is not False for rc_, bad, mk, _ in fx.values())
+    p("F6.4", op_ja and op_nein and tl_nein and fix_ok,
+      f"op={'ja' if op_ja else 'nein'},{'nein' if op_nein else 'ja'} tl={'nein' if tl_nein else 'ja'} fixturen={'OK' if fix_ok else 'FAIL'} · хук: «Оператор:» в окне — rc {op_in[0]}; "
+      f"lint владения на них — «{own_ok[own_ok.find('«Оператор:»'):][:60] if '«Оператор:»' in own_ok else own_ok[:60]}», строк FAIL owner — {len(pre_fails)} · "
+      f"вне окна — rc {op_out[0]} «{op_out[1][:90]}»; дифф сверх запаса — rc {op_big[0]}; мимо хука → bin/check-budget: строк FAIL owner {len(own_fails)} «{own_fail[:110]}», BUDGET_FAIL owner — "
+      f"{'есть' if 'BUDGET_FAIL owner' in ob.splitlines() else 'нет'} · «Тимлид:» при CLAUDECODE=1 — rc {tl_in[0]} «{tl_in[1][:80]}», без — rc {tl_out[0]} · из сессии (CLAUDECODE=1): "
+      + "; ".join(f"{n} — rc {rc_}, красных строк {len(bad)}{', COMMIT_OK' if mk else ''}{f' (без ключа или abide вне счёта: {chr(32).join(nk)})' if nk else ''}"
+                  for n, (rc_, bad, mk, nk) in fx.items()))
+    # F6.5 — bin/phase-report: «Оператор:» и «Тимлид:» плеча (после выдачи — серии коммитов запроса с той же SPEC; «Тимлид:» сразу за ней — выдача)
+    def leg(dd, commits):
+        for msg_, rel, text in commits:
+            plain_commit(dd, msg_, rel, text, env=GIT_ENV, hooks=False)
+        rc_, o_ = sh([f"{dd}/bin/phase-report", "--no-jev"], dd)
+        m_ = re.search(r"слово оператора (\d+), тимлида (\d+)", o_)
+        return (int(m_[1]), int(m_[2])) if m_ else None, read(f"{dd}/docs/evidence/phase-report.md") if os.path.isfile(f"{dd}/docs/evidence/phase-report.md") else ""
+    full = op_project()
+    got, rep = leg(full, [("Тимлид: вердикт проверяющего", "docs/reviews/2-spec.md", "PASS\n"), ("F1.1: работа", "src/x.py", "x = 2\n"),
+                          ("Оператор: строка статуса", "docs/STATUS.md", "s2\n"), ("Оператор: ещё строка", "docs/STATUS.md", "s3\n"), ("Тимлид: поправка", "docs/PROCESS.md", "p2\n")])
+    empty, _ = leg(op_project(), [("Тимлид: вердикт проверяющего", "docs/reviews/2-spec.md", "PASS\n"), ("F1.1: работа", "src/x.py", "x = 2\n")])
+    # правка запроса посреди плеча («Тимлид:», та же SPEC в Read first) начало плеча не сдвигает: слово до неё остаётся в списке
+    mid, _ = leg(op_project(), [("F1.1: работа", "src/x.py", "x = 2\n"), ("Оператор: до правки запроса", "docs/STATUS.md", "s2\n"),
+                                 ("Тимлид: уточнение запроса", "docs/PROMPT.txt", "Read first: docs/SPEC-2.md\n\nУточнение.\n"), ("Оператор: после", "docs/STATUS.md", "s3\n")])
+    rows = [l for l in rep.splitlines() if re.match(r"^- `[0-9a-f]+` · (Оператор|Тимлид) · ", l)]
+    named = all(any(w in l and path in l for l in rows) for w, path in (("строка статуса", "docs/STATUS.md"), ("ещё строка", "docs/STATUS.md"), ("поправка", "docs/PROCESS.md")))
+    # история запроса с прошлой SPEC и даты +01:00: плечо — с серии той же SPEC; решения хука до плеча вне счёта; ложный блок — строка в ## Notes
+    h_words, h_gate, h_false = op_history()
+    ok65 = got == (2, 1) and empty == (0, 0) and len(rows) == 3 and named and mid == (2, 1) and h_words == (2, 1) and h_gate == (4, 8) and h_false == 1
+    p("F6.5", ok65, f"liste={got[0] if got else '?'},{got[1] if got else '?'} leer={empty[0] if empty else '?'},{empty[1] if empty else '?'} · история SPEC-1 → SPEC-2, даты +01:00: "
+                    f"слово {','.join(map(str, h_words)) if h_words else 'нет строки'} (ждём 2,1: слово SPEC-1 не в счёте), решений хука за плечо "
+                    f"{' из '.join(map(str, h_gate)) if h_gate else 'нет строки'} (ждём 4 из 8), ложных блоков в ## Notes {h_false if h_false is not None else 'нет строки'} (ждём 1) · bin/phase-report --no-jev: плечо "
+                    f"«Тимлид:» выдачи, F1.1, «Оператор:» ×2, «Тимлид:» ×1 — строк списка {len(rows)}, sha · путь · слово названы — {'да' if named else 'нет'}: "
+                    + " | ".join(' '.join(l.split())[:70] for l in rows) + " · без них — " + (f"{empty[0]},{empty[1]}" if empty else "нет строки")
+                    + " · правка запроса «Тимлид:» посреди плеча — " + (f"{mid[0]},{mid[1]}" if mid else "нет строки"))
+    print("OPERATOR_WORD_OK" if all(sec) else "OPERATOR_WORD_FAIL", flush=True)
+    return all(sec)
+
+
+# ---------- раздел telefon (SPEC-v3.5 F9.4): копия клона после апгрейда — линты v3.5 и пропуск ответвления ----------
+LINTS35 = ("planka-early", "basis-judge", "spec-paths", "spec-review")
+HEADS35 = "checks/fixtures/telefon-spec11-transcript-heads.jsonl"
+
+
+def section_telefon():
+    """F9.4: копия клона telefon после bin/two-tier-upgrade кита — строки линтов v3.5 в bin/check-budget, BUDGET_OK, хук на ответвлении SPEC-11 — pass «not the phase session»;
+    кит v3.4 (OLD_KIT) — линтов нет, ответвление судится. Нет клона или не репо кита — `F9.4 offen`."""
+    clone = os.environ.get("TELEFON_CLONE", f"{TMP}/telefon-src")
+    if root != "kit" or not os.path.isdir(f"{clone}/.git") or not os.path.isfile(HEADS35):
+        print(f"F9.4 offen · {'не репо кита' if root != 'kit' else 'клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src (ветка main)'}", flush=True)
+        return True
+    h = harness_module()
+    fork = next(r for r in (json.loads(l) for l in open(HEADS35, encoding="utf-8")) if r["role"] == "fork")
+    old = old_tree(OLD_KIT, "kit")
+
+    def side(upgrader, branch):
+        d = fz_copy(clone)
+        rc_u, t_u = sh([upgrader, "--branch", branch, d], os.getcwd(), env=dict(os.environ))
+        rc_b, t_b = sh(["bin/check-budget"], d, env=dict(os.environ))
+        lints = sorted({m.group(2) for l in t_b.splitlines() for m in [re.match(r"(OK|WARN|FAIL) +([\w-]+):", l)] if m and m.group(2) in LINTS35})
+        tdir = tempfile.mkdtemp(prefix="f94-transcript-", dir=TMP)
+        tp = h.synth_transcript(f"{tdir}/{fork['session']}.jsonl", h.head_records(fork, open(f"{d}/docs/PROMPT.txt", encoding="utf-8").read()))
+        log = h.gate_run(d, tp, fork["session"], env_over={"SPEC_GATE": "active"})[3]
+        last = log[-1] if log else {}
+        ignored = sh(["git", "check-ignore", "-q", ".claude/phase-session.json"], d)[0] == 0
+        shutil.rmtree(d, ignore_errors=True)
+        return rc_u, tail(t_u)[:80], rc_b, (t_b.splitlines() or ["—"])[-1], lints, last.get("decision", "нет строки"), str(last.get("reason", ""))[:60], ignored
+    new = side(os.path.abspath(f"{root}/bin/two-tier-upgrade"), UPGRADE_BRANCH)
+    was = side(f"{old}/kit/bin/two-tier-upgrade", "kit-v3.4-probe") if old else None
+    ok = (new[0] == 0 and new[2] == 0 and new[3] == "BUDGET_OK" and len(new[4]) == 4 and new[5] == "pass" and new[6].startswith("not the phase session") and new[7]
+          and was is not None and was[0] == 0 and not was[4] and was[5] == "block")
+    probe("F9.4", ok, f"lints={len(new[4])},{len(was[4]) if was else '?'} hook={new[5]},{was[5] if was else '?'} · копия клона, bin/two-tier-upgrade --branch {UPGRADE_BRANCH} — rc {new[0]}; "
+                      f"bin/check-budget — rc {new[2]} «{new[3]}», строки линтов v3.5: {', '.join(new[4]) or 'нет'}; хук на ответвлении SPEC-11 ({HEADS35}) — {new[5]} «{new[6]}»; "
+                      f".claude/phase-session.json в .gitignore — {'да' if new[7] else 'нет'} · кит v3.4 ({OLD_KIT}) --branch kit-v3.4-probe — rc {was[0] if was else '?'}; "
+                      f"bin/check-budget — rc {was[2] if was else '?'} «{was[3] if was else '?'}», строк линтов v3.5 {len(was[4]) if was else '?'}; хук — {was[5] if was else '?'} «{was[6] if was else ''}»")
+    return ok
+
+
 def run_sections(names):
-    return all([{"frozen": section_frozen, "fenster": section_fenster, "graph": section_graph, "paar": section_paar, "mods": section_mods}[n]() for n in names])
+    return all([{"frozen": section_frozen, "fenster": section_fenster, "graph": section_graph, "paar": section_paar, "mods": section_mods,
+                 "handoff": section_handoff, "operator": section_operator, "telefon": section_telefon}[n]() for n in names])
 
 
 if want:
@@ -1599,9 +2076,7 @@ for n in names:
     say(not miss, n, f"контракт ({len(CONTRACT.get(n, []))} слов): нет — {', '.join(miss) or 'ничего'}")
 if "accept" in names:
     say("docs/STATUS.md" not in read(f"{sk}/accept/SKILL.md"), "accept", "STATUS не пишет: пути docs/STATUS.md в скилле нет")
-ev = read(f"{root}/.claude/agents/evaluator.md")
-tools = re.search(r"^tools:(.*)$", ev, re.M).group(1).strip()
-say("Write" not in tools and "Edit" not in tools and "REVIEW.md" in ev, "evaluator", f"tools {tools}; формат REVIEW.md {'есть' if 'REVIEW.md' in ev else 'нет'}")
+say(not os.path.exists(f"{root}/.claude/agents/evaluator.md"), "evaluator", f"{root}/.claude/agents/evaluator.md — {'есть' if os.path.exists(f'{root}/.claude/agents/evaluator.md') else 'нет: приёмка — /verify-phase на Opus (SPEC-v3.5 F8.4)'}")
 wf = sorted(os.listdir(f"{root}/.claude/workflows")) if os.path.isdir(f"{root}/.claude/workflows") else []
 say(wf == ["verify-phase.js"], "workflows", f"{root}/.claude/workflows: {', '.join(wf) or 'нет'} (ждём verify-phase.js)")
 vp = f"{root}/bin/verify-phase"
@@ -1623,8 +2098,8 @@ if root == "kit":
     same = all(rd[k] == kd[k] for k in set(rd) & set(kd) - {"owner"} - V33_CHANGED)
     delta = sorted(set(kd) - set(rd)) + sorted(ko - ro) + [f"−{x}" for x in sorted(set(rd) - set(kd))] + [f"−{x}" for x in sorted(ro - ko)]
     delta += [f"{k} {rd[k]}→{kd[k]}" for k in sorted(V33_CHANGED & set(rd) & set(kd)) if rd[k] != kd[k]]
-    say(same and set(kd) - set(rd) <= V32_KEYS | V33_KEYS and set(rd) - set(kd) <= V32_RETIRED | V34_RETIRED and ko - ro <= V32_OWNER | V34_OWNER and ro - ko <= V32_RETIRED | {".claude/toolgate.yaml"}, "budgets",
-        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2–v3.4 для тимлида: {', '.join(delta) or 'нет'}")
+    say(same and set(kd) - set(rd) <= V32_KEYS | V33_KEYS | V35_KEYS and set(rd) - set(kd) <= V32_RETIRED | V34_RETIRED and ko - ro <= V32_OWNER | V34_OWNER and ro - ko <= V32_RETIRED | {".claude/toolgate.yaml"}, "budgets",
+        f"defaults budgets.json = kit/budgets.json, кроме названной дельты v3.2–v3.5 для тимлида: {', '.join(delta) or 'нет'}")
     lim = kd.get("prompt_chars", kd.get("goal_chars"))
     owned = {"docs/PROMPT.txt", "docs/GOAL.txt"} & ko
     say(kd.get("abide_rules", 0) <= 8 and lim is not None and lim <= 4000 and owned and {".claude/spec-gate.json", ".abide/rubric.json"} <= ko and ".claude/toolgate.yaml" not in ko,
@@ -1638,12 +2113,12 @@ if root == "kit" and os.path.isdir("mods/handoff"):  # v3.2, F6: мод handoff 
         hand.append(bool(ok))
         print(f"{'OK  ' if ok else 'FAIL'} {item}: {msg}")
     row = next((l for l in read("kit/docs/PROCESS.template.md").splitlines() if "`handoff@two-tier-mods`" in l), "")
-    hsay(row and "| да |" in row and "70 %" in row and "/clear" in row, "handoff", f"строка шаблона Environment: {'да, 70 %, /clear' if row else 'нет'}")
+    hsay(row and "| да |" in row and "`handoff_threshold_pct`" in row and "/clear" in row, "handoff", f"строка шаблона Environment: {'да, порог handoff_threshold_pct, /clear' if row else 'нет'}")
     ls = json.loads(read("kit/.claude/launch.settings.json"))
-    opts = ls.get("pluginConfigs", {}).get("handoff@two-tier-mods", {}).get("options")  # SPEC-v3.2 F6: 70 % и /clear — в pluginConfigs, не умолчания мода
+    opts = ls.get("pluginConfigs", {}).get("handoff@two-tier-mods", {}).get("options")  # SPEC-v3.5 F1: порог — budgets.json, в pluginConfigs его нет; /clear — опция
     on = ls.get("enabledPlugins", {}).get("handoff@two-tier-mods") is True
-    hsay(on and opts and opts.get("threshold") == 70 and opts.get("autoClear") is True, "handoff",
-         f"launch settings кита: включён — {on}; pluginConfigs: " + (f"threshold {opts.get('threshold')}, autoClear {opts.get('autoClear')}, handoffDir {opts.get('handoffDir')}"
+    hsay(on and opts and "threshold" not in opts and opts.get("autoClear") is True, "handoff",
+         f"launch settings кита: включён — {on}; pluginConfigs: " + (f"threshold {opts.get('threshold', 'нет — budgets.json')}, autoClear {opts.get('autoClear')}, handoffDir {opts.get('handoffDir')}"
                                                                      if opts else "записи handoff@two-tier-mods нет"))
     hsay("handoffs/" in read(".gitignore").splitlines(), "handoff", f".gitignore: handoffs/ — {'есть' if 'handoffs/' in read('.gitignore').splitlines() else 'нет'}")
     os.makedirs("/tmp/two-tier-v3", exist_ok=True)
@@ -1768,5 +2243,8 @@ if shutil.which("claude"):
 else:
     print("--   window: claude нет в PATH (CI) — живого хода нет")
 print("WINDOW_OK" if all(win) else "WINDOW_FAIL")
-sections_ok = run_sections(SECTIONS)
+skip = [s for s in os.environ.get("CHECK_KIT_SKIP", "").split(",") if s in SECTIONS]  # гейт: живой раздел, чей маркер он берёт из evidence
+for s in skip:
+    print(f"--   {s}: пропущен (CHECK_KIT_SKIP) — маркер раздела берёт гейт из evidence", flush=True)
+sections_ok = run_sections([s for s in SECTIONS if s not in skip])
 sys.exit(0 if kit_ok and all(hand) and all(win) and sections_ok else 1)

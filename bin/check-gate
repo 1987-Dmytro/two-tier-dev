@@ -36,7 +36,7 @@ case "${0##*/} $*" in
   "gate-test bin/check-spend --self-test") echo "TEST_OK bin/check-spend --self-test" ;;
   "jev --self-test") echo JEV_OK ;;
   "two-tier-upgrade --self-test") echo UPGRADE_OK ;;
-  "check-docs ") printf '%s\n' "F8.1 docs=4 заглушка" "F8.2 templates=OK заглушка" DOCS_OK ;;
+  "check-docs ") printf '%s\n' "v3.4-F8.1 docs=4 заглушка" "v3.4-F8.2 templates=OK заглушка" DOCS_OK ;;
   "claude plugin validate "*) echo "Validation passed" ;;
   "claude plugin test "*) printf '(pass) %s\n' @NAMES@; printf ' %s\n' "1 pass" "0 fail" ;;
 esac | grep -vxF "${STUB_DROP:-@}"
@@ -140,7 +140,7 @@ noarch = f"{TOP}/fixture-noarch"
 shutil.copytree(F, noarch, symlinks=True)
 os.remove(f"{noarch}/docs/archive/gate-v3.3/gate-v3.3")
 with ThreadPoolExecutor() as ex:  # гейты рядом: один идёт 10–20 с
-    runs = [ex.submit(stubbed, F), ex.submit(stubbed, F, STUB_DROP="JEV_OK"), ex.submit(stubbed, stray), ex.submit(stubbed, F, STUB_OFFEN="F6.3 offen · заглушка"),
+    runs = [ex.submit(stubbed, F), ex.submit(stubbed, F, STUB_DROP="JEV_OK"), ex.submit(stubbed, stray), ex.submit(stubbed, F, STUB_OFFEN="v3.4-F6.3 offen · заглушка"),
             ex.submit(stubbed, noarch), ex.submit(stubbed, F, TELEFON_CLONE=f"{TOP}/no-clone")]
 (rc, o, text), (rc2, o2, text2), (rc3, o3, text3), (rc4, o4, text4), (rc5, o5, text5), (rc6, o6, text6) = [r.result() for r in runs]
 say(rc == 0 and o[-1:] == ["GATE_OK"] and any(l.startswith("F8.5 leer=OK telefon=OK") for l in o), "заглушки, все маркеры", text)

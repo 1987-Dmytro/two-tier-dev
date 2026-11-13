@@ -51,7 +51,7 @@ AMEND = re.compile(rf"Поправка[ \t]+[^\s:<>][^:\n<>]*:[ \t]*слово �
 EVIDENCE = re.compile(r"(?<![\w./-])docs/evidence/[^\s`,;()]+")  # v3.4, F2.1: путь в ячейке «измерено у нас»; ../docs/evidence/ — уже не он
 PAIR_LINE = re.compile(r"^PAIR_(?:OK|FAIL) diff_p50=-?\d+ diff_p95=-?\d+", re.M)  # v3.4, F5.2: итог checks/paired_stand.sh в файле звена вендора
 DEPLOY_LINE = re.compile(r"\b(?:DEPLOY_LINIE=1|linie=1)\b")  # v3.4, F7.1: токены шаблона деплоя судят всегда; слова — список deploy_words файла тимлида (решение 398)
-LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key", "risk-tier")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
+LINT_RULES = ("planka-source", "scope-growth", "planken-inline", "planken-key", "risk-tier", "planka-early", "basis-judge", "spec-paths", "spec-review", "owner")  # строка BUDGET_<статус> <правило> — для гейта и тимлида
 
 
 def read(p):
@@ -113,8 +113,21 @@ def load_budgets(path="budgets.json"):
             new = {}
         if new:
             b.update(new)
+            KIT_NEW.update(new)
             out.append(("WARN", "budgets", f"ключей кита нет в budgets.json — {', '.join(sorted(new))}: взяты из {kit}; вносит тимлид"))
     return b, out
+
+
+KIT_NEW = set()  # ключи кита, взятые load_budgets из kit/budgets.json: их нет в budgets.json корня
+
+
+def rule_spec_copy(b):
+    """SPEC-v3.5 F9.1: копия скилла team-lead-spec у тимлида (docs/drafts/team-lead-spec.md) — не длиннее team_lead_spec_copy_chars.
+    Нет ключа или файла — строки нет; ключ взят из кита, а не из budgets.json корня, — WARN: ключ и ужатую копию вносит тимлид."""
+    f, key = "docs/drafts/team-lead-spec.md", "team_lead_spec_copy_chars"
+    if key not in b or not os.path.isfile(f):
+        return []
+    return [check(key, len(read(f)), b[key], f"{f}{', ключ кита — вносит тимлид' if key in KIT_NEW else ''}", "WARN" if key in KIT_NEW else "FAIL")]
 
 
 def phase():
@@ -489,17 +502,39 @@ def rule_owner(b):
         return out + [("OK", "owner", "нет main/origin/main или коммитов — lint коммитов пропущен")]
     # -z: пути как есть — без кавычек и \-escape не-ASCII (core.quotePath), каждый до NUL; \x01 — начало коммита
     log = git("log", "-z", "--no-merges", "--no-renames", "--name-only", "--format=%x01%h %s", f"{base}..HEAD").stdout
-    tl = []
+    tl, op = [], []
     for chunk in log.split("\x01")[1:]:
         head, _, names = chunk.partition("\0")
         sha, _, subj = head.partition(" ")
         own = owner_at(f"{sha}^", owner)
-        hit = [p for p in (n.lstrip("\n") for n in names.split("\0")) if p and is_tl(p, own)]
+        paths = [p for p in (n.lstrip("\n") for n in names.split("\0")) if p]
+        hit = [p for p in paths if is_tl(p, own)]
         if subj.startswith("Тимлид:"):
             tl.append(f"{sha} {subj}")
+        elif subj.startswith("Оператор:"):  # SPEC-v3.5 F6: слово оператора — только пути окна доводки SPEC на родителе коммита
+            win = window_at(f"{sha}^")
+            out_ = [p for p in paths if not (win and any(p == w or (w.endswith("/") and p.startswith(w)) for w in win[0]))]
+            if out_:
+                out.append(("FAIL", "owner", f"{sha} «{subj}» — вне окна доводки SPEC §3{'' if win else ' (окна нет)'}: {', '.join(out_)}"))
+            else:
+                op.append(f"{sha} {subj}")
         elif hit:
             out.append(("FAIL", "owner", f"{sha} «{subj}» меняет файлы тимлида без «Тимлид:»: {', '.join(hit)}"))
-    return out + [("OK", "owner", f"коммитов «Тимлид:» после merge-base {base[:7]} — {len(tl)}: {'; '.join(tl) or '—'}")]
+    ops = f"; «Оператор:» в окне — {len(op)}: {'; '.join(op)}" if op else ""
+    return out + [("OK", "owner", f"коммитов «Тимлид:» после merge-base {base[:7]} — {len(tl)}: {'; '.join(tl) or '—'}{ops}")]
+
+
+WINDOW = re.compile(r"Окно доводки:\s*открыто\s+(.*?)\s*·\s*запас диффа\s+(\d+)")  # SPEC-v3.5 F6: строка §3 — её же читают bin/operator-word и хук коммита
+
+
+def window_at(rev):
+    """([пути], запас) окна доводки §3 SPEC фазы в rev или None."""
+    m = re.search(r"^Read first:\s*([^,\s]+)", git("show", f"{rev}:docs/PROMPT.txt").stdout, re.M)
+    text = git("show", f"{rev}:{m.group(1)}").stdout if m and re.fullmatch(r"(.*/)?SPEC-[^/]+\.md", m.group(1)) else ""
+    sec3 = re.search(r"^## 3\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    w = WINDOW.search(sec3.group(1)) if sec3 else None
+    paths = re.findall(r"`([^`\s]+)`", w.group(1)) if w else []
+    return (paths, int(w.group(2))) if paths else None
 
 
 def rule_abide(b):
@@ -530,7 +565,187 @@ def rule_frozen(b):
     return [("FAIL" if r.returncode else "OK", "frozen-paths", ((r.stdout + r.stderr).strip().splitlines() or ["судья без вывода"])[-1])]
 
 
-RULES = [rule_sizes, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_risk, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide, rule_frozen]
+# ---------- SPEC-v3.5 F4, F5, F7: линты выдачи ----------
+REPORT_ITEM = re.compile(r"\s*отч[её]т:", re.I)  # F4: пункт ранней планки — отчёт: текст пункта начинается словом «отчёт:»
+BASIS = re.compile(r"Судьи деплоя и регрессии, изменённые фазой, на базе:\s*(?:\d+\s+из\s+\d+|нет)(?![\w<])")  # F5.1: строка §5 SPEC
+NEW_PATHS = re.compile(r"^[ \t]*-?[ \t]*\**Новые пути:\**(.*)$", re.M)  # F5.2: строка §1 SPEC — пути, которых ещё нет в HEAD
+BRANCH_FORM = re.compile(r"\bbranch\s+`?([\w./-]+)`?\s+(?:only|from)\b", re.I)  # форма, которую читает /phase (mods/phase-start, branchOf)
+VERDICT_PIN = re.compile(r"^spec:\s*(\S+)\s*@\s*([0-9a-f]{12})\s*$")  # F7: третья строка вердикта свежего проверяющего
+
+
+def issue_weight(spec, prompt):
+    """FAIL до выдачи; выданная SPEC, идущая фаза или evidence этой SPEC в HEAD (фаза была: так её видно и после слияния и правки тимлида — копия
+    клона telefon, SPEC-11) — WARN (правит тимлид); обрезанная история — WARN. Линты выдачи SPEC-v3.5: planka-early, basis-judge, spec-paths."""
+    if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
+        return "WARN", " (история git обрезана: выдана ли SPEC — не определить)"
+    if issued(spec, prompt) or in_flight(spec, prompt):
+        return "WARN", " (SPEC уже выдана: правит тимлид)"
+    ev = spec_evidence_in_head(spec)
+    return ("WARN", f" (фаза была: evidence этой SPEC в HEAD — {ev}; правит тимлид)") if ev else ("FAIL", "")
+
+
+def landing_tables(text):
+    """Таблицы посадки — [(заголовок, [(строка, ячейка «измерено у нас»)])]: заголовок — непустые строки над шапкой до пустой и сама шапка; нет их —
+    абзац над пустыми строками (раскладка шаблона: заголовок, пустая строка, таблица), если он не пункт списка и не таблица; разделитель и таблица в ``` — не строки."""
+    out, lines, fence, i = [], text.splitlines(), False, 0
+    split = lambda l: [c.strip() for c in re.split(r"(?<!\\)\|", re.sub(r"^\||(?<!\\)\|$", "", l.strip()))]
+    while i < len(lines):
+        l = lines[i]
+        if re.match(r"\s*```", l):
+            fence = not fence
+        if fence or not l.lstrip().startswith("|") or "измерено у нас" not in l.lower():
+            i += 1
+            continue
+        col = next(k for k, c in enumerate(split(l)) if "измерено у нас" in c.lower())
+        j, head = i - 1, [l]
+        while j >= 0 and lines[j].strip() and not lines[j].lstrip().startswith("|") and not lines[j].startswith("#"):
+            head.insert(0, lines[j])
+            j -= 1
+        if len(head) == 1 and j >= 0 and not lines[j].strip():  # SPEC-v3.5 F4.1: заголовок через пустую строку — как в шаблоне и в SPEC-11
+            k = j
+            while k >= 0 and not lines[k].strip():
+                k -= 1
+            para = []
+            while k >= 0 and lines[k].strip() and not lines[k].startswith("#") and not lines[k].lstrip().startswith(("```", "~~~")):  # блок кода — не заголовок
+                para.insert(0, lines[k])
+                k -= 1
+            if para and not any(re.match(r"\s*([-*+]\s|\d+[.)]\s|\|)", x) for x in para):
+                head = para + head
+        rows, i = [], i + 1
+        while i < len(lines) and lines[i].lstrip().startswith("|"):
+            cs = split(lines[i])
+            if not all(c and not c.strip("-:") for c in cs):
+                rows.append((lines[i], cs[col] if col < len(cs) else ""))
+            i += 1
+        out.append(("\n".join(head), rows))
+    return out
+
+
+def rule_planka_early(b):
+    """SPEC-v3.5 F4: пункт, связанный с ранней планкой (его id или ключ `planken:` в заголовке или строке её таблицы посадки, ячейка — «ранняя»), — отчёт:
+    начинается словом «отчёт:» и маркер фичи от него не зависит. Иначе FAIL до выдачи, WARN после."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec, prompt = ph[2], ph[4]
+    text = read(spec)
+    items = {m.group(1): m.group(2) for l in text.splitlines() for m in [ITEM.match(l)] if m}
+    keys = {i: set(KEYREF.findall(t)) for i, t in items.items()}
+    early, bad = 0, []
+    for head, rows in landing_tables(text):
+        for raw, cell in rows:
+            if not re.match(r"[^\w<]*ранняя\b", cell, re.I):
+                continue
+            early += 1
+            where = f"{head}\n{raw}"
+            refs = set(KEYREF.findall(where))
+            bad += [i for i in items if (re.search(rf"(?<![\w.]){re.escape(i)}(?!\d)", where) or keys[i] & refs) and not REPORT_ITEM.match(items[i]) and i not in bad]
+    if not bad:
+        return [("OK", "planka-early", f"{spec}: ранних планок {early}, связанных пунктов без «отчёт:» — нет")]
+    weight, note = issue_weight(spec, prompt)
+    return [(weight, "planka-early", f"{' '.join(bad)}: пункт ранней планки судит маркер фичи — текст не начинается словом «отчёт:» ({spec}){note}")]
+
+
+def rule_basis(b):
+    """SPEC-v3.5 F5.1: §5 SPEC называет судей деплоя и регрессии, изменённых фазой и прогнанных на базе: «… на базе: <n из m | нет>»."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec, prompt = ph[2], ph[4]
+    sec5 = re.search(r"^## 5\.[^\n]*\n(.*?)(?=^## |\Z)", read(spec), re.S | re.M)
+    if sec5 and BASIS.search(sec5.group(1)):
+        return [("OK", "basis-judge", f"{spec}: строка «Судьи деплоя и регрессии, изменённые фазой, на базе:» в §5 — есть")]
+    weight, note = issue_weight(spec, prompt)
+    return [(weight, "basis-judge", f"{spec}: в §5 нет строки «Судьи деплоя и регрессии, изменённые фазой, на базе: <n из m | нет>»{note}")]
+
+
+def path_tokens(text):
+    """Пути и цели make в обратных кавычках: первое слово токена; `make <цель>` — с остатком (флаг после цели — ошибка)."""
+    for tok in re.findall(r"`([^`\n]+)`", text):
+        words = tok.split()
+        if words and words[0] == "make" and len(words) > 1:
+            yield ("make", words[1], words[2:])
+        elif words:
+            yield ("path", re.sub(r"[:#]\d[\w,.-]*$", "", words[0]).rstrip(".,;:»)"), [])
+
+
+def rule_spec_paths(b):
+    """SPEC-v3.5 F5.2–F5.4: путь или `make <цель>` в обратных кавычках SPEC и стартового запроса существует в HEAD или назван в строке «Новые пути:» §1. Путь — первое
+    слово токена, если оно начинается с каталога верхнего уровня HEAD; слэш-команды, голые имена, пути вне репо, шаблоны с <…> и *, игнорируемое git — не судятся.
+    Запрос называет ветку формой /phase: `branch <b> only` или `branch <b> from <c>`."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec, prompt = ph[2], ph[4]
+    stext, ptext = read(spec), read(prompt)
+    tops = {n for n in git("ls-tree", "--name-only", "-d", "HEAD").stdout.split("\n") if n}
+    new = {w for line in NEW_PATHS.findall(stext) for kind, w, _ in path_tokens(line) if kind == "path"}
+    makefile = git("show", "HEAD:Makefile").stdout
+    targets = set(re.findall(r"^([A-Za-z0-9_.-]+):", makefile, re.M))
+    in_head = lambda p: git("cat-file", "-e", f"HEAD:{p.rstrip('/')}").returncode == 0
+    ignored = lambda p: git("check-ignore", "-q", "--no-index", p).returncode == 0
+    has_head = git("rev-parse", "-q", "--verify", "HEAD").returncode == 0  # без HEAD (пример шаблонов вне git) пути и цели не судятся
+    bad, seen = [], 0  # (что, почему)
+    for src, text in ((spec, stext), (prompt, ptext)):
+        for kind, w, rest in path_tokens(text):
+            if kind == "make":
+                if "<" in w or not has_head:
+                    continue
+                seen += 1
+                if w not in targets:
+                    bad.append((f"make {w}", f"{src}: цели нет в Makefile HEAD"))
+                elif rest and rest[0].startswith("-"):
+                    bad.append((f"make {w} {rest[0]}", f"{src}: make не принимает флаг после цели"))
+                continue
+            if "/" not in w or w.split("/", 1)[0] not in tops or re.search(r"[<*?]", w):
+                continue
+            seen += 1
+            if not (in_head(w) or w in new or w.rstrip("/") in new or ignored(w)):
+                bad.append((w, f"{src}: нет в HEAD и в строке «Новые пути:»"))
+    if not BRANCH_FORM.search(ptext):
+        bad.append(("ветка", f"{prompt}: не названа формой /phase — «branch <b> only» или «branch <b> from <c>»"))
+    if not bad:
+        return [("OK", "spec-paths", f"{spec}, {prompt}: путей и целей make {seen}, все в HEAD, в «Новые пути:» или вне суда; ветка — формой /phase")]
+    weight, note = issue_weight(spec, prompt)
+    what = list(dict.fromkeys(w for w, _ in bad))
+    why = list(dict.fromkeys(f"{w} ({r})" for w, r in bad))
+    return [(weight, "spec-paths", f"{', '.join(what)}: {'; '.join(why)}{note}")]
+
+
+def spec_evidence_in_head(spec):
+    """В HEAD есть evidence этой SPEC — файл docs/evidence/*-result.txt с первой строкой `spec: SPEC-<n>`: фаза начата (F7.3)."""
+    want = "spec: " + re.sub(r"\.md$", "", os.path.basename(spec))
+    for n in git("ls-tree", "--name-only", "HEAD", "docs/evidence/").stdout.split("\n"):
+        if n.endswith("-result.txt") and git("show", f"HEAD:{n}").stdout.lstrip("﻿").split("\n", 1)[0].strip() == want:
+            return n
+    return None
+
+
+def rule_spec_review(b):
+    """SPEC-v3.5 F7: SPEC из запроса прочитана свежим проверяющим до «принято» — в docs/reviews/ вердикт PASS с её пином (первые три строки файла: вердикт, счёт,
+    `spec: <путь> @ <12 знаков git hash-object>`). Нет PASS с этим пином (NEEDS_WORK, пин другой версии, коммит после запроса — не замена) → FAIL; evidence этой SPEC в HEAD → WARN."""
+    ph = phase()
+    if not ph or not ph[2] or not os.path.isfile(ph[2]):
+        return []
+    spec = ph[2]
+    pin = pin_of(read(spec))
+    found = []
+    for p in sorted(glob.glob("docs/reviews/*.md")):
+        head = read(p).lstrip("﻿").split("\n")[:3]
+        m = VERDICT_PIN.match(head[2].strip()) if len(head) == 3 else None
+        verdict = head[0].split()[0] if head and head[0].split() else ""
+        if m and verdict in ("PASS", "NEEDS_WORK") and os.path.normpath(m.group(1)) == os.path.normpath(spec):
+            found.append((p, verdict, m.group(2)))
+    if any(v == "PASS" and pn == pin for _, v, pn in found):
+        return [("OK", "spec-review", f"{spec} @ {pin}: PASS свежего проверяющего — {next(p for p, v, pn in found if v == 'PASS' and pn == pin)}")]
+    why = ("; ".join(f"{p}: {v} @ {pn}" + ("" if pn == pin else " — пин другой версии") for p, v, pn in found) or "вердикта с её пином в docs/reviews/ нет")
+    ev = spec_evidence_in_head(spec)
+    weight, note = ("WARN", f" (фаза начата: evidence этой SPEC в HEAD — {ev})") if ev else ("FAIL", "")
+    return [(weight, "spec-review", f"{spec} @ {pin}: нет PASS свежего проверяющего с этим пином — {why}{note}")]
+
+
+RULES = [rule_sizes, rule_spec_copy, rule_dollar, rule_prompt, rule_spec, rule_planka, rule_risk, rule_scope, rule_planken, rule_plan, rule_review, rule_intent, rule_owner, rule_abide, rule_frozen,
+         rule_planka_early, rule_basis, rule_spec_paths, rule_spec_review]
 
 
 def run(b):
@@ -545,14 +760,15 @@ def report(out):
         print(f"{s:4} {r}: {m}")
     for s, r, m in out:
         if r in LINT_RULES and s != "OK":  # v3.4, F2: строка линта для гейта и тимлида; scope-growth называет фичи
-            print(f"BUDGET_{s} {r}" + (" " + m.split(":", 1)[0] if r in ("scope-growth", "risk-tier") else ""))
+            print(f"BUDGET_{s} {r}" + (" " + m.split(":", 1)[0] if r in ("scope-growth", "risk-tier", "planka-early", "spec-paths") else ""))
     fails = sum(s == "FAIL" for s, _, _ in out)
     print(f"BUDGET_FAIL: {fails}" if fails else "BUDGET_OK")
     return 1 if fails else 0
 
 
 # ---------- self-test: каждая фикстура — свой временный проект в /tmp/two-tier-v3 ----------
-GIT_ENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
+# SPEC-v3.5 F6.4: фикстуры, играющие тимлида, зовут git в окружении своей роли — без CLAUDECODE сессии Claude Code
+GIT_ENV = dict({k: v for k, v in os.environ.items() if k != "CLAUDECODE"}, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
                GIT_AUTHOR_EMAIL="t@example.invalid", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
 
 
@@ -905,7 +1121,7 @@ def lints():
     plain_rot = plain_fail != "нет строки" and "BUDGET_FAIL planka-source" in p_red[1] and p_red[0] == 1
     plain_gruen = any(l.startswith("OK   planka-source") for l in p_good[1]) and "BUDGET_FAIL planka-source" not in p_good[1]
     rot, gruen = rot and fail_line == "BUDGET_FAIL planka-source" and plain_rot, gruen and plain_gruen
-    emit("F2.1", rot and gruen and state,
+    emit("v3.4-F2.1", rot and gruen and state,
          f"rot={'OK' if rot else 'нет'} gruen={'OK' if gruen else 'нет'} · без файла — {r1[0]}: «{r1[1]}» → «{fail_line}» · bin/check-budget на фикстуре — rc {p_red[0]} «{plain_fail}…» и "
          f"BUDGET_FAIL planka-source — {'есть' if 'BUDGET_FAIL planka-source' in p_red[1] else 'нет'}; с файлом — {'OK planka-source' if plain_gruen else 'нет'} · красные: {rot_text} · зелёные: {gruen_text} · выдача: {state_text}")
     # F2.2
@@ -955,7 +1171,7 @@ def lints():
     ])
     p_scope = plain(base, grown())
     named = "BUDGET_FAIL scope-growth F2" in p_scope[1]
-    emit("F2.2", ohne and mit and named and without[1].startswith("F2:") and two[1].startswith("F3:"),
+    emit("v3.4-F2.2", ohne and mit and named and without[1].startswith("F2:") and two[1].startswith("F3:"),
          f"ohne={without[0]} mit={withl[1].rsplit('поправок: ', 1)[-1] if 'поправок: ' in withl[1] else '?'} · без строки — «{without[1]}»; со строкой — «{withl[1]}» · "
          f"bin/check-budget на фикстуре — {'BUDGET_FAIL scope-growth F2' if named else 'нет строки BUDGET_FAIL scope-growth F2'}; две новые, одна строка — «{two[1][:20]}» · FAIL: {ohne_text} · OK: {mit_text}")
     # F2.3
@@ -999,7 +1215,7 @@ def lints():
     ])
     p_inl = plain({**pr, **pfile(K), "docs/SPEC-1.md": top + item(f"{key}, p95 3300 мс")})
     warned = "BUDGET_WARN planken-inline" in p_inl[1]
-    emit("F2.3", inline and fine and keyred and warned,
+    emit("v3.4-F2.3", inline and fine and keyred and warned,
          f"inline={inl[0]} ohne={nof[0]} · число рядом — «{inl[1]}»; нет файла — «{nof[1]}» · bin/check-budget на фикстуре — {'BUDGET_WARN planken-inline' if warned else 'нет строки BUDGET_WARN planken-inline'} · "
          f"WARN: {inline_text} · OK: {fine_text} · FAIL: {keyred_text}")
     # F2.4
@@ -1045,9 +1261,222 @@ def lints():
         ("нет права на запуск, с меткой", 1, "TEST_FAIL tests/t.sh rc=127", test_run({"flaky": {"tests/t.sh": "решение"}}, argv=("tests/t.sh",))),
         ("rc 126, с меткой", 1, "TEST_FAIL bash tests/t.sh rc=126", test_run(label, "exit 126\n")),
     ])
-    emit("F2.4", flaky and block,
+    emit("v3.4-F2.4", flaky and block,
          f"flaky={'OK' if flaky else 'нет'} ohne={'block' if block else 'нет'} · с меткой, красный — rc {fl[0]} «{fl[1]}»; без метки — rc {no[0]} «{no[1]}» · FLAKY и зелёные: {flaky_text} · блок, rc 1: {block_text}")
-    cur = rule_planka(dict(b)) + rule_scope(dict(b)) + rule_planken(dict(b))
+    # ── SPEC-v3.5: линты выдачи F4, F5, F7 ──
+    kroot = "kit" if os.path.isdir("kit/docs") else "."
+
+    def tmpl(edits=()):
+        """`--templates` на копии шаблонов кита во /tmp/two-tier-v3, правки — (файл, было, стало): красная сторона — шаблон без строки."""
+        d = tempfile.mkdtemp(prefix="check-budget-tmpl-", dir=TMP)
+        try:
+            for rel in dict.fromkeys(list(TEMPLATES) + list(CONTRACT) + ["budgets.json"]):
+                if os.path.isfile(f"{kroot}/{rel}"):
+                    write(os.path.join(d, kroot, rel), read(f"{kroot}/{rel}"))
+            for rel, a, z in edits:
+                q = os.path.join(d, kroot, rel)
+                txt = read(q)
+                if a not in txt:
+                    return None, [f"в {rel} нет строки «{a[:40]}» — красную сторону не собрать"]
+                write(q, txt.replace(a, z))
+            r = subprocess.run([sys.executable, me, "--templates"], cwd=d, capture_output=True, text=True)
+            return r.returncode, r.stdout.splitlines()
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def tline(res, rule):
+        return next((" ".join(l.split()) for l in res[1] if re.match(rf"(OK|WARN|FAIL)\s+{rule}:", l)), "нет строки")
+
+    def tred(res, rel, phrase):  # красная: rc 1, один FAIL — строка contract называет файл и фразу
+        line = tline(res, "contract") if res[0] is None else next((" ".join(l.split()) for l in res[1] if l.startswith("FAIL contract") and rel in l), "нет строки")
+        return res[0] == 1 and phrase in line and "BUDGET_FAIL: 1" in res[1], line
+
+    t_green = tmpl()
+    contract_ok = lambda rel: t_green[0] == 0 and any(l.startswith("OK   contract") and rel in l for l in t_green[1])
+    vor = f"--templates шаблонов {kroot}/ — rc {t_green[0]}"
+
+    def sp(text, files={}, commits=(), prompt=None):  # фикстура линтов выдачи: git с HEAD на коммите запроса, правило на SPEC-1
+        return {"docs/PROMPT.txt": prompt if prompt is not None else "Read first: docs/SPEC-1.md\nBranch phase-1 only.\n", "docs/SPEC-1.md": text, **files}, list(commits)
+    lr = lambda rule, text, files={}, commits=(), prompt=None: run_side(*sp(text, files, commits, prompt), rule)
+
+    def plain_line(text, rule, files={}, commits=()):  # настоящий скрипт на фикстуре: строка BUDGET_ правила
+        fs, cs = sp(text, files, commits)
+        rc, lines = plain(fs, cs)
+        return rc, next((l for l in lines if l.startswith(f"BUDGET_FAIL {rule}") or l.startswith(f"BUDGET_WARN {rule}")), "нет строки")
+
+    # F4 — ранняя планка: форма F58.1 SPEC-11 (заголовок и строка таблицы называют пункт, пункт ссылается на ключ planken:)
+    def early(item, head="Все строки «ранняя»: судят пара F58.1 и A/B F58.4.", row="ранняя — пара F58.1", cell=None, title="выигрыш пары p50 ≥ 500 мс", gap="\n\n"):
+        # gap — между заголовком и таблицей: пустая строка, как в шаблоне и в SPEC-11 (по умолчанию), или вплотную
+        return ("# SPEC-1\n\n## 2. Фичи\n- **F58 Пара** · готово: F58.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n"
+                f"  - `F58.1` {item}\n\n{head}{gap}| звено | измерено у нас |\n|---|---|\n| {title} | {cell if cell is not None else row} |\n\n## 3. Инварианты\n")
+    judged = "пара p50: выигрыш ≥ 500 мс (`planken:pair.delay_gain_p50_ms`) — маркер `X_OK`"
+    report_item = "отчёт: пара p50 — выигрыш в мс (`planken:pair.delay_gain_p50_ms`) печатается строкой `F58.1 <мс>`; маркер `X_OK` от него не зависит"
+    file_cell = "`docs/evidence/pair.txt`, n=12, p50 520, p95 610"
+    pe = lambda text, files={}, commits=(): lr(rule_planka_early, text, files, commits)
+    f41_rows = [
+        ("форма F58.1", "FAIL", "F58.1:", pe(early(judged))),
+        ("только ключ planken: в строке", "FAIL", "F58.1:", pe(early(judged, head="Пара одного часа.", row="ранняя (`planken:pair.delay_gain_p50_ms`)"))),
+        ("только id в заголовке (через пустую строку)", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1.", row="ранняя"))),
+        ("только id в заголовке вплотную", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1.", row="ранняя", gap="\n"))),
+        ("заголовок жирным, как «Таблица A» SPEC-11", "FAIL", "F58.1:", pe(early(judged, head="**Таблица A — пара F58.1, раз в час**", row="ранняя"))),
+        ("через две пустые строки", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1.", row="ранняя", gap="\n\n\n"))),
+        ("заголовок в две строки", "FAIL", "F58.1:", pe(early(judged, head="Таблица посадки: судит пара F58.1,\nраз в час.", row="ранняя"))),
+        ("« - » внутри заголовка", "FAIL", "F58.1:", pe(early(judged, head="Судит пара F58.1 - раз в час.", row="ранняя"))),
+        ("выдана и идёт", "WARN", "SPEC уже выдана", pe(early(judged), commits=[("F58.1: работа", {"src/x.py": "x\n"}, [])])),
+    ]
+    rot41, rot41_text = judge(f41_rows)
+    rc41, line41 = plain_line(early(judged), "planka-early")
+    rot41 = rot41 and rc41 == 1 and line41.startswith("BUDGET_FAIL planka-early F58.1")
+    emit("F4.1", rot41, f"rot={'FAIL' if rot41 else 'нет'} · bin/check-budget на фикстуре формы F58.1 — rc {rc41} «{line41}» · {rot41_text}")
+    f42_rows = [
+        ("пункт с «отчёт:»", "OK", "связанных пунктов без «отчёт:» — нет", pe(early(report_item))),
+        ("«Отчёт:» с заглавной", "OK", "связанных пунктов без «отчёт:» — нет", pe(early("О" + report_item[1:]))),
+        ("планка с файлом распределения", "OK", "ранних планок 0", pe(early(judged, head="Судит пара F58.1.", cell=file_cell))),
+        ("ранняя без связи с пунктом", "OK", "ранних планок 1", pe(early(judged, head="Окно звонков.", row="ранняя"))),
+        ("пункт списка над таблицей — не заголовок", "OK", "ранних планок 1", pe(early(judged, head="- пара F58.1 — пункт списка", row="ранняя"))),
+        ("заголовок вплотную, абзац над ним через пустую — не заголовок", "OK", "ранних планок 1", pe(early(judged, head="Абзац: судит пара F58.1.\n\nОкно звонков.", row="ранняя", gap="\n"))),
+        ("пункт «1.»", "OK", "ранних планок 1", pe(early(judged, head="1. пара F58.1 — пункт списка", row="ранняя"))),
+        ("таблица над таблицей", "OK", "ранних планок 1", pe(early(judged, head="| звено | судья |\n|---|---|\n| y | F58.1 |", row="ранняя"))),
+        ("пункт с продолжением", "OK", "ранних планок 1", pe(early(judged, head="- пара F58.1 — пункт списка\n  продолжение пункта", row="ранняя"))),
+        ("пункт «*»", "OK", "ранних планок 1", pe(early(judged, head="* пара F58.1 — пункт списка", row="ранняя"))),
+        ("строка # над абзацем", "OK", "ранних планок 1", pe(early(judged, head="### Таблица посадки F58.1\nОкно звонков.", row="ранняя"))),
+        ("блок кода над таблицей", "OK", "ранних планок 1", pe(early(judged, head="```\nпара F58.1\n```", row="ранняя"))),
+    ]
+    ok42, ok42_text = judge(f42_rows)
+    emit("F4.2", ok42, f"otchet={'OK' if f42_rows[0][3][0] == 'OK' else f42_rows[0][3][0]} datei={'OK' if f42_rows[2][3][0] == 'OK' else f42_rows[2][3][0]} · {ok42_text}")
+    r43 = [tred(tmpl([("docs/SPEC.template.md", "Пункт ранней планки — отчёт", "Пункт ранней планки")]), "SPEC.template.md", "Пункт ранней планки — отчёт"),
+           tred(tmpl([("docs/PLAN.template.md", "Пункт ранней планки — отчёт", "Пункт ранней планки")]), "PLAN.template.md", "Пункт ранней планки — отчёт")]
+    v43 = contract_ok("SPEC.template.md") and contract_ok("PLAN.template.md")
+    emit("F4.3", v43 and all(r for r, _ in r43),
+         f"vorlage={'OK' if v43 else 'нет'} rot={'OK' if all(r for r, _ in r43) else 'нет'} · {vor}, {tline(t_green, 'contract')[:60]}… · без строки в §2 SPEC — «{r43[0][1][:160]}» · без строки в PLAN — «{r43[1][1][:160]}»")
+    if all(ok_all[-3:]):
+        print("PLANKA_EARLY_OK")
+
+    # F5 — судьи на базе и пути спеки
+    def spec5(sec5="", sec1="", items="  - `F1.1` `bin/x` печатает X\n"):
+        return (f"# SPEC-1\n\n## 1. Дизайн\n{sec1}\n## 2. Фичи\n- **F1 x** · готово: F1.1 · чек: `bin/x` → `X_OK` · служит: S1 · after: —\n{items}\n"
+                f"## 3. Инварианты\n\n## 5. Артефакт закрытия\n{sec5}\n")
+    basis = "- Судьи деплоя и регрессии, изменённые фазой, на базе: {}.\n"
+    bj = lambda text: lr(rule_basis, text)
+    f51 = judge([
+        ("без строки", "FAIL", "в §5 нет строки", bj(spec5())),
+        ("плейсхолдер шаблона", "FAIL", "в §5 нет строки", bj(spec5(basis.format("<n из m | нет>")))),
+        ("строка вне §5", "FAIL", "в §5 нет строки", bj(spec5(sec1=basis.format("нет")))),
+        ("правка тимлида после запроса, evidence этой SPEC в HEAD", "WARN", "фаза была: evidence этой SPEC в HEAD",
+         lr(rule_basis, spec5(), commits=[("Тимлид: правка SPEC", {"docs/SPEC-1.md": spec5() + "Правка.\n"}, []),
+                                          ("Тимлид: evidence", {"docs/evidence/F1-x-result.txt": "spec: SPEC-1\nF1.1 x\n"}, [])])),
+        ("та же правка без evidence", "FAIL", "в §5 нет строки", lr(rule_basis, spec5(), commits=[("Тимлид: правка SPEC", {"docs/SPEC-1.md": spec5() + "Правка.\n"}, [])])),
+        ("нет", "OK", "— есть", bj(spec5(basis.format("нет")))),
+        ("2 из 3", "OK", "— есть", bj(spec5(basis.format("2 из 3")))),
+    ])
+    rc51, line51 = plain_line(spec5(), "basis-judge")
+    ok51 = f51[0] and rc51 == 1 and line51.startswith("BUDGET_FAIL basis-judge")
+    emit("F5.1", ok51, f"ohne={'FAIL' if ok51 else 'нет'} mit={'OK' if f51[0] else 'нет'} · bin/check-budget на фикстуре — rc {rc51} «{line51}» · {f51[1]}")
+    bx = {"bin/x": "x\n", "Makefile": "check-live:\n\ttrue\nregress:\n\ttrue\n"}
+    ps = lambda items, sec1="", files=bx, prompt=None: lr(rule_spec_paths, spec5(basis.format("нет"), sec1, items), files, (), prompt)
+    item = lambda tok: f"  - `F1.1` {tok} печатает X\n"
+    f52 = judge([
+        ("путь вне HEAD", "FAIL", "bin/nope:", ps(item("`bin/nope`"))),
+        ("цель make вне Makefile", "FAIL", "make nope:", ps(item("`make nope`"))),
+        ("путь в запросе", "FAIL", "bin/gone:", ps(item("`bin/x`"), prompt="Read first: docs/SPEC-1.md\nBranch phase-1 only; run `bin/gone`.\n")),
+    ])
+    rc52, line52 = plain_line(spec5(basis.format("нет"), "", item("`bin/nope`")), "spec-paths", bx)
+    vor52 = contract_ok("SPEC.template.md") and tline(t_green, "spec-paths").startswith("OK")
+    ok52 = f52[0] and rc52 == 1 and line52.startswith("BUDGET_FAIL spec-paths bin/nope")
+    emit("F5.2", ok52 and vor52, f"fehlt={'FAIL' if ok52 else 'нет'} vorlage={'OK' if vor52 else 'нет'} · bin/check-budget на фикстуре — rc {rc52} «{line52}» · {f52[1]} · "
+         f"шаблон: {vor}, «{tline(t_green, 'spec-paths')[:120]}»")
+    ign = {**bx, ".gitignore": "docs/out/\n"}
+    f53_green = [
+        ("путь из HEAD", "OK", "путей и целей make", ps(item("`bin/x`"))),
+        ("путь из «Новые пути:»", "OK", "путей и целей make", ps(item("`bin/new`"), sec1="- **Новые пути:** `bin/new`\n")),
+        ("шаблон <…> и *", "OK", "путей и целей make", ps(item("`bin/<имя>` и `bin/check-*`"))),
+        ("вне репо /tmp и ~", "OK", "путей и целей make", ps(item("`/tmp/two-tier-v3/x` и `~/.claude/settings.json`"))),
+        ("под .gitignore", "OK", "путей и целей make", ps(item("`docs/out/a.txt`"), files=ign)),
+    ]
+    f53_red = [
+        ("тот же путь вне HEAD", "FAIL", "bin/y:", ps(item("`bin/y`"))),
+        ("без «Новые пути:»", "FAIL", "bin/new:", ps(item("`bin/new`"))),
+        ("без <…> и *", "FAIL", "bin/name:", ps(item("`bin/name`"))),
+        ("внутри репо", "FAIL", "bin/two-tier-v3/x:", ps(item("`bin/two-tier-v3/x`"))),
+        ("без строки .gitignore", "FAIL", "docs/out/a.txt:", ps(item("`docs/out/a.txt`"))),
+    ]
+    g53, r53 = judge(f53_green), judge(f53_red)
+    n53 = sum(r[3][0] == "OK" for r in f53_green)
+    emit("F5.3", g53[0] and r53[0], f"ok={n53}/5 · {g53[1]} · красные без условия: {r53[1]}")
+    s11 = [  # kit-fixes §3, К F5: ошибки SPEC-11 v2
+        ("путь профиля", "profiles/tab-code-v2.json", ps(item("`profiles/tab-code-v2.json`"), files={**bx, "profiles/tab-code.json": "{}\n"})),
+        ("файл ревью", "docs/reviews/2026-11-09-spec11.md", ps(item("`docs/reviews/2026-11-09-spec11.md`"), files={**bx, "docs/reviews/2026-11-10-spec11.md": "x\n"})),
+        ("make <цель> --флаг", "make check-live --ab", ps(item("`make check-live --ab`"))),
+        ("запрос без branch <b> only|from", "ветка", ps(item("`bin/x`"), prompt="Read first: docs/SPEC-1.md\nWork on branch phase-1.\n")),
+    ]
+    named = [(n, w, r) for n, w, r in s11 if r[0] == "FAIL" and r[1].startswith(w)]
+    emit("F5.4", len(named) == 4, f"spec11={len(named)}/4 · " + "; ".join(f"{n} — {r[0]} «{r[1][:110]}»" for n, _, r in s11))
+    if all(ok_all[-4:]):
+        print("SPEC_PATHS_OK")
+
+    # F7 — свежий проверяющий спеки до подписи
+    r71 = tred(tmpl([("REVIEW.md", "## Спека до подписи", "## Спека")]), "REVIEW.md", "## Спека до подписи")
+    v71 = contract_ok("REVIEW.md")
+    emit("F7.1", v71 and r71[0], f"abschnitt={'OK' if v71 else 'нет'} rot={'OK' if r71[0] else 'нет'} · {vor} · без раздела — «{r71[1][:160]}»")
+    spec7 = spec5(basis.format("нет"))
+    pin7 = pin_of(spec7)
+    verdict = lambda v, pin, path="docs/SPEC-1.md": {"docs/reviews/1-spec.md": f"{v}\nблокирующих 0, named 2\nspec: {path} @ {pin}\n\nсчёт прежних прогонов: 1\n"}
+    sr = lambda files={}, commits=(): lr(rule_spec_review, spec7, files, commits)
+    other = pin_of(spec7 + "правка\n")
+    work7 = [("F1.1: работа", {"src/x.py": "x\n"}, [])]
+    ev7 = [("F1.1: evidence", {"docs/evidence/F1-x-result.txt": "spec: SPEC-1\nF1.1 x\n"}, [])]
+    f72 = judge([
+        ("PASS нет", "FAIL", "вердикта с её пином в docs/reviews/ нет", sr()),
+        ("PASS с её пином", "OK", "PASS свежего проверяющего", sr(verdict("PASS", pin7))),
+    ])
+    rc72, line72 = plain_line(spec7, "spec-review")
+    ok72 = f72[0] and rc72 == 1 and line72 == "BUDGET_FAIL spec-review"
+    emit("F7.2", ok72, f"ohne={'FAIL' if ok72 else 'нет'} mit={'OK' if f72[0] else 'нет'} · bin/check-budget на фикстуре — rc {rc72} «{line72}» · {f72[1]}")
+    f73 = [
+        ("NEEDS_WORK с её пином", "FAIL", f"NEEDS_WORK @ {pin7}", sr(verdict("NEEDS_WORK", pin7))),
+        ("PASS с пином другой версии", "FAIL", "пин другой версии", sr(verdict("PASS", other))),
+        ("коммит после запроса без PASS", "FAIL", "вердикта с её пином в docs/reviews/ нет", sr(commits=work7)),
+    ]
+    ok73, t73 = judge(f73)
+    w73 = judge([("evidence этой SPEC в HEAD", "WARN", "фаза начата: evidence этой SPEC в HEAD — docs/evidence/F1-x-result.txt", sr(commits=work7 + ev7))])
+    n73 = sum(r[3][0] == "FAIL" for r in f73)
+    emit("F7.3", ok73 and w73[0], f"fail={n73}/3 evidence={'WARN' if w73[0] else 'нет'} · {t73} · {w73[1]}")
+    r74 = tred(tmpl([("docs/PROCESS.template.md", "claude -p --model claude-opus-5-5", "claude -p")]), "PROCESS.template.md", "claude -p --model claude-opus-5-5")
+    v74 = contract_ok("PROCESS.template.md")
+    emit("F7.4", v74 and r74[0], f"zeile={'OK' if v74 else 'нет'} rot={'OK' if r74[0] else 'нет'} · {vor} · без строки проверяющего — «{r74[1][:160]}»")
+    if all(ok_all[-4:]):
+        print("SPEC_REVIEW_OK")
+
+    # F9.1 — копия team-lead-spec у тимлида не длиннее team_lead_spec_copy_chars: знаки, не байты; ключ из кита, а не из budgets.json корня, — WARN
+    key91 = "team_lead_spec_copy_chars"
+    bj91 = json.loads(read(f"{kroot}/budgets.json"))
+
+    def value91(bj, kit):  # значение как есть: в ките число пункта — 8000, без подстановки; в проекте — число или нет ключа
+        kd = bj["defaults"].get(key91)
+        return kd, (isinstance(kd, int) and kd == 8000 if kit else (kd is None or isinstance(kd, int)))
+    kd91, val91 = value91(bj91, kroot == "kit")
+    lim91 = 8000 if kroot == "kit" else (kd91 if isinstance(kd91, int) else 8000)  # фикстура: 8001 → FAIL, 8000 → OK (PLAN F9.1)
+
+    def copy_side(n, kit_key=False):
+        own = json.loads(budgets)
+        own["defaults"].pop(key91, None) if kit_key else own["defaults"].update({key91: lim91})
+        fs = {"budgets.json": json.dumps(own, ensure_ascii=False), "docs/drafts/team-lead-spec.md": "я" * n, ".abide/rubric.json": read(f"{kroot}/.abide/rubric.json")}
+        if kit_key:
+            fs["kit/budgets.json"] = json.dumps({"defaults": {**own["defaults"], key91: lim91}}, ensure_ascii=False)
+        rc_, lines = plain(fs)
+        return rc_, next((" ".join(l.split()) for l in lines if re.match(rf"(OK|WARN|FAIL) +{key91}:", l)), "нет строки")
+    over, at, kitw = copy_side(lim91 + 1), copy_side(lim91), copy_side(lim91 + 1, kit_key=True)
+    gate91 = lambda val: val and over[0] == 1 and over[1].startswith(f"FAIL {key91}") and at[0] == 0 and at[1].startswith(f"OK {key91}") and kitw[1].startswith(f"WARN {key91}") and kitw[0] == 0
+    fx91 = lambda v: {"defaults": {**{k: x for k, x in bj91["defaults"].items() if k != key91}, **({} if v is None else {key91: v})}}  # budgets.json кита: ключ v, None — без ключа
+    # пункт на budgets.json кита и красная сторона значения: та же проверка на фикстуре с 9000 и без ключа — пункт красный
+    res91 = [gate91(value91(bj, kit)[1]) for bj, kit in ((bj91, kroot == "kit"), (fx91(9000), True), (fx91(None), True))]
+    ok91 = res91 == [True, False, False]
+    emit("F9.1", ok91, f"spec={over[1].split()[0]},{at[1].split()[0]} · {kroot}/budgets.json: {key91} = {kd91 if kd91 is not None else 'нет'}{'' if val91 else ' (в ките ждали 8000)'}, "
+                       f"та же проверка на фикстуре budgets.json кита: 9000 — {'OK' if res91[1] else 'FAIL'}, ключа нет — {'OK' if res91[2] else 'FAIL'}; "
+                       f"фикстура: копия {lim91 + 1} знаков (кириллица — знаки, не байты) — rc {over[0]} «{over[1]}»; "
+                       f"{lim91} — rc {at[0]} «{at[1]}» · ключ только в kit/budgets.json — rc {kitw[0]} «{kitw[1]}»")
+
+    cur = rule_planka(dict(b)) + rule_scope(dict(b)) + rule_planken(dict(b)) + rule_planka_early(dict(b)) + rule_basis(dict(b)) + rule_spec_paths(dict(b)) + rule_spec_review(dict(b))
     for s_, r_, m_ in cur:
         print(f"{s_:4} {r_}: {m_}")
     if all(ok_all) and not any(s_ == "FAIL" for s_, _, _ in cur):
@@ -1080,11 +1509,18 @@ CONTRACT = {  # v3.1, F6: фаза под ultracode рождается из ша
                                  "`.claude/settings.local.json`", "`/phase`"],
     "CLAUDE.md": ["Агенты воркфлоу", "worktree", "главная сессия", "по точным путям", "Push в `main` запрещён", "/verify-phase",
                   "## Rules for every commit", "abide check", ".abide/rubric.json"],
+    "docs/PLAN.template.md": ["Пункт ранней планки — отчёт", "`F<n>.<k> <число>`"],  # v3.5, F4.3
+    "REVIEW.md": ["## Спека до подписи", "`spec: <путь> @ <пин>`"],  # v3.5, F7.1
 }
+CONTRACT["docs/SPEC.template.md"] += ["Судьи деплоя и регрессии, изменённые фазой, на базе:"]  # v3.5, F5.1: живой текст §5
+CONTRACT["docs/PROCESS.template.md"] += ["## Свежий проверяющий спеки", "claude -p --model claude-opus-5-5", "свежий клон", "не субагент"]  # v3.5, F7.4
 
 
-CONTRACT_S2 = ["пара одного часа", "<звено вендора"]  # v3.4, F5.2: строка звена вендора — живой текст §2 шаблона SPEC
-CONTRACT_S3 = ["Фаза доводки", "`bin/check-frozen-diff`"]  # v3.4, F8.2: строка доводки закрытого модуля — живой текст §3 шаблона SPEC
+CONTRACT_S1 = ["**Новые пути:**"]  # v3.5, F5.2: строка §1 шаблона SPEC
+CONTRACT_S2 = ["пара одного часа", "<звено вендора",  # v3.4, F5.2: строка звена вендора — живой текст §2 шаблона SPEC
+               "Пункт ранней планки — отчёт", "`F<i>.<k> <число>`"]  # v3.5, F4.3
+CONTRACT_S3 = ["Фаза доводки", "`bin/check-frozen-diff`",  # v3.4, F8.2: строка доводки закрытого модуля — живой текст §3 шаблона SPEC
+               "Окно доводки: открыто", "запас диффа", "`bin/operator-word"]  # v3.5, F6.1
 
 
 def contract_text(f, text, sec=5):
@@ -1110,7 +1546,7 @@ def templates():
     for f, words in CONTRACT.items():
         text = contract_text(f, read(f"{root}/{f}"))
         miss = [w for w in words if w not in text]
-        by_sec = {2: CONTRACT_S2, 3: CONTRACT_S3} if f == "docs/SPEC.template.md" else {}
+        by_sec = {1: CONTRACT_S1, 2: CONTRACT_S2, 3: CONTRACT_S3} if f == "docs/SPEC.template.md" else {}
         miss += [w for sec, ws in by_sec.items() for w in ws if w not in contract_text(f, read(f"{root}/{f}"), sec)]
         out.append(("FAIL" if miss else "OK", "contract", f"{root}/{f}: фраз {len(words) + sum(map(len, by_sec.values()))}, нет — {'; '.join(miss) or 'ничего'}"))
     slash = re.compile("/" + "goal" + r"\b")  # v3.2: фазу запускает стартовый запрос — команды в ките не остаётся (строка не ловит сама себя)
@@ -1135,7 +1571,8 @@ def templates():
     pin = pin_of(read(f"{root}/docs/INTENT.template.md"))
     subs = [("<n>", "1"), ("<current review file or nothing>", "docs/reviews/1-1.md"),
             ("<первые 12 знаков git hash-object>", pin), ("<файл, n, p50/p95 — или «ранняя»>", "ранняя"),
-            ("<pair — пара одного часа: docs/evidence/<файл со строкой PAIR_…> — или «ранняя»>", "ранняя")]
+            ("<pair — пара одного часа: docs/evidence/<файл со строкой PAIR_…> — или «ранняя»>", "ранняя"),
+            ("<n из m | нет>", "нет"), ("<b>", "phase-1")]  # v3.5: строка судей на базе (F5.1), ветка формой /phase (F5.4)
     fs = {}
     for t, dst in TEMPLATES.items():
         text = read(f"{root}/{t}")
@@ -1143,6 +1580,9 @@ def templates():
             text = text.replace(a, z)
         fs[dst] = text
         print(f"пример: {root}/{t} → {dst}")
+    # v3.5, F7: фаза на выдаче прочитана свежим проверяющим — вердикт формой раздела «Спека до подписи» REVIEW.md, пин — примерной SPEC
+    fs["docs/reviews/1-spec.md"] = f"PASS\nблокирующих 0, named 0\nspec: docs/SPEC-1.md @ {pin_of(fs['docs/SPEC-1.md'])}\n"
+    print("пример: вердикт свежего проверяющего → docs/reviews/1-spec.md")
     return report(out + in_fixture(fs, None, lambda: run(b)))
 
 

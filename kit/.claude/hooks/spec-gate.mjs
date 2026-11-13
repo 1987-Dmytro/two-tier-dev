@@ -18,11 +18,16 @@
 // verdict files are read from HEAD, and any of them that `git status` shows as changed, untracked or deleted (eol conversion and
 // filters as git applies them) holds the turn by its name. Logs that checks and hooks append (docs/evidence/*.jsonl) and the phase
 // report are not part of the set.
-// A STOP line counts only from the pushed HEAD (SPEC-v3.3 F1.5): a new line `STOP: <id>` with a reason of SPEC §4 and, within
-// the next three lines (not on the STOP line itself; LF or CRLF), a question (a ? with no word, =, & or % right after it, so not one
-// inside a URL) and a resume line ends the turn once. It is new when its text from «STOP:» on starts neither
-// like a STOP line of the PROGRESS committed before the session nor like a stop already honored (the log keeps their marks): its
-// first 60 characters, or all of a shorter line — an edited tail, «— снят» at the end or a bullet in front keep a line old.
+// A STOP line counts only from the pushed HEAD (SPEC-v3.3 F1.5). The open STOP (SPEC-v3.5 F3) is the one whose Resume line
+// /phase resume sends (openStop below, as the phase-start mod finds it): `STOP: <id>` with a reason of SPEC §4 and, within the next
+// three lines (LF or CRLF), a question (a ? with no word, =, & or % right after it, so not one inside a URL) and a resume line. It ends
+// the turn as often as the turn ends while it stays open: after the commit that opened it (the oldest commit of the unbroken run of
+// PROGRESS versions back from HEAD with the same open STOP line — a stop with the text of a past phase's stop is a new stop) there is
+// no commit beyond the report files (docs/evidence/, docs/PROGRESS.md, docs/PLAN-*.md) and no Resume word — a user message after
+// that commit that is the stop's Resume line as /phase resume sends it, or starts with «Resume:». A Resume word seen once is kept in
+// the log (`resumed`: <sha of the stop commit>:<hash of the line>), so the stop stays closed in the next session (handoff, /clear) —
+// also when that turn end passes before the stop is judged (background tasks, AGENT_STOP): the word is logged there too.
+// «— снят» at the end of the line closes it too. A STOP line on disk only, or an open STOP without its form, is a missing line.
 // The full set → SPEC_GATE_OK and the turn ends; otherwise the end of the turn is blocked and the reason is the list of what is
 // missing, built by code. Jev is not asked here: its one cell — an item against the raw output of its probe — is in the phase
 // report, in the shadow (SPEC-v3.3 F1.6).
@@ -33,6 +38,13 @@
 // `background_tasks[].type`) or a session cron; a subagent or anything else leaves the set to be judged (SPEC-v3.4 F1.1). An
 // unreadable .claude/spec-gate.json → pass with the reason. Every decision is a line of docs/evidence/spec-gate.jsonl with the types
 // of the background tasks; a pass there, with its reason, is a line of the phase report (F1.5).
+// Whose turn is judged (SPEC-v3.5 F2): .claude/phase-session.json (outside git, kept by the phase-start mod: /phase, the prompt it
+// sends, classic.SessionStart after /clear) names the phase sessions; the hook only reads it. (1) A session it names is judged. (2) A
+// fork — the first records of its transcript carry another session's sessionId (a side chat copies the head of its parent) — passes
+// as `not the phase session`, with or without the file. (3) A session the file does not name whose records before the first answer
+// of the model carry the start prompt, the Resume line of the open STOP as /phase resume sends it, or the handoff mod's continuation
+// is judged: closed on refusal for a phase session, whatever the file says. (4) Any other session is a service one: with the file —
+// pass `not the phase session`; without it — judged as in v3.4.
 // Modes off · shadow · active: SPEC_GATE from the environment, else `mode` of .claude/spec-gate.json (the team lead's file).
 // `claude -p` of acceptance and of the control pairs runs with SPEC_GATE=off. The hook never prints a permission decision; on its
 // own error it exits 0, and an empty stdin or one that is not a JSON object is its own error too: pass with the reason in the log (decision 401).
@@ -47,6 +59,9 @@ const WAKES = ['monitor', 'workflow', 'shell']  // background task types that wa
 const PLATFORM_CAP = Number(process.env.CLAUDE_CODE_STOP_HOOK_BLOCK_CAP) || 8
 const NO_TRANSCRIPT_MS = 3 * 3600e3  // no readable transcript: the session is taken to have started this long ago
 const LABELS = [/Сделано|Done/i, /Следующий шаг|Next step/i, /Когда закончим|When/i]  // the template's three labels of the head
+const MARK_FILE = path.join('.claude', 'phase-session.json')  // the phase sessions, kept by the phase-start mod (SPEC-v3.5 F2)
+const HANDOFF_STARTS = ['Свежий контекст после хендоффа', 'Fresh context after a handoff']  // the first words of the handoff mod's resumePrompt
+const HEAD_BYTES = 32 * 1024 * 1024  // the head of a transcript is read up to the first answer of the model, at most this much
 const t0 = Date.now()
 
 const read = p => {
@@ -116,6 +131,156 @@ function sessionStart(transcript) {
   return null
 }
 
+function transcriptHead(p) {  // the records before the first answer of the model; null when the transcript is not readable
+  let fd
+  try {
+    fd = fs.openSync(p, 'r')
+    const out = []
+    let rest = '', pos = 0
+    const buf = Buffer.alloc(1024 * 1024)
+    while (pos < HEAD_BYTES) {
+      const n = fs.readSync(fd, buf, 0, buf.length, pos)
+      if (!n) break
+      pos += n
+      const lines = (rest + buf.subarray(0, n).toString('utf8')).split('\n')
+      rest = lines.pop()
+      for (const l of lines) {
+        let r
+        try { r = JSON.parse(l) } catch { continue }
+        if (r?.type === 'assistant') return out
+        out.push(r)
+      }
+    }
+    try { const r = JSON.parse(rest); if (r?.type !== 'assistant') out.push(r) } catch {}
+    return out
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd) } catch {}
+  }
+}
+
+const userText = r => {  // the text of a user record: a string or its text parts; a tool result is not the person's word
+  const c = r?.type === 'user' ? r.message?.content : null
+  return typeof c === 'string' ? c : Array.isArray(c) ? c.filter(x => x?.type === 'text').map(x => String(x.text ?? '')).join('\n') : ''
+}
+const norm = s => String(s).replace(/\s+/g, ' ').trim()
+
+function phaseMark(root) {  // {exists, sessions}: a file that is not JSON names no session, yet it is there
+  const raw = read(path.join(root, MARK_FILE))
+  if (raw === null) return { exists: false, sessions: [] }
+  try {
+    const j = JSON.parse(raw)
+    const s = Array.isArray(j) ? j : j?.sessions
+    return { exists: true, sessions: Array.isArray(s) ? s.filter(x => typeof x === 'string') : [] }
+  } catch {
+    return { exists: true, sessions: [] }
+  }
+}
+
+// The open STOP of a PROGRESS as the phase-start mod finds it (resumeOf, mods/phase-start/hooks/text.ts): the last STOP line of
+// «## Open stop», else of the first section with a STOP that is not «## Closed…»; its Resume line within the next three lines,
+// «Resume: …» before «Продолжай…», never a question. null — no STOP line there.
+const STOP_ONE = /^[ \t]*(?:[-*][ \t]*)?STOP:[ \t]*STOP-[A-Z]+\b/m
+const LIFTED = /[—–-]+\s*снят\S*\s*$/i
+const RESUME_LINE = /^[ \t]*(?:[-*][ \t]*)?\**Resume:\**[ \t]*(\S.*)$/i
+const CONTINUE_LINE = /^[ \t]*(?:[-*][ \t]*)?(Продолж[^?]*)$/i
+const RESUME_MARK = /(?:^|\s)\**Resume:\**[ \t]*\S[^\n]*(?<!\?)[ \t]*$/im  // the form check: a Resume line, or «Resume: …» after the question on its line — not the word alone, never a question (as resumeOf)
+function openStop(progress) {
+  const sections = progress.split(/^(?=## )/m)
+  const section = sections.find(s => s.startsWith('## Open stop')) ?? sections.find(s => !s.startsWith('## Closed') && STOP_ONE.test(s)) ?? ''
+  const lines = section.split(/\r?\n/)
+  const i = lines.findLastIndex(l => STOP_ONE.test(l))
+  if (i < 0) return null
+  const near = lines.slice(i + 1, i + 4)
+  let resume
+  for (const re of [RESUME_LINE, CONTINUE_LINE]) {
+    for (const l of near) {
+      const t = (l.match(re) || [])[1]?.trim()
+      if (t && !t.endsWith('?')) { resume = t; break }
+    }
+    if (resume) break
+  }
+  return { line: lines[i], lifted: LIFTED.test(lines[i]), resume, near: near.join('\n') }
+}
+
+// The commit that opened the open STOP: the oldest of the unbroken run of PROGRESS versions back from HEAD whose open STOP has the
+// same line; a run broken by a version without it (an answered stop, a fresh PROGRESS of the next phase) starts after the break.
+function stopCommit(root, line) {
+  const shas = (git(root, 'log', '--format=%H', '-n', '300', 'HEAD', '--', 'docs/PROGRESS.md') || '').split('\n').filter(Boolean)
+  let at = null
+  for (const s of shas) {
+    const o = openStop(git(root, 'show', `${s}:docs/PROGRESS.md`) || '')
+    if (!o || o.line !== line) break
+    at = s
+  }
+  return at
+}
+
+// A Resume word after `since` (ms) in the transcript's last 16 MB: a user message (not meta, not a tool result) that is the Resume line
+// as /phase resume sends it, or starts with «Resume:».
+function resumeWord(p, resume, since) {
+  let fd
+  try {
+    fd = fs.openSync(p, 'r')
+    const size = fs.fstatSync(fd).size
+    const from = Math.max(0, size - 16 * 1024 * 1024)
+    const buf = Buffer.alloc(size - from)
+    fs.readSync(fd, buf, 0, buf.length, from)
+    const want = resume ? norm(resume) : null
+    for (const l of buf.toString('utf8').split('\n')) {
+      if (!l.includes('"user"')) continue
+      let r
+      try { r = JSON.parse(l) } catch { continue }
+      if (r?.isMeta || !(Date.parse(r?.timestamp) > since)) continue
+      const t = norm(userText(r))
+      if (t && ((want && t === want) || /^Resume:/i.test(t))) return true
+    }
+  } catch {} finally {
+    if (fd !== undefined) try { fs.closeSync(fd) } catch {}
+  }
+  return false
+}
+
+// The open stop of PROGRESS at HEAD and its Resume word (SPEC-v3.5 F3.2): {open, at, mark, word}; a lifted or absent stop — no mark.
+function stopWord(root, input, log, progress) {
+  const open = openStop(progress)
+  if (!open || open.lifted) return { open, at: null, mark: null, word: false }
+  const at = stopCommit(root, open.line)
+  const mark = at && `${at.slice(0, 12)}:${sha12(canon(open.line))}`
+  const when = at ? Number(git(root, 'log', '-1', '--format=%ct', at)) * 1000 : Infinity
+  const word = !!mark && (log.some(l => (l.resumed || []).includes(mark)) || resumeWord(input.transcript_path, open.resume, when))
+  return { open, at, mark, word }
+}
+
+// A turn end that passes before the stop is judged keeps the Resume word it carries: [mark] or [].
+function wordOnPass(root, input, log) {
+  try {
+    const w = stopWord(root, input, log, atHead(root, 'docs/PROGRESS.md') || '')
+    return w.word ? [w.mark] : []
+  } catch {
+    return []
+  }
+}
+
+// SPEC-v3.5 F2: null — the session is judged; {reason} — it passes as not the phase session.
+function notPhase(input, root, promptText, progress) {
+  const id = String(input.session_id || '')
+  const mark = phaseMark(root)
+  if (id && mark.sessions.includes(id)) return null  // (1)
+  const head = transcriptHead(input.transcript_path)
+  const first = (head || []).find(r => typeof r?.sessionId === 'string')
+  if (first && id && first.sessionId !== id) return { reason: `not the phase session: a fork of ${createHash('sha256').update(first.sessionId).digest('hex').slice(0, 8)}` }  // (2)
+  const stop = openStop(progress)
+  const resume = stop && !stop.lifted ? stop.resume : null
+  const want = norm(promptText).slice(0, 200)
+  const own = (head || []).map(userText).map(norm).filter(Boolean)
+  const asks = own.some(t => (want && t.includes(want)) || (resume && (t === norm(resume) || t.startsWith(`Resume: ${norm(resume)}`))) || /^Resume:/i.test(t)
+    || HANDOFF_STARTS.some(h => t.startsWith(h)))
+  if (asks) return null  // (3)
+  return mark.exists ? { reason: `not the phase session: ${MARK_FILE} does not name it` } : null  // (4)
+}
+
 function features(spec) {  // feature lines and, under each, its item lines `  - `F<n>.<k>` …` and the ids of its «готово:» range
   const out = []
   let open = false
@@ -145,12 +310,6 @@ function stopReasons(spec) {
 const STOP_LINE = /^[ \t]*(?:[-*][ \t]*)?STOP:[ \t]*(STOP-[A-Z]+)\b.*$/gm
 const sha12 = s => createHash('sha256').update(s).digest('hex').slice(0, 12)
 const canon = line => line.slice(line.indexOf('STOP:')).trim()
-const stopMark = line => { const c = canon(line).slice(0, 60); return `${c.length}:${sha12(c)}` }  // «n:hash» of its first n ≤ 60 characters
-const marked = (line, marks) => marks.some(k => {  // the first n characters match; a mark shorter than 40 also needs the same line or «— снят» after it
-  const [n, h] = k.includes(':') ? k.split(':').map((x, i) => (i ? x : Number(x))) : [60, k]
-  const c = canon(line)
-  return sha12(c.slice(0, n)) === h && (n >= 40 || !c.slice(n).trim() || /^\s*[—–-]+\s*снят/i.test(c.slice(n)))
-})
 
 function head(progress) {
   const m = progress.match(/\n## (?:Голова|Head)[^\n]*\n[\s\S]*?(?=\n## |$)/)
@@ -218,16 +377,18 @@ const bgTypes = input => (Array.isArray(input.background_tasks) ? input.backgrou
 function decide(input, root, cfg, log) {
   const prior = log.filter(l => l.session === input.session)
   const stopFile = process.env.AGENT_STOP_FILE || path.join(root, 'AGENT_STOP')
-  if (fs.existsSync(stopFile)) return { decision: 'pass', reason: 'agent-stop' }
+  if (fs.existsSync(stopFile)) return { decision: 'pass', reason: 'agent-stop', resumed: wordOnPass(root, input, log) }
   const promptFile = ['docs/PROMPT.txt', 'docs/GOAL.txt'].find(p => atHead(root, p) !== null || fs.existsSync(path.join(root, p)))
   if (!promptFile) return null // no phase is open
   const rf = ((atHead(root, promptFile) ?? read(path.join(root, promptFile)) ?? '').match(/^Read first:(.*)$/m) || [])[1] || ''
   const specPath = rf.split(',').map(s => s.trim()).find(s => /(^|\/)SPEC-[^/]+\.md$/.test(s))
   const spec = specPath && (atHead(root, specPath) ?? read(path.join(root, specPath)))
   if (!spec) return { decision: 'pass', reason: `no SPEC in Read first of ${promptFile}` }
+  const other = notPhase(input, root, atHead(root, promptFile) ?? read(path.join(root, promptFile)) ?? '', atHead(root, 'docs/PROGRESS.md') || '')
+  if (other) return { decision: 'pass', reason: other.reason }
   const wakes = [...new Set(bgTypes(input).filter(t => WAKES.includes(t)))]
   if ((input.session_crons || []).length) wakes.push('cron')
-  if (wakes.length) return { decision: 'pass', reason: `background:${wakes.join(',')}` }
+  if (wakes.length) return { decision: 'pass', reason: `background:${wakes.join(',')}`, resumed: wordOnPass(root, input, log) }
   const start = sessionStart(input.transcript_path) ?? t0 - NO_TRANSCRIPT_MS
 
   const feats = features(spec)
@@ -284,28 +445,32 @@ function decide(input, root, cfg, log) {
   missing.push(...cov.missing)
 
   const reasons = stopReasons(spec)
-  const seen = [...base.matchAll(STOP_LINE)].map(m => stopMark(m[0]))
-  for (const l of log) seen.push(...(l.stops || []))  // a stop is honored once, in any session
-  const fresh = text => [...text.matchAll(STOP_LINE)].filter(m => !marked(m[0], seen))
-  const atHeadStops = fresh(progress)
-  for (const m of fresh(disk).filter(m => !atHeadStops.some(h => canon(h[0]) === canon(m[0])))) {
+  const atHeadLines = new Set([...progress.matchAll(STOP_LINE)].map(m => canon(m[0])))
+  for (const m of [...disk.matchAll(STOP_LINE)].filter(m => !atHeadLines.has(canon(m[0])))) {
     missing.push(`«${canon(m[0]).slice(0, 60)}» is in docs/PROGRESS.md on disk only: a STOP counts from the pushed HEAD — commit and push it`)
   }
-  const plines = progress.split(/\r?\n/)  // m[0] carries no \r: in a CRLF file the lines must not either
-  const formed = m => { const i = plines.indexOf(m[0]); const near = plines.slice(i + 1, i + 4).join('\n'); return i >= 0 && /\?(?![\w=&%])/.test(near) && /resume|продолж/i.test(near) }
-  for (const m of atHeadStops.filter(m => !reasons.includes(m[1]))) missing.push(`«STOP: ${m[1]}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
-  for (const m of atHeadStops.filter(m => reasons.includes(m[1]) && !formed(m))) missing.push(`«STOP: ${m[1]}» has no question (?) and resume line within the next three lines`)
-  const valid = atHeadStops.filter(m => reasons.includes(m[1]) && formed(m))
-
-  if (valid.length && pushed) return { decision: 'stop', reason: valid.map(m => m[1]).join(', '), stops: valid.map(m => stopMark(m[0])) }
-  if (!missing.length) return { decision: 'ok', reason: `SPEC_GATE_OK: features ${feats.length}, items ${items}, pushed ${sha.slice(0, 7)}, ${cov.used}` }
+  const open = openStop(progress)  // SPEC-v3.5 F3: the STOP /phase resume answers, as long as it stays open
+  const resumed = []
+  if (open && !open.lifted) {
+    const id = (open.line.match(/STOP:[ \t]*(STOP-[A-Z]+)/) || [])[1]
+    if (!reasons.includes(id)) missing.push(`«STOP: ${id}» is not a stop of SPEC §4 (${reasons.join(', ')})`)
+    else if (!(/\?(?![\w=&%])/.test(open.near) && (open.resume || RESUME_MARK.test(open.near)))) missing.push(`«STOP: ${id}» has no question (?) and resume line within the next three lines`)
+    else {
+      const { at, mark, word } = stopWord(root, input, log, progress)
+      const own = p => p.startsWith('docs/evidence/') || p === 'docs/PROGRESS.md' || /^docs\/PLAN-[^/]+\.md$/.test(p)
+      const code = at ? commits(root, `${at}..HEAD`).find(c => c.files.some(p => !own(p))) : null
+      if (word) resumed.push(mark)
+      if (mark && !code && !word && pushed) return { decision: 'stop', reason: id, stops: [mark] }
+    }
+  }
+  if (!missing.length) return { decision: 'ok', reason: `SPEC_GATE_OK: features ${feats.length}, items ${items}, pushed ${sha.slice(0, 7)}, ${cov.used}`, resumed }
   // the guard only turns a block into a pass: the set is evaluated first, so a full set or a new STOP is never lost to it
   const last = prior.slice(-cfg.caps.same_list)
   const same = l => JSON.stringify(l || [])
   if (last.length === cfg.caps.same_list && last.every(l => l.decision === 'block' && same(l.missing) === same(missing))) {
-    return { decision: 'pass', reason: `no-progress: the same list blocked ${cfg.caps.same_list} times in a row`, missing }
+    return { decision: 'pass', reason: `no-progress: the same list blocked ${cfg.caps.same_list} times in a row`, missing, resumed }
   }
-  return { decision: 'block', reason: `${missing.length} missing`, missing }
+  return { decision: 'block', reason: `${missing.length} missing`, missing, resumed }
 }
 
 function main() {
@@ -342,7 +507,7 @@ function main() {
     d = { decision: 'pass', reason: `error: ${e.name}: ${String(e.message).slice(0, 120)}` }
   }
   if (!d) return
-  const line = { ts: new Date().toISOString(), session: input.session, mode, decision: d.decision, reason: d.reason, missing: d.missing || [], stops: d.stops || [],
+  const line = { ts: new Date().toISOString(), session: input.session, mode, decision: d.decision, reason: d.reason, missing: d.missing || [], stops: d.stops || [], resumed: d.resumed || [],
     bg: bgTypes(input), platform_cap: PLATFORM_CAP, stop_hook_active: !!input.stop_hook_active, ms: Date.now() - t0 }
   try {
     fs.mkdirSync(path.dirname(logPath), { recursive: true })
@@ -351,7 +516,7 @@ function main() {
   if (d.decision === 'block' && mode === 'active') {
     const reason = `spec-gate: the phase is not done — the end of the turn is held. Missing:\n${d.missing.map(m => `- ${m}`).join('\n')}\nClose what is missing, or commit and push a new line \`STOP: <id>\` for a stop of SPEC §4 with the question and a resume line.`
     process.stdout.write(JSON.stringify({ decision: 'block', reason }) + '\n')
-  } else if (d.decision === 'ok' || d.decision === 'stop' || (d.decision === 'pass' && !d.reason.startsWith('background'))) {
+  } else if (d.decision === 'ok' || d.decision === 'stop' || (d.decision === 'pass' && !d.reason.startsWith('background') && !d.reason.startsWith('not the phase session'))) {  // a side chat is not told at every turn
     const msg = d.decision === 'ok' ? d.reason : `spec-gate (${mode}): ${d.decision} — ${d.reason}`
     process.stdout.write(JSON.stringify({ systemMessage: msg }) + '\n')
   }

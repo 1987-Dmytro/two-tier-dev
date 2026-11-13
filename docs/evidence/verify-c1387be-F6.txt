@@ -1,0 +1,18 @@
+VERDICT: PASS
+КЛАССЫ: блокирующих 0, повторов 0, named 4
+FEATURES: F6
+/verify-phase · docs/SPEC-v3.5.md · HEAD c1387be · проверяющие claude-opus-5-5 (фич 1 из 9, опровергателей 0) · судья claude-opus-5-5
+
+Свежий прогон bin/check-kit operator на c1387be дал rc 0 и OPERATOR_WORD_OK. Файл docs/evidence/F6-check-kit-result.txt несёт строки F6.1–F6.5 с маркерами пунктов, а собственные команды проверяющего подтвердили каждый пункт сырым выводом: шаблон с окном и красный --templates без него, коммит «Оператор:», отказы nein=3/3, хук и lint владения с отказом «Тимлид:» при CLAUDECODE=1, список плеча 2,1 и 0,0. Все четыре мутанта риска high на границе запаса, CLAUDECODE, плече phase-report и rule_owner покраснели, кандидатов в блок после опровержения нет, а четыре краевые находки не опровергают ни пункт, ни «готово» в установке кита с хуком — поэтому без блоков.
+
+## Блокирующие
+Нет.
+
+## Named, not built
+- operator-word меряет запас по рабочему дереву, а не по HEAD: без хука commit-msg коммит с реальным диффом 7 строк при запасе 5 проходит (E2b), и lint владения запас не проверяет; в ките хук стоит, и там F6.3 держится — не блок
+- строка отчёта operator-word не видит изменение завершающего перевода строки: пишет «строк диффа 0 из 5», а git считает 1+1 (E3); запас при этом держит numstat хука
+- новый файл в каталоге окна, чьего родительского каталога нет, падает трейсбеком FileNotFoundError, а не строкой отказа (E5); файл цел, коммита нет
+- team-lead-session ловит только CLAUDECODE ровно равный "1"; при CLAUDECODE=true коммит «Тимлид:» проходит (E14); Claude Code ставит 1, так что пункт F6.4 в заданном виде держится
+
+## По фичам
+- F6: risk high; прошлый вердикт verify-f1b6f85-F1-F6.txt; чек `bin/check-kit operator (own run in worktree at c1387be, 1:10 total; gate.log line 33 also reads 'F6 OPERATOR_WORD_OK'; docs/evidence/F6-check-kit-result.txt ends with OPERATOR_WORD_OK and carries F6.1-F6.5 lines)` rc 0, маркер есть (own_run); пунктов своим прогоном 5/5; мутация kit/bin/operator-word: reserve boundary: `if lines > cap:` -> `if lines >= cap:` (a diff of exactly the reserve is refused) → red; мутация kit/.githooks/commit-msg: team-lead-session: `os.environ.get("CLAUDECODE") == "1"` -> `== "true"` (Тимлид: from a session passes) → red; мутация kit/bin/phase-report: words(): `leg = leg or kind != "Тимлид:"` -> `leg = True` (issue-adjacent Тимлид: commits counted in the leg) → red; мутация kit/bin/check-budget: rule_owner: `if out_:` -> `if out_ and not win:` (Оператор: commit outside an existing window no longer FAIL owner) → red; находок 4, блокирующих-кандидатов 0, опровергнуто 0

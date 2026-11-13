@@ -117,7 +117,7 @@ mark() {  # mark <F> <маркер> <лог…>: в каждом логе rc 0 �
   local f=$1 m=$2 why="" l rc; shift 2
   for l in "$@"; do
     if [ ! -e "$LOGS/$l.relayed" ]; then
-      grep -E '^(F[0-9]+\.[0-9]+ FAIL|FAIL|WARN|BAD|FLAKY|[A-Z_]+_WARN)' "$LOGS/$l.log" 2>/dev/null | sed "s/^/    $l: /"
+      grep -E '^((v[0-9.]+-)?F[0-9]+\.[0-9]+ FAIL|FAIL|WARN|BAD|FLAKY|[A-Z_]+_WARN)' "$LOGS/$l.log" 2>/dev/null | sed "s/^/    $l: /"
       : > "$LOGS/$l.relayed"
     fi
     rc=$(cat "$LOGS/$l.rc" 2>/dev/null || echo нет)
@@ -127,13 +127,13 @@ mark() {  # mark <F> <маркер> <лог…>: в каждом логе rc 0 �
   if [ -z "$why" ]; then echo "$f $m"; else echo "$f FAIL: $m — $why"; fail "$m ($why)"; fi
 }
 offen() {  # offen <лог…>: строки `F<n>.<k> offen` и `F<n>.<k> ключ=offen`, кроме F5.3 (SPEC §4) и F3.5 проекта, который не репо кита
-  grep -HE '^F[0-9]+\.[0-9]+ ([a-z_]+=)?offen( |$)' "$@" 2>/dev/null | sed "s#^$LOGS/##" | grep -vE '^[^:]+\.log:F5\.3 offen|^kit-t4\.log:F3\.5 telefon=offen · не репо кита|^kit-t4\.log:F9\.[12] offen · не репо кита'
+  grep -HE '^(v[0-9.]+-)?F[0-9]+\.[0-9]+ ([a-z_]+=)?offen( |$)' "$@" 2>/dev/null | sed "s#^$LOGS/##" | grep -vE '^[^:]+\.log:v3\.4-F5\.3 offen|^kit-t4\.log:v3\.4-F3\.5 telefon=offen · не репо кита|^kit-t4\.log:v3\.4-F9\.[12] offen · не репо кита'
 }
 # красные образцы самой разметки: лог без маркера при rc 1 и rc 0, маркер при rc 1 — FAIL с именем; чужой offen — виден, F5.3 — разрешён
 printf 'OK   x\n' | tee "$LOGS/red-a.log" > "$LOGS/red-b.log"; printf 'RED_OK\n' > "$LOGS/red-c.log"; echo 1 | tee "$LOGS/red-a.rc" > "$LOGS/red-c.rc"; echo 0 > "$LOGS/red-b.rc"
 red=$(for s in a b c; do mark F0 RED_OK "red-$s" | tail -1; done | grep -c '^F0 FAIL')
 red_text=$(mark F0 RED_OK red-b | tail -1)
-printf 'F6.3 offen · образец\nF3.5 telefon=offen · клона нет\nF5.3 offen n=0 fon=0\nF3.1 verboten=OK offen=OK cap=OK\n' > "$LOGS/red-offen.log"
+printf 'v3.4-F6.3 offen · образец\nv3.4-F3.5 telefon=offen · клона нет\nv3.4-F5.3 offen n=0 fon=0\nv3.4-F3.1 verboten=OK offen=OK cap=OK\n' > "$LOGS/red-offen.log"
 red_offen=$(offen "$LOGS/red-offen.log" | wc -l | tr -d ' ')
 rm -f "$LOGS"/red-*
 
@@ -164,9 +164,9 @@ mark v3.2 UPGRADE_OK upgrade
 f_marks=$fails
 
 for i in 1 2; do  # строки F8.1 и F8.2 — из лога bin/check-docs как есть
-  line=$(grep -m1 "^F8\.$i " "$LOGS/docs.log")
+  line=$(grep -m1 "^v3\.4-F8\.$i " "$LOGS/docs.log")
   echo "${line:-F8.$i FAIL: нет строки в логе bin/check-docs}"
-  case "$i:$line" in 1:"F8.1 docs=4 "*|2:"F8.2 templates=OK "*) ;; *) fail "F8.$i" ;; esac
+  case "$i:$line" in 1:"v3.4-F8.1 docs=4 "*|2:"v3.4-F8.2 templates=OK "*) ;; *) fail "F8.$i" ;; esac
 done
 
 modline() {  # modline <пункт> <слово=OK> <мод> <тест…>: validate и test мода зелёные, названные тесты прошли
@@ -204,14 +204,14 @@ fi
 if [ -n "$TU" ]; then
   tu_rc=$(cat "$LOGS/tel-up.rc" 2>/dev/null || echo нет); tb_rc=$(cat "$LOGS/tel-budget.rc" 2>/dev/null || echo нет); tb_end=$(tail -1 "$LOGS/tel-budget.log" 2>/dev/null)
   tel=$([ "$tu_rc" = 0 ] && [ "$tb_rc" = 0 ] && [ "$tb_end" = BUDGET_OK ] && echo OK || echo FAIL)
-  f35=$(grep -m1 -oE '^F3\.5 telefon=[^ ]+' "$LOGS/kit-repo.log")
+  f35=$(grep -m1 -oE '^v3\.4-F3\.5 telefon=[^ ]+' "$LOGS/kit-repo.log")
   tel_raw="копия клона: two-tier-upgrade --branch kit-v3.4 — rc $tu_rc; bin/check-budget — rc $tb_rc «${tb_end}»; $f35"
   rm -rf "${TU%/repo}"  # 50 МБ копии клона: вывод — в логах
 else
   tel=offen tel_raw="клона нет: TELEFON_CLONE или /tmp/two-tier-v3/telefon-src"
 fi
 other=$(offen "$LOGS"/*.log)
-f53=$(grep -m1 -oE '^F5\.3 (offen )?n=[0-9]+ fon=[0-9]+' "$LOGS/kit-repo.log")
+f53=$(grep -m1 -oE '^v3\.4-F5\.3 (offen )?n=[0-9]+ fon=[0-9]+' "$LOGS/kit-repo.log")
 leer=$([ "$f_marks" -eq 0 ] && [ "$n" = "$m" ] && [ "$hp" = .githooks ] && [ -n "$det73" ] && [ "$red" = 3 ] && [ "$red_offen" = 2 ] && echo OK || echo FAIL)
 line85="leer=$leer telefon=$tel · t4 от bin/two-tier-init: файлов кита $n из $m, core.hooksPath $hp; маркеров красных $f_marks ‖ v3.3 F7.3 без модели: t4 — $k_bud; без рубрики — печать ключа $b_leak, $b_bud; база — $same; копия с переписанным вопросом и без правила — $diff73; scope — $scopes; $live73 ‖ $tel_raw ‖ bin/gate-v3.3 — $arch ‖ $f53; другого offen — ${other:-нет} ‖ красный образец: лог без маркера при rc 1 и rc 0, маркер при rc 1 — FAIL $red/3, «${red_text}»; offen F6.3 и F3.5 рядом с F5.3 — чужих $red_offen"
 [ "$leer" = OK ] && [ "$tel" = OK ] && [ "$arch" != "НЕ в архиве" ] && [ -z "$other" ] && echo "F8.5 $line85" || { echo "F8.5 FAIL: $line85"; fail "F8.5 leer=$leer telefon=$tel${other:+ offen}"; }
