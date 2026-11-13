@@ -43,3 +43,6 @@
 {"ts": "2026-11-08T13:14:49Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2194}
 {"ts": "2026-11-08T17:16:35Z", "caller": "check-ui", "model": "jev-1.13.0", "status": 200, "calls": 2, "input_tokens": 2192}
 {"ts":"2026-11-08T17:29:01.989Z","caller":"self-test-live","model":"jev-1.13.0","questions":1,"status":200,"version":"jev-1.13.0","ms":383,"input_tokens":300,"output_tokens":20}
+{"ts":"2026-11-12T23:25:30.116Z","caller":"phase-report","model":"jev-1.13.0","questions":40,"status":200,"version":"jev-1.13.0","ms":475,"input_tokens":17711,"output_tokens":1713}
+{"ts":"2026-11-13T01:06:53.027Z","caller":"phase-report","model":"jev-1.13.0","questions":40,"status":200,"version":"jev-1.13.0","ms":510,"input_tokens":18088,"output_tokens":1713}
+{"ts":"2026-11-13T12:02:25.819Z","caller":"phase-report","model":"jev-1.13.0","questions":40,"status":200,"version":"jev-1.13.0","ms":528,"input_tokens":19003,"output_tokens":1713}
