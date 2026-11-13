@@ -6,7 +6,7 @@
 строки F9.1–F9.4 — из логов чеков как есть; F9.5 — сам гейт: проект из кита жив, все маркеры, копия клона telefon (F9.4; TELEFON_CLONE или
 /tmp/two-tier-v3/telefon-src), в evidence фичи F1–F8 — ровно одна строка на каждый её пункт и ни одной с чужим id (SPEC §3); красные образцы —
 лог F9.4 без клона и строка пункта с чужим id. GATE35_OK — только после всех проверок; лог без маркера — FAIL с именем.
-Живые пробы F1 (хост вкладки) и F2 (хост и хук) гейт повторяет только при правке мода или хука после коммита их evidence — иначе маркер из
+Живые пробы F1 (хост вкладки) и F2 (хост и хук) гейт повторяет только при правке путей фичи (мод, хук, чек, шаблоны) после коммита их evidence — иначе маркер из
 evidence; F8 — `bin/check-verify --gate` (воркфлоу и лаунчер без правок с коммита evidence F8 — маркер из него). В репо ничего не пишет,
 кроме журналов чеков; полные логи — свой каталог /tmp/two-tier-v3/gate35-*, в вывод — команда, код выхода и строки FAIL/WARN/BAD/FLAKY.
 """
@@ -18,9 +18,11 @@ TT = os.environ.get("GATE_TMP") or "/tmp/two-tier-v3"
 SPEC = "docs/SPEC-v3.5.md"
 SPEC_ID = "SPEC-v3.5"
 CLONE = os.environ.get("TELEFON_CLONE") or "/tmp/two-tier-v3/telefon-src"
-LIVE = {  # фича: маркер, evidence, пути — правка их после коммита evidence требует живого прогона
-    "F1": ("HANDOFF_TAB_OK", "docs/evidence/F1-check-kit-result.txt", ["mods/handoff"]),
-    "F2": ("GATE_SESSION_OK", "docs/evidence/F2-check-harness-result.txt", ["kit/.claude/hooks/spec-gate.mjs", "kit/.claude/hooks/steer.sh", "mods/phase-start"]),
+LIVE = {  # фича: маркер, evidence, пути фичи (мод, хук, чек, шаблоны — SPEC «Цена судей») — правка их после коммита evidence требует живого прогона
+    "F1": ("HANDOFF_TAB_OK", "docs/evidence/F1-check-kit-result.txt",
+           ["mods/handoff", "kit/bin/check-kit", "kit/bin/check-harness", "kit/budgets.json", "kit/.claude/launch.settings.json", "kit/docs/PROCESS.template.md"]),
+    "F2": ("GATE_SESSION_OK", "docs/evidence/F2-check-harness-result.txt",
+           ["kit/.claude/hooks/spec-gate.mjs", "kit/.claude/hooks/steer.sh", "mods/phase-start", "kit/bin/check-harness", "kit/.gitignore", "bin/two-tier-init"]),
 }
 OFFEN_OK = [r"^[^:]+:v3\.4-F5\.3 offen", r"^kit-t5:v3\.4-F3\.5 telefon=offen · не репо кита", r"^kit-t5:v3\.4-F9\.[12] offen · не репо кита",
             r"^kit-t5:F1\.[1-5] offen · не репо кита", r"^kit-t5:F6\.[1-5] offen · не репо кита", r"^kit-t5:F9\.4 offen · не репо кита"]

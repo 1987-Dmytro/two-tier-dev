@@ -1946,12 +1946,16 @@ def section_operator():
     got, rep = leg(full, [("Тимлид: вердикт проверяющего", "docs/reviews/2-spec.md", "PASS\n"), ("F1.1: работа", "src/x.py", "x = 2\n"),
                           ("Оператор: строка статуса", "docs/STATUS.md", "s2\n"), ("Оператор: ещё строка", "docs/STATUS.md", "s3\n"), ("Тимлид: поправка", "docs/PROCESS.md", "p2\n")])
     empty, _ = leg(op_project(), [("Тимлид: вердикт проверяющего", "docs/reviews/2-spec.md", "PASS\n"), ("F1.1: работа", "src/x.py", "x = 2\n")])
+    # правка запроса посреди плеча («Тимлид:», та же SPEC в Read first) начало плеча не сдвигает: слово до неё остаётся в списке
+    mid, _ = leg(op_project(), [("F1.1: работа", "src/x.py", "x = 2\n"), ("Оператор: до правки запроса", "docs/STATUS.md", "s2\n"),
+                                 ("Тимлид: уточнение запроса", "docs/PROMPT.txt", "Read first: docs/SPEC-2.md\n\nУточнение.\n"), ("Оператор: после", "docs/STATUS.md", "s3\n")])
     rows = [l for l in rep.splitlines() if re.match(r"^- `[0-9a-f]+` · (Оператор|Тимлид) · ", l)]
     named = all(any(w in l and path in l for l in rows) for w, path in (("строка статуса", "docs/STATUS.md"), ("ещё строка", "docs/STATUS.md"), ("поправка", "docs/PROCESS.md")))
-    ok65 = got == (2, 1) and empty == (0, 0) and len(rows) == 3 and named
+    ok65 = got == (2, 1) and empty == (0, 0) and len(rows) == 3 and named and mid == (2, 1)
     p("F6.5", ok65, f"liste={got[0] if got else '?'},{got[1] if got else '?'} leer={empty[0] if empty else '?'},{empty[1] if empty else '?'} · bin/phase-report --no-jev: плечо "
                     f"«Тимлид:» выдачи, F1.1, «Оператор:» ×2, «Тимлид:» ×1 — строк списка {len(rows)}, sha · путь · слово названы — {'да' if named else 'нет'}: "
-                    + " | ".join(' '.join(l.split())[:70] for l in rows) + " · без них — " + (f"{empty[0]},{empty[1]}" if empty else "нет строки"))
+                    + " | ".join(' '.join(l.split())[:70] for l in rows) + " · без них — " + (f"{empty[0]},{empty[1]}" if empty else "нет строки")
+                    + " · правка запроса «Тимлид:» посреди плеча — " + (f"{mid[0]},{mid[1]}" if mid else "нет строки"))
     print("OPERATOR_WORD_OK" if all(sec) else "OPERATOR_WORD_FAIL", flush=True)
     return all(sec)
 

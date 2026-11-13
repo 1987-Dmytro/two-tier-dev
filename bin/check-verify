@@ -1064,7 +1064,7 @@ def pair(rows, before, after, edit_ts):
 def retired(base):
     """F8.4: где агент evaluator: (в архиве репо, файлы evaluator.md в kit/ и bin/, упоминания вне списка апгрейда и проб)."""
     files = [os.path.relpath(os.path.join(d, f), base) for top in ("kit", "bin") for d, _, fs in os.walk(f"{base}/{top}") for f in fs if f == "evaluator.md"]
-    allow = {"kit/bin/two-tier-upgrade", "kit/bin/check-kit", "bin/check-verify"}  # снимает, проверяет отсутствие, проба
+    allow = {"kit/bin/two-tier-upgrade", "kit/bin/check-kit", "bin/check-verify", "bin/check-docs"}  # снимает, проверяет отсутствие, проба F8.4, проба F9.2 (её красный образец называет агента)
     said = []
     for top in ("kit", "bin"):
         for d, _, fs in os.walk(f"{base}/{top}"):
