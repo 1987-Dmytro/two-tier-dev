@@ -1,7 +1,7 @@
 {
   "name": "handoff",
-  "version": "0.4.0",
-  "description": "Writes a handoff document from the live transcript when the context fills past a threshold, when Jev judges the unit of work finished (absorbed from compact-adviser), or on /handoff, then clears the context and resumes from it.",
+  "version": "0.6.0",
+  "description": "Hands off in place, never with /clear: at every crossing of the threshold (the fill read as the app reads it, against the compaction window) the mod compacts the session with the handoff's sections; every compaction of a person's session keeps them and leaves its summary as a handoff file. No Jev, no paid calls.",
   "author": {
     "name": "two-tier-dev"
   },
@@ -9,7 +9,7 @@
     "threshold": {
       "type": "number",
       "default": 70,
-      "description": "Fallback threshold: context fill (percent of the window) at which the handoff is written automatically after the turn ends; handoff_threshold_pct of the project's budgets.json wins.",
+      "description": "Fallback threshold: context fill (percent of the compaction window, as the app shows it) at which the session is compacted in place after the turn ends, at every crossing; handoff_threshold_pct of the project's budgets.json wins.",
       "title": "Auto-handoff threshold (%)"
     },
     "handoffDir": {
@@ -18,11 +18,11 @@
       "description": "Directory for handoff files, relative to the project root (e.g. `claude` for a team-lead repo).",
       "title": "Handoff directory"
     },
-    "autoClear": {
+    "autoCompact": {
       "type": "boolean",
       "default": true,
-      "description": "After writing the handoff, run /clear and submit the resume prompt so work continues in a fresh context.",
-      "title": "Clear and resume after the handoff"
+      "description": "Past the threshold, compact the session in place with the handoff's sections (the task list, background work and the session stay); off writes the handoff file only. The context is never cleared.",
+      "title": "Compact in place at the handoff"
     },
     "minTurns": {
       "type": "number",
@@ -37,19 +37,8 @@
         "ru",
         "en"
       ],
-      "description": "Language of the handoff document and the resume prompt.",
+      "description": "Language of the handoff document and of the compaction's instructions.",
       "title": "Language"
-    },
-    "jev": {
-      "type": "string",
-      "default": "hint",
-      "options": [
-        "off",
-        "hint",
-        "auto"
-      ],
-      "description": "Jev's boundary judgment after each settled answer below the threshold (needs TYPESAFE_API_KEY): hint lights the band, auto hands off right there, off never asks.",
-      "title": "Jev boundary (off / hint / auto)"
     }
   },
   "types": "./types/index.d.ts"

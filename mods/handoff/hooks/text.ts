@@ -4,11 +4,11 @@ export type Lang = 'ru' | 'en'
 
 export type Parsed = { slug: string; body: string }
 
-/** YYYY-MM-DD-HHMM in the local time of the hooks environment. */
-export function stampOf(ms: number): string {
+/** YYYY-MM-DD-HHMM (with `withSeconds`, YYYY-MM-DD-HHMMSS) in the local time of the hooks environment. */
+export function stampOf(ms: number, withSeconds = false): string {
   const d = new Date(ms)
   const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${withSeconds ? p(d.getSeconds()) : ''}`
 }
 
 /** A safe file-name slug: lowercase ASCII/Cyrillic letters, digits and dashes, at most 40 characters. */
@@ -66,7 +66,66 @@ export function handoffPrompt(lang: Lang, stamp: string, dir: string): string {
   ].join('\n')
 }
 
-/** The prompt submitted after /clear: read the handoff and continue. */
+/**
+ * What the summarizer is told when the handoff rides a compaction (0.5.0): the conversation is replaced by the summary
+ * and the work goes on in the same session, so the summary carries what a handoff carries.
+ */
+export function compactInstructions(lang: Lang): string {
+  if (lang === 'en') {
+    return [
+      'Compact as a handoff: this summary replaces the conversation and the work continues in this same session. Keep, in full:',
+      "1. The user's task and their latest words and rulings, verbatim where they matter.",
+      '2. The task list with the state of each task.',
+      '3. What is done — paths, commits, numbers, exit codes.',
+      '4. Decisions and rulings, each with its reason.',
+      '5. The step in progress and the next step — exact commands and files.',
+      '6. What is running in the background — processes, sessions, agents, with their ids or PIDs, output files and what is awaited from them.',
+      '7. Open questions and risks, with the exact state they were left in.',
+      'Facts over prose; never invent a result that was not seen; never write a secret.',
+    ].join('\n')
+  }
+  return [
+    'Сжимай как хендофф: сводка заменит разговор, а работа продолжится в этой же сессии. Сохрани полностью:',
+    '1. Задачу пользователя и его последние слова и решения — дословно там, где это важно.',
+    '2. Список задач и состояние каждой.',
+    '3. Что сделано — пути, коммиты, числа, коды выхода.',
+    '4. Решения и рулинги — у каждого причина.',
+    '5. Текущий шаг и следующий — точные команды и файлы.',
+    '6. Что идёт в фоне — процессы, сессии, агенты: их id или PID, файлы вывода и чего от них ждём.',
+    '7. Открытые вопросы и риски — с точным состоянием, в котором оставлены.',
+    'Факты, не проза; не выдумывать результат, которого не видел; секреты не писать.',
+  ].join('\n')
+}
+
+/** The person's own `/compact <text>` first, the handoff's sections after it. */
+export function withInstructions(own: string | undefined, ours: string): string {
+  const o = own?.trim()
+  return o ? `${o}\n\n${ours}` : ours
+}
+
+/** A compaction's summary: the texts the conversation holds afterwards that it did not hold before (kept messages are dropped). */
+export function summaryOf(before: readonly { text: string }[], after: readonly { text: string }[]): string {
+  const seen = new Set(before.map(m => m.text))
+  return after
+    .filter(m => m.text.trim() !== '' && !seen.has(m.text))
+    .map(m => m.text.trim())
+    .join('\n\n')
+}
+
+const kTokens = (n: number | undefined) => (n === undefined ? '?' : `${Math.round(n / 1000)}k`)
+
+/** The file a compaction leaves under handoffDir: the map on disk; the context itself stays in the session as the summary. */
+export function compactDoc(lang: Lang, stamp: string, trigger: string, summary: string, before?: number, after?: number): string {
+  const size = `${kTokens(before)} → ${kTokens(after)}`
+  const head =
+    lang === 'en'
+      ? [`# Handoff ${stamp} — compaction (${trigger})`, `The context was carried over by a compaction in the same session (${size} tokens); below is the summary the model now holds.`]
+      : [`# Хендофф ${stamp} — сжатие (${trigger})`, `Контекст перенесён сжатием в этой же сессии (${size} токенов); ниже — сводка, которая теперь у модели.`]
+  const body = summary || (lang === 'en' ? '(the compaction returned no summary text)' : '(сжатие не вернуло текста сводки)')
+  return `${head.join('\n')}\n\n${body}\n`
+}
+
+/** The line for a brand-new process (`/handoff write`, Only file): read the handoff and continue. */
 export function resumePrompt(lang: Lang, relPath: string): string {
   return lang === 'en'
     ? `Fresh context after a handoff. Read ${relPath} in full, then continue from its section "3. Next" — start with the first step; ask only if section 4 blocks it.`

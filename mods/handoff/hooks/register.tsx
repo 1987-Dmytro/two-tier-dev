@@ -1,76 +1,95 @@
 // handoff — a Claude Code mod (two-tier-dev).
-// When the context fills past `threshold` (read from $.session.usage() at the end of a turn), on `/handoff now`, or
-// on the band's button, it asks the model — over the session's own transcript, served from the prompt cache
-// ($.model.fork) — for a handoff document, writes it under `handoffDir`, and (with `autoClear`) runs /clear and
-// submits the resume prompt, so the work continues in a fresh context with nothing retyped.
-// Below the threshold, Jev (absorbed from compact-adviser) judges each settled answer: is the unit of work finished,
-// and was it hands-on? Past a floor that slides with the fill, `jev: hint` lights the band, `jev: auto` hands off there.
-// A band above the prompt shows the fill, the hint and the buttons. Headless runs (`claude -p`) are left alone.
+// 0.6.0: the handoff rides a compaction in the same session — never /clear — at every crossing of the threshold, read as
+// the app reads the fill (against the compaction window); no Jev, no paid call, no TYPESAFE_API_KEY (the operator's word).
+// A /clear dropped the conversation, the task list and the tie to background work; a compaction keeps the session (its id,
+// tasks, background tasks, notifications) and puts a summary in the conversation's place. The mod tells every compaction of a
+// person's session what to keep — the handoff's sections — and saves its summary under `handoffDir` as the map on disk:
+// - the engine's own compaction (its window's end mid-turn, `/compact`): a `session.compact` hook adds the instructions;
+// - past `threshold` at the end of a turn, on the band's button or `/handoff now`: the mod compacts itself between turns
+//   ($.session.compact with the instructions — a plugin's own call skips its own hook).
+// The mod cannot compact while a turn runs: a turn's growth past the threshold is bounded by the engine's own compaction at
+// the end of its window (`autoCompactWindow`), which carries the same sections. `/handoff status` prints where that is.
 // SPEC-v3.5 F1 (0.4.0): /handoff is registered everywhere the mod loads — a host like the Code tab starts as the SDK does (isInteractive
 // false) and attaches a surface later; the mod acts by itself only in a person's session: the REPL or an attached surface, the rule of
 // spec-board and window-guard (an attach is latched). The threshold is `handoff_threshold_pct` of the project's budgets.json (defaults,
 // project only tightens — the rule of window-guard), else the `threshold` option, else 70; it is read at each decision and each status.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
-import { JEV_FROM, JEV_TIMEOUT_MS, JEV_URL, floorFor, parseJudgment, requestBody, score, stateOf, type Judgment, type Mode } from './jev'
-import { handoffPrompt, parseHandoff, resumePrompt, stampOf, type Lang } from './text'
+import type { EngineInterface, Register, SessionCompacted, SessionMessage } from 'claude-code'
+import { compactDoc, compactInstructions, handoffPrompt, parseHandoff, resumePrompt, stampOf, summaryOf, withInstructions, type Lang } from './text'
 
-type Settings = { threshold: number; handoffDir: string; autoClear: boolean; minTurns: number; language: Lang; jev: Mode }
+type Settings = { threshold: number; handoffDir: string; autoCompact: boolean; minTurns: number; language: Lang }
 
 type State = {
   s: Settings
   isAttended: boolean // the REPL, or a surface attached once (session.attach): a person's session
-  isArmed: boolean // re-armed once the fill drops well below the threshold (a fresh context after /clear)
-  threshold: number // the threshold of the last decision: what the band and Jev's floor read
+  isSdkHost: boolean // started as the SDK starts (isInteractive false) — the Code tab: $.session.compact is refused there
+  isArmed: boolean // re-armed whenever the fill is below the threshold (after a compaction: its size afterwards)
+  threshold: number // the threshold of the last decision: what the band reads
   isRunning: boolean
   lastPath: string | undefined
-  prompt: string // the user's last typed prompt: what Jev reads beside the answer
-  seq: number // turns started: a judgment that comes back after the next turn began is dropped
-  judged: string | undefined // the turn Jev was last asked about
+  pending: Trigger | undefined // the mod's trigger of a `/compact` prompt it submitted: names the file the hook writes
 }
 
 type Outcome = { isWritten: true; relPath: string; text: string } | { isWritten: false; text: string }
+type Trigger = 'threshold' | 'button' | 'command'
+type Fill = { tokens?: number; window: number; percent?: number; isCompactionWindow: boolean }
 
 const fill = atom({ plugin: 'handoff', key: 'fill' } as const, null)
 const isHidden = atom({ plugin: 'handoff', key: 'isHidden' } as const, false)
 const note = atom({ plugin: 'handoff', key: 'note' } as const, '')
-const advice = atom({ plugin: 'handoff', key: 'advice' } as const, '')
 
 const clamp = (n: number, lo: number, hi: number) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo)
+const kTokens = (n: number | undefined) => (n === undefined ? '?' : `${Math.round(n / 1000)}k`)
+const sizeOf = (f: Fill) => (f.tokens === undefined ? '' : ` · ${kTokens(f.tokens)}/${kTokens(f.window)}`)
+const percentOf = (tokens: number, window: number) => Math.round((tokens / window) * 100)
+const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err))
+const HEADLESS = /not available in a headless/i // $.session.compact in an SDK-hosted session (the Code tab), engine 2.1.321
+
+// The fill as the person sees it — the app's context figure and /context measure against the compaction window
+// (`autoCompactWindow`, `rawMaxTokens`), which may be smaller than the model's: 386k is 64 % of a 600k compaction window and
+// only 38 % of a 1M model window. `context.percent` is the model's; the breakdown (`summary`: estimated locally, no request)
+// names the compaction window. No breakdown — the model's window, as before.
+async function fillOf($: EngineInterface): Promise<Fill> {
+  const { context } = await $.session.usage({ breakdown: 'summary' })
+  const raw = context.breakdown?.rawMaxTokens
+  if (raw !== undefined && raw > 0) {
+    return { tokens: context.tokens, window: raw, percent: context.tokens === undefined ? undefined : percentOf(context.tokens, raw), isCompactionWindow: raw !== context.window }
+  }
+  return { tokens: context.tokens, window: context.window, percent: context.percent, isCompactionWindow: false }
+}
 
 const settingsOf = (o: Readonly<Record<string, unknown>>): Settings => ({
   threshold: clamp(Number(o.threshold ?? 70), 10, 95),
   handoffDir: String(o.handoffDir ?? 'handoffs').replace(/^\/+|\/+$/g, '') || 'handoffs',
-  autoClear: o.autoClear !== false,
+  autoCompact: o.autoCompact !== false,
   minTurns: Math.max(0, Number(o.minTurns ?? 2)),
   language: o.language === 'en' ? 'en' : 'ru',
-  jev: o.jev === 'off' || o.jev === 'auto' ? o.jev : 'hint',
 })
 
 const words = (lang: Lang) =>
   lang === 'en'
-    ? { now: 'Handoff → fresh context', file: 'File only', compact: 'Compact', hide: 'Hide', ctx: 'ctx', at: 'handoff @', jev: 'Jev: unit finished' }
-    : { now: 'Хендофф → свежий контекст', file: 'Только файл', compact: 'Compact', hide: 'Скрыть', ctx: 'контекст', at: 'хендофф @', jev: 'Jev: задача на границе' }
+    ? { now: 'Hand off → compact', file: 'File only', hide: 'Hide', ctx: 'ctx', at: 'handoff @' }
+    : { now: 'Передать → compact', file: 'Только файл', hide: 'Скрыть', ctx: 'контекст', at: 'хендофф @' }
 
 export const register: Register = (on, options) => {
   const st: State = {
     s: settingsOf(options),
     isAttended: false,
+    isSdkHost: false,
     isArmed: true,
     threshold: 70,
     isRunning: false,
     lastPath: undefined,
-    prompt: '',
-    seq: 0,
-    judged: undefined,
+    pending: undefined,
   }
 
   on('session.start', async ($, e, next) => {
     st.isAttended ||= e.isInteractive // a host may attach before this runs
+    st.isSdkHost = !e.isInteractive
     await $.command.register({
       name: 'handoff',
-      description: 'Write a handoff from this session; `now` also clears the context and resumes from it.',
+      description: 'Hand off in place: `now` compacts this session with the handoff sections (never /clear); `write` writes the file only.',
       argumentHint: 'now | write | status | last',
     })
     return next(e)
@@ -81,53 +100,59 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // A main-loop turn begins (a subagent's run raises none): keep the typed prompt for Jev, drop the last hint.
-  on('turn.start', async ($, e, next) => {
-    st.seq++
-    if (e.text.trim()) st.prompt = e.text
-    if (await read($, advice)) await update($, advice, () => '')
-    return next(e)
-  })
-
-  // /clear resets $.state, and session.start does not fire again: put the fill back so the band shows at once.
+  // A person's /clear resets $.state, and session.start does not fire again: put the fill back so the band shows at once.
   on('classic.SessionStart', async ($, e, next) => {
     const result = await next(e)
     if (e.source !== 'clear' || !(await isPersons($, st))) return result
     try {
-      const percent = (await $.session.usage()).context.percent ?? 0
-      await update($, fill, () => percent)
+      const { percent } = await fillOf($)
+      if (percent !== undefined) await update($, fill, () => percent)
     } catch {
       /* no figure: the band comes back after the next turn */
     }
     return result
   })
 
-  // The decision point: after every main-loop turn, read the window's fill; past the threshold — hand off;
-  // below it, ask Jev whether this answer closes a unit of work.
+  // Every compaction of a person's main conversation the mod did not start itself — the engine's window end mid-turn, a
+  // `/compact`, another plugin, a precompute: the summary keeps the handoff's sections; once it stands, it is saved as a file.
+  on('session.compact', async ($, e, next) => {
+    if (e.agentId !== undefined || !(await isPersons($, st))) return next(e)
+    const result = await next({ ...e, instructions: withInstructions(e.instructions, compactInstructions(st.s.language)) })
+    if (e.trigger === 'precompute') return result
+    const trigger = st.pending ?? e.trigger // the mod's own `/compact` prompt (Code tab) carries the mod's trigger
+    st.pending = undefined
+    if (result.skip !== undefined) {
+      if (trigger === 'threshold') st.isArmed = true
+      return result
+    }
+    await afterCompact($, st, trigger, e.messages, result)
+    return result
+  })
+
+  // The decision point: after every main-loop turn, read the fill as the app does; at or past the threshold — compact in place.
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     if (e.agentId !== undefined || st.isRunning || e.isAborted || !(await isPersons($, st))) return result
     const threshold = (st.threshold = await thresholdOf($, st))
-    let percent = 0
+    let now: Fill | undefined
     try {
-      percent = (await $.session.usage()).context.percent ?? 0
+      now = await fillOf($)
     } catch {
-      return result // no figure, no decision
+      /* shown below as unknown */
     }
-    await update($, fill, () => percent)
-    $.ui.status(`ctx ${percent}% · handoff @${threshold}%`)
-    if (percent < threshold - 20) st.isArmed = true
-    if (percent < threshold) {
-      if (st.s.jev !== 'off' && st.isArmed && e.reason === 'answer' && e.answer.trim() && percent >= JEV_FROM && st.judged !== e.turnId) {
-        st.judged = e.turnId
-        const answer = e.answer
-        const seq = st.seq
-        // Outside this dispatch: the turn ends while Jev answers.
-        $.clock.after(0, () => void judgeBoundary($, st, answer, percent, seq))
-      }
+    const percent = now?.percent
+    if (now === undefined || percent === undefined) {
+      // No figure (no response yet in this window, or the read failed): no decision — said, not silent.
+      $.ui.status(`ctx unknown · handoff @${threshold}%`)
       return result
     }
-    if (!st.isArmed) return result
+    await update($, fill, () => percent)
+    $.ui.status(`ctx ${percent}%${sizeOf(now)} · handoff @${threshold}%`)
+    if (percent < threshold) {
+      st.isArmed = true // below the threshold: the next crossing compacts
+      return result
+    }
+    if (!st.isArmed) return result // a compaction that left the fill at or past the threshold is not repeated each turn
     let turns = st.s.minTurns
     try {
       turns = await $.session.turns()
@@ -136,9 +161,14 @@ export const register: Register = (on, options) => {
     }
     if (turns < st.s.minTurns) return result
     st.isArmed = false
-    $.ui.toast(`handoff: context at ${percent}% — writing the handoff…`, { timeoutMs: 6000 })
-    // Outside this dispatch: the turn is not held while the fork and the /clear run.
-    $.clock.after(250, () => void handoffAndResume($, st, 'auto'))
+    $.ui.toast(
+      st.s.autoCompact
+        ? `handoff: context at ${percent}% — compacting in place; the work stays in this session…`
+        : `handoff: context at ${percent}% — writing the handoff file…`,
+      { timeoutMs: 6000 },
+    )
+    // Outside this dispatch, once the turn has ended: a compaction is refused while a turn runs.
+    $.clock.after(250, () => void (st.s.autoCompact ? compactInPlace($, st, 'threshold') : handoffFileOnly($, st, 'threshold')))
     return result
   })
 
@@ -149,13 +179,13 @@ export const register: Register = (on, options) => {
       const last = st.lastPath ?? (await readLast($))
       return { text: last ? `last handoff: ${last}` : 'no handoff written yet' }
     }
+    if (arg === 'now') {
+      // The compaction cannot run inside the command's own dispatch; it follows once the session is idle.
+      $.clock.after(100, () => void compactInPlace($, st, 'command'))
+      return { text: 'handoff: compacting in place with the handoff sections — the work stays in this session…' }
+    }
     const outcome = await writeHandoff($, st, 'command')
     if (!outcome.isWritten) return { text: outcome.text }
-    if (arg === 'now' && st.s.autoClear) {
-      // /clear cannot run inside the command's own dispatch; it follows once the session is idle.
-      $.clock.after(100, () => void clearAndResume($, st, outcome.relPath))
-      return { text: `${outcome.text} — clearing the context and resuming from it…` }
-    }
     return { text: `${outcome.text} — fresh-session line: ${resumePrompt(st.s.language, outcome.relPath)}` }
   })
 
@@ -166,19 +196,16 @@ export const register: Register = (on, options) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const w = words(st.s.language)
     const last = await read($, note)
-    const tip = await read($, advice)
-    const isHot = percent >= st.threshold || tip !== ''
+    const isHot = percent >= st.threshold
     return (
       <Box>
         <Text color={isHot ? 'yellow' : undefined} dimColor={!isHot}>
           {w.ctx} {percent}% · {w.at}
-          {st.threshold}%{tip ? ` · ${w.jev} ${tip}` : ''}{last ? ` · ${last}` : ''}{' '}
+          {st.threshold}%{last ? ` · ${last}` : ''}{' '}
         </Text>
-        <Button key="now" label={w.now} hotkey="h" variant="primary" onPress={() => void handoffAndResume($, st, 'button')} />
+        <Button key="now" label={w.now} hotkey="h" variant="primary" onPress={() => void compactInPlace($, st, 'button')} />
         <Text> </Text>
         <Button key="file" label={w.file} hotkey="f" onPress={() => void handoffFileOnly($, st)} />
-        <Text> </Text>
-        <Button key="compact" label={w.compact} hotkey="c" onPress={() => void compactNow($)} />
         <Text> </Text>
         <Button key="hide" label={w.hide} plain onPress={() => update($, isHidden, () => true)} />
       </Box>
@@ -186,75 +213,11 @@ export const register: Register = (on, options) => {
   })
 }
 
-// Jev's judgment of the answer just settled: the hint, or (jev: auto) the handoff right at the boundary.
-// No key, an error, a timeout or a wrong model — no advice and nothing changes; each call is one journal line, no content.
-async function judgeBoundary($: EngineInterface, st: State, answer: string, percent: number, seq: number): Promise<void> {
-  if (st.isRunning) return
-  const key = await $.env.get('TYPESAFE_API_KEY')
-  if (!key) return
-  let tools: string[] = []
-  try {
-    const ms = await $.session.messages()
-    let i = ms.length - 1
-    while (i >= 0 && !(ms[i]!.role === 'user' && !ms[i]!.toolResults?.length && ms[i]!.text.trim())) i--
-    tools = ms.slice(i + 1).flatMap(m => m.toolUses.map(u => u.tool))
-  } catch {
-    /* counts unknown: Jev reads the text alone */
-  }
-  const t0 = await $.clock.now()
-  let verdict: Judgment | string
-  try {
-    const res = await Promise.race([
-      $.http.fetch(JEV_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-        body: requestBody(stateOf(st.prompt, answer, tools, key)),
-      }),
-      $.clock.sleep(JEV_TIMEOUT_MS).then(() => undefined),
-    ])
-    verdict = !res ? `timeout after ${JEV_TIMEOUT_MS} ms` : !res.ok ? `HTTP ${res.status}` : parseJudgment(res.text)
-  } catch (err) {
-    verdict = `network: ${err instanceof Error ? err.message : String(err)}`.split(key).join('[key]')
-  }
-  const floor = floorFor(percent, st.threshold)
-  const s = typeof verdict === 'string' ? undefined : Math.round(score(verdict) * 100) / 100
-  const isStale = st.seq !== seq || st.isRunning
-  const decision = s === undefined ? 'error' : isStale ? 'stale' : s < floor ? 'below' : st.s.jev
-  await journal($, st, {
-    at: new Date(t0).toISOString(),
-    ms: (await $.clock.now()) - t0,
-    percent,
-    floor,
-    score: s,
-    decision,
-    ...(typeof verdict === 'string' ? { error: verdict } : { model: verdict.model, in: verdict.inputTokens, out: verdict.outputTokens }),
-  })
-  if (s === undefined || isStale) return
-  $.ui.status(`ctx ${percent}% · handoff @${st.threshold}% · jev ${s.toFixed(2)}/${floor.toFixed(2)}`)
-  if (s < floor) return
-  const tip = `${s.toFixed(2)} ≥ ${floor.toFixed(2)}`
-  if (st.s.jev === 'auto') {
-    let turns = st.s.minTurns
-    try {
-      turns = await $.session.turns()
-    } catch {
-      /* count unknown: treated as enough */
-    }
-    if (turns >= st.s.minTurns && st.isArmed) {
-      st.isArmed = false
-      $.ui.toast(`handoff: Jev — unit finished (${tip}), writing the handoff…`, { timeoutMs: 6000 })
-      await handoffAndResume($, st, 'jev')
-      return
-    }
-  }
-  await update($, advice, () => tip) // the band turns yellow; no toast — every finished answer would raise one
-}
-
-// One line per Jev call in <handoffDir>/jev.jsonl: numbers and the decision, never the prompt or the answer.
+// One line per record in <handoffDir>/<file>: numbers and paths, never the prompt, the answer or the summary.
 // ponytail: read-and-rewrite append, a 4 MiB file (~25k lines) is the ceiling; rotate by date if it ever nears it.
-async function journal($: EngineInterface, st: State, rec: Record<string, unknown>): Promise<void> {
+async function journal($: EngineInterface, st: State, file: string, rec: Record<string, unknown>): Promise<void> {
   try {
-    const path = `${await $.session.root()}/${st.s.handoffDir}/jev.jsonl`
+    const path = `${await $.session.root()}/${st.s.handoffDir}/${file}`
     let old = ''
     try {
       old = await $.fs.read(path)
@@ -267,25 +230,102 @@ async function journal($: EngineInterface, st: State, rec: Record<string, unknow
   }
 }
 
-// The band's Compact: Claude Code's own /compact path, between turns.
-async function compactNow($: EngineInterface): Promise<void> {
+// The mod's own compaction, between turns: the handoff's sections as instructions, then the same bookkeeping as the hook's.
+// Not done — busy, vetoed ({ skip }), refused (a turn runs) or failed: nothing is cleared; the threshold re-arms, so the next
+// turn's end tries again; the button and /handoff now never held the arm.
+async function compactInPlace($: EngineInterface, st: State, trigger: Trigger): Promise<void> {
+  const rearm = () => {
+    if (trigger === 'threshold') st.isArmed = true
+  }
+  if (st.isRunning) {
+    rearm()
+    return
+  }
+  st.isRunning = true
   try {
-    const r = await $.session.compact()
-    await update($, note, () => (r.skip !== undefined ? `compact: ${r.skip}` : 'compacted'))
-    await update($, advice, () => '')
+    let before: readonly SessionMessage[] = []
+    try {
+      before = await $.session.messages()
+    } catch {
+      /* no snapshot: the file holds every text the compaction left */
+    }
+    const result = await $.session.compact({ instructions: compactInstructions(st.s.language) })
+    if (result.skip !== undefined) {
+      rearm()
+      await update($, note, () => `compact: ${result.skip}`)
+      return
+    }
+    const relPath = await afterCompact($, st, trigger, before, result)
+    await update($, note, () => (relPath ? `compacted · ${relPath}` : 'compacted'))
   } catch (err) {
-    $.ui.toast(`handoff: compact failed — ${err instanceof Error ? err.message : String(err)}`, { timeoutMs: 6000 })
+    if (st.isSdkHost || HEADLESS.test(messageOf(err))) {
+      // The Code tab hosts the engine as the SDK does: there `$.session.compact` is refused and compaction runs inside a turn,
+      // as the `/compact` command (the engine's own words; a prompt beginning with / is refused — `$.command.run` runs it).
+      // The session.compact hook adds the sections, saves the file and re-arms.
+      st.pending = trigger
+      try {
+        await $.command.run({ command: 'compact' })
+        await update($, note, () => 'compacting via /compact')
+        return
+      } catch (err2) {
+        st.pending = undefined
+        err = err2
+      }
+    }
+    rearm()
+    const why = `handoff: compact failed — ${messageOf(err)}; nothing was cleared`
+    $.ui.toast(why, { timeoutMs: 8000 })
+    await update($, note, () => why)
+  } finally {
+    st.isRunning = false
   }
 }
 
-async function handoffAndResume($: EngineInterface, st: State, trigger: 'auto' | 'button' | 'jev'): Promise<void> {
-  const outcome = await writeHandoff($, st, trigger)
-  await update($, note, () => outcome.text)
-  if (outcome.isWritten && st.s.autoClear) await clearAndResume($, st, outcome.relPath)
+// A compaction stood: save its summary as the handoff file, re-arm from its size afterwards (the last response's figure is
+// stale until the next one), one journal line. Returns the file's path relative to the root, or undefined when unwritten.
+async function afterCompact($: EngineInterface, st: State, trigger: string, before: readonly SessionMessage[], result: SessionCompacted): Promise<string | undefined> {
+  let relPath: string | undefined
+  let at = 0
+  try {
+    at = await $.clock.now()
+    const stamp = stampOf(at)
+    const path = `${st.s.handoffDir}/handoff-${stampOf(at, true)}-compact-${trigger}.md` // to the second: two in a minute keep both
+    await $.fs.write(`${await $.session.root()}/${path}`, compactDoc(st.s.language, stamp, trigger, summaryOf(before, result.messages), result.tokensBefore, result.tokensAfter))
+    relPath = path
+    st.lastPath = path
+    $.ui.log(`handoff (compact, ${trigger}): ${path}`)
+    try {
+      await $.store.set('lastPath', path)
+    } catch {
+      /* the store is a convenience */
+    }
+  } catch (err) {
+    $.ui.toast(`handoff: compacted, but the file failed — ${messageOf(err)}`, { timeoutMs: 6000 })
+  }
+  try {
+    const { window } = await fillOf($) // the same window the band and the threshold read
+    if (result.tokensAfter !== undefined && window > 0) {
+      const percent = percentOf(result.tokensAfter, window)
+      const threshold = await thresholdOf($, st)
+      await update($, fill, () => percent)
+      $.ui.status(`ctx ${percent}% · ${kTokens(result.tokensAfter)}/${kTokens(window)} · handoff @${threshold}% · compacted`)
+      if (percent < threshold) st.isArmed = true
+    }
+  } catch {
+    /* no window: the next turn's figure re-arms */
+  }
+  await journal($, st, 'compact.jsonl', {
+    at: new Date(at).toISOString(),
+    trigger,
+    before: result.tokensBefore ?? null,
+    after: result.tokensAfter ?? null,
+    file: relPath ?? null,
+  })
+  return relPath
 }
 
-async function handoffFileOnly($: EngineInterface, st: State): Promise<void> {
-  const outcome = await writeHandoff($, st, 'button')
+async function handoffFileOnly($: EngineInterface, st: State, trigger: Trigger = 'button'): Promise<void> {
+  const outcome = await writeHandoff($, st, trigger)
   await update($, note, () => outcome.text)
   if (outcome.isWritten) $.ui.log(`fresh-session line: ${resumePrompt(st.s.language, outcome.relPath)}`)
 }
@@ -317,11 +357,23 @@ async function thresholdOf($: EngineInterface, st: State): Promise<number> {
   return b === undefined ? st.s.threshold : clamp(b, 10, 95)
 }
 
+// The engine's own compaction point (autoCompactWindow): what bounds a turn's growth past the threshold.
+async function autoCompactText($: EngineInterface): Promise<string> {
+  try {
+    const b = (await $.session.usage({ breakdown: 'summary' })).context.breakdown
+    if (!b) return 'unknown'
+    return b.isAutoCompactEnabled && b.autoCompactThreshold !== undefined ? `${kTokens(b.autoCompactThreshold)} (${b.autocompactSource})` : 'off'
+  } catch {
+    return 'unknown'
+  }
+}
+
 async function statusLine($: EngineInterface, st: State): Promise<string> {
   let fillText = 'unknown'
   try {
-    const { context } = await $.session.usage()
-    fillText = `${context.percent ?? 0}% of ${context.window} tokens`
+    const f = await fillOf($)
+    const of = `${f.window} tokens (${f.isCompactionWindow ? 'compaction window, as the app shows' : 'model window'})`
+    fillText = f.percent === undefined ? `unknown of ${of}, no response since the start or the last compaction` : `${f.percent}% of ${of}, ${kTokens(f.tokens)}`
   } catch {
     /* no figure */
   }
@@ -329,7 +381,16 @@ async function statusLine($: EngineInterface, st: State): Promise<string> {
   const b = await budgetThreshold($)
   const surfaces = await $.session.surfaces()
   const surface = surfaces.length ? surfaces.join(',') : st.isAttended ? 'attached' : 'none'
-  return `handoff · context ${fillText} · threshold ${await thresholdOf($, st)}% (${b === undefined ? 'option' : 'budgets.json'}) · surface ${surface} · auto-clear ${st.s.autoClear ? 'on' : 'off'} · dir ${st.s.handoffDir}/ · last: ${last ?? '—'}`
+  return [
+    `handoff · context ${fillText}`,
+    `threshold ${await thresholdOf($, st)}% (${b === undefined ? 'option' : 'budgets.json'})`,
+    `engine compacts at ${await autoCompactText($)}`,
+    `surface ${surface}`,
+    `armed ${st.isArmed ? 'yes' : 'no'}`,
+    `auto-compact ${st.s.autoCompact ? 'on' : 'off'}`,
+    `dir ${st.s.handoffDir}/`,
+    `last: ${last ?? '—'}`,
+  ].join(' · ')
 }
 
 async function readLast($: EngineInterface): Promise<string | undefined> {
@@ -341,7 +402,7 @@ async function readLast($: EngineInterface): Promise<string | undefined> {
   }
 }
 
-async function writeHandoff($: EngineInterface, st: State, trigger: 'auto' | 'command' | 'button' | 'jev'): Promise<Outcome> {
+async function writeHandoff($: EngineInterface, st: State, trigger: Trigger): Promise<Outcome> {
   if (st.isRunning) return { isWritten: false, text: 'handoff: already running' }
   st.isRunning = true
   try {
@@ -365,21 +426,10 @@ async function writeHandoff($: EngineInterface, st: State, trigger: 'auto' | 'co
     $.ui.log(`handoff (${trigger}): ${relPath}`)
     return { isWritten: true, relPath, text: `handoff written: ${relPath}` }
   } catch (err) {
-    const why = `handoff: failed — ${err instanceof Error ? err.message : String(err)}`
+    const why = `handoff: failed — ${messageOf(err)}`
     $.ui.toast(why, { timeoutMs: 6000 })
     return { isWritten: false, text: why }
   } finally {
     st.isRunning = false
-  }
-}
-
-async function clearAndResume($: EngineInterface, st: State, relPath: string): Promise<void> {
-  try {
-    await $.command.run({ command: 'clear' })
-    await $.prompt.submit({ text: resumePrompt(st.s.language, relPath) })
-  } catch (err) {
-    $.ui.toast(`handoff: written, but the fresh start failed — ${err instanceof Error ? err.message : String(err)}`, {
-      timeoutMs: 8000,
-    })
   }
 }
