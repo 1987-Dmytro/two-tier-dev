@@ -3,7 +3,7 @@ export type HandoffFill = number | null
 declare module 'claude-code' {
   interface PluginState {
     handoff: {
-      /** Context fill after the last turn, percent of the window; null until the first response. */
+      /** Context fill after the last turn or compaction, percent of the window; null until the first response. */
       fill: number | null
       /** The person hid the band for this session. */
       isHidden: boolean
