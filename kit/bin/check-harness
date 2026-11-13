@@ -2063,6 +2063,14 @@ def stop_probes(src, launch):
     dec = lambda r: last_line(r).get("decision")
     STOP_L = GATE_STOP.split("\n")[0]
     stop_now = lambda repo, text=GATE_STOP: (open(f"{repo}/docs/PROGRESS.md", "a", encoding="utf-8").write("\n" + text), ship(repo, "стоп", "docs/PROGRESS.md"))
+
+    def one(text, word=None):  # свой проект: стоп text запушен, слово word (если есть) — в транскрипте после коммита; решение хука
+        w, tw = gate_fixture(src, launch)
+        stop_now(w, text)
+        if word is not None:
+            with open(tw, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + 2)), "message": {"role": "user", "content": word}}, ensure_ascii=False) + "\n")
+        return dec(gate_run(w, tw, "probe-one"))
     # F3.1 — открытый стоп, после него только отчётные коммиты: каждый конец хода — stop; хук v3.4 — второй block
     a, ta = gate_fixture(src, launch)
     stop_now(a)
@@ -2079,12 +2087,14 @@ def stop_probes(src, launch):
     two, ttwo = gate_fixture(src, launch)  # в разделе две строки STOP: прошлая снята, открытая — последняя
     stop_now(two, GATE_STOP.replace(STOP_L, STOP_L + " — снят") + "\n" + GATE_STOP)
     last_open = dec(gate_run(two, ttwo, "probe-open-two"))
+    sect_open = one("STOP: STOP-INPUT — прошлый ключ — снят\n\n## Open stop\n" + GATE_STOP)  # «## Open stop» раньше первого раздела со STOP
+    sect_closed = one("\n## Closed stops\nSTOP: STOP-PAY — старый.\nВопрос: был ли? Resume: да\n\n## Notes\n" + GATE_STOP)  # «## Closed…» не судится
     o, to = gate_fixture(src, launch)
     stop_now(o)
     old = hook_at(src, o, OLD_HOOK_34, "spec-gate-v34.mjs")
     alt = [dec(gate_run(o, to, "probe-open", hook=old)), dec(gate_run(o, to, "probe-open", hook=old))] if old else ["?", "?"]
-    item(S, "F3.1", new == ["stop"] * 3 and alt == ["stop", "block"] and rep_plan == rep_head == last_open == "stop", f"neu={','.join(new[:2])} alt={','.join(alt)} · стоп запушен, после него коммит только в docs/evidence/: "
-         f"та же сессия — {new[0]}, {new[1]}; новая сессия — {new[2]}; затем коммит только docs/PLAN-1.md — {rep_plan}, только головы PROGRESS — {rep_head}; две строки STOP в разделе (первая снята) — {last_open}; хук v3.4 ({OLD_HOOK_34}) — {', '.join(alt)}")
+    item(S, "F3.1", new == ["stop"] * 3 and alt == ["stop", "block"] and rep_plan == rep_head == last_open == sect_open == sect_closed == "stop", f"neu={','.join(new[:2])} alt={','.join(alt)} · стоп запушен, после него коммит только в docs/evidence/: "
+         f"та же сессия — {new[0]}, {new[1]}; новая сессия — {new[2]}; затем коммит только docs/PLAN-1.md — {rep_plan}, только головы PROGRESS — {rep_head}; две строки STOP в разделе (первая снята) — {last_open}; «## Open stop» после раздела со снятым STOP — {sect_open}; STOP в «## Closed stops» раньше открытого — {sect_closed}; хук v3.4 ({OLD_HOOK_34}) — {', '.join(alt)}")
     # F3.2 — стоп закрыт: коммит кода, «— снят», слово Resume (и в новой сессии)
     c, tc = gate_fixture(src, launch)
     stop_now(c)
@@ -2116,11 +2126,12 @@ def stop_probes(src, launch):
         return dec(gate_run(w, tw, "probe-word"))
     prefix = word_at("Resume: ключ у оператора, иду дальше", 2)  # не строка Resume стопа, но начинается с «Resume:» — слово
     before = word_at(resume, -300)  # строка Resume стопа до его коммита — не слово
-    meta = word_at("Resume: ключ у оператора, иду дальше", 2, meta=True)  # служебная запись харнеса (isMeta), не слова человека — не слово
+    meta = word_at("Resume: ключ у оператора, иду дальше", 2, meta=True)
+    inline = one(GATE_STOP, "«продолжай по SPEC-1 с F2: ключ выдан».")  # «Resume: …» за вопросом в строке — не строка Resume: её текст без префикса — не слово  # служебная запись харнеса (isMeta), не слова человека — не слово
     sides = [dec(code), dec(snyat), dec(res1), dec(res2)]
-    item(S, "F3.2", sides == ["block"] * 4 and bool(kept) and prefix == "block" and before == meta == "stop", f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
+    item(S, "F3.2", sides == ["block"] * 4 and bool(kept) and prefix == "block" and before == meta == inline == "stop", f"code={sides[0]} snyat={sides[1]} resume={sides[2]},{sides[3]} · коммит кода после стопа — {sides[0]}; «— снят» в конце строки — {sides[1]}; "
          f"слово Resume (строка Resume стопа после его коммита), потом коммит только в docs/evidence/ — {sides[2]}, в журнале resumed {kept}; новая сессия без слова — {sides[3]}; "
-         f"сообщение «Resume: …» не строкой стопа — {prefix}; строка Resume за 5 мин до коммита стопа — {before}; служебная запись (isMeta) «Resume: …» — {meta}")
+         f"сообщение «Resume: …» не строкой стопа — {prefix}; строка Resume за 5 мин до коммита стопа — {before}; служебная запись (isMeta) «Resume: …» — {meta}; текст «Resume:» из строки вопроса без префикса — {inline}")
     # F3.3 — стоп с текстом стопа прошлой фазы: новый стоп; хук v3.4 — «старый»
     p, tp = gate_fixture(src, launch, stop_old=True)
     pg = open(f"{p}/docs/PROGRESS.md", encoding="utf-8").read()
@@ -2135,10 +2146,33 @@ def stop_probes(src, launch):
     open(f"{q}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg.replace("\n" + GATE_STOP, ""))
     ship(q, "свежий PROGRESS новой фазы", "docs/PROGRESS.md")
     stop_now(q)
+    other = "STOP: STOP-INPUT — нужен другой ключ.\nВопрос оператору: выдать ли другой ключ?\nResume: продолжай по SPEC-1 с F2: другой ключ выдан\n"
+    x, tx = gate_fixture(src, launch)  # стоп A, коммит кода, стоп A заменён стопом B: серия B — от замены
+    stop_now(x, other)
+    open(f"{x}/bin/zz", "w", encoding="utf-8").write("echo zz\n")
+    ship(x, "F1.1: код до замены стопа", "bin/zz")
+    pg = open(f"{x}/docs/PROGRESS.md", encoding="utf-8").read()
+    open(f"{x}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg.replace(other, GATE_STOP))
+    ship(x, "стоп заменён", "docs/PROGRESS.md")
+    swapped = dec(gate_run(x, tx, "probe-swap"))
+    y, ty = gate_fixture(src, launch)  # стоп со словом Resume, ответ, тот же текст стопа снова: новый стоп, слово прошлого не в счёт
+    again = f"{STOP_L}\nВопрос оператору: выдать ли ключ фикстуры?\nResume: {resume}\n"
+    stop_now(y, again)
+    with open(ty, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + 2)), "message": {"role": "user", "content": resume}}, ensure_ascii=False) + "\n")
+    first = dec(gate_run(y, ty, "probe-again"))
+    pg = open(f"{y}/docs/PROGRESS.md", encoding="utf-8").read()
+    open(f"{y}/docs/PROGRESS.md", "w", encoding="utf-8").write(pg.replace("\n" + again, ""))
+    ship(y, "ответ на стоп", "docs/PROGRESS.md")
+    time.sleep(3)  # новый коммит стопа — позже слова прошлого
+    stop_now(y, again)
+    fresh_y = f"{os.path.dirname(ty)}/fresh.jsonl"
+    open(fresh_y, "w").write(json.dumps({"type": "user", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}) + "\n")
+    second = dec(gate_run(y, fresh_y, "probe-again-next"))
     old3 = hook_at(src, q, OLD_HOOK_34, "spec-gate-v34.mjs")
     alt3 = dec(gate_run(q, tq, "probe-past", hook=old3)) if old3 else "?"
-    item(S, "F3.3", neu3 == "stop" and alt3 == "block", f"neu={neu3} alt={alt3} · та же строка стопа была в PROGRESS до сессии (прошлая фаза), снята, коммит кода, в новой фазе снова запушена: "
-         f"хук — {neu3}; хук v3.4 ({OLD_HOOK_34}) — {alt3}")
+    item(S, "F3.3", neu3 == "stop" and alt3 == "block" and swapped == "stop" and first == "block" and second == "stop", f"neu={neu3} alt={alt3} · та же строка стопа была в PROGRESS до сессии (прошлая фаза), снята, коммит кода, в новой фазе снова запушена: "
+         f"хук — {neu3}; хук v3.4 ({OLD_HOOK_34}) — {alt3} · стоп A, коммит кода, A заменён стопом B — {swapped}; стоп со словом Resume — {first}, ответ и тот же текст стопа новым коммитом — {second}")
     # F3.4 — форма: без вопроса и Resume, причина вне §4, только на диске — missing с именем; оформленный — stop
     f1, t1 = gate_fixture(src, launch)
     stop_now(f1, "STOP: STOP-INPUT — фикстуре нужен ключ оператора.\nключ лежит у оператора.\n")
@@ -2166,12 +2200,19 @@ def stop_probes(src, launch):
     for a_ in (("add", "--", "docs/PROGRESS.md"), ("commit", "-qm", "стоп без push")):
         subprocess.run(["git", *a_], cwd=f8, env=GIT_ENV, capture_output=True, text=True, check=True)
     unpushed = gate_run(f8, t8, "probe-form")
+    form_more = {  # окно — три строки под STOP, не сама строка; Продолжай… — тоже строка Resume; STOP — только в начале строки; «— снят» — в конце; ? в URL — не вопрос
+        "вопрос и Resume на 2-й и 3-й строке": (one("STOP: STOP-INPUT — нужен ключ.\nКлюч лежит у оператора.\nВопрос оператору: выдать ли ключ?\nResume: продолжай по SPEC-1 с F2\n"), "stop"),
+        "вопрос только в строке STOP": (one("STOP: STOP-INPUT — выдать ли ключ?\nКлюч у оператора.\nResume: продолжай по SPEC-1 с F2\n"), "block"),
+        "строка «Продолжай…» вместо Resume": (one("STOP: STOP-INPUT — нужен ключ.\nВопрос оператору: выдать ли ключ?\nПродолжай по SPEC-1 с F2, когда ключ выдан.\n"), "stop"),
+        "«STOP: STOP-PAY» внутри строки ниже": (one(GATE_STOP + "Прежний текст: см. STOP: STOP-PAY в архиве.\n"), "stop"),
+        "«снят» не в конце строки STOP": (one("STOP: STOP-INPUT — прежний ключ снят с выдачи, нужен новый.\nВопрос оператору: выдать ли ключ фикстуры? Resume: «продолжай по SPEC-1 с F2: ключ выдан».\n"), "stop"),
+        "? только в URL": (one("STOP: STOP-INPUT — нужен ключ.\nКлюч: https://example.invalid/key?id=1\nResume: продолжай по SPEC-1 с F2\n"), "block")}
     rs = lambda x: " ".join(str(m) for m in (last_line(x).get("missing") or []))
     named = ["STOP-INPUT» has no question" in rs(no_form), "STOP-PAY» is not a stop of SPEC §4" in rs(bad_id), "on disk only" in rs(disk)]
     extra = ["STOP-INPUT» has no question" in rs(word), "STOP-INPUT» has no question" in rs(noq), "STOP-INPUT» has no question" in rs(qres), "is not pushed" in rs(unpushed)]  # стороны сверх трёх пункта
-    item(S, "F3.4", all(named) and all(extra) and dec(no_form) == dec(bad_id) == dec(disk) == dec(word) == dec(noq) == dec(qres) == dec(unpushed) == "block" and dec(formed) == "stop",
+    item(S, "F3.4", all(named) and all(extra) and dec(no_form) == dec(bad_id) == dec(disk) == dec(word) == dec(noq) == dec(qres) == dec(unpushed) == "block" and dec(formed) == "stop" and all(g == w for g, w in form_more.values()),
          f"form={sum(named)}/3 · без вопроса и Resume — {dec(no_form)}, названо — {'да' if named[0] else 'нет'}; STOP-PAY вне §4 — {dec(bad_id)}, названо — {'да' if named[1] else 'нет'}; "
-         f"только на диске — {dec(disk)}, названо — {'да' if named[2] else 'нет'}; ещё: слова «продолжать» и resume в вопросе без строки Resume — {dec(word)}, строка Resume без вопроса — {dec(noq)}, строка Resume вопросом — {dec(qres)}, закоммичен без push — {dec(unpushed)}, названо — {sum(extra)}/4 · "
+         f"только на диске — {dec(disk)}, названо — {'да' if named[2] else 'нет'}; ещё: слова «продолжать» и resume в вопросе без строки Resume — {dec(word)}, строка Resume без вопроса — {dec(noq)}, строка Resume вопросом — {dec(qres)}, закоммичен без push — {dec(unpushed)}, названо — {sum(extra)}/4; " + "; ".join(f"{k} — {g}" for k, (g, _) in form_more.items()) + " · "
          f"красная: оформленный и запушенный — {dec(formed)}")
 
 
