@@ -1,32 +1,32 @@
 spec: SPEC-v3.5
 $ bin/gate-v3.5
-gate-v3.5: ветка v3.5, HEAD af4e800
-t5: bin/two-tier-init — файлов кита 57 (в git 57), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate35-4e9jrj3y
-F1: из evidence — docs/evidence/F1-check-kit-result.txt @ f197008, mods/handoff без правок
-F2: из evidence — docs/evidence/F2-check-harness-result.txt @ 1658e2c, kit/.claude/hooks/spec-gate.mjs, kit/.claude/hooks/steer.sh, mods/phase-start без правок
+gate-v3.5: ветка v3.5, HEAD b5a5304
+t5: bin/two-tier-init — файлов кита 57 (в git 57), core.hooksPath .githooks; логи — /tmp/two-tier-v3/gate35-q594ctok
+F1: из evidence — docs/evidence/F1-check-kit-result.txt @ f1b6f85, mods/handoff без правок
+F2: из evidence — docs/evidence/F2-check-harness-result.txt @ b5a5304, kit/.claude/hooks/spec-gate.mjs, kit/.claude/hooks/steer.sh, mods/phase-start без правок
 init-t5: (t5) bin/check-budget — rc 0
 templates-t5: (t5) bin/check-budget --templates — rc 0
 gate-test: (t5) bin/gate-test bin/check-spend --self-test — rc 0
 owner: (t5) bin/check-budget --self-test intent owner — rc 0
 jev: (t5) bin/jev --self-test — rc 0
-stop: (корень ветки) bin/check-harness stop — rc 0
 lints-t5: (t5) bin/check-budget --lints — rc 0
 commit-t5: (t5) bin/check-harness commit — rc 0
 templates-repo: (корень ветки) bin/check-budget --templates — rc 0
-verify: (корень ветки) bin/check-verify --gate — rc 0
 budget-repo: (корень ветки) bin/check-budget — rc 0
+verify: (корень ветки) bin/check-verify --gate — rc 0
+stop: (корень ветки) bin/check-harness stop — rc 0
 lints-repo: (корень ветки) bin/check-budget --lints — rc 0
-spend: (корень ветки) bin/check-spend — rc 0
 upgrade: (корень ветки) bin/two-tier-upgrade --self-test — rc 0
+spend: (корень ветки) bin/check-spend — rc 0
 env-t5: (t5) bin/check-harness env — rc 0
 kit-t5: (t5) bin/check-kit — rc 0
 items-t5: (t5) bin/check-harness items — rc 0
-kit-repo: (корень ветки) bin/check-kit · CHECK_KIT_SKIP=handoff — rc 0
 desktop-t5: (t5) bin/check-harness --desktop — rc 0
+kit-repo: (корень ветки) bin/check-kit · CHECK_KIT_SKIP=handoff — rc 0
 docs: (корень ветки) bin/check-docs — rc 0
 моды: handoff validate rc 0, test rc 0 (25 pass, 0 fail); phase-start validate rc 0, test rc 0 (46 pass, 0 fail); spec-board validate rc 0, test rc 0 (24 pass, 0 fail); window-guard validate rc 0, test rc 0 (38 pass, 0 fail)
-F1 HANDOFF_TAB_OK — из docs/evidence/F1-check-kit-result.txt @ f197008
-F2 GATE_SESSION_OK — из docs/evidence/F2-check-harness-result.txt @ 1658e2c
+F1 HANDOFF_TAB_OK — из docs/evidence/F1-check-kit-result.txt @ f1b6f85
+F2 GATE_SESSION_OK — из docs/evidence/F2-check-harness-result.txt @ b5a5304
 F3 GATE_STOP_OK
     lints-repo: WARN spec-paths: kit/.claude/agents/evaluator.md, bin/check-procs: kit/.claude/agents/evaluator.md (docs/SPEC-v3.5.md: нет в HEAD и в строке «Новые пути:»); bin/check-procs (docs/SPEC-v3.5.md: нет в HEAD и в строке «Новые пути:») (SPEC уже выдана: правит тимлид)
     lints-repo: WARN spec-review: docs/SPEC-v3.5.md @ 740ff1fda7f2: нет PASS свежего проверяющего с этим пином — docs/reviews/v3.5-spec.md: NEEDS_WORK @ 73ea6b9ed7ec — пин другой версии (фаза начата: evidence этой SPEC в HEAD — docs/evidence/F1-check-kit-result.txt)
@@ -42,7 +42,7 @@ v3.4 FROZEN_OK
 v3.4 FENSTER_OK
 v3.4 PAAR_OK
     desktop-t5: HARNESS_WARN cli-behind cli=2.1.319 app=2.1.321
-    desktop-t5: HARNESS_WARN cli-behind cli=2.1.319 github=2.1.322
+    desktop-t5: HARNESS_WARN cli-behind cli=2.1.319 github=2.1.323
     desktop-t5: HARNESS_WARN write-block-wider additional=1
     desktop-t5: HARNESS_WARN tab-profile profil=fehlt — нет .claude/settings.local.json, оператор копирует профиль: cp .claude/launch.settings.json .claude/settings.local.json
     desktop-t5: HARNESS_WARN subagent-model-local settings.local=claude-opus-5-5 --settings=claude-sonnet-5-5
@@ -77,5 +77,5 @@ F9.2 feld=1 rein=7 raus=3 · CHANGELOG, запись v3.5 над v3.4: поле 
 F9.3 docs=2/2 · kit/docs/PROCESS.template.md: фраз 5; kit/CLAUDE.md: фраз 3; нет — ничего · красный образец: копия без первой фразы — docs=1/2 «kit/docs/PROCESS.template.md: Слово исполнителю — в главную сессию фазы»; docs=1/2 «kit/CLAUDE.md: Слово оператора — в главную сессию фазы»
 F9.4 lints=4,0 hook=pass,block · копия клона, bin/two-tier-upgrade --branch kit-v3.5 — rc 0; bin/check-budget — rc 0 «BUDGET_OK», строки линтов v3.5: basis-judge, planka-early, spec-paths, spec-review; хук на ответвлении SPEC-11 (checks/fixtures/telefon-spec11-transcript-heads.jsonl) — pass «not the phase session: a fork of a90fd024»; .claude/phase-session.json в .gitignore — да · кит v3.4 (6cd2177) --branch kit-v3.4-probe — rc 0; bin/check-budget — rc 0 «BUDGET_OK», строк линтов v3.5 0; хук — block «15 missing»
 F9.5 leer=OK rot=2/2 · t5 от bin/two-tier-init: файлов кита 57 из 57, core.hooksPath .githooks; маркеров красных 0; моды 4: 4 зелёных; живые F1 и F2 — F1 evidence, F2 evidence ‖ копия клона telefon — OK ‖ evidence F1–F8: пунктов 35, строк не по одной и чужих id — нет ‖ другого offen — нет ‖ красные образцы: строка F9.4 без клона — красный; строка «F3.5» прошлой фазы в evidence F3 — чужой id F3.5 в F3-*; разметка: лог без маркера и маркер при rc 1 — FAIL 2/2
-gate-v3.5: 324 с; логи — /tmp/two-tier-v3/gate35-4e9jrj3y
+gate-v3.5: 395 с; логи — /tmp/two-tier-v3/gate35-q594ctok
 GATE35_OK

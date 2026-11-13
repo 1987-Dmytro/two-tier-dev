@@ -38,3 +38,4 @@
 {"cli": "2.1.319", "features": ["F3"], "limit": 1800, "sec": 960, "wf_sec": 608, "bash": 10, "fon": 0, "moved": 0, "status": "completed", "ts": "2026-11-12T23:41:10Z", "tokens": 243165, "wf": "c213a6ff6fec", "models": {"claude-opus-5-5": 5}}
 {"cli": "2.1.319", "features": ["F3"], "limit": 1800, "sec": 1073, "wf_sec": 724, "bash": 10, "fon": 0, "moved": 0, "status": "completed", "ts": "2026-11-13T00:10:20Z", "tokens": 176967, "wf": "c213a6ff6fec", "models": {"claude-opus-5-5": 3}}
 {"cli": "2.1.319", "features": ["F2"], "limit": 1800, "sec": 1071, "wf_sec": 722, "bash": 13, "fon": 1, "moved": 0, "status": "completed", "ts": "2026-11-13T00:34:24Z", "tokens": 244503, "wf": "c213a6ff6fec", "models": {"claude-opus-5-5": 4}}
+{"cli": "2.1.319", "features": ["F2"], "limit": 1800, "sec": 1068, "wf_sec": 643, "bash": 14, "fon": 5, "moved": 0, "status": "completed", "ts": "2026-11-13T01:06:15Z", "tokens": 187879, "wf": "c213a6ff6fec", "models": {"claude-opus-5-5": 3}}
