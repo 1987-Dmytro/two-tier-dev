@@ -1647,30 +1647,8 @@ def command_names(host):
     return {(c.get("name") if isinstance(c, dict) else str(c)) for c in (cc[-1].get("commands") or [])} if cc else set()
 
 
-def installed_drift(mods=("handoff", "phase-start")):
-    """Установленные копии модов кита против дерева mods/: [(мод, в дереве, [(scope, версия)])] с расхождением. Чек судит копию из дерева
-    (--plugin-dir), а вкладка Code грузит установленную копию из кэша плагинов: старая копия не делает того, что доказал чек (handoff 0.3.0
-    во вкладке Code хендофф не пишет — ждёт REPL). Только чтение installed_plugins.json пользователя; в вывод — версии и scope, без путей."""
-    try:
-        rows_all = json.loads(read(os.path.expanduser("~/.claude/plugins/installed_plugins.json")) or "{}")
-    except ValueError:
-        return []
-    rows_all = rows_all.get("plugins", rows_all) if isinstance(rows_all, dict) else {}
-    here = os.path.realpath(".")
-    out = []
-    for m in mods:
-        tree = (json.loads(read(f"mods/{m}/.claude-plugin/plugin.json") or "{}")).get("version")
-        rows = [r for r in rows_all.get(f"{m}@two-tier-mods") or [] if isinstance(r, dict)
-                and (r.get("scope") == "user" or (r.get("projectPath") and os.path.realpath(r["projectPath"]) == here))]
-        old = [(r.get("scope"), r.get("version")) for r in rows if r.get("version") != tree]
-        if tree and old:
-            out.append((m, tree, old))
-    return out
-
-
 def section_handoff():
-    """F1 (SPEC-v3.5): строки F1.1–F1.5 и HANDOFF_TAB_OK. Не репо кита — строки offen; нет claude в PATH — живые стороны offen, маркера нет, код 0.
-    Установленная копия мода старше дерева — строка WARN mods-installed с командой оператора (маркер от неё не зависит)."""
+    """F1 (SPEC-v3.5): строки F1.1–F1.5 и HANDOFF_TAB_OK. Не репо кита — строки offen; нет claude в PATH — живые стороны offen, маркера нет, код 0."""
     sec, opened = [], []
 
     def p(item, ok, text):
@@ -1684,10 +1662,6 @@ def section_handoff():
         for i in range(1, 6):
             offen_line(f"F1.{i}", "не репо кита: нет mods/handoff")
         return True
-    for m, tree, old in installed_drift():
-        print(f"WARN mods-installed: {m} в дереве {tree}, установлено " + ", ".join(f"{sc} {v}" for sc, v in old)
-              + f" — вкладка Code грузит установленную копию; рука оператора: claude plugin marketplace update two-tier-mods && "
-              + " && ".join(f"claude plugin update {m}@two-tier-mods --scope {sc}" for sc in dict.fromkeys(sc for sc, _ in old)) + ", затем новая сессия", flush=True)
     h = harness_module()
     live = bool(shutil.which("claude"))
     # F1.5 — шаблоны: ключ budgets.json, профиль без порога и с autoCompactWindow, правило modes без порога handoff; пара effectiveWindow

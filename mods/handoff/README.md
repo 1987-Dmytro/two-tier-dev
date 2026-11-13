@@ -40,8 +40,10 @@
 **Где не работает.** `claude -p` и SDK (нет человека у промпта — мод молчит); Cowork (моды там не
 исполняются — хендофф тимлида остаётся за скиллом). Агенты воркфлоу и субагенты не трогаются.
 
-**Настройки** (`/config` → handoff, или `pluginConfigs.handoff` в settings любого уровня — в репо тимлида
-`.claude/settings.json` может задать `handoffDir: "claude"`):
+**Настройки** (`/config` → handoff, или `pluginConfigs.handoff` в `~/.claude/settings.json` либо в файле `--settings`
+строки запуска — так репо тимлида задаёт `handoffDir: "claude"`). `pluginConfigs` в `.claude/settings.json` и
+`.claude/settings.local.json` проекта движок не применяет (проба 13.11, движок 2.1.321: там 33 и 34 — статус `70% (option)`,
+через `--settings` 35 — `35% (option)`); профиль вкладки Code порог мода не несёт — порог проекта только ключ budgets.json выше:
 
 | поле | по умолчанию | смысл |
 |---|---|---|
