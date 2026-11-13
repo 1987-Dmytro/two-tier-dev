@@ -1064,7 +1064,8 @@ def pair(rows, before, after, edit_ts):
 def retired(base):
     """F8.4: где агент evaluator: (в архиве репо, файлы evaluator.md в kit/ и bin/, упоминания вне списка апгрейда и проб)."""
     files = [os.path.relpath(os.path.join(d, f), base) for top in ("kit", "bin") for d, _, fs in os.walk(f"{base}/{top}") for f in fs if f == "evaluator.md"]
-    allow = {"kit/bin/two-tier-upgrade", "kit/bin/check-kit", "bin/check-verify", "bin/check-docs"}  # снимает, проверяет отсутствие, проба F8.4, проба F9.2 (её красный образец называет агента)
+    allow = {"kit/bin/two-tier-upgrade", "kit/bin/check-kit", "bin/check-verify"}  # снимает, проверяет отсутствие, проба F8.4
+    lines_ok = {"bin/check-docs": ("red_out = f92(CL.replace(", "без снятого `evaluator`")}  # проба F9.2: её красный образец называет агента — только эти строки
     said = []
     for top in ("kit", "bin"):
         for d, _, fs in os.walk(f"{base}/{top}"):
@@ -1073,7 +1074,9 @@ def retired(base):
                 if "__pycache__" in rel or rel in allow or os.path.islink(os.path.join(d, f)):
                     continue
                 try:
-                    said += [rel] if "evaluator" in open(os.path.join(d, f), encoding="utf-8").read() else []
+                    hit = [l for l in open(os.path.join(d, f), encoding="utf-8").read().splitlines()
+                           if "evaluator" in l and not any(m in l for m in lines_ok.get(rel, ()))]
+                    said += [rel] if hit else []
                 except (UnicodeDecodeError, OSError):
                     pass
     return os.path.isfile(f"{base}/docs/archive/evaluator.md"), files, said
@@ -1122,6 +1125,10 @@ def f8(live):
     os.makedirs(f"{red_dir}/kit/.claude/agents")
     shutil.copy2(f"{REPO}/docs/archive/evaluator.md", f"{red_dir}/kit/.claude/agents/evaluator.md") if arch else None
     _, r_files, _ = retired(red_dir)
+    red_say = tempfile.mkdtemp(prefix="check-verify-f84s-", dir=TMP)  # красная: упоминание агента в файле kit/ вне списка
+    os.makedirs(f"{red_say}/kit/bin")
+    open(f"{red_say}/kit/bin/mention", "w", encoding="utf-8").write("# evaluator\n")
+    _, _, r_said = retired(red_say)
     u = tempfile.mkdtemp(prefix="check-verify-up-", dir=TMP)
     gu = lambda *a: subprocess.run(["git", *a], cwd=u, env=GIT_ENV, capture_output=True, text=True)
     gu("init", "-q", "-b", "main")
@@ -1134,9 +1141,10 @@ def f8(live):
     tree = gu("ls-tree", "-r", "--name-only", "HEAD").stdout.split()
     up_arch = [x for x in tree if x.startswith("docs/archive/") and x.endswith("claude-config/agents/evaluator.md")]
     up_ok = up.returncode == 0 and up_arch and ".claude/agents/evaluator.md" not in tree
-    ok84 = arch and not files and not said and r_files == ["kit/.claude/agents/evaluator.md"] and up_ok
+    ok84 = arch and not files and not said and r_files == ["kit/.claude/agents/evaluator.md"] and r_said == ["kit/bin/mention"] and up_ok
     p("F8.4", ok84, f"agent={'archiv' if arch and not files else 'kit'} upgrade={'archiv' if up_ok else 'nein'} · docs/archive/evaluator.md — {'есть' if arch else 'нет'}; evaluator.md в kit/ и bin/ — "
-                    f"{', '.join(files) or 'нет'}; упоминаний вне списка апгрейда и проб — {', '.join(said) or 'нет'} · красная: файл в kit/ — {', '.join(r_files) or 'не найден'} · "
+                    f"{', '.join(files) or 'нет'}; упоминаний вне списка апгрейда и проб — {', '.join(said) or 'нет'} · красная: файл в kit/ — {', '.join(r_files) or 'не найден'}, "
+                    f"упоминание в kit/bin/mention — {', '.join(r_said) or 'не найдено'} · "
                     f"two-tier-upgrade проекта с .claude/agents/evaluator.md — rc {up.returncode}, в HEAD {', '.join(up_arch) or 'архива нет'}, на месте — {'нет' if up_ok else 'есть'}")
     gd = tempfile.mkdtemp(prefix="check-verify-gate-", dir=TMP)
     gg = lambda *a: subprocess.run(["git", *a], cwd=gd, env=GIT_ENV, capture_output=True, text=True)

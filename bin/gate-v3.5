@@ -20,9 +20,11 @@ SPEC_ID = "SPEC-v3.5"
 CLONE = os.environ.get("TELEFON_CLONE") or "/tmp/two-tier-v3/telefon-src"
 LIVE = {  # фича: маркер, evidence, пути фичи (мод, хук, чек, шаблоны — SPEC «Цена судей») — правка их после коммита evidence требует живого прогона
     "F1": ("HANDOFF_TAB_OK", "docs/evidence/F1-check-kit-result.txt",
-           ["mods/handoff", "kit/bin/check-kit", "kit/bin/check-harness", "kit/budgets.json", "kit/.claude/launch.settings.json", "kit/docs/PROCESS.template.md"]),
+           ["mods/handoff", "kit/bin/check-kit", "kit/bin/check-harness", "kit/budgets.json", "kit/.claude/launch.settings.json", "kit/docs/PROCESS.template.md",
+            "bin/two-tier-init"]),
     "F2": ("GATE_SESSION_OK", "docs/evidence/F2-check-harness-result.txt",
-           ["kit/.claude/hooks/spec-gate.mjs", "kit/.claude/hooks/steer.sh", "mods/phase-start", "kit/bin/check-harness", "kit/.gitignore", "bin/two-tier-init"]),
+           ["kit/.claude/hooks/spec-gate.mjs", "kit/.claude/hooks/steer.sh", "kit/.claude/settings.json", "mods/phase-start", "kit/bin/check-harness", "kit/.gitignore",
+            "bin/two-tier-init", "checks/fixtures/telefon-spec11-transcript-heads.jsonl"]),
 }
 OFFEN_OK = [r"^[^:]+:v3\.4-F5\.3 offen", r"^kit-t5:v3\.4-F3\.5 telefon=offen · не репо кита", r"^kit-t5:v3\.4-F9\.[12] offen · не репо кита",
             r"^kit-t5:F1\.[1-5] offen · не репо кита", r"^kit-t5:F6\.[1-5] offen · не репо кита", r"^kit-t5:F9\.4 offen · не репо кита"]
@@ -77,11 +79,15 @@ def mark(f, marker, *names, rcs, quiet=False):
 
 
 def fresh(ev, paths):
-    """(маркер из evidence годен, почему): коммит evidence есть, маркер в нём, пути без правок с него — в истории и в дереве."""
+    """(маркер из evidence годен, почему): коммит evidence есть, маркер в нём, пути есть и без правок с него — в истории и в дереве (и новых файлов вне git)."""
     c = git("log", "-1", "--format=%H", "--", ev).stdout.strip()
     if not c:
         return False, f"{ev} нет в истории"
+    gone = [p for p in paths if not os.path.exists(f"{REPO}/{p}")]
+    if gone:
+        return False, f"путей фичи нет: {', '.join(gone)}"
     changed = [x for x in git("diff", "--name-only", c, "--", *paths).stdout.split() if x]
+    changed += [x for x in git("ls-files", "--others", "--exclude-standard", "--", *paths).stdout.split() if x]
     return (False, f"с {c[:7]} изменены: {', '.join(changed[:5])}") if changed else (True, f"{ev} @ {c[:7]}, {', '.join(paths)} без правок")
 
 
