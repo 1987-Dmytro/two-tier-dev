@@ -606,7 +606,7 @@ def landing_tables(text):
             while k >= 0 and not lines[k].strip():
                 k -= 1
             para = []
-            while k >= 0 and lines[k].strip() and not lines[k].startswith("#"):
+            while k >= 0 and lines[k].strip() and not lines[k].startswith("#") and not lines[k].lstrip().startswith(("```", "~~~")):  # блок кода — не заголовок
                 para.insert(0, lines[k])
                 k -= 1
             if para and not any(re.match(r"\s*([-*+]\s|\d+[.)]\s|\|)", x) for x in para):
@@ -1340,6 +1340,7 @@ def lints():
         ("пункт с продолжением", "OK", "ранних планок 1", pe(early(judged, head="- пара F58.1 — пункт списка\n  продолжение пункта", row="ранняя"))),
         ("пункт «*»", "OK", "ранних планок 1", pe(early(judged, head="* пара F58.1 — пункт списка", row="ранняя"))),
         ("строка # над абзацем", "OK", "ранних планок 1", pe(early(judged, head="### Таблица посадки F58.1\nОкно звонков.", row="ранняя"))),
+        ("блок кода над таблицей", "OK", "ранних планок 1", pe(early(judged, head="```\nпара F58.1\n```", row="ранняя"))),
     ]
     ok42, ok42_text = judge(f42_rows)
     emit("F4.2", ok42, f"otchet={'OK' if f42_rows[0][3][0] == 'OK' else f42_rows[0][3][0]} datei={'OK' if f42_rows[2][3][0] == 'OK' else f42_rows[2][3][0]} · {ok42_text}")

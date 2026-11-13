@@ -250,9 +250,10 @@ os.makedirs(f"{fr}/docs/evidence")
 os.makedirs(f"{fr}/mod")
 open(f"{fr}/docs/evidence/F1-x-result.txt", "w").write("spec: SPEC-v3.5\n")
 open(f"{fr}/mod/a.ts", "w").write("a\n")
-git("init", "-q", "-b", "main", cwd=fr)
-git("add", "--", "docs/evidence/F1-x-result.txt", "mod/a.ts", cwd=fr)
-git("-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "F1.1: evidence", cwd=fr)
+fr_env = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")  # без конфига пользователя: подпись, шаблоны и хуки не мешают коммиту
+for a in (["init", "-q", "-b", "main"], ["add", "--", "docs/evidence/F1-x-result.txt", "mod/a.ts"],
+          ["-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "F1.1: evidence"]):
+    subprocess.run(["git", *a], cwd=fr, env=fr_env, capture_output=True, text=True)
 fr_base = fresh("docs/evidence/F1-x-result.txt", ["mod"], fr)
 fr_gone = fresh("docs/evidence/F1-x-result.txt", ["mod", "mod-typo"], fr)
 open(f"{fr}/mod/new.ts", "w").write("b\n")
