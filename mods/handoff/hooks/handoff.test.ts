@@ -500,6 +500,25 @@ test('a compaction refused (a turn runs): nothing cleared, a toast, re-armed —
   expect(h.commands).not.toContain('clear')
 })
 
+test('the fill is read against the compaction window, as the app shows it: 386k of 600k is 64 %, not the model window\'s 39 %', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
+  const h = hostOf([39], {
+    budgets: BUDGETS(40),
+    surfaces: ['desktop'],
+    tokens: 386341,
+    breakdown: { rawMaxTokens: 600000, autoCompactThreshold: 580000, isAutoCompactEnabled: true, autocompactSource: 'settings' },
+  })
+  hosted(on, h)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+  h.fills = [39, 39]
+  const { text } = await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)
+  expect(text ?? '').toContain('64% of 600000 tokens (compaction window, as the app shows), 386k')
+  await turns($, clock, h, 1)
+  expect(h.statuses).toContain('ctx 64% · 386k/600k · handoff @40%')
+  expect(h.compactions).toHaveLength(1) // 64 ≥ 40, though the model window reads 39
+  expect(h.statuses).toContain('ctx 8% · 50k/600k · handoff @40% · compacted')
+})
+
 test('a vetoed compaction ({ skip }) from the threshold re-arms: the next turn end tries again', { options: { jev: 'off', minTurns: 0 } }, async ($, on) => {
   const h = hostOf([50, 50], { budgets: BUDGETS(40), surfaces: ['desktop'], skip: 1 })
   hosted(on, h)
@@ -532,7 +551,7 @@ test('no figure yet (no response in this window): no decision, the status says u
   expect(h.statuses).toContain('ctx unknown · handoff @40%')
   h.fills = [null]
   const { text } = await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)
-  expect(text ?? '').toContain('context unknown of 1000000 tokens')
+  expect(text ?? '').toContain('context unknown of 1000000 tokens (model window)')
 })
 
 test('/handoff now compacts in place once the session is idle; no /clear, no prompt', { options: { jev: 'off' } }, async ($, on) => {
@@ -612,7 +631,7 @@ test("status names the engine's compaction point, armed and the Jev key's presen
   hosted(on, h)
   await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
   const { text } = await $.command.run({ command: 'handoff', args: 'status', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as any)
-  expect(text ?? '').toContain('43% of 1000000 tokens (427k)')
+  expect(text ?? '').toContain('43% of 1000000 tokens (model window), 427k')
   expect(text ?? '').toContain('engine compacts at 580k (settings)')
   expect(text ?? '').toContain('armed yes')
   expect(text ?? '').toContain('jev hint (key absent; last —)')

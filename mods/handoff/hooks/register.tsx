@@ -16,7 +16,7 @@
 // project only tightens — the rule of window-guard), else the `threshold` option, else 70; it is read at each decision and each status.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionCompacted, SessionContextUsage, SessionMessage } from 'claude-code'
+import type { EngineInterface, Register, SessionCompacted, SessionMessage } from 'claude-code'
 import { JEV_FROM, JEV_TIMEOUT_MS, JEV_URL, floorFor, parseJudgment, requestBody, score, stateOf, type Judgment, type Mode } from './jev'
 import { compactDoc, compactInstructions, handoffPrompt, parseHandoff, resumePrompt, stampOf, summaryOf, withInstructions, type Lang } from './text'
 
@@ -45,7 +45,22 @@ const advice = atom({ plugin: 'handoff', key: 'advice' } as const, '')
 
 const clamp = (n: number, lo: number, hi: number) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo)
 const kTokens = (n: number | undefined) => (n === undefined ? '?' : `${Math.round(n / 1000)}k`)
-const sizeOf = (c: SessionContextUsage) => (c.tokens === undefined ? '' : ` · ${kTokens(c.tokens)}/${kTokens(c.window)}`)
+type Fill = { tokens?: number; window: number; percent?: number; isCompactionWindow: boolean }
+const sizeOf = (f: Fill) => (f.tokens === undefined ? '' : ` · ${kTokens(f.tokens)}/${kTokens(f.window)}`)
+const percentOf = (tokens: number, window: number) => Math.round((tokens / window) * 100)
+
+// The fill as the person sees it — the app's context figure and /context measure against the compaction window
+// (`autoCompactWindow`, `rawMaxTokens`), which may be smaller than the model's: 386k is 64 % of a 600k compaction window and
+// only 38 % of a 1M model window. `context.percent` is the model's; the breakdown (`summary`: estimated locally, no request)
+// names the compaction window. No breakdown — the model's window, as before.
+async function fillOf($: EngineInterface): Promise<Fill> {
+  const { context } = await $.session.usage({ breakdown: 'summary' })
+  const raw = context.breakdown?.rawMaxTokens
+  if (raw !== undefined && raw > 0) {
+    return { tokens: context.tokens, window: raw, percent: context.tokens === undefined ? undefined : percentOf(context.tokens, raw), isCompactionWindow: raw !== context.window }
+  }
+  return { tokens: context.tokens, window: context.window, percent: context.percent, isCompactionWindow: false }
+}
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 const settingsOf = (o: Readonly<Record<string, unknown>>): Settings => ({
@@ -106,7 +121,7 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     if (e.source !== 'clear' || !(await isPersons($, st))) return result
     try {
-      const { percent } = (await $.session.usage()).context
+      const { percent } = await fillOf($)
       if (percent !== undefined) await update($, fill, () => percent)
     } catch {
       /* no figure: the band comes back after the next turn */
@@ -130,20 +145,20 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     if (e.agentId !== undefined || st.isRunning || e.isAborted || !(await isPersons($, st))) return result
     const threshold = (st.threshold = await thresholdOf($, st))
-    let context: SessionContextUsage | undefined
+    let now: Fill | undefined
     try {
-      context = (await $.session.usage()).context
+      now = await fillOf($)
     } catch {
       /* shown below as unknown */
     }
-    const percent = context?.percent
-    if (context === undefined || percent === undefined) {
+    const percent = now?.percent
+    if (now === undefined || percent === undefined) {
       // No figure (no response yet in this window, or the read failed): no decision — said, not silent.
       $.ui.status(`ctx unknown · handoff @${threshold}%`)
       return result
     }
     await update($, fill, () => percent)
-    $.ui.status(`ctx ${percent}%${sizeOf(context)} · handoff @${threshold}%`)
+    $.ui.status(`ctx ${percent}%${sizeOf(now)} · handoff @${threshold}%`)
     if (percent < threshold - 20) st.isArmed = true
     if (percent < threshold) {
       if (st.s.jev !== 'off' && st.isArmed && e.reason === 'answer' && e.answer.trim() && percent >= JEV_FROM && st.judged !== e.turnId) {
@@ -362,9 +377,9 @@ async function afterCompact($: EngineInterface, st: State, trigger: string, befo
     $.ui.toast(`handoff: compacted, but the file failed — ${messageOf(err)}`, { timeoutMs: 6000 })
   }
   try {
-    const { window } = (await $.session.usage()).context
+    const { window } = await fillOf($) // the same window the band and the threshold read
     if (result.tokensAfter !== undefined && window > 0) {
-      const percent = Math.round((result.tokensAfter / window) * 100)
+      const percent = percentOf(result.tokensAfter, window)
       const threshold = await thresholdOf($, st)
       await update($, fill, () => percent)
       $.ui.status(`ctx ${percent}% · ${kTokens(result.tokensAfter)}/${kTokens(window)} · handoff @${threshold}% · compacted`)
@@ -430,11 +445,9 @@ async function autoCompactText($: EngineInterface): Promise<string> {
 async function statusLine($: EngineInterface, st: State): Promise<string> {
   let fillText = 'unknown'
   try {
-    const { context } = await $.session.usage()
-    fillText =
-      context.percent === undefined
-        ? `unknown of ${context.window} tokens (no response since the start or the last compaction)`
-        : `${context.percent}% of ${context.window} tokens (${kTokens(context.tokens)})`
+    const f = await fillOf($)
+    const of = `${f.window} tokens (${f.isCompactionWindow ? 'compaction window, as the app shows' : 'model window'})`
+    fillText = f.percent === undefined ? `unknown of ${of}, no response since the start or the last compaction` : `${f.percent}% of ${of}, ${kTokens(f.tokens)}`
   } catch {
     /* no figure */
   }
